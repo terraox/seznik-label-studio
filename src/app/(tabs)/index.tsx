@@ -1,165 +1,32 @@
-import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
-import { AppIcon, type AppIconName } from '@/components/app-icon';
+import { BuyFromUsStrip } from '@/components/home/buy-from-us-strip';
+import { ContinueCard } from '@/components/home/continue-card';
+import { HeroCard } from '@/components/home/hero-card';
+import { HomeHeader } from '@/components/home/home-header';
 import {
-  CustomizeIcon,
-  DocBadgeIcon,
-  ImgToLabelIcon,
-  JewelleryLabelIcon,
-  NewLabelIcon,
-  TwoUpsLabelIcon,
-  PrintPhotoIcon,
-  ScanLabelIcon,
-  ShareNodeIcon,
-  ShippingLabelIcon,
-} from '@/components/home-icons';
-import { HomeHeroFlow } from '@/components/home-hero-flow';
-import { LabelPreview } from '@/components/label-preview';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow, Palette, scaleFont } from '@/constants/ui';
-import { SEZNIK_PRINTER_MODELS } from '@/constants/printer-models';
+  CREATE_GRID_TOOLS,
+  FILE_TOOLS,
+  LABEL_TYPE_TOOLS,
+} from '@/components/home/home-tools';
+import { SectionHeading } from '@/components/home/section-heading';
+import { ToolGrid } from '@/components/home/tool-grid';
+import { MaxContentWidth } from '@/constants/theme';
+import { HomeLayout, Palette } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useLabelStore } from '@/stores/label-store';
-import { usePrinterStore } from '@/stores/printer-store';
-
-type IconName = AppIconName;
-
-function ActionItem({
-  icon,
-  label,
-  disabled,
-  href,
-  onPress,
-  customIcon,
-  highlight,
-}: {
-  icon?: IconName;
-  label: string;
-  disabled?: boolean;
-  href?: string;
-  onPress?: () => void;
-  customIcon?: React.ReactNode;
-  highlight?: boolean;
-}) {
-  const router = useRouter();
-  const color = highlight ? Palette.accent : disabled ? Palette.disabled : Palette.actionText;
-
-  const handlePress = () => {
-    if (disabled) return;
-    if (href) {
-      router.push(href as any);
-    } else if (onPress) {
-      onPress();
-    }
-  };
-
-  return (
-    <View style={styles.actionItem}>
-      <Pressable
-        disabled={disabled}
-        onPress={handlePress}
-        hitSlop={8}
-        android_ripple={androidRipple}
-        style={({ pressed }) => [
-          styles.actionPressable,
-          pressed && !disabled && styles.pressed,
-        ]}>
-        {customIcon ? (
-          customIcon
-        ) : icon ? (
-          <AppIcon name={icon} tintColor={color} size={23} pointerEvents="none" />
-        ) : null}
-        <Text
-          numberOfLines={1}
-          style={[
-            styles.actionLabel,
-            { color: highlight ? Palette.ink : disabled ? Palette.disabled : Palette.actionText },
-          ]}>
-          {label}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-const MENU_GAP = 12;
-const SCREEN_PAD = 16;
-const WIDE_TILE_H = 62;
-const SQUARE_TILE_H = 96;
-const HOME_PREVIEW_MAX_HEIGHT = 118;
-const HEADER_HERO_EXTRA = 112;
-
-function Tile({
-  iconComponent,
-  label,
-  variant = 'square',
-  style,
-  href,
-  onPress,
-}: {
-  iconComponent: React.ReactNode;
-  label: string;
-  variant?: 'wide' | 'square';
-  style?: object;
-  href?: string;
-  onPress?: () => void;
-}) {
-  const router = useRouter();
-  const isWide = variant === 'wide';
-
-  const handlePress = () => {
-    if (href) {
-      router.push(href as any);
-    } else if (onPress) {
-      onPress();
-    }
-  };
-
-  return (
-    <View style={[styles.tileOuter, style]}>
-      <Pressable
-        onPress={handlePress}
-        android_ripple={androidRipple}
-        style={({ pressed }) => [
-          isWide ? styles.tileInnerWide : styles.tileInnerSquare,
-          pressed && styles.pressed,
-        ]}>
-        <View style={styles.tileIconWrap}>{iconComponent}</View>
-        <Text
-          numberOfLines={1}
-          style={[styles.tileLabel, isWide && styles.tileLabelWide]}>
-          {label}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
 
 export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
-  const tabPad = useTabBarPadding(Spacing.five);
-  const { width } = useWindowDimensions();
-  const router = useRouter();
-
+  // Tab bar inset only — no extra bottom padding so content can fit one screen.
+  const tabPad = useTabBarPadding(0);
   const documents = useLabelStore((s) => s.documents);
   const deleteDocument = useLabelStore((s) => s.deleteDocument);
   const uploadToCloud = useLabelStore((s) => s.uploadToCloud);
-  const printerStatus = usePrinterStore((s) => s.status);
-  const printerName = usePrinterStore((s) => s.deviceName);
 
-  const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
-  const activeModelMeta = SEZNIK_PRINTER_MODELS[selectedModel] || SEZNIK_PRINTER_MODELS.td404;
+  const [viewportH, setViewportH] = useState(0);
+  const [contentH, setContentH] = useState(0);
+  const scrollEnabled = contentH > viewportH + 1;
 
   const recentLabel = useMemo(
     () =>
@@ -169,231 +36,57 @@ export default function HomeScreen() {
     [documents],
   );
 
-  const [previewWidth, setPreviewWidth] = useState(0);
-
-  const handleDelete = () => {
-    if (!recentLabel) return;
-    Alert.alert('Delete Label', `Delete "${recentLabel.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => deleteDocument(recentLabel.id),
-      },
-    ]);
-  };
-
-  const handleUpload = () => {
-    if (!recentLabel) return;
-    uploadToCloud(recentLabel);
-    Alert.alert(
-      'Template saved',
-      `"${recentLabel.name}" is in Select Existing Template and Template → Cloud.`,
-    );
-  };
-
-  const connected = printerStatus === 'connected';
-  const innerWidth = Math.min(width - SCREEN_PAD * 2, MaxContentWidth);
-  const quarterTileWidth = (innerWidth - MENU_GAP * 3) / 4;
+  const hasLabels = documents.length > 0;
 
   return (
     <View style={styles.root}>
-      {/* Navy Header */}
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
-        <HomeHeroFlow />
-        <Pressable
-          onPress={() => router.push('/printer-connect')}
-          android_ripple={androidRipple}
-          style={({ pressed }) => [
-            styles.connection,
-            connected && styles.connectionConnected,
-            pressed && styles.pressed,
-          ]}>
-          <Text numberOfLines={1} style={styles.connectionText}>
-            {connected
-              ? `${activeModelMeta.shortName}: ${printerName ?? 'Connected'}`
-              : `${activeModelMeta.shortName} · Unconnected`}
-          </Text>
-          <AppIcon name="link" tintColor="#FFFFFF" size={15} />
-        </Pressable>
-      </View>
+      <HomeHeader />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: tabPad },
-        ]}
-        showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[styles.content, { paddingBottom: tabPad }]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        scrollEnabled={scrollEnabled}
+        onLayout={(e) => setViewportH(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_w, h) => setContentH(h)}>
         <View style={styles.inner}>
-          {/* Main Card: most recent label */}
-          <View style={styles.card}>
-            <View style={styles.cardTopSection}>
-              <View style={[styles.cardHead, width < 360 && styles.cardHeadStacked]}>
-                <Text
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  style={[styles.cardTitle, { fontSize: scaleFont(width, 13.5, 0.85, 1.05) }]}>
-                  {recentLabel ? recentLabel.name : 'No labels yet'}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  style={[
-                    styles.cardSize,
-                    width < 360 && styles.cardSizeStacked,
-                    { fontSize: scaleFont(width, 13, 0.85, 1.05) },
-                  ]}>
-                  {recentLabel
-                    ? `${recentLabel.widthMm.toFixed(0)} x ${recentLabel.heightMm.toFixed(0)} (${recentLabel.paperType})`
-                    : ''}
-                </Text>
-              </View>
+          <HeroCard compact={hasLabels} />
 
-              <View
-                style={styles.previewWrap}
-                onLayout={(e) => setPreviewWidth(e.nativeEvent.layout.width)}>
-                {recentLabel && previewWidth > 0 ? (
-                  <LabelPreview
-                    document={recentLabel}
-                    width={previewWidth}
-                    maxHeight={HOME_PREVIEW_MAX_HEIGHT}
-                    showStage
-                    style={styles.previewBorder}
-                  />
-                ) : (
-                  <Pressable onPress={() => router.push('/new-label')} style={styles.emptyPreview}>
-                    <AppIcon name="plus.circle" tintColor={Palette.accent} size={28} />
-                    <Text style={styles.emptyPreviewText}>
-                      Create your first label to see it here
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-
-            {/* Bottom White Section: 5 Actions */}
-            <View style={styles.actionRow}>
-              <ActionItem
-                icon="square.and.pencil"
-                label="Edit"
-                disabled={!recentLabel}
-                onPress={() =>
-                  recentLabel &&
-                  router.push({ pathname: '/edit', params: { labelId: recentLabel.id } })
-                }
-              />
-              <ActionItem
-                icon="printer"
-                label="Print"
-                disabled={!recentLabel}
-                onPress={() =>
-                  recentLabel &&
-                  router.push({ pathname: '/print', params: { labelId: recentLabel.id } })
-                }
-              />
-              <ActionItem icon="trash" label="Delete" disabled={!recentLabel} onPress={handleDelete} />
-              <ActionItem
-                customIcon={<ShareNodeIcon color={recentLabel ? Palette.accent : Palette.disabled} size={24} />}
-                label="Share"
-                disabled={!recentLabel}
-                onPress={() =>
-                  recentLabel &&
-                  router.push({ pathname: '/share', params: { labelId: recentLabel.id } })
-                }
-                highlight={Boolean(recentLabel)}
-              />
-              <ActionItem
-                icon="icloud.and.arrow.up"
-                label="Upload"
-                disabled={!recentLabel}
-                onPress={handleUpload}
+          {recentLabel ? (
+            <View style={styles.section}>
+              <SectionHeading>Last edited label</SectionHeading>
+              <ContinueCard
+                document={recentLabel}
+                onDelete={() => deleteDocument(recentLabel.id)}
+                onUpload={() => {
+                  uploadToCloud(recentLabel);
+                  Alert.alert(
+                    'Template saved',
+                    `"${recentLabel.name}" is in Select Existing Template and Template → Cloud.`,
+                  );
+                }}
               />
             </View>
+          ) : null}
+
+          <View style={styles.section}>
+            <SectionHeading>Print from file</SectionHeading>
+            <ToolGrid ids={FILE_TOOLS} columns={3} />
           </View>
 
-          {/* Menu Grid */}
-          <View style={styles.menuSection}>
-            {/* Row 1: 2 Wide Buttons */}
-            <View style={styles.menuRow}>
-              <Tile
-                variant="wide"
-                style={styles.menuHalf}
-                iconComponent={<NewLabelIcon size={26} color={Palette.accent} />}
-                label="New Label"
-                href="/new-label"
-              />
-              <Tile
-                variant="wide"
-                style={styles.menuHalf}
-                iconComponent={<ScanLabelIcon size={26} color={Palette.accent} />}
-                label="Scan Label"
-                href="/scan"
-              />
-            </View>
-
-            {/* Row 2: 3 Square Buttons */}
-            <View style={styles.menuRow}>
-              <Tile
-                style={styles.menuThird}
-                iconComponent={<DocBadgeIcon badge="EXCEL" size={32} color="#7E8B98" />}
-                label="Print Excel"
-                href="/excel-print"
-              />
-              <Tile
-                style={styles.menuThird}
-                iconComponent={<DocBadgeIcon badge="PDF" size={32} color="#7E8B98" />}
-                label="Print PDF"
-                href="/pdf"
-              />
-              <Tile
-                style={styles.menuThird}
-                iconComponent={<PrintPhotoIcon size={30} color={Palette.accent} />}
-                label="Print Photo"
-                href="/print-photo-modal"
-              />
-            </View>
-
-            {/* Row 3: same square category tiles — 2ups, Shipping, Jewellery, Customize, Img to Label */}
-            <View style={styles.categoryRow}>
-              <Tile
-                style={[styles.menuQuarter, { width: quarterTileWidth }]}
-                iconComponent={<TwoUpsLabelIcon size={30} color={Palette.accent} />}
-                label="2ups Label"
-                href="/new-label-setup?isTwoUps=true"
-              />
-              <Tile
-                style={[styles.menuQuarter, { width: quarterTileWidth }]}
-                iconComponent={<ShippingLabelIcon size={30} color={Palette.accent} />}
-                label="Shipping"
-                href="/shipping-label"
-              />
-              <Tile
-                style={[styles.menuQuarter, { width: quarterTileWidth }]}
-                iconComponent={<JewelleryLabelIcon size={30} color={Palette.accent} />}
-                label="Jewellery"
-                href="/jewellery-label"
-              />
-              <Tile
-                style={[styles.menuQuarter, { width: quarterTileWidth }]}
-                iconComponent={<CustomizeIcon size={30} color={Palette.accent} />}
-                label="Customize"
-                href="/customize-template"
-              />
-              <Tile
-                style={[styles.menuQuarter, { width: quarterTileWidth }]}
-                iconComponent={<ImgToLabelIcon size={30} color={Palette.accent} />}
-                label="Img to Label"
-                href="/img-to-label"
-              />
-              <Tile
-                style={[styles.menuQuarter, { width: quarterTileWidth }]}
-                iconComponent={<AppIcon name="list.number" tintColor={Palette.accent} size={28} />}
-                label="Serial Labels"
-                href="/serial-label"
-              />
-            </View>
+          <View style={styles.section}>
+            <SectionHeading>More ways to create</SectionHeading>
+            <ToolGrid ids={CREATE_GRID_TOOLS} columns={3} />
           </View>
+
+          <View style={styles.section}>
+            <SectionHeading>Label types</SectionHeading>
+            <ToolGrid ids={LABEL_TYPE_TOOLS} columns={4} />
+          </View>
+
+          <BuyFromUsStrip />
         </View>
       </ScrollView>
     </View>
@@ -405,212 +98,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Palette.screen,
   },
-  header: {
-    backgroundColor: Palette.header,
-    paddingHorizontal: Spacing.four,
-    paddingBottom: HEADER_HERO_EXTRA,
-    alignItems: 'flex-end',
-    overflow: 'hidden',
-  },
-  connection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Palette.danger,
-    minHeight: 40,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    zIndex: 2,
-    elevation: 4,
-  },
-  connectionText: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
-    fontWeight: '600',
-  },
   scroll: {
     flex: 1,
-    marginTop: -36,
   },
   content: {
-    paddingHorizontal: SCREEN_PAD,
+    paddingHorizontal: HomeLayout.screenPad,
+    paddingTop: HomeLayout.contentPadTop,
     alignItems: 'center',
+    flexGrow: 1,
   },
   inner: {
     width: '100%',
     maxWidth: MaxContentWidth,
-    gap: MENU_GAP,
+    gap: HomeLayout.sectionGap,
   },
-  card: {
-    backgroundColor: Palette.card,
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...cardShadow,
-  },
-  cardTopSection: {
-    backgroundColor: Palette.cardTop,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 8,
-    gap: 6,
-  },
-  cardHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.two,
+  section: {
     width: '100%',
-  },
-  cardHeadStacked: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-  },
-  cardTitle: {
-    color: Palette.ink,
-    fontWeight: '500',
-    flex: 1,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  cardSize: {
-    color: Palette.ink,
-    fontWeight: '500',
-    flexShrink: 0,
-    maxWidth: '48%',
-    textAlign: 'right',
-  },
-  cardSizeStacked: {
-    maxWidth: '100%',
-    textAlign: 'left',
-    alignSelf: 'stretch',
-  },
-  previewWrap: {
-    width: '100%',
-  },
-  previewBorder: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyPreview: {
-    width: '100%',
-    height: HOME_PREVIEW_MAX_HEIGHT,
-    borderRadius: 10,
-    backgroundColor: '#F4F6F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-  },
-  emptyPreviewText: {
-    color: Palette.muted,
-    fontSize: 12.5,
-  },
-  connectionConnected: {
-    backgroundColor: '#2E9E63',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-  },
-  actionItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  actionPressable: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 2,
-  },
-  actionLabel: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  menuSection: {
-    gap: MENU_GAP,
-    width: '100%',
-  },
-  menuRow: {
-    flexDirection: 'row',
-    gap: MENU_GAP,
-    width: '100%',
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: MENU_GAP,
-    width: '100%',
-  },
-  menuHalf: {
-    flex: 1,
-    minWidth: 0,
-  },
-  menuThird: {
-    flex: 1,
-    minWidth: 0,
-  },
-  menuQuarter: {
-    minWidth: 0,
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  tileOuter: {
-    minWidth: 0,
-  },
-  tileInnerWide: {
-    backgroundColor: Palette.card,
-    borderRadius: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    width: '100%',
-    height: WIDE_TILE_H,
-    ...cardShadow,
-  },
-  tileInnerSquare: {
-    backgroundColor: Palette.card,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 4,
-    width: '100%',
-    height: SQUARE_TILE_H,
-    ...cardShadow,
-  },
-  tileIconWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 28,
-    minHeight: 28,
-  },
-  tileLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: Palette.ink,
-    textAlign: 'center',
-  },
-  tileLabelWide: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Palette.ink,
-    textAlign: 'left',
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

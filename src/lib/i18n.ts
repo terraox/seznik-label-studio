@@ -8,6 +8,7 @@ import { INDIAN_LANGUAGES } from '@/constants/indian-languages';
 export type TranslationKey =
   | 'tab.home'
   | 'tab.template'
+  | 'tab.shop'
   | 'tab.setting'
   | 'tab.help'
   | 'setting.title'
@@ -43,6 +44,7 @@ type StringsTable = Partial<Record<TranslationKey, string>>;
 const en: Record<TranslationKey, string> = {
   'tab.home': 'Home',
   'tab.template': 'Template',
+  'tab.shop': 'Shop',
   'tab.setting': 'Setting',
   'tab.help': 'Help',
   'setting.title': 'Setting',
@@ -77,6 +79,7 @@ const en: Record<TranslationKey, string> = {
 const hi: StringsTable = {
   'tab.home': 'होम',
   'tab.template': 'टेम्पलेट',
+  'tab.shop': 'शॉप',
   'tab.setting': 'सेटिंग',
   'tab.help': 'सहायता',
   'setting.title': 'सेटिंग',

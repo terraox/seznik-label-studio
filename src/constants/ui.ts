@@ -15,6 +15,60 @@ export const Palette = {
   disabled: '#A4B0BC',
 } as const;
 
+/** Filled hero surface; white text on it stays above 4.5:1 (Palette.accent is ~2.9:1). */
+export const accentStrong = '#0E7C8A';
+
+/**
+ * Solid status-chip fills (white text on each). Contrast vs #FFFFFF is ≥4.5:1.
+ * `idle` is the red "not connected" fill (WePrint / old home pill). `busy` is
+ * amber for scanning/connecting. `ok` is green when connected or printing.
+ */
+export const HomeStatusColors = {
+  idle: '#DC2626',
+  busy: '#B45309',
+  ok: '#18794A',
+  error: '#DC2626',
+} as const;
+
+export const HomeLayout = {
+  screenPad: 16,
+  /** Horizontal gap between tiles in a row. */
+  gap: 10,
+  /** Vertical gap between major sections. */
+  sectionGap: 16,
+  /** Top padding inside the home ScrollView content. */
+  contentPadTop: 16,
+  gridColumns: 3,
+  labelTypeColumns: 4,
+  /** New Label hero — WePrint-style broad card with left art. */
+  heroHeight: 96,
+  /** 3-column tile min height (Print from file, More ways to create). */
+  tileHeight: 80,
+  /** 4-column Label types tile min height. */
+  labelTypeTileHeight: 72,
+  /** Section heading text line (~13) + space below heading. */
+  sectionHeadingBlock: 24,
+  sectionHeadingGap: 6,
+  iconSize: 22,
+  chipHeight: 44,
+  /** Last-edited card preview stage height (HiFi catalog paint). */
+  continuePreviewMaxHeight: 200,
+  /** Buy from us marquee strip. */
+  buyStripHeight: 108,
+  labelMaxFontScale: 1.4,
+} as const;
+
+/**
+ * Content height budget at default font scale (exclude tab-bar padding).
+ * Assumed viewport for content: ~360×740 phone → ~560dp below header/above tabs.
+ * With current-template card + Buy from us strip the home screen scrolls.
+ */
+export const HOME_CONTENT_BUDGET = {
+  assumedViewportHeight: 560,
+  withContinue: 700,
+  withoutContinue: 520,
+} as const;
+
 export const cardShadow = Platform.select({
   ios: {
     shadowColor: '#0B1F33',

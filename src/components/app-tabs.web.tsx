@@ -30,6 +30,9 @@ export default function AppTabs() {
           <TabTrigger name="template" href="/template" asChild>
             <TabButton icon="square.grid.2x2.fill">{t('tab.template')}</TabButton>
           </TabTrigger>
+          <TabTrigger name="shop" href="/shop" asChild>
+            <TabButton icon="bag.fill">{t('tab.shop')}</TabButton>
+          </TabTrigger>
           <TabTrigger name="help" href="/help" asChild>
             <TabButton icon="questionmark.circle.fill">{t('tab.help')}</TabButton>
           </TabTrigger>
