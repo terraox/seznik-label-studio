@@ -31,6 +31,7 @@ const CONTENT_FIT_KEYS = new Set([
   'text',
   'content',
   'fontSize',
+  'fontFamily',
   'charSpacing',
   'lineSpacing',
   'bold',
@@ -67,8 +68,9 @@ export function fitTextBoxToContent(
   if (el.verticalDisplay) {
     const chars = raw.length > 0 ? raw.replace(/\n/g, '').split('') : [''];
     const glyphW = Math.max(
-      measureTextWidthMm(raw.length ? raw.replace(/\n/g, '') : 'W', fontSize, charSpacing, bold) / Math.max(1, chars.length),
-      measureTextWidthMm('W', fontSize, 0, bold),
+      measureTextWidthMm(raw.length ? raw.replace(/\n/g, '') : 'W', fontSize, charSpacing, bold, el.fontFamily) /
+        Math.max(1, chars.length),
+      measureTextWidthMm('W', fontSize, 0, bold, el.fontFamily),
     );
     return {
       width: roundMm(Math.min(maxW, Math.max(minW, glyphW + pad))),
@@ -79,7 +81,7 @@ export function fitTextBoxToContent(
   const explicitLines = raw.length > 0 ? raw.split('\n') : [''];
   let longestMm = 0;
   for (const line of explicitLines) {
-    longestMm = Math.max(longestMm, measureTextWidthMm(line, fontSize, charSpacing, bold));
+    longestMm = Math.max(longestMm, measureTextWidthMm(line, fontSize, charSpacing, bold, el.fontFamily));
   }
 
   const width = roundMm(Math.min(maxW, Math.max(minW, longestMm + pad)));
@@ -93,6 +95,7 @@ export function fitTextBoxToContent(
     charSpacing,
     bold,
     verticalDisplay: false,
+    fontFamily: el.fontFamily,
   });
   return {
     width,
@@ -116,6 +119,7 @@ export function mergeTextElementPatch(
     'text',
     'content',
     'fontSize',
+    'fontFamily',
     'width',
     'charSpacing',
     'lineSpacing',
@@ -149,6 +153,7 @@ export function mergeTextElementPatch(
     charSpacing: merged.charSpacing ?? 0,
     bold: merged.bold ?? false,
     verticalDisplay: merged.verticalDisplay ?? false,
+    fontFamily: merged.fontFamily,
   });
 
   if (updates.autoTextHeight === true || (autoHeight && updates.autoTextHeight !== false)) {

@@ -16,12 +16,14 @@ import { OpenSans_400Regular } from '@expo-google-fonts/open-sans';
 import { Oswald_500Medium } from '@expo-google-fonts/oswald';
 import { PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
 import { Roboto_400Regular } from '@expo-google-fonts/roboto';
+import { RobotoMono_400Regular } from '@expo-google-fonts/roboto-mono';
 
 /** All custom families used by FONT_LIBRARY — load once at app root so editor/preview are real. */
 export const APP_FONT_MAP = {
   Inter_400Regular,
   Inter_600SemiBold,
   Roboto_400Regular,
+  RobotoMono_400Regular,
   OpenSans_400Regular,
   Lato_400Regular,
   Montserrat_600SemiBold,

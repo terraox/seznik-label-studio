@@ -42,6 +42,16 @@ test('mergeTextElementPatch applies content-fit when text is edited', () => {
   assert.ok(typeof next.height === 'number' && next.height >= start.height);
 });
 
+test('mergeTextElementPatch refits the box when the font changes', () => {
+  const start = textEl('hiiiiiii', { width: 12, height: 6, fontFamily: 'Inter' });
+  const next = mergeTextElementPatch(start, { fontFamily: 'Monospace' }, canvas);
+  assert.equal(next.type, 'text');
+  if (next.type !== 'text') return;
+  assert.equal(next.fontFamily, 'Monospace');
+  assert.ok(next.width > start.width, `mono width ${next.width} should exceed ${start.width}`);
+  assert.ok(typeof next.height === 'number' && next.height >= 4);
+});
+
 test('explicit newlines grow height', () => {
   const one = fitTextBoxToContent(textEl('Line'), canvas);
   const two = fitTextBoxToContent(textEl('Line\nLine'), canvas);

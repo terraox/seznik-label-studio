@@ -370,13 +370,19 @@ function inkValue(antiColor?: boolean): number {
 }
 
 function resolveFontFamily(name?: string): string | undefined {
-  if (!name || name === 'Default' || name === 'Barcode') return undefined;
   try {
+    const { lookupFontFamily } = require('@/lib/fonts/lookup') as typeof import('@/lib/fonts/lookup');
     const { FONT_LIBRARY } = require('@/constants/font-library') as {
-      FONT_LIBRARY: { name: string; id: string; family?: string }[];
+      FONT_LIBRARY: { name: string; id: string; family?: string; source?: string }[];
     };
-    const byName = FONT_LIBRARY.find((f) => f.name === name || f.id === name);
-    return byName?.family;
+    let installed: { id: string; name: string; familyKey: string }[] = [];
+    try {
+      const { useInstalledFontStore } = require('@/stores/installed-font-store') as typeof import('@/stores/installed-font-store');
+      installed = useInstalledFontStore.getState().items ?? [];
+    } catch {
+      installed = [];
+    }
+    return lookupFontFamily(name, FONT_LIBRARY, installed);
   } catch {
     return undefined;
   }
@@ -406,6 +412,7 @@ function drawText(
     charSpacing: el.charSpacing,
     bold: el.bold,
     verticalDisplay: el.verticalDisplay,
+    fontFamily: el.fontFamily,
   });
   const fontH = Math.max(1, Math.round(ptToMm(el.fontSize) * dpm));
   const lineH = Math.max(1, Math.round(layout.lineHeightMm * dpm));

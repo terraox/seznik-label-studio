@@ -29,7 +29,8 @@ import {
   type TimeElementState,
 } from "@/components/editor/types";
 import { getClipartById } from "@/constants/clipart-library";
-import { FONT_LIBRARY } from "@/constants/font-library";
+import { resolveFontFamily } from "@/lib/fonts/resolve-font";
+import { useInstalledFontStore } from "@/stores/installed-font-store";
 import { barcodeModulesForMode } from "@/lib/barcode-code128";
 import {
   snap1DBarcodeModules,
@@ -74,12 +75,6 @@ function shapeFillColor(element: ShapeElementState) {
   if (!element.fill) return "transparent";
   if (element.fillColor) return element.fillColor;
   return paletteColor(element.drawingColorIndex);
-}
-
-export function resolveFontFamily(name: string): string | undefined {
-  if (!name || name === "Default" || name === "Barcode") return undefined;
-  const byName = FONT_LIBRARY.find((f) => f.name === name || f.id === name);
-  return byName?.family ?? undefined;
 }
 
 function fontSizePx(fontSizePt: number, scale: number) {
@@ -138,7 +133,8 @@ function textStyleFor(
   if (state.strikethrough) decorations.push("line-through");
   return {
     fontSize: size,
-    lineHeight: size * lineMult,
+    lineHeight: size * 1.25 * lineMult,
+    paddingVertical: size * 0.12,
     includeFontPadding: false,
     fontFamily: resolveFontFamily(state.fontFamily),
     fontWeight: state.bold ? ("600" as const) : ("400" as const),
@@ -230,6 +226,7 @@ function formatTextForRender(element: TextLayoutFields, raw: string) {
     charSpacing: element.charSpacing ?? 0,
     bold: element.bold ?? false,
     verticalDisplay: false,
+    fontFamily: element.fontFamily,
   });
   return {
     text: lines.join("\n"),
@@ -1289,6 +1286,7 @@ export function ElementContentView({
   selectedTableCell,
   tableSelectionColor,
 }: ContentProps) {
+  useInstalledFontStore((state) => state.revision);
   switch (element.type) {
     case "text":
       return <TextContent element={element} scale={scale} widthPx={widthPx} />;

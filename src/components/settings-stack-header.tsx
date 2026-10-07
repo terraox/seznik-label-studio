@@ -6,8 +6,18 @@ import { AppIcon } from '@/components/app-icon';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple, Palette } from '@/constants/ui';
 
-export function SettingsStackHeader({ title }: { title: string }) {
+export function SettingsStackHeader({
+  title,
+  rightLabel,
+  onRightPress,
+}: {
+  title: string;
+  rightLabel?: string;
+  onRightPress?: () => void;
+}) {
   const insets = useSafeAreaInsets();
+
+  const sideWidth = rightLabel && onRightPress ? 64 : 36;
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + Spacing.one }]}>
@@ -15,11 +25,25 @@ export function SettingsStackHeader({ title }: { title: string }) {
         onPress={() => router.back()}
         hitSlop={12}
         android_ripple={androidRipple}
-        style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
+        style={({ pressed }) => [
+          styles.backBtn,
+          { width: sideWidth, alignItems: sideWidth === 36 ? 'center' : 'flex-start' },
+          pressed && styles.pressed,
+        ]}>
         <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
       </Pressable>
       <Text style={styles.title}>{title}</Text>
-      <View style={styles.spacer} />
+      {rightLabel && onRightPress ? (
+        <Pressable
+          onPress={onRightPress}
+          hitSlop={8}
+          android_ripple={androidRipple}
+          style={({ pressed }) => [styles.rightBtn, { width: sideWidth }, pressed && styles.pressed]}>
+          <Text style={styles.rightLabel}>{rightLabel}</Text>
+        </Pressable>
+      ) : (
+        <View style={[styles.spacer, { width: sideWidth }]} />
+      )}
     </View>
   );
 }
@@ -39,7 +63,7 @@ const styles = StyleSheet.create({
   backBtn: {
     width: 36,
     height: 36,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   title: {
@@ -51,6 +75,17 @@ const styles = StyleSheet.create({
   },
   spacer: {
     width: 36,
+  },
+  rightBtn: {
+    width: 64,
+    height: 36,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  rightLabel: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
   },
   pressed: {
     opacity: 0.65,

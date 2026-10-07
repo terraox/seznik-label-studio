@@ -8,6 +8,7 @@ import { ScrollView, Text, View, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { APP_FONT_MAP } from '@/lib/app-fonts';
+import { startInstalledFontHydration } from '@/lib/fonts/runtime';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -44,6 +45,8 @@ class RootErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
 function AppRoot() {
   const colorScheme = useColorScheme();
   useFonts(APP_FONT_MAP);
+
+  useEffect(() => startInstalledFontHydration(), []);
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});

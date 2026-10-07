@@ -45,7 +45,8 @@ import { barcodeBarsForMode } from '@/lib/barcode-code128';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { generateQrMatrix } from '@/printing/renderer/qrcode';
 import { applySerialOffset, lineSpacingMultiplier } from '@/lib/serial-content';
-import { FONT_LIBRARY } from '@/constants/font-library';
+import { resolveFontFamily } from '@/lib/fonts/resolve-font';
+import { useInstalledFontStore } from '@/stores/installed-font-store';
 import { getClipartById } from '@/constants/clipart-library';
 import { parseSvgDrawOps } from '@/lib/clipart/parse-svg';
 import { applyMonoToRgba, resolveEditorColorMode } from '@/lib/editor/image-mono';
@@ -65,11 +66,7 @@ export function inkColor(drawingColorIndex: number): string {
   return drawingColorIndex === 0 || color === '#FFFFFF' ? DESIGN_INK : color;
 }
 
-export function resolveFontFamily(name?: string): string | undefined {
-  if (!name || name === 'Default' || name === 'Barcode') return undefined;
-  const byName = FONT_LIBRARY.find((f) => f.name === name || f.id === name);
-  return byName?.family ?? undefined;
-}
+export { resolveFontFamily };
 
 export function fontSizePx(fontSizePt: number, scale: number): number {
   return Math.max(1, ptToMm(fontSizePt) * scale);
@@ -89,6 +86,7 @@ export const SkiaText = memo(function SkiaText({
   heightPx: number;
   scale: number;
 }) {
+  const fontRevision = useInstalledFontStore((state) => state.revision);
   const size = fontSizePx(element.fontSize, scale);
   const color = element.antiColor ? '#FFFFFF' : inkColor(element.drawingColorIndex);
   const family = resolveFontFamily(element.fontFamily) || 'sans-serif';
@@ -104,7 +102,7 @@ export const SkiaText = memo(function SkiaText({
     } catch {
       return null;
     }
-  }, [family, size, element.italic, element.bold]);
+  }, [family, size, element.italic, element.bold, fontRevision]);
 
   const rawText =
     element.contentType === 'Data Source' && element.columnNameContent
@@ -186,6 +184,7 @@ export const SkiaBarcode = memo(function SkiaBarcode({
   bold?: boolean;
   scale: number;
 }) {
+  const fontRevision = useInstalledFontStore((state) => state.revision);
   const bars = useMemo(() => {
     return barcodeBarsForMode(encodeMode, content || '0123456789');
   }, [encodeMode, content]);
@@ -212,7 +211,7 @@ export const SkiaBarcode = memo(function SkiaBarcode({
     } catch {
       return null;
     }
-  }, [showLabel, fontFamily, labelSize, bold]);
+  }, [showLabel, fontFamily, labelSize, bold, fontRevision]);
 
   const rects = useMemo(() => {
     if (!bars) return [];

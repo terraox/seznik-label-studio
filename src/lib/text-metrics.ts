@@ -51,13 +51,33 @@ export function lineSpacingMultiplier(spacing?: LineSpacing): number {
   }
 }
 
+/** Roboto Mono and the Monospace library entry share one advance. */
+export function usesMonospaceMetrics(fontFamily?: string): boolean {
+  'worklet';
+  if (!fontFamily) return false;
+  const key = fontFamily.toLowerCase().replace(/[\s_-]/g, '');
+  return key === 'mono' || key === 'monospace' || key === 'menlo' || key.indexOf('robotomono') >= 0;
+}
+
 /**
  * Character width estimation in em units relative to font size (1.0 em = 1 font size unit).
  * Calibrated against standard system / sans-serif fonts (Roboto, Inter, San Francisco, Arial).
+ * Monospace faces use a flat 0.6 em so wrap matches Roboto Mono on screen and in print.
  */
-export function charWidthEm(ch: string, bold = false): number {
+export function charWidthEm(ch: string, bold = false, fontFamily?: string): number {
   'worklet';
   const code = ch.charCodeAt(0);
+  if (usesMonospaceMetrics(fontFamily)) {
+    if (
+      (code >= 0x2e80 && code <= 0x9fff) ||
+      (code >= 0xac00 && code <= 0xd7af) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xff01 && code <= 0xff60)
+    ) {
+      return 1.0;
+    }
+    return bold ? 0.63 : 0.6;
+  }
 
   // CJK / Full-width ideographs (Chinese, Japanese, Korean, full-width forms)
   if (
@@ -230,6 +250,7 @@ export function measureTextWidthMm(
   fontSizePt: number,
   charSpacingMm = 0,
   bold = false,
+  fontFamily?: string,
 ): number {
   'worklet';
   if (!text || text.length === 0) return 0;
@@ -237,7 +258,7 @@ export function measureTextWidthMm(
   let totalMm = 0;
   for (let i = 0; i < text.length; i++) {
     const ch = text.charAt(i);
-    totalMm += charWidthEm(ch, bold) * emToMm + charSpacingMm;
+    totalMm += charWidthEm(ch, bold, fontFamily) * emToMm + charSpacingMm;
   }
   return totalMm;
 }
@@ -269,6 +290,8 @@ export type ComputeWrappedLinesParams = {
   charSpacing?: number;
   bold?: boolean;
   verticalDisplay?: boolean;
+  /** Library name or family key. Monospace uses a flat advance. */
+  fontFamily?: string;
 };
 
 /**
@@ -282,6 +305,7 @@ export function computeWrappedLines({
   charSpacing = 0,
   bold = false,
   verticalDisplay = false,
+  fontFamily,
 }: ComputeWrappedLinesParams): string[] {
   'worklet';
   if (!text || text.length === 0) return [''];
@@ -311,7 +335,7 @@ export function computeWrappedLines({
       for (let i = 0; i < para.length; i++) {
         const ch = para.charAt(i);
         const testLine = currentLine + ch;
-        if (currentLine.length > 0 && measureTextWidthMm(testLine, fontSize, charSpacing, bold) > safeWidthMm) {
+        if (currentLine.length > 0 && measureTextWidthMm(testLine, fontSize, charSpacing, bold, fontFamily) > safeWidthMm) {
           result.push(currentLine);
           currentLine = ch;
         } else {
@@ -340,7 +364,7 @@ export function computeWrappedLines({
       const word = words[w];
       const candidate = currentLine.length > 0 ? currentLine + ' ' + word : word;
 
-      if (measureTextWidthMm(candidate, fontSize, charSpacing, bold) <= safeWidthMm) {
+      if (measureTextWidthMm(candidate, fontSize, charSpacing, bold, fontFamily) <= safeWidthMm) {
         currentLine = candidate;
       } else {
         if (currentLine.length > 0) {
@@ -349,7 +373,7 @@ export function computeWrappedLines({
         }
 
         // Check if individual word exceeds available width on its own
-        if (measureTextWidthMm(word, fontSize, charSpacing, bold) <= safeWidthMm) {
+        if (measureTextWidthMm(word, fontSize, charSpacing, bold, fontFamily) <= safeWidthMm) {
           currentLine = word;
         } else {
           // Word is too long to fit in one line, break mid-word
@@ -357,7 +381,7 @@ export function computeWrappedLines({
           for (let c = 0; c < word.length; c++) {
             const ch = word.charAt(c);
             const testPartial = partial + ch;
-            if (partial.length > 0 && measureTextWidthMm(testPartial, fontSize, charSpacing, bold) > safeWidthMm) {
+            if (partial.length > 0 && measureTextWidthMm(testPartial, fontSize, charSpacing, bold, fontFamily) > safeWidthMm) {
               result.push(partial);
               partial = ch;
             } else {
@@ -386,6 +410,7 @@ export type ComputeTextElementHeightParams = {
   charSpacing?: number;
   bold?: boolean;
   verticalDisplay?: boolean;
+  fontFamily?: string;
 };
 
 /**
@@ -400,6 +425,7 @@ export function computeTextElementHeightMm({
   charSpacing = 0,
   bold = false,
   verticalDisplay = false,
+  fontFamily,
 }: ComputeTextElementHeightParams): number {
   'worklet';
   const lines = computeWrappedLines({
@@ -410,6 +436,7 @@ export function computeTextElementHeightMm({
     charSpacing,
     bold,
     verticalDisplay,
+    fontFamily,
   });
 
   const mult = lineSpacingMultiplier(lineSpacing);
@@ -438,6 +465,7 @@ export function layoutPrintText({
   charSpacing = 0,
   bold = false,
   verticalDisplay = false,
+  fontFamily,
 }: ComputeTextElementHeightParams): PrintTextLayout {
   'worklet';
   const lines = computeWrappedLines({
@@ -448,10 +476,11 @@ export function layoutPrintText({
     charSpacing,
     bold,
     verticalDisplay,
+    fontFamily,
   });
   return {
     lines,
-    widthsMm: lines.map((line) => measureTextWidthMm(line, fontSize, charSpacing, bold)),
+    widthsMm: lines.map((line) => measureTextWidthMm(line, fontSize, charSpacing, bold, fontFamily)),
     lineHeightMm: ptToMm(fontSize) * lineSpacingMultiplier(lineSpacing),
   };
 }

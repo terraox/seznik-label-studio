@@ -437,6 +437,7 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
         charSpacing: element.charSpacing ?? 0,
         bold: element.bold ?? false,
         verticalDisplay: element.verticalDisplay ?? false,
+        fontFamily: element.fontFamily,
       });
       return { width: element.width, height };
     }
@@ -457,6 +458,7 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
         charSpacing: element.charSpacing ?? 0,
         bold: element.bold ?? false,
         verticalDisplay: element.verticalDisplay ?? false,
+        fontFamily: element.fontFamily,
       });
       return { width: element.width, height };
     }
