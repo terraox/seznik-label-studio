@@ -146,6 +146,7 @@ import {
   VerticalRuler,
   type LiveRulerBounds,
 } from '@/components/canvas-rulers';
+import { ResizeSizeHud } from '@/components/editor/resize-size-hud';
 import { LabelSettingsMenu } from '@/components/editor/more-menu';
 import { LabelSizeEditor } from '@/components/label-size-editor';
 import { LinePropertyPanel } from '@/components/editor/line-property-panel';
@@ -321,7 +322,7 @@ function scaledFontSizeForResize(
   scaleY: number,
   fallbackFontSize?: number,
 ): number | undefined {
-  if ('fontSize' in el && typeof el.fontSize === 'number') {
+  if (el.type !== 'barcode' && 'fontSize' in el && typeof el.fontSize === 'number') {
     const drivingScale = handle === 'e' ? scaleX : scaleY;
     return Math.max(4, Math.round(el.fontSize * drivingScale * 2) / 2);
   }
@@ -676,6 +677,7 @@ export default function EditScreen() {
   const groupScaleMinSv = useSharedValue(0.001);
   const groupScaleMaxSv = useSharedValue(1000);
   const activeSelectedIdSv = useSharedValue(primaryId ?? (params.selectedElementId ?? ''));
+  const resizeHudVisibleSv = useSharedValue(0);
   const [panelOpen, setPanelOpen] = useState(() =>
     Boolean(params.autoOpenPanel === 'true' && params.selectedElementId)
   );
@@ -1102,6 +1104,11 @@ export default function EditScreen() {
     if (!canvasFullscreen) return;
     setCanvasFullscreen(false);
   }, [canvasFullscreen]);
+
+  const handleSplitDragCancel = useCallback(() => {
+    splitDraggingRef.current = false;
+    setSplitDragging(false);
+  }, []);
 
   const handleSplitDragEnd = useCallback(
     (result: SplitReleaseResult) => {
@@ -1862,6 +1869,7 @@ export default function EditScreen() {
 
     transformingRef.current = false;
     transformKindRef.current = null;
+    resizeHudVisibleSv.value = 0;
     dragStartPositionsRef.current = null;
     resizeStartSnapshotsRef.current = null;
     clearGroupPreview();
@@ -1918,16 +1926,29 @@ export default function EditScreen() {
     topBarSelectionVisibleSv,
     bottomPanelVisibleSv,
     commitSelectedTableCell,
+    resizeHudVisibleSv,
   ]);
 
   const handleDeselectAll = useCallback(() => {
+    selectedIdsRef.current = [];
+    primaryIdRef.current = null;
+    activeSelectedIdSv.value = '';
     topBarSelectionVisibleSv.value = 0;
     bottomPanelVisibleSv.value = 0;
+    groupEligibleSv.value = 0;
+    resizeHudVisibleSv.value = 0;
     setSelectedIds([]);
     setPrimaryId(null);
     commitSelectedTableCell(null);
     setPanelOpen(false);
-  }, [topBarSelectionVisibleSv, bottomPanelVisibleSv, commitSelectedTableCell]);
+  }, [
+    activeSelectedIdSv,
+    topBarSelectionVisibleSv,
+    bottomPanelVisibleSv,
+    groupEligibleSv,
+    resizeHudVisibleSv,
+    commitSelectedTableCell,
+  ]);
 
   const toggleMultipleMode = useCallback(() => {
     const turningOn = !multipleMode;
@@ -2310,6 +2331,7 @@ export default function EditScreen() {
       historyRef.current.begin(docRef.current.elements);
       publishSnapGuides([]);
       transformKindRef.current = kind;
+      resizeHudVisibleSv.value = kind === 'resize' ? 1 : 0;
       if (docRef.current.bulk) {
         bulkGestureSnapshotRef.current = JSON.parse(
           JSON.stringify(docRef.current.elements),
@@ -2347,7 +2369,7 @@ export default function EditScreen() {
         resizeStartSnapshotsRef.current = null;
       }
     },
-    [publishSnapGuides, handleSelect],
+    [publishSnapGuides, handleSelect, resizeHudVisibleSv],
   );
 
   const prepareGroupResizeHandle = useCallback(
@@ -2402,6 +2424,7 @@ export default function EditScreen() {
   const handleTransformEnd = useCallback(
     (payload: TransformCommitPayload) => {
       publishSnapGuides([]);
+      resizeHudVisibleSv.value = 0;
       if (!docRef.current.elements.some((el) => el.id === payload.id)) {
         transformingRef.current = false;
         dragStartPositionsRef.current = null;
@@ -2611,6 +2634,7 @@ export default function EditScreen() {
       groupScaleXSv,
       groupScaleYSv,
       editorSettings.pictureAdsorption,
+      resizeHudVisibleSv,
     ],
   );
 
@@ -4216,6 +4240,10 @@ export default function EditScreen() {
           </View>
         </View>
 
+        <View style={styles.resizeHudSlot} pointerEvents="none">
+          <ResizeSizeHud liveBounds={liveRulerBounds} visibleSv={resizeHudVisibleSv} />
+        </View>
+
         {doc.bulk && doc.bulk.rowCount > 1 ? (
           <View style={styles.bulkNav}>
             <PdfPageNav
@@ -4340,6 +4368,8 @@ export default function EditScreen() {
             panelMinPx={panelMinForSplit}
             onDragStart={handleSplitDragStart}
             onDragEnd={handleSplitDragEnd}
+            onDragCancel={handleSplitDragCancel}
+            onTap={selectedIds.length > 0 ? handleDeselectAll : undefined}
           />
 
           {editorSettings.showNudgePad && !canvasFullscreen ? (
@@ -4847,6 +4877,15 @@ const styles = StyleSheet.create({
     height: 44,
     overflow: 'hidden',
     zIndex: 2,
+  },
+  resizeHudSlot: {
+    width: '100%',
+    height: 26,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: EDITOR_WORKSPACE_COLOR,
+    zIndex: 3,
   },
   subToolbarRow: {
     width: '100%',

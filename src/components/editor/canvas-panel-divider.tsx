@@ -38,6 +38,10 @@ type CanvasPanelDividerProps = {
   onCanvasHeightChange?: (nextCanvasPx: number) => void;
   onDragStart?: () => void;
   onDragEnd?: (result: SplitReleaseResult) => void;
+  /** Finger lifted without a split-drag (tap or cancelled pan). */
+  onDragCancel?: () => void;
+  /** Stationary tap in the gap — used to clear canvas selection. */
+  onTap?: () => void;
 };
 
 export function CanvasPanelDivider({
@@ -49,6 +53,8 @@ export function CanvasPanelDivider({
   onCanvasHeightChange,
   onDragStart,
   onDragEnd,
+  onDragCancel,
+  onTap,
 }: CanvasPanelDividerProps) {
   const fallbackHeightSv = useSharedValue(canvasHeightPx);
   const activeHeightSv = canvasHeightSv ?? fallbackHeightSv;
@@ -64,8 +70,8 @@ export function CanvasPanelDivider({
     panelMinPxSv.value = panelMinPx;
   }, [panelMinPx, panelMinPxSv]);
 
-  const callbacksRef = useRef({ onDragStart, onDragEnd, onCanvasHeightChange });
-  callbacksRef.current = { onDragStart, onDragEnd, onCanvasHeightChange };
+  const callbacksRef = useRef({ onDragStart, onDragEnd, onDragCancel, onCanvasHeightChange, onTap });
+  callbacksRef.current = { onDragStart, onDragEnd, onDragCancel, onCanvasHeightChange, onTap };
 
   const fireDragStart = useCallback(() => {
     callbacksRef.current.onDragStart?.();
@@ -79,15 +85,26 @@ export function CanvasPanelDivider({
     callbacksRef.current.onDragEnd?.(result);
   }, []);
 
+  const fireTap = useCallback(() => {
+    callbacksRef.current.onTap?.();
+  }, []);
+
+  const fireDragCancel = useCallback(() => {
+    callbacksRef.current.onDragCancel?.();
+  }, []);
+
   const gesture = useMemo(() => {
-    return Gesture.Pan()
-      .minDistance(1)
-      .activeOffsetY([-1, 1])
+    const pan = Gesture.Pan()
+      .minDistance(8)
+      .activeOffsetY([-8, 8])
       .shouldCancelWhenOutside(false)
       .hitSlop({ top: 12, bottom: 12 })
       .onBegin(() => {
         'worklet';
         startPxSv.value = activeHeightSv.value;
+      })
+      .onStart(() => {
+        'worklet';
         if (isDraggingSv) {
           isDraggingSv.value = true;
         }
@@ -128,12 +145,27 @@ export function CanvasPanelDivider({
         if (isDraggingSv) {
           isDraggingSv.value = false;
         }
+        runOnJS(fireDragCancel)();
       });
+
+    const tap = Gesture.Tap()
+      .maxDuration(400)
+      .maxDistance(10)
+      .onEnd((_e, success) => {
+        'worklet';
+        if (success) {
+          runOnJS(fireTap)();
+        }
+      });
+
+    return Gesture.Exclusive(pan, tap);
   }, [
     activeHeightSv,
     fireCanvasHeightChange,
+    fireDragCancel,
     fireDragEnd,
     fireDragStart,
+    fireTap,
     isDraggingSv,
     panelMinPxSv,
     startPxSv,
