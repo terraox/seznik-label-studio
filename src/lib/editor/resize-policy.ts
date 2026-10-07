@@ -67,6 +67,14 @@ export function resizePolicyFor(element: LabelElement): ResizePolicy {
         minMm: RESIZE_MIN_PROPORTIONAL_MM,
         comment: 'QR and ArcText stay square and scale as a whole.',
       };
+    case 'barcode':
+      return {
+        anchors: ['e', 's'],
+        behavior: { e: 'width', s: 'height' },
+        rotateHandle: false,
+        minMm: MIN_ELEMENT_MM,
+        comment: 'Barcode: width and height independently. Live preview stretches the same bars; it does not re-snap modules while dragging.',
+      };
     default:
       return {
         anchors: ['e', 's'],

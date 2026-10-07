@@ -1,31 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View, Platform } from 'react-native';
+import { computeArcTextLayout } from "@/lib/editor/arctext-layout";
+import { useEffect, useMemo, useState } from "react";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import Svg, {
   Circle,
-  Defs,
   Ellipse,
   Line,
   Path,
   Rect,
   Text as SvgText,
-  TextPath,
-} from 'react-native-svg';
-import { computeArcTextLayout } from '@/lib/editor/arctext-layout';
-import QRCode from 'react-native-qrcode-svg';
+} from "react-native-svg";
 
-import { ClipartIcon } from '@/components/clipart-icon';
-import { SignaturePreview } from '@/components/editor/signature-drawing-board';
-import { MonoImagePreview } from '@/components/editor/mono-image-preview';
-import { BorderPreview } from '@/components/border-preview';
-import { borderShapeForMedia } from '@/printing/raster/border-shapes';
-import { formatDataSourceColumn } from '@/lib/editor/data-source-display';
-import {
-  looksLikeImageUri,
-  resolveEditorColorMode,
-} from '@/lib/editor/image-mono';
-import { useDataStore } from '@/stores/data-store';
-import { useSettingsStore } from '@/stores/settings-store';
-import { getClipartById } from '@/constants/clipart-library';
+import { BorderPreview } from "@/components/border-preview";
+import { ClipartIcon } from "@/components/clipart-icon";
+import { MonoImagePreview } from "@/components/editor/mono-image-preview";
+import { SignaturePreview } from "@/components/editor/signature-drawing-board";
 import {
   DRAWING_COLORS,
   applyTimeOffsets,
@@ -39,31 +27,43 @@ import {
   type ShapeElementState,
   type TableElementState,
   type TimeElementState,
-} from '@/components/editor/types';
-import { FONT_LIBRARY } from '@/constants/font-library';
-import { barcodeBarsForMode, barcodeModulesForMode } from '@/lib/barcode-code128';
-import { snap1DBarcodeModules, type SnappedBar } from '@/lib/barcode/barcode-snapping';
-import { formatBarcodeHri } from '@/lib/barcode/hri';
-import { dotsPerMm } from '@/lib/printer/print-spec';
-import { stretchThenRoundBars } from '@/printing/raster/barcode-stretch';
-import { encodeDataMatrix } from '@/lib/barcode/datamatrix';
-import { encodePdf417 } from '@/lib/barcode/pdf417';
-import { generateQrMatrix } from '@/printing/renderer/qrcode';
-import { applySerialOffset, lineSpacingMultiplier } from '@/lib/serial-content';
+} from "@/components/editor/types";
+import { getClipartById } from "@/constants/clipart-library";
+import { FONT_LIBRARY } from "@/constants/font-library";
+import { barcodeModulesForMode } from "@/lib/barcode-code128";
+import {
+  snap1DBarcodeModules,
+  type SnappedBar,
+} from "@/lib/barcode/barcode-snapping";
+import { encodeDataMatrix } from "@/lib/barcode/datamatrix";
+import { formatBarcodeHri } from "@/lib/barcode/hri";
+import { encodePdf417 } from "@/lib/barcode/pdf417";
+import { formatDataSourceColumn } from "@/lib/editor/data-source-display";
+import {
+  looksLikeImageUri,
+  resolveEditorColorMode,
+} from "@/lib/editor/image-mono";
+import { ensureTableCells } from "@/lib/editor/table-cells";
+import { ptToMm, type LabelElement } from "@/lib/label-document";
+import { dotsPerMm } from "@/lib/printer/print-spec";
+import { applySerialOffset, lineSpacingMultiplier } from "@/lib/serial-content";
 import {
   charSpacingToLetterSpacing,
   computeWrappedLines,
   measureTextWidthMm,
-} from '@/lib/text-metrics';
-import { ensureTableCells } from '@/lib/editor/table-cells';
-import { ptToMm, type LabelElement } from '@/lib/label-document';
+} from "@/lib/text-metrics";
+import { stretchThenRoundBars } from "@/printing/raster/barcode-stretch";
+import { borderShapeForMedia } from "@/printing/raster/border-shapes";
+import { generateQrMatrix } from "@/printing/renderer/qrcode";
+import { useDataStore } from "@/stores/data-store";
+import { useSettingsStore } from "@/stores/settings-store";
 
 /** Design-space black (gallery/editor). Print still flattens to 1-bit in the raster pipeline. */
-export const DESIGN_INK = '#111111';
+export const DESIGN_INK = "#111111";
 
 export function inkColor(drawingColorIndex: number) {
   const color = DRAWING_COLORS[drawingColorIndex] ?? DESIGN_INK;
-  return drawingColorIndex === 0 || color === '#FFFFFF' ? DESIGN_INK : color;
+  return drawingColorIndex === 0 || color === "#FFFFFF" ? DESIGN_INK : color;
 }
 
 function paletteColor(drawingColorIndex: number) {
@@ -71,13 +71,13 @@ function paletteColor(drawingColorIndex: number) {
 }
 
 function shapeFillColor(element: ShapeElementState) {
-  if (!element.fill) return 'transparent';
+  if (!element.fill) return "transparent";
   if (element.fillColor) return element.fillColor;
   return paletteColor(element.drawingColorIndex);
 }
 
 export function resolveFontFamily(name: string): string | undefined {
-  if (!name || name === 'Default' || name === 'Barcode') return undefined;
+  if (!name || name === "Default" || name === "Barcode") return undefined;
   const byName = FONT_LIBRARY.find((f) => f.name === name || f.id === name);
   return byName?.family ?? undefined;
 }
@@ -119,120 +119,135 @@ type ContentProps = {
 function textStyleFor(
   state: Pick<
     EditorElementState,
-    | 'fontSize'
-    | 'fontFamily'
-    | 'bold'
-    | 'italic'
-    | 'underline'
-    | 'strikethrough'
-    | 'align'
-    | 'drawingColorIndex'
-    | 'antiColor'
-  > & { lineSpacing?: EditorElementState['lineSpacing'] },
+    | "fontSize"
+    | "fontFamily"
+    | "bold"
+    | "italic"
+    | "underline"
+    | "strikethrough"
+    | "align"
+    | "drawingColorIndex"
+    | "antiColor"
+  > & { lineSpacing?: EditorElementState["lineSpacing"] },
   scale: number,
 ) {
   const size = fontSizePx(state.fontSize, scale);
-  const lineMult = lineSpacingMultiplier(state.lineSpacing ?? '1.0');
+  const lineMult = lineSpacingMultiplier(state.lineSpacing ?? "1.0");
   const decorations: string[] = [];
-  if (state.underline) decorations.push('underline');
-  if (state.strikethrough) decorations.push('line-through');
+  if (state.underline) decorations.push("underline");
+  if (state.strikethrough) decorations.push("line-through");
   return {
     fontSize: size,
     lineHeight: size * lineMult,
     includeFontPadding: false,
     fontFamily: resolveFontFamily(state.fontFamily),
-    fontWeight: state.bold ? ('600' as const) : ('400' as const),
-    fontStyle: state.italic ? ('italic' as const) : ('normal' as const),
-    textDecorationLine: (decorations.join(' ') || 'none') as
-      | 'none'
-      | 'underline'
-      | 'line-through'
-      | 'underline line-through',
-    textAlign: (state.align === 'spacing' ? 'justify' : state.align) as
-      | 'left'
-      | 'center'
-      | 'right'
-      | 'justify',
-    color: state.antiColor ? '#FFFFFF' : inkColor(state.drawingColorIndex),
+    fontWeight: state.bold ? ("600" as const) : ("400" as const),
+    fontStyle: state.italic ? ("italic" as const) : ("normal" as const),
+    textDecorationLine: (decorations.join(" ") || "none") as
+      | "none"
+      | "underline"
+      | "line-through"
+      | "underline line-through",
+    textAlign: (state.align === "spacing" ? "justify" : state.align) as
+      | "left"
+      | "center"
+      | "right"
+      | "justify",
+    color: state.antiColor ? "#FFFFFF" : inkColor(state.drawingColorIndex),
   };
 }
 
 type TextLayoutFields = Pick<
   EditorElementState,
-  | 'contentType'
-  | 'columnNameContent'
-  | 'fontSize'
-  | 'width'
-  | 'charSpacing'
-  | 'bold'
-  | 'align'
-  | 'autoWrapping'
-  | 'verticalDisplay'
-  | 'lineSpacing'
-  | 'italic'
-  | 'underline'
-  | 'strikethrough'
-  | 'fontFamily'
-  | 'drawingColorIndex'
-  | 'antiColor'
+  | "contentType"
+  | "columnNameContent"
+  | "fontSize"
+  | "width"
+  | "charSpacing"
+  | "bold"
+  | "align"
+  | "autoWrapping"
+  | "verticalDisplay"
+  | "lineSpacing"
+  | "italic"
+  | "underline"
+  | "strikethrough"
+  | "fontFamily"
+  | "drawingColorIndex"
+  | "antiColor"
 > & { degreesOffset?: number };
 
 function resolveTextRaw(
-  element: Pick<TextLayoutFields, 'contentType' | 'columnNameContent' | 'degreesOffset'>,
+  element: Pick<
+    TextLayoutFields,
+    "contentType" | "columnNameContent" | "degreesOffset"
+  >,
   textValue: string,
   showColumnName: boolean,
 ): string {
-  if (element.contentType === 'Data Source' && element.columnNameContent) {
+  if (element.contentType === "Data Source" && element.columnNameContent) {
     return formatDataSourceColumn(element.columnNameContent, showColumnName);
   }
-  if (element.contentType === 'Degrees') {
+  if (element.contentType === "Degrees") {
     return applySerialOffset(textValue, element.degreesOffset ?? 1, 1);
   }
   return textValue;
 }
 
 function dataColumnHighlightStyle(
-  element: Pick<TextLayoutFields, 'contentType' | 'columnNameContent'>,
+  element: Pick<TextLayoutFields, "contentType" | "columnNameContent">,
   highlightColumnName: boolean,
 ) {
   if (
     highlightColumnName &&
-    element.contentType === 'Data Source' &&
+    element.contentType === "Data Source" &&
     element.columnNameContent
   ) {
-    return { backgroundColor: 'rgba(255, 235, 59, 0.35)' };
+    return { backgroundColor: "rgba(255, 235, 59, 0.35)" };
   }
   return null;
 }
 
 function formatTextForRender(element: TextLayoutFields, raw: string) {
   if (element.verticalDisplay) {
-    return { text: raw.split('').join('\n'), numberOfLines: undefined as number | undefined };
-  }
-  if (element.autoWrapping === 'Close') {
     return {
-      text: raw.replace(/\r?\n/g, ' '),
+      text: raw.split("").join("\n"),
+      numberOfLines: undefined as number | undefined,
+    };
+  }
+  if (element.autoWrapping === "Close") {
+    return {
+      text: raw.replace(/\r?\n/g, " "),
       numberOfLines: 1 as number | undefined,
-      ellipsizeMode: 'tail' as const,
+      ellipsizeMode: "tail" as const,
     };
   }
   const lines = computeWrappedLines({
     text: raw,
     fontSize: element.fontSize,
     widthMm: element.width,
-    autoWrapping: element.autoWrapping ?? 'Word',
+    autoWrapping: element.autoWrapping ?? "Word",
     charSpacing: element.charSpacing ?? 0,
     bold: element.bold ?? false,
     verticalDisplay: false,
   });
-  return { text: lines.join('\n'), numberOfLines: undefined as number | undefined };
+  return {
+    text: lines.join("\n"),
+    numberOfLines: undefined as number | undefined,
+  };
 }
 
-function letterSpacingStyle(element: Pick<TextLayoutFields, 'charSpacing' | 'fontSize'>) {
+function letterSpacingStyle(
+  element: Pick<TextLayoutFields, "charSpacing" | "fontSize">,
+) {
   const spacing = element.charSpacing ?? 0;
   if (spacing <= 0) return null;
   return {
-    letterSpacing: charSpacingToLetterSpacing(spacing, element.fontSize, Platform.OS),
+    letterSpacing: charSpacingToLetterSpacing(
+      spacing,
+      element.fontSize,
+      Platform.OS,
+    ),
   };
 }
 
@@ -245,22 +260,30 @@ function TextContent({
   widthPx: number;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
-  const highlightColumnName = useSettingsStore((s) => s.editor.highlightColumnName);
+  const highlightColumnName = useSettingsStore(
+    (s) => s.editor.highlightColumnName,
+  );
   const style = textStyleFor(element, scale);
   const raw = resolveTextRaw(element, element.text, showColumnName);
   const formatted = formatTextForRender(element, raw);
-  const align = element.align === 'spacing' ? 'justify' : element.align;
+  const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
       style={[
         styles.fill,
         {
-          justifyContent: 'center',
-          alignItems: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'stretch',
+          justifyContent: "center",
+          alignItems:
+            align === "center"
+              ? "center"
+              : align === "right"
+                ? "flex-end"
+                : "stretch",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
-      ]}>
+      ]}
+    >
       <Text
         allowFontScaling={false}
         style={[
@@ -270,7 +293,10 @@ function TextContent({
           letterSpacingStyle(element),
         ]}
         numberOfLines={formatted.numberOfLines}
-        ellipsizeMode={'ellipsizeMode' in formatted ? formatted.ellipsizeMode : undefined}>
+        ellipsizeMode={
+          "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
+        }
+      >
         {formatted.text}
       </Text>
     </View>
@@ -286,22 +312,30 @@ function DegreesContent({
   widthPx: number;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
-  const highlightColumnName = useSettingsStore((s) => s.editor.highlightColumnName);
+  const highlightColumnName = useSettingsStore(
+    (s) => s.editor.highlightColumnName,
+  );
   const style = textStyleFor(element, scale);
   const raw = resolveTextRaw(element, element.content, showColumnName);
   const formatted = formatTextForRender(element, raw);
-  const align = element.align === 'spacing' ? 'justify' : element.align;
+  const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
       style={[
         styles.fill,
         {
-          justifyContent: 'center',
-          alignItems: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'stretch',
+          justifyContent: "center",
+          alignItems:
+            align === "center"
+              ? "center"
+              : align === "right"
+                ? "flex-end"
+                : "stretch",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
-      ]}>
+      ]}
+    >
       <Text
         allowFontScaling={false}
         style={[
@@ -311,7 +345,10 @@ function DegreesContent({
           letterSpacingStyle(element),
         ]}
         numberOfLines={formatted.numberOfLines}
-        ellipsizeMode={'ellipsizeMode' in formatted ? formatted.ellipsizeMode : undefined}>
+        ellipsizeMode={
+          "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
+        }
+      >
         {formatted.text}
       </Text>
     </View>
@@ -329,24 +366,31 @@ function TimeContent({
   const now = useClock(true);
   const adjusted = applyTimeOffsets(now, element);
   const style = textStyleFor(element, scale);
-  const align = element.align === 'spacing' ? 'justify' : element.align;
+  const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
       style={[
         styles.fill,
         {
-          justifyContent: 'center',
-          alignItems: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'stretch',
-          overflow: 'hidden',
+          justifyContent: "center",
+          alignItems:
+            align === "center"
+              ? "center"
+              : align === "right"
+                ? "flex-end"
+                : "stretch",
+          overflow: "hidden",
         },
         element.antiColor && styles.antiBg,
-      ]}>
+      ]}
+    >
       <Text
         allowFontScaling={false}
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.15}
-        style={[style, styles.textFill, { textAlign: align }]}>
+        style={[style, styles.textFill, { textAlign: align }]}
+      >
         {formatLiveDateTime(adjusted)}
       </Text>
     </View>
@@ -378,7 +422,7 @@ function BarcodePrintBars({
         <View
           key={`bar-${index}`}
           style={{
-            position: 'absolute',
+            position: "absolute",
             left: bar.x0 * dotsToDip,
             width: Math.max(dotsToDip, bar.width * dotsToDip),
             top: 0,
@@ -412,20 +456,24 @@ function BarcodeContent({
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const content =
-    element.contentType === 'Data Source' && element.columnNameContent
+    element.contentType === "Data Source" && element.columnNameContent
       ? formatDataSourceColumn(element.columnNameContent, showColumnName)
-      : element.content || '0123456789';
+      : element.content || "0123456789";
   const rawModules = useMemo(
     () => barcodeModulesForMode(element.encodeMode, content),
     [content, element.encodeMode],
   );
-  const color = element.antiColor ? '#FFFFFF' : inkColor(element.drawingColorIndex);
-  const bgColor = element.antiColor ? inkColor(element.drawingColorIndex) : 'transparent';
+  const color = element.antiColor
+    ? "#FFFFFF"
+    : inkColor(element.drawingColorIndex);
+  const bgColor = element.antiColor
+    ? inkColor(element.drawingColorIndex)
+    : "transparent";
   const labelSize = fontSizePx(element.fontSize, scale);
-  const showLabel = element.textFlag !== 'Hide';
+  const showLabel = element.textFlag !== "Hide";
   const hri = formatBarcodeHri(element.encodeMode, content);
   const labelHeight = showLabel ? Math.max(8, Math.round(labelSize * 1.2)) : 0;
-  const align = element.align === 'spacing' ? 'justify' : element.align;
+  const align = element.align === "spacing" ? "justify" : element.align;
   const labelStyle = textStyleFor(element, scale);
 
   const useDotBars =
@@ -451,70 +499,87 @@ function BarcodeContent({
     return snap1DBarcodeModules(rawModules, widthMm, snapDpi, false);
   }, [rawModules, widthMm, snapDpi]);
 
-  const fontHDots = useDotBars ? Math.max(8, Math.round(ptToMm(element.fontSize) * dpm!)) : 0;
-  const labelHDots = useDotBars && showLabel ? Math.max(8, Math.round(fontHDots * 1.2)) : 0;
+  const fontHDots = useDotBars
+    ? Math.max(8, Math.round(ptToMm(element.fontSize) * dpm!))
+    : 0;
+  const labelHDots =
+    useDotBars && showLabel ? Math.max(8, Math.round(fontHDots * 1.2)) : 0;
   const barsHDots = useDotBars ? Math.max(2, heightDots - labelHDots) : 0;
   const dotsToDip = useDotBars && widthDots > 0 ? widthPx / widthDots : 1;
-  const barsHPx = useDotBars ? barsHDots * dotsToDip : 0;
+  const printBarsHPx = useDotBars ? barsHDots * dotsToDip : 0;
+  const barsPath = useMemo(() => {
+    if (!snapped) return "";
+    return snapped.bars
+      .map((bar) => {
+        const barX = bar.x * widthPx;
+        const barW = Math.max(bar.width * widthPx, 0.55);
+        return `M${barX},0h${barW}v100h-${barW}Z`;
+      })
+      .join(" ");
+  }, [snapped, widthPx]);
 
   const label = showLabel ? (
     <View
       style={{
-        width: '100%',
+        width: "100%",
         height: labelHeight,
         flexShrink: 0,
-        alignItems: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'stretch',
-        justifyContent: 'center',
-      }}>
+        alignItems:
+          align === "center"
+            ? "center"
+            : align === "right"
+              ? "flex-end"
+              : "stretch",
+        justifyContent: "center",
+      }}
+    >
       <Text
         numberOfLines={1}
         allowFontScaling={false}
         style={[
           labelStyle,
           {
-            width: '100%',
+            width: "100%",
             lineHeight: labelHeight,
             textAlign: align,
           },
-        ]}>
+        ]}
+      >
         {hri}
       </Text>
     </View>
   ) : null;
 
   return (
-    <View style={[styles.fill, { backgroundColor: bgColor, justifyContent: 'flex-start', alignItems: 'stretch' }]}>
-      {element.textFlag === 'Top' ? label : null}
+    <View
+      style={[
+        styles.fill,
+        {
+          backgroundColor: bgColor,
+          justifyContent: "flex-start",
+          alignItems: "stretch",
+        },
+      ]}
+    >
+      {element.textFlag === "Top" ? label : null}
       {rawModules && snapped ? (
         useDotBars ? (
           <BarcodePrintBars
             bars={snapped.bars}
             boxWDots={widthDots}
             widthPx={widthPx}
-            barsHPx={barsHPx}
+            barsHPx={printBarsHPx}
             color={color}
           />
         ) : (
-          <View
-            style={{
-              flex: 1,
-              width: '100%',
-            }}>
+          <View style={{ flex: 1, width: "100%" }}>
             <Svg
               width="100%"
               height="100%"
               viewBox={`0 0 ${widthPx} 100`}
-              preserveAspectRatio="none">
-              <Path
-                d={snapped.bars
-                  .map((bar) => {
-                    const barX = bar.x * widthPx;
-                    const barW = Math.max(bar.width * widthPx, 0.55);
-                    return `M${barX},0h${barW}v100h-${barW}Z`;
-                  })
-                  .join(' ')}
-                fill={color}
-              />
+              preserveAspectRatio="none"
+            >
+              <Path d={barsPath} fill={color} />
             </Svg>
           </View>
         )
@@ -523,7 +588,7 @@ function BarcodeContent({
           <Text style={styles.invalidText}>Invalid barcode content</Text>
         </View>
       )}
-      {element.textFlag === 'Bottom' ? label : null}
+      {element.textFlag === "Bottom" ? label : null}
     </View>
   );
 }
@@ -539,26 +604,37 @@ function QrcodeContent({
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const content =
-    element.contentType === 'Data Source' && element.columnNameContent
+    element.contentType === "Data Source" && element.columnNameContent
       ? formatDataSourceColumn(element.columnNameContent, showColumnName)
-      : element.contentType === 'Degrees'
-      ? applySerialOffset(element.content || 'https://example.com', element.degreesOffset, 1)
-      : element.content || 'https://example.com';
-  const color = element.antiColor ? '#FFFFFF' : inkColor(element.drawingColorIndex);
-  const bgColor = element.antiColor ? inkColor(element.drawingColorIndex) : '#FFFFFF00';
+      : element.contentType === "Degrees"
+        ? applySerialOffset(
+            element.content || "https://example.com",
+            element.degreesOffset,
+            1,
+          )
+        : element.content || "https://example.com";
+  const color = element.antiColor
+    ? "#FFFFFF"
+    : inkColor(element.drawingColorIndex);
+  const bgColor = element.antiColor
+    ? inkColor(element.drawingColorIndex)
+    : "#FFFFFF00";
 
   // 1. QR Code
   const qrMatrix = useMemo(() => {
-    if (element.encodeMode === 'QRCode') {
-      return generateQrMatrix(content, (element.errorLevel as 'L' | 'M' | 'Q' | 'H') || 'M');
+    if (element.encodeMode === "QRCode") {
+      return generateQrMatrix(
+        content,
+        (element.errorLevel as "L" | "M" | "Q" | "H") || "M",
+      );
     }
     return null;
   }, [element.encodeMode, content, element.errorLevel]);
 
   const qrPath = useMemo(() => {
-    if (element.encodeMode !== 'QRCode' || !qrMatrix) return '';
+    if (element.encodeMode !== "QRCode" || !qrMatrix) return "";
     const qz = Math.max(0, parseInt(element.zoneSize, 10));
-    let d = '';
+    let d = "";
     for (let r = 0; r < qrMatrix.size; r++) {
       for (let c = 0; c < qrMatrix.size; c++) {
         if (qrMatrix.data[r * qrMatrix.size + c]) {
@@ -574,16 +650,16 @@ function QrcodeContent({
   // 2. DataMatrix (ISO/IEC 16022 authentic ECC 200)
   const isRectangular = widthPx > heightPx * 1.5;
   const dmMatrix = useMemo(() => {
-    if (element.encodeMode === 'DataMatrix') {
+    if (element.encodeMode === "DataMatrix") {
       return encodeDataMatrix(content, isRectangular);
     }
     return null;
   }, [element.encodeMode, content, isRectangular]);
 
   const dmPath = useMemo(() => {
-    if (element.encodeMode !== 'DataMatrix' || !dmMatrix) return '';
+    if (element.encodeMode !== "DataMatrix" || !dmMatrix) return "";
     const qz = Math.max(1, parseInt(element.zoneSize, 10) || 1);
-    let d = '';
+    let d = "";
     for (let r = 0; r < dmMatrix.rows; r++) {
       for (let c = 0; c < dmMatrix.cols; c++) {
         if (dmMatrix.matrix[r][c]) {
@@ -596,17 +672,17 @@ function QrcodeContent({
 
   // 3. PDF417 (ISO/IEC 15438 authentic multi-row)
   const pdfMatrix = useMemo(() => {
-    if (element.encodeMode === 'PDF417') {
+    if (element.encodeMode === "PDF417") {
       return encodePdf417(content, 2);
     }
     return null;
   }, [element.encodeMode, content]);
 
   const pdfPath = useMemo(() => {
-    if (element.encodeMode !== 'PDF417' || !pdfMatrix) return '';
+    if (element.encodeMode !== "PDF417" || !pdfMatrix) return "";
     const qzX = Math.max(2, parseInt(element.zoneSize, 10) || 2);
     const qzY = Math.max(2, parseInt(element.zoneSize, 10) || 2);
-    let d = '';
+    let d = "";
     for (let r = 0; r < pdfMatrix.rows; r++) {
       for (let c = 0; c < pdfMatrix.cols; c++) {
         if (pdfMatrix.matrix[r][c]) {
@@ -617,7 +693,7 @@ function QrcodeContent({
     return d;
   }, [element.encodeMode, pdfMatrix, element.zoneSize]);
 
-  if (element.encodeMode === 'QRCode' && qrMatrix) {
+  if (element.encodeMode === "QRCode" && qrMatrix) {
     const qz = Math.max(0, parseInt(element.zoneSize, 10));
     const totalSize = qrMatrix.size + qz * 2;
 
@@ -627,14 +703,15 @@ function QrcodeContent({
           width="100%"
           height="100%"
           viewBox={`0 0 ${totalSize} ${totalSize}`}
-          preserveAspectRatio="xMidYMid meet">
+          preserveAspectRatio="xMidYMid meet"
+        >
           <Path d={qrPath} fill={color} />
         </Svg>
       </View>
     );
   }
 
-  if (element.encodeMode === 'DataMatrix' && dmMatrix) {
+  if (element.encodeMode === "DataMatrix" && dmMatrix) {
     const qz = Math.max(1, parseInt(element.zoneSize, 10) || 1);
     const totalW = dmMatrix.cols + qz * 2;
     const totalH = dmMatrix.rows + qz * 2;
@@ -645,14 +722,15 @@ function QrcodeContent({
           width="100%"
           height="100%"
           viewBox={`0 0 ${totalW} ${totalH}`}
-          preserveAspectRatio="xMidYMid meet">
+          preserveAspectRatio="xMidYMid meet"
+        >
           <Path d={dmPath} fill={color} />
         </Svg>
       </View>
     );
   }
 
-  if (element.encodeMode === 'PDF417' && pdfMatrix) {
+  if (element.encodeMode === "PDF417" && pdfMatrix) {
     const qzX = Math.max(2, parseInt(element.zoneSize, 10) || 2);
     const qzY = Math.max(2, parseInt(element.zoneSize, 10) || 2);
     const totalW = pdfMatrix.cols + qzX * 2;
@@ -664,7 +742,8 @@ function QrcodeContent({
           width="100%"
           height="100%"
           viewBox={`0 0 ${totalW} ${totalH}`}
-          preserveAspectRatio="xMidYMid meet">
+          preserveAspectRatio="xMidYMid meet"
+        >
           <Path d={pdfPath} fill={color} />
         </Svg>
       </View>
@@ -691,22 +770,33 @@ function LineContent({
 }) {
   const color = inkColor(element.drawingColorIndex);
   const vertical = heightPx >= widthPx * 2;
-  const strokeWidth = Math.max(1, (vertical ? element.width : element.height) * scale);
+  const strokeWidth = Math.max(
+    1,
+    (vertical ? element.width : element.height) * scale,
+  );
   const midY = heightPx / 2;
   const dash =
-    element.lineStyle === 'dashed'
-      ? [Math.max(3, element.virtualInterval * scale), Math.max(3, element.virtualInterval * scale)]
+    element.lineStyle === "dashed"
+      ? [
+          Math.max(3, element.virtualInterval * scale),
+          Math.max(3, element.virtualInterval * scale),
+        ]
       : undefined;
 
-  if (element.lineStyle === 'slash' || element.lineStyle === 'backslash') {
+  if (element.lineStyle === "slash" || element.lineStyle === "backslash") {
     const gap = Math.max(4, element.virtualInterval * scale * 2);
     const count = Math.ceil(widthPx / gap) + 2;
     const slashHeight = Math.min(heightPx, Math.max(6, strokeWidth * 4));
     return (
-      <Svg width="100%" height="100%" viewBox={`0 0 ${widthPx} ${heightPx}`} preserveAspectRatio="none">
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${widthPx} ${heightPx}`}
+        preserveAspectRatio="none"
+      >
         {Array.from({ length: count }).map((_, i) => {
           const x = i * gap;
-          const up = element.lineStyle === 'slash';
+          const up = element.lineStyle === "slash";
           return (
             <Line
               key={i}
@@ -726,7 +816,12 @@ function LineContent({
   if (vertical) {
     const midX = widthPx / 2;
     return (
-      <Svg width="100%" height="100%" viewBox={`0 0 ${widthPx} ${heightPx}`} preserveAspectRatio="none">
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${widthPx} ${heightPx}`}
+        preserveAspectRatio="none"
+      >
         <Line
           x1={midX}
           y1={0}
@@ -741,7 +836,12 @@ function LineContent({
   }
 
   return (
-    <Svg width="100%" height="100%" viewBox={`0 0 ${widthPx} ${heightPx}`} preserveAspectRatio="none">
+    <Svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${widthPx} ${heightPx}`}
+      preserveAspectRatio="none"
+    >
       <Line
         x1={0}
         y1={midY}
@@ -777,17 +877,22 @@ function ShapeContent({
   const innerW = Math.max(1, widthPx - strokeWidth - safePad * 2);
   const innerH = Math.max(1, heightPx - strokeWidth - safePad * 2);
 
-  if (element.figureShape === 'oval' || element.figureShape === 'circle') {
+  if (element.figureShape === "oval" || element.figureShape === "circle") {
     const rx =
-      element.figureShape === 'circle'
+      element.figureShape === "circle"
         ? Math.min(widthPx, heightPx) / 2 - inset
         : widthPx / 2 - inset;
     const ry =
-      element.figureShape === 'circle'
+      element.figureShape === "circle"
         ? Math.min(widthPx, heightPx) / 2 - inset
         : heightPx / 2 - inset;
     return (
-      <Svg width="100%" height="100%" viewBox={`0 0 ${widthPx} ${heightPx}`} preserveAspectRatio="none">
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${widthPx} ${heightPx}`}
+        preserveAspectRatio="none"
+      >
         <Ellipse
           cx={widthPx / 2}
           cy={heightPx / 2}
@@ -801,9 +906,17 @@ function ShapeContent({
     );
   }
 
-  const radius = element.figureShape === 'roundedRectangle' ? element.roundRadius * scale : 0;
+  const radius =
+    element.figureShape === "roundedRectangle"
+      ? element.roundRadius * scale
+      : 0;
   return (
-    <Svg width="100%" height="100%" viewBox={`0 0 ${widthPx} ${heightPx}`} preserveAspectRatio="none">
+    <Svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${widthPx} ${heightPx}`}
+      preserveAspectRatio="none"
+    >
       <Rect
         x={inset}
         y={inset}
@@ -820,9 +933,11 @@ function ShapeContent({
 }
 
 /** Traces what the highlight renderer actually reads, only when the value changes. */
-let lastHighlightRead = '\u0000';
-function logHighlightRead(cell: { row: number; col: number } | null | undefined) {
-  const key = cell ? `${cell.row},${cell.col}` : 'none';
+let lastHighlightRead = "\u0000";
+function logHighlightRead(
+  cell: { row: number; col: number } | null | undefined,
+) {
+  const key = cell ? `${cell.row},${cell.col}` : "none";
   if (key === lastHighlightRead) return;
   lastHighlightRead = key;
   console.log(`[table-cell] highlight-render reads=${key}`);
@@ -834,7 +949,7 @@ function TableContent({
   heightPx,
   scale,
   selectedTableCell,
-  tableSelectionColor = '#48C3C7',
+  tableSelectionColor = "#48C3C7",
 }: {
   element: TableElementState;
   widthPx: number;
@@ -844,10 +959,14 @@ function TableContent({
   tableSelectionColor?: string;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
-  const highlightColumnName = useSettingsStore((s) => s.editor.highlightColumnName);
+  const highlightColumnName = useSettingsStore(
+    (s) => s.editor.highlightColumnName,
+  );
   const table = ensureTableCells(element);
   logHighlightRead(selectedTableCell);
-  const color = inkColor(element.drawingColorIndex > 0 ? element.drawingColorIndex : 1);
+  const color = inkColor(
+    element.drawingColorIndex > 0 ? element.drawingColorIndex : 1,
+  );
   const strokeWidth = Math.max(1, element.lineWidth * scale);
   const totalRowMm = element.rowHeights.reduce((sum, h) => sum + h, 0) || 1;
   const totalColMm = element.columnWidths.reduce((sum, w) => sum + w, 0) || 1;
@@ -888,14 +1007,25 @@ function TableContent({
 
   return (
     <View style={styles.fill}>
-      <Svg width="100%" height="100%" viewBox={`0 0 ${widthPx} ${heightPx}`} preserveAspectRatio="none">
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${widthPx} ${heightPx}`}
+        preserveAspectRatio="none"
+      >
         {rowLines.map((y, i) => (
           <Line
             key={`r${i}`}
             x1={0}
-            y1={Math.min(heightPx - strokeWidth / 2, Math.max(strokeWidth / 2, y))}
+            y1={Math.min(
+              heightPx - strokeWidth / 2,
+              Math.max(strokeWidth / 2, y),
+            )}
             x2={widthPx}
-            y2={Math.min(heightPx - strokeWidth / 2, Math.max(strokeWidth / 2, y))}
+            y2={Math.min(
+              heightPx - strokeWidth / 2,
+              Math.max(strokeWidth / 2, y),
+            )}
             stroke={color}
             strokeWidth={strokeWidth}
           />
@@ -903,9 +1033,15 @@ function TableContent({
         {colLines.map((x, i) => (
           <Line
             key={`c${i}`}
-            x1={Math.min(widthPx - strokeWidth / 2, Math.max(strokeWidth / 2, x))}
+            x1={Math.min(
+              widthPx - strokeWidth / 2,
+              Math.max(strokeWidth / 2, x),
+            )}
             y1={0}
-            x2={Math.min(widthPx - strokeWidth / 2, Math.max(strokeWidth / 2, x))}
+            x2={Math.min(
+              widthPx - strokeWidth / 2,
+              Math.max(strokeWidth / 2, x),
+            )}
             y2={heightPx}
             stroke={color}
             strokeWidth={strokeWidth}
@@ -914,9 +1050,10 @@ function TableContent({
       </Svg>
       {cellLayouts.map(({ row, col, left, top, width, height }) => {
         const cell = table.cells?.[row]?.[col];
-        const selected = selectedTableCell?.row === row && selectedTableCell?.col === col;
-        const raw = cell ? resolveTextRaw(cell, cell.text, showColumnName) : '';
-        const flat = raw.replace(/\r?\n/g, ' ');
+        const selected =
+          selectedTableCell?.row === row && selectedTableCell?.col === col;
+        const raw = cell ? resolveTextRaw(cell, cell.text, showColumnName) : "";
+        const flat = raw.replace(/\r?\n/g, " ");
         const padX = Math.max(1, scale * 0.4);
         const innerW = Math.max(1, width - padX * 2);
         const measuredPx = cell
@@ -924,21 +1061,27 @@ function TableContent({
           : 0;
         const scaleX = measuredPx > innerW ? innerW / measuredPx : 1;
         const style = cell ? textStyleFor(cell, scale) : undefined;
-        const align = cell?.align === 'spacing' ? 'justify' : cell?.align ?? 'left';
+        const align =
+          cell?.align === "spacing" ? "justify" : (cell?.align ?? "left");
         return (
           <View
             key={`cell-${row}-${col}`}
             pointerEvents="none"
             style={[
               {
-                position: 'absolute',
+                position: "absolute",
                 left,
                 top,
                 width,
                 height,
-                overflow: 'hidden',
-                justifyContent: 'center',
-                alignItems: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'stretch',
+                overflow: "hidden",
+                justifyContent: "center",
+                alignItems:
+                  align === "center"
+                    ? "center"
+                    : align === "right"
+                      ? "flex-end"
+                      : "stretch",
                 paddingHorizontal: Math.max(1, scale * 0.4),
                 paddingVertical: Math.max(0, scale * 0.2),
               },
@@ -948,7 +1091,8 @@ function TableContent({
                 borderColor: tableSelectionColor,
               },
               cell && dataColumnHighlightStyle(cell, highlightColumnName),
-            ]}>
+            ]}
+          >
             {cell && flat ? (
               <Text
                 numberOfLines={1}
@@ -958,12 +1102,16 @@ function TableContent({
                   letterSpacingStyle(cell),
                   {
                     textAlign: align,
-                    width: scaleX < 1 ? measuredPx : '100%',
+                    width: scaleX < 1 ? measuredPx : "100%",
                     ...(scaleX < 1
-                      ? { transform: [{ scaleX }], transformOrigin: 'left center' as const }
+                      ? {
+                          transform: [{ scaleX }],
+                          transformOrigin: "left center" as const,
+                        }
                       : null),
                   },
-                ]}>
+                ]}
+              >
                 {flat}
               </Text>
             ) : null}
@@ -986,15 +1134,19 @@ function ArcTextContent({
   scale: number;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
-  const highlightColumnName = useSettingsStore((s) => s.editor.highlightColumnName);
-  const color = element.antiColor ? '#FFFFFF' : inkColor(element.drawingColorIndex);
+  const highlightColumnName = useSettingsStore(
+    (s) => s.editor.highlightColumnName,
+  );
+  const color = element.antiColor
+    ? "#FFFFFF"
+    : inkColor(element.drawingColorIndex);
   const isPlaceholder = !element.text || element.text.trim().length === 0;
   const displayText =
-    element.contentType === 'Data Source' && element.columnNameContent
+    element.contentType === "Data Source" && element.columnNameContent
       ? formatDataSourceColumn(element.columnNameContent, showColumnName)
       : isPlaceholder
-      ? 'Double-tap to enter text'
-      : element.text;
+        ? "Double-tap to enter text"
+        : element.text;
 
   const nominalFontSize = fontSizePx(element.fontSize, scale);
   const layout = useMemo(
@@ -1008,14 +1160,22 @@ function ArcTextContent({
         scale,
         bold: element.bold,
       }),
-    [displayText, widthPx, heightPx, nominalFontSize, element.lineWidth, scale, element.bold],
+    [
+      displayText,
+      widthPx,
+      heightPx,
+      nominalFontSize,
+      element.lineWidth,
+      scale,
+      element.bold,
+    ],
   );
 
   const fontFamily = resolveFontFamily(element.fontFamily);
   const textColor = isPlaceholder
     ? element.antiColor
-      ? 'rgba(255, 255, 255, 0.65)'
-      : '#334155'
+      ? "rgba(255, 255, 255, 0.65)"
+      : "#334155"
     : color;
 
   return (
@@ -1024,7 +1184,8 @@ function ArcTextContent({
         styles.fill,
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
-      ]}>
+      ]}
+    >
       <Svg width="100%" height="100%" viewBox={`0 0 ${widthPx} ${heightPx}`}>
         {/* Circular guide line matching reference specification */}
         <Circle
@@ -1045,19 +1206,20 @@ function ArcTextContent({
             fill={textColor}
             fontSize={layout.effectiveFontSizePx}
             fontFamily={fontFamily}
-            fontWeight={element.bold ? '700' : '400'}
-            fontStyle={element.italic ? 'italic' : 'normal'}
+            fontWeight={element.bold ? "700" : "400"}
+            fontStyle={element.italic ? "italic" : "normal"}
             textDecoration={
               element.underline
-                ? 'underline'
+                ? "underline"
                 : element.strikethrough
-                ? 'line-through'
-                : 'none'
+                  ? "line-through"
+                  : "none"
             }
             textAnchor="middle"
             alignmentBaseline="middle"
             dominantBaseline="middle"
-            transform={`rotate(${item.rotationDeg}, ${item.x}, ${item.y})`}>
+            transform={`rotate(${item.rotationDeg}, ${item.x}, ${item.y})`}
+          >
             {item.char}
           </SvgText>
         ))}
@@ -1072,7 +1234,7 @@ function ImageContent({
   heightPx,
   forPrint,
 }: {
-  element: Extract<LabelElement, { type: 'image' }>;
+  element: Extract<LabelElement, { type: "image" }>;
   widthPx: number;
   heightPx: number;
   forPrint?: boolean;
@@ -1080,13 +1242,17 @@ function ImageContent({
   const excelFiles = useDataStore((s) => s.excelFiles);
   const activeRow = useDataStore((s) => s.activeRowIndex);
   let displayUri = forPrint ? element.printUri || element.uri : element.uri;
-  if (!forPrint && element.contentType === 'Data Source' && element.columnNameContent) {
+  if (
+    !forPrint &&
+    element.contentType === "Data Source" &&
+    element.columnNameContent
+  ) {
     for (const file of excelFiles) {
       const sheet = file.sheets[file.activeSheetIndex] ?? file.sheets[0];
       if (!sheet) continue;
       const idx = sheet.columns.indexOf(element.columnNameContent);
       if (idx < 0) continue;
-      const value = String(sheet.rows[activeRow]?.[idx] ?? '');
+      const value = String(sheet.rows[activeRow]?.[idx] ?? "");
       if (looksLikeImageUri(value)) {
         displayUri = value;
         break;
@@ -1101,7 +1267,7 @@ function ImageContent({
       colorMode={element.colorMode}
       grayThreshold={element.grayThreshold ?? 128}
       tile={Boolean(element.tile)}
-      contentFit={element.contentFit ?? 'contain'}
+      contentFit={element.contentFit ?? "contain"}
       flipH={element.flipH}
       flipV={element.flipV}
       antiColor={element.antiColor}
@@ -1124,13 +1290,15 @@ export function ElementContentView({
   tableSelectionColor,
 }: ContentProps) {
   switch (element.type) {
-    case 'text':
+    case "text":
       return <TextContent element={element} scale={scale} widthPx={widthPx} />;
-    case 'degrees':
-      return <DegreesContent element={element} scale={scale} widthPx={widthPx} />;
-    case 'time':
+    case "degrees":
+      return (
+        <DegreesContent element={element} scale={scale} widthPx={widthPx} />
+      );
+    case "time":
       return <TimeContent element={element} scale={scale} widthPx={widthPx} />;
-    case 'barcode':
+    case "barcode":
       return (
         <BarcodeContent
           element={element}
@@ -1143,11 +1311,24 @@ export function ElementContentView({
           printDpi={printDpi}
         />
       );
-    case 'qrcode':
-      return <QrcodeContent element={element} widthPx={widthPx} heightPx={heightPx} />;
-    case 'line':
-      return <LineContent element={element} widthPx={widthPx} heightPx={heightPx} scale={scale} />;
-    case 'shape':
+    case "qrcode":
+      return (
+        <QrcodeContent
+          element={element}
+          widthPx={widthPx}
+          heightPx={heightPx}
+        />
+      );
+    case "line":
+      return (
+        <LineContent
+          element={element}
+          widthPx={widthPx}
+          heightPx={heightPx}
+          scale={scale}
+        />
+      );
+    case "shape":
       return (
         <ShapeContent
           element={element}
@@ -1157,7 +1338,7 @@ export function ElementContentView({
           forPrint={forPrint}
         />
       );
-    case 'table':
+    case "table":
       return (
         <TableContent
           element={element}
@@ -1168,11 +1349,16 @@ export function ElementContentView({
           tableSelectionColor={tableSelectionColor}
         />
       );
-    case 'arctext':
+    case "arctext":
       return (
-        <ArcTextContent element={element} widthPx={widthPx} heightPx={heightPx} scale={scale} />
+        <ArcTextContent
+          element={element}
+          widthPx={widthPx}
+          heightPx={heightPx}
+          scale={scale}
+        />
       );
-    case 'image':
+    case "image":
       return (
         <ImageContent
           element={element}
@@ -1181,11 +1367,11 @@ export function ElementContentView({
           forPrint={forPrint}
         />
       );
-    case 'clipart': {
+    case "clipart": {
       const sticker = getClipartById(element.clipartId);
       const previewColor =
-        element.colorMode === 'B & W' || element.colorMode === 'Halftone'
-          ? '#111827'
+        element.colorMode === "B & W" || element.colorMode === "Halftone"
+          ? "#111827"
           : inkColor(element.drawingColorIndex);
       const unit = Math.min(widthPx, heightPx);
       const iconSize = element.tile ? Math.max(8, Math.round(unit / 5)) : unit;
@@ -1194,7 +1380,9 @@ export function ElementContentView({
         sticker ? (
           <ClipartIcon svg={sticker.svg} size={size} color={previewColor} />
         ) : (
-          <Text style={{ fontSize: size * 0.7, color: previewColor }}>{element.glyph ?? '★'}</Text>
+          <Text style={{ fontSize: size * 0.7, color: previewColor }}>
+            {element.glyph ?? "★"}
+          </Text>
         );
 
       if (element.tile) {
@@ -1209,9 +1397,10 @@ export function ElementContentView({
                 style={{
                   width: widthPx / cols,
                   height: heightPx / rows,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 {renderGlyph(Math.min(widthPx / cols, heightPx / rows))}
               </View>
             ))}
@@ -1225,12 +1414,13 @@ export function ElementContentView({
         </View>
       );
     }
-    case 'border': {
+    case "border": {
       const shape = borderShapeForMedia(mediaShape);
-      const tagged = strokeFromOuterEdge === true || element.geometryVersion === 1;
+      const tagged =
+        strokeFromOuterEdge === true || element.geometryVersion === 1;
       if (forPrint && printDpi != null) {
         return (
-          <View style={[styles.fill, { overflow: 'hidden' }]}>
+          <View style={[styles.fill, { overflow: "hidden" }]}>
             <BorderPreview
               styleId={element.borderStyle}
               scale={scale}
@@ -1278,10 +1468,12 @@ export function ElementContentView({
         </View>
       );
     }
-    case 'signature': {
+    case "signature": {
       const mode = resolveEditorColorMode(element.colorMode);
       const color =
-        forPrint || mode !== 'Original' ? DESIGN_INK : inkColor(element.drawingColorIndex);
+        forPrint || mode !== "Original"
+          ? DESIGN_INK
+          : inkColor(element.drawingColorIndex);
       return (
         <View style={styles.fill}>
           <SignaturePreview
@@ -1300,41 +1492,41 @@ export function ElementContentView({
 
 const styles = StyleSheet.create({
   fill: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     flexShrink: 0,
-    overflow: 'visible',
+    overflow: "visible",
   },
   fillVisible: {
-    width: '100%',
-    height: '100%',
-    overflow: 'visible',
+    width: "100%",
+    height: "100%",
+    overflow: "visible",
   },
   center: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   tileWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignContent: 'flex-start',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignContent: "flex-start",
   },
   antiBg: {
-    backgroundColor: '#111827',
+    backgroundColor: "#111827",
   },
   textFill: {
-    width: '100%',
+    width: "100%",
     flexShrink: 0,
   },
   invalidBox: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E5484D',
+    borderColor: "#E5484D",
   },
   invalidText: {
     fontSize: 10,
-    color: '#E5484D',
+    color: "#E5484D",
   },
 });

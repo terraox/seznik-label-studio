@@ -138,7 +138,6 @@ export type KonvaTransformerProps = {
 };
 
 const HIT_TARGET_PX = 36;
-const TOOLTIP_MS = 80;
 
 /**
  * Drag activation / tap tolerance.
@@ -182,10 +181,6 @@ function logMultiTransformBox(
 }
 
 type HandlePosition = ResizeAnchor;
-
-type TooltipHandle = {
-  setText: (text: string | null) => void;
-};
 
 export const KonvaTransformer = memo(function KonvaTransformer({
   element,
@@ -271,7 +266,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const animRot = useSharedValue<number>(baseRotation);
   const minResizeMmSv = useSharedValue(resizePolicy.minMm);
   const aspectSv = useSharedValue(aspectRatio);
-  const lastTooltipTimeSv = useSharedValue(0);
   const lastTapTimeSv = useSharedValue(0);
   const lastTapXSv = useSharedValue(0);
   const lastTapYSv = useSharedValue(0);
@@ -320,8 +314,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const resizeBehaviorESv = useSharedValue(resizePolicy.behavior.e ?? 'none');
   const resizeBehaviorSSv = useSharedValue(resizePolicy.behavior.s ?? 'none');
   const beginTimeSv = useSharedValue(0);
-  const tooltipRef = useRef<TooltipHandle | null>(null);
-  const lastTooltipAt = useRef(0);
   const containerRef = useRef<View>(null);
 
   useEffect(() => {
@@ -503,7 +495,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   /** Committed drag: moves position only. NEVER alters width, height, or fontSize. */
   const dispatchDragCommitMm = useCallback(
     (leftMm: number, topMm: number) => {
-      tooltipRef.current?.setText(null);
       const widthMm = sizeMm.width;
       const heightMm = sizeMm.height;
       const clamped = clampToLabelBounds(
@@ -656,7 +647,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   /** Committed resize: same resizeMemberByScale as live preview. Origin never moves. */
   const dispatchResizeCommit = useCallback(
     (handle: ResizeAnchor, nextWPx: number, nextHPx: number, rot: number) => {
-      tooltipRef.current?.setText(null);
       const behavior = resizePolicy.behavior[handle];
       if (!behavior) {
         isInteracting.value = false;
@@ -670,7 +660,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
       let fontSize: number | undefined;
       let naturalHeightMm: number | undefined;
-      if ('fontSize' in element && typeof element.fontSize === 'number') {
+      if (
+        element.type !== 'barcode' &&
+        'fontSize' in element &&
+        typeof element.fontSize === 'number'
+      ) {
         const drivingScale = handle === 'e' ? scaleX : scaleY;
         fontSize = Math.max(4, Math.round(element.fontSize * drivingScale * 2) / 2);
       }
@@ -709,18 +703,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       resizePolicy,
       isInteracting,
     ],
-  );
-
-  const updateTooltipJS = useCallback(
-    (wPx: number, hPx: number) => {
-      const now = Date.now();
-      if (now - lastTooltipAt.current < TOOLTIP_MS) return;
-      lastTooltipAt.current = now;
-      const wMm = pxToMm(wPx, pxPerMMSafe).toFixed(2);
-      const hMm = pxToMm(hPx, pxPerMMSafe).toFixed(2);
-      tooltipRef.current?.setText(`${wMm} × ${hMm} mm`);
-    },
-    [pxPerMMSafe],
   );
 
   const bodyHitSlop = useMemo(() => {
@@ -1419,12 +1401,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           }
 
           runOnJS(logLiveBoxJS)(box.left, box.top, box.width, box.height);
-
-          const now = Date.now();
-          if (now - lastTooltipTimeSv.value >= 80) {
-            lastTooltipTimeSv.value = now;
-            runOnJS(updateTooltipJS)(animW.value, animH.value);
-          }
         })
         .onEnd(() => {
           'worklet';
@@ -1451,7 +1427,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       element.id,
       dispatchResizeCommit,
       captureResizeStartFromPx,
-      updateTooltipJS,
       notifyTransformStartJS,
       notifyGroupResizeHandleBeginJS,
       groupEligibleSv,
@@ -1480,7 +1455,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       boldSv,
       verticalDisplaySv,
       liveBounds,
-      lastTooltipTimeSv,
       logLiveBoxJS,
     ],
   );
@@ -1513,7 +1487,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     };
   });
 
-  const liveScaleContent = element.type !== 'border';
+  // Match pre-cb5cf2e QR/barcode: fill the live box. Transform-scaling the
+  // inner SVG is what made modules flicker while dragging.
+  const liveScaleContent =
+    element.type !== 'border' && element.type !== 'barcode' && element.type !== 'qrcode';
 
   const contentRotateStyle = useAnimatedStyle(() => {
     const rotate = { rotate: `${animRot.value}deg` };
@@ -1528,9 +1505,12 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     const baseH = Math.max(1, startH.value);
     const liveW = Math.max(1, animW.value);
     const liveH = Math.max(1, animH.value);
+    // Transform only — never animate layout width/height. Resizing layout
+    // forces barcode/QR SVG to re-rasterize every frame (flicker).
     return {
-      width: baseW,
-      height: baseH,
+      position: 'absolute' as const,
+      left: 0,
+      top: 0,
       transformOrigin: 'top left' as const,
       transform: [{ scaleX: liveW / baseW }, { scaleY: liveH / baseH }, rotate],
     };
@@ -1664,16 +1644,36 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 },
               }
             : {})}>
-          <Animated.View pointerEvents="none" style={contentRotateStyle}>
-            <ElementContentView
-              element={element}
-              widthPx={baseWidthPx}
-              heightPx={baseHeightPx}
-              scale={pxPerMMSafe}
-              mediaShape={borderMediaShape}
-              selectedTableCell={element.type === 'table' ? selectedTableCell : null}
-              tableSelectionColor={tableSelectionColor}
-            />
+          <Animated.View
+            pointerEvents="none"
+            collapsable={false}
+            renderToHardwareTextureAndroid={liveScaleContent}
+            style={contentRotateStyle}>
+            {liveScaleContent ? (
+              <View
+                collapsable={false}
+                style={{ width: baseWidthPx, height: baseHeightPx, overflow: 'hidden' }}>
+                <ElementContentView
+                  element={element}
+                  widthPx={baseWidthPx}
+                  heightPx={baseHeightPx}
+                  scale={pxPerMMSafe}
+                  mediaShape={borderMediaShape}
+                  selectedTableCell={element.type === 'table' ? selectedTableCell : null}
+                  tableSelectionColor={tableSelectionColor}
+                />
+              </View>
+            ) : (
+              <ElementContentView
+                element={element}
+                widthPx={baseWidthPx}
+                heightPx={baseHeightPx}
+                scale={pxPerMMSafe}
+                mediaShape={borderMediaShape}
+                selectedTableCell={element.type === 'table' ? selectedTableCell : null}
+                tableSelectionColor={tableSelectionColor}
+              />
+            )}
           </Animated.View>
         </View>
       </GestureDetector>
@@ -1688,8 +1688,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             isOverflowed && styles.selectionOutlineOverflow,
           ]}
         />
-
-        <ResizeTooltip tooltipRef={tooltipRef} />
 
         {isOverflowed ? (
           <Animated.View style={overflowBadgeStyle}>
@@ -1755,27 +1753,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     prev.groupHandleSv === next.groupHandleSv &&
     prev.groupScaleMinSv === next.groupScaleMinSv &&
     prev.groupScaleMaxSv === next.groupScaleMaxSv
-  );
-});
-
-const ResizeTooltip = memo(function ResizeTooltip({
-  tooltipRef,
-}: {
-  tooltipRef: React.MutableRefObject<TooltipHandle | null>;
-}) {
-  const [text, setText] = React.useState<string | null>(null);
-  useEffect(() => {
-    tooltipRef.current = { setText };
-    return () => {
-      tooltipRef.current = null;
-    };
-  }, [tooltipRef]);
-
-  if (!text) return null;
-  return (
-    <View pointerEvents="none" style={styles.tooltipPill}>
-      <Text style={styles.tooltipText}>{text}</Text>
-    </View>
   );
 });
 
@@ -1850,22 +1827,6 @@ const styles = StyleSheet.create({
     top: '50%',
     right: -CHROME_HANDLE_RADIUS_PX,
     marginTop: -CHROME_HANDLE_RADIUS_PX,
-  },
-  tooltipPill: {
-    position: 'absolute',
-    top: -46,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    zIndex: 20,
-  },
-  tooltipText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.2,
   },
   selectionOutlineOverflow: {
     borderColor: '#EF4444',
