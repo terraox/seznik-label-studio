@@ -10,7 +10,9 @@ import type { SelectSource, TransformStartKind } from './konva-transformer';
 import { KonvaTransformer, type TransformCommitPayload, type TransformMovePayload } from './konva-transformer';
 import { CanvasGridOverlay } from '@/components/editor/canvas-grid-overlay';
 import { PrintGridLayer } from '@/components/print-grid-layer';
+import { PrintRulerLayer } from '@/components/print-ruler-layer';
 import { printGridKnockoutsMm, printGridSpacingMm } from '@/lib/print-grid';
+import { printRulerEnabled } from '@/lib/print-ruler';
 import { DEFAULT_GRID_SPACING_MM } from '@/lib/editor/canvas-grid';
 import { type LiveRulerBounds } from '@/components/canvas-rulers';
 import { CableFlagDieCutOverlay } from '@/components/cable-flag-outline';
@@ -340,6 +342,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
   const h = Math.max(1, canvasHeightPx);
   const resolvedGridSpacingMm = gridSpacingMm ?? DEFAULT_GRID_SPACING_MM;
   const printGridSpacing = printGridSpacingMm(doc);
+  const printRulerOn = printRulerEnabled(doc);
   const docElements = doc.elements;
   const printGridKnockouts = useMemo(
     () => printGridKnockoutsMm({ elements: docElements }),
@@ -639,6 +642,15 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
               heightMm={doc.heightMm}
               spacingMm={printGridSpacing}
               knockoutsMm={printGridKnockouts}
+              widthPx={w}
+              heightPx={h}
+            />
+          ) : null}
+
+          {printRulerOn ? (
+            <PrintRulerLayer
+              widthMm={doc.widthMm}
+              heightMm={doc.heightMm}
               widthPx={w}
               heightPx={h}
             />

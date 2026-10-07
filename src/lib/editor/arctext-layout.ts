@@ -26,9 +26,38 @@ export type ComputeArcTextLayoutParams = {
   bold?: boolean;
 };
 
+/** Leave a gap at 6 o'clock so the string never wraps onto itself. */
+const MAX_ARC_SPAN_RAD = (320 * Math.PI) / 180;
+/** Extra tracking so rotated glyphs do not kiss along the arc. */
+const TRACKING_EM = 0.22;
+/** Glyphs are centered on the path; keep height well inside the circle. */
+const MAX_FONT_OVER_RADIUS = 0.24;
+
+function baselineRadiusFor(radius: number, fontSize: number, strokeWidth: number): number {
+  return Math.max(2, radius - fontSize * 0.52 - strokeWidth / 2 - 1);
+}
+
+function totalAngleFor(text: string, fontSize: number, baselineRadius: number, bold: boolean): number {
+  const tracking = fontSize * TRACKING_EM;
+  let total = 0;
+  for (let i = 0; i < text.length; i++) {
+    const w = charWidthEm(text[i], bold) * fontSize * 1.12 + tracking;
+    total += w / Math.max(2, baselineRadius);
+  }
+  return total;
+}
+
+function fontFits(text: string, fontSize: number, radius: number, strokeWidth: number, bold: boolean): boolean {
+  if (fontSize > radius * MAX_FONT_OVER_RADIUS) return false;
+  const baselineRadius = baselineRadiusFor(radius, fontSize, strokeWidth);
+  if (baselineRadius < fontSize * 0.7) return false;
+  return totalAngleFor(text, fontSize, baselineRadius, bold) <= MAX_ARC_SPAN_RAD;
+}
+
 /**
  * Computes polar vector coordinates and tangent rotations for text curved along
  * a circular arc with an inscribed circular guide line.
+ * Font size is always reduced until characters cannot overlap, at any box size.
  */
 export function computeArcTextLayout({
   text,
@@ -44,6 +73,7 @@ export function computeArcTextLayout({
   const cy = heightPx / 2;
   const strokeWidth = Math.max(0.75, (lineWidthMm || 0.25) * scale);
   const radius = Math.max(2, (diameter - strokeWidth) / 2 - 1);
+  const minFont = 1;
 
   if (!text || text.length === 0 || radius <= 4) {
     return {
@@ -51,58 +81,41 @@ export function computeArcTextLayout({
       cy,
       radius,
       strokeWidth,
-      effectiveFontSizePx: nominalFontSizePx,
+      effectiveFontSizePx: Math.max(minFont, Math.min(nominalFontSizePx, radius * MAX_FONT_OVER_RADIUS)),
       characters: [],
     };
   }
 
-  // Baseline radius hugs inside the circular guide line
-  let effectiveFontSizePx = nominalFontSizePx;
-  let baselineRadius = Math.max(2, radius - effectiveFontSizePx * 0.95 - strokeWidth / 2 - 1);
-
-  // Maximum angular span allowed (350 degrees to leave breathing room at bottom)
-  const maxAllowedAngleRad = (350 * Math.PI) / 180;
-
-  const calcTotalAngle = (fontSize: number, r: number) => {
-    let total = 0;
-    const letterSpacing = fontSize * 0.05;
-    for (let i = 0; i < text.length; i++) {
-      const w = charWidthEm(text[i], bold) * fontSize + letterSpacing;
-      total += w / r;
+  let hi = Math.min(nominalFontSizePx, radius * MAX_FONT_OVER_RADIUS);
+  let lo = minFont;
+  if (!fontFits(text, hi, radius, strokeWidth, bold)) {
+    for (let i = 0; i < 14; i++) {
+      const mid = (lo + hi) / 2;
+      if (fontFits(text, mid, radius, strokeWidth, bold)) lo = mid;
+      else hi = mid;
     }
-    return total;
-  };
-
-  let totalAngle = calcTotalAngle(effectiveFontSizePx, baselineRadius);
-
-  // Auto-shrink font size to fit if text exceeds max allowable circumference (Task Decision: Option A)
-  if (totalAngle > maxAllowedAngleRad && totalAngle > 0) {
-    const scaleFactor = maxAllowedAngleRad / totalAngle;
-    effectiveFontSizePx = Math.max(3 * scale, nominalFontSizePx * scaleFactor);
-    baselineRadius = Math.max(2, radius - effectiveFontSizePx * 0.95 - strokeWidth / 2 - 1);
-    totalAngle = calcTotalAngle(effectiveFontSizePx, baselineRadius);
+    hi = lo;
   }
 
-  // Symmetrically center text at the 12 o'clock peak (angle = -PI / 2)
+  const effectiveFontSizePx = Math.max(minFont, hi);
+  const baselineRadius = baselineRadiusFor(radius, effectiveFontSizePx, strokeWidth);
+  const totalAngle = totalAngleFor(text, effectiveFontSizePx, baselineRadius, bold);
+  const tracking = effectiveFontSizePx * TRACKING_EM;
+
   let currentAngle = -Math.PI / 2 - totalAngle / 2;
-  const letterSpacing = effectiveFontSizePx * 0.05;
   const characters: ArcCharLayout[] = [];
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    const charWidth = charWidthEm(char, bold) * effectiveFontSizePx + letterSpacing;
+    const charWidth = charWidthEm(char, bold) * effectiveFontSizePx * 1.12 + tracking;
     const deltaAngle = charWidth / baselineRadius;
     const midAngle = currentAngle + deltaAngle / 2;
 
-    const x = cx + baselineRadius * Math.cos(midAngle);
-    const y = cy + baselineRadius * Math.sin(midAngle);
-    const rotationDeg = (midAngle * 180) / Math.PI + 90;
-
     characters.push({
       char,
-      x,
-      y,
-      rotationDeg,
+      x: cx + baselineRadius * Math.cos(midAngle),
+      y: cy + baselineRadius * Math.sin(midAngle),
+      rotationDeg: (midAngle * 180) / Math.PI + 90,
     });
 
     currentAngle += deltaAngle;

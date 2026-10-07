@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
-import { PrintGridIcon, SafeModeIcon } from '@/components/editor/chrome-icons';
+import { PrintGridIcon, PrintRulerIcon, SafeModeIcon } from '@/components/editor/chrome-icons';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -165,7 +165,6 @@ import {
   getQuickEditPatch,
   getQuickEditPlaceholder,
   getQuickEditTitle,
-  getQuickEditValue,
   isQuickEditableType,
   type ElementAnchorRect,
 } from '@/lib/editor/quick-value';
@@ -315,31 +314,18 @@ function boxOfElement(el: LabelElement): MmBox {
   return { left: el.left, top: el.top, width: size.width, height: size.height };
 }
 
-function naturalHeightForWidth(el: LabelElement, widthMm: number, fontSize?: number): number | undefined {
-  if (el.type === 'text' || el.type === 'degrees') {
-    const rawText =
-      el.contentType === 'Data Source' && el.columnNameContent
-        ? `{${el.columnNameContent}}`
-        : 'text' in el
-          ? el.text
-          : el.content;
-    const fs = fontSize ?? ('fontSize' in el && typeof el.fontSize === 'number' ? el.fontSize : 12);
-    return computeTextElementHeightMm({
-      text: rawText,
-      fontSize: fs,
-      widthMm,
-      autoWrapping: el.autoWrapping ?? 'Word',
-      lineSpacing: el.lineSpacing ?? '1.0',
-      charSpacing: el.charSpacing ?? 0,
-      bold: el.bold ?? false,
-      verticalDisplay: el.verticalDisplay ?? false,
-    });
+function scaledFontSizeForResize(
+  el: LabelElement,
+  handle: 'e' | 's',
+  scaleX: number,
+  scaleY: number,
+  fallbackFontSize?: number,
+): number | undefined {
+  if ('fontSize' in el && typeof el.fontSize === 'number') {
+    const drivingScale = handle === 'e' ? scaleX : scaleY;
+    return Math.max(4, Math.round(el.fontSize * drivingScale * 2) / 2);
   }
-  if (el.type === 'time') {
-    const fs = fontSize ?? ('fontSize' in el && typeof el.fontSize === 'number' ? el.fontSize : 12);
-    return textBlockHeightMm(fs, 1);
-  }
-  return undefined;
+  return fallbackFontSize;
 }
 
 function resizeElementByScale(
@@ -365,7 +351,6 @@ function resizeElementByScale(
     aspect: aspectRatioOf(el),
     minMm: policy.minMm,
     canvas,
-    naturalHeightMm: naturalHeightForWidth(el, start.width * scaleX, fontSize),
   });
 }
 
@@ -706,6 +691,12 @@ export default function EditScreen() {
   const toolbarRef = useRef<View>(null);
   const canvasShotRef = useRef<ViewShot>(null);
   const clipartReplaceIdRef = useRef<string | null>(null);
+  const clipartPendingPlacementRef = useRef<{
+    left?: number;
+    top?: number;
+    width?: number;
+    height?: number;
+  } | null>(null);
   const [showLabelMenu, setShowLabelMenu] = useState(false);
   const [labelMenuTop, setLabelMenuTop] = useState(0);
   const [showTablePicker, setShowTablePicker] = useState(false);
@@ -1420,7 +1411,10 @@ export default function EditScreen() {
         elements.map((el) => {
           if (el.id !== id) return el;
           if (el.type === 'text' || el.type === 'degrees') {
-            return mergeTextElementPatch(el, updates);
+            return mergeTextElementPatch(el, updates, {
+              widthMm: docRef.current.widthMm,
+              heightMm: docRef.current.heightMm,
+            });
           }
           return { ...el, ...updates } as LabelElement;
         }),
@@ -1546,7 +1540,7 @@ export default function EditScreen() {
           setQuickEditTarget({
             id: tableId,
             type: 'text',
-            value,
+            value: '',
             anchorRect,
             tableCell: { tableId, row: cell.row, col: cell.col },
           });
@@ -1720,6 +1714,7 @@ export default function EditScreen() {
             left: fit.left,
             top: fit.top,
             width: fit.width,
+            height: fit.height,
             fontSize: fit.fontSize,
             ...overrides,
           };
@@ -1958,6 +1953,7 @@ export default function EditScreen() {
     editorSettings.editorGridSpacingMm ?? DEFAULT_EDITOR_SETTINGS.editorGridSpacingMm;
 
   const printGridOn = doc.settings?.printGrid === true;
+  const printRulerOn = doc.settings?.printRuler === true;
 
   const togglePrintGrid = useCallback(() => {
     setDoc((prev) => {
@@ -1969,6 +1965,17 @@ export default function EditScreen() {
     });
     setDirty(true);
   }, [gridSpacingMm]);
+
+  const togglePrintRuler = useCallback(() => {
+    setDoc((prev) => {
+      const settings = resolveLabelSettings(prev);
+      return {
+        ...prev,
+        settings: { ...settings, printRuler: !settings.printRuler },
+      };
+    });
+    setDirty(true);
+  }, []);
 
   const changeGridSpacing = useCallback(
     (mm: number) => {
@@ -2184,7 +2191,7 @@ export default function EditScreen() {
         setQuickEditTarget({
           id,
           type: element.type,
-          value: getQuickEditValue(element),
+          value: '',
           anchorRect,
         });
       }, 80);
@@ -2443,45 +2450,6 @@ export default function EditScreen() {
         commitBulkSlotGeometry(slotIds);
       };
 
-      const applyAutoFitFont = (el: LabelElement): LabelElement => {
-        if (!defaults.autoFitFont || (el.type !== 'text' && el.type !== 'degrees')) return el;
-        const showColumnName = useSettingsStore.getState().editor.showColumnName;
-        const raw =
-          el.type === 'text'
-            ? el.contentType === 'Data Source' && el.columnNameContent
-              ? formatDataSourceColumn(el.columnNameContent, showColumnName)
-              : el.text
-            : el.contentType === 'Data Source' && el.columnNameContent
-              ? formatDataSourceColumn(el.columnNameContent, showColumnName)
-              : el.content;
-        const targetMaxH = Math.max(2, canvas.heightMm - Math.max(0, el.top));
-        const fittedFs = fitFontSizeToLabel({
-          text: raw,
-          widthMm: el.width,
-          maxHeightMm: targetMaxH,
-          initialFontSize: el.fontSize,
-          autoWrapping: el.autoWrapping,
-          lineSpacing: el.lineSpacing,
-          charSpacing: el.charSpacing,
-          bold: el.bold,
-          verticalDisplay: el.verticalDisplay,
-        });
-        const next = { ...el, fontSize: fittedFs } as LabelElement;
-        if ('autoTextHeight' in next && next.autoTextHeight !== false) {
-          (next as { height: number }).height = computeTextElementHeightMm({
-            text: raw,
-            fontSize: fittedFs,
-            widthMm: el.width,
-            autoWrapping: el.autoWrapping,
-            lineSpacing: el.lineSpacing,
-            charSpacing: el.charSpacing,
-            bold: el.bold,
-            verticalDisplay: el.verticalDisplay,
-          });
-        }
-        return next;
-      };
-
       const patchBox = (
         el: LabelElement,
         box: MmBox,
@@ -2526,10 +2494,11 @@ export default function EditScreen() {
               if (!ids.includes(el.id)) return el;
               const start = resizeSnapshots.get(el.id);
               if (!start) return el;
-              const live = resizeElementByScale(el, start, handle, scaleX, scaleY, canvas, clean.fontSize);
+              const fs = scaledFontSizeForResize(el, handle, scaleX, scaleY, clean.fontSize);
+              const live = resizeElementByScale(el, start, handle, scaleX, scaleY, canvas, fs);
               logMultiTransformBox('live', el.id, live);
               logMultiTransformBox('commit', el.id, live);
-              return patchBox(el, live, clean.rotation, clean.fontSize);
+              return patchBox(el, live, clean.rotation, fs);
             }),
           recordHistory,
         );
@@ -2578,11 +2547,7 @@ export default function EditScreen() {
           elements.map((el) => {
             if (el.id !== payload.id) return el;
             const fs = clean.fontSize ?? ('fontSize' in el && typeof el.fontSize === 'number' ? el.fontSize : undefined);
-            let targetHeight = clean.heightMm;
-            const naturalH = naturalHeightForWidth(el, clean.widthMm, fs);
-            if (naturalH !== undefined) {
-              targetHeight = naturalH;
-            }
+            const targetHeight = clean.heightMm;
             let next: LabelElement;
             if (kind === 'resize') {
               next = patchBox(
@@ -2627,9 +2592,6 @@ export default function EditScreen() {
                 next = { ...next, ...snapped };
               }
             }
-            if (kind === 'resize' && (next.type === 'text' || next.type === 'degrees')) {
-              next = applyAutoFitFont(next);
-            }
             return next;
           }),
         recordHistory,
@@ -2649,7 +2611,6 @@ export default function EditScreen() {
       groupScaleXSv,
       groupScaleYSv,
       editorSettings.pictureAdsorption,
-      defaults.autoFitFont,
     ],
   );
 
@@ -3163,25 +3124,24 @@ export default function EditScreen() {
         editorBridge.clipartResult = null;
         const replaceId = clipartReplaceIdRef.current;
         clipartReplaceIdRef.current = null;
+        const placement = clipartPendingPlacementRef.current;
+        clipartPendingPlacementRef.current = null;
         const existing =
           replaceId != null
             ? docRef.current.elements.find((el) => el.id === replaceId && el.type === 'clipart')
             : undefined;
         if (existing) {
           patchElement(existing.id, { clipartId: clipart.id });
-          setClipartTab('Regular');
-          setPanelOpen(true);
-          topBarSelectionVisibleSv.value = 1;
-          bottomPanelVisibleSv.value = 1;
         } else {
           addElement('clipart', {
             clipartId: clipart.id,
+            ...(placement ?? {}),
           });
-          setClipartTab('Regular');
-          setPanelOpen(true);
-          topBarSelectionVisibleSv.value = 1;
-          bottomPanelVisibleSv.value = 1;
         }
+        setClipartTab('Regular');
+        setPanelOpen(true);
+        topBarSelectionVisibleSv.value = 1;
+        bottomPanelVisibleSv.value = 1;
       }
 
       if (editorBridge.borderResult) {
@@ -3393,16 +3353,19 @@ export default function EditScreen() {
       if (ghost.type !== 'text' && ghost.type !== 'degrees' && ghost.type !== 'time') {
         overrides.height = ghost.heightMm;
       }
-      const el = addElement(ghost.type, overrides);
-      if (el?.type === 'clipart') {
-        clipartReplaceIdRef.current = el.id;
-        setClipartTab('Regular');
-        setPanelOpen(true);
-        topBarSelectionVisibleSv.value = 1;
-        bottomPanelVisibleSv.value = 1;
-      } else {
-        openAddedElementPanel(ghost.label);
+      if (ghost.type === 'clipart') {
+        clipartReplaceIdRef.current = null;
+        clipartPendingPlacementRef.current = {
+          left: placed.left,
+          top: placed.top,
+          width: ghost.widthMm,
+          height: ghost.heightMm,
+        };
+        router.push({ pathname: '/clipart', params: { from: 'edit' } });
+        return;
       }
+      addElement(ghost.type, overrides);
+      openAddedElementPanel(ghost.label);
     },
     [addElement, openAddedElementPanel, publishSnapGuides, windowPointToArtboardMm],
   );
@@ -3488,14 +3451,9 @@ export default function EditScreen() {
         void handlePickImage();
         break;
       case 'Clipart': {
-        const added = addElement('clipart');
-        if (added) {
-          clipartReplaceIdRef.current = added.id;
-        }
-        setClipartTab('Regular');
-        setPanelOpen(true);
-        topBarSelectionVisibleSv.value = 1;
-        bottomPanelVisibleSv.value = 1;
+        clipartReplaceIdRef.current = null;
+        clipartPendingPlacementRef.current = null;
+        router.push({ pathname: '/clipart', params: { from: 'edit' } });
         break;
       }
       case 'Border': {
@@ -3702,6 +3660,13 @@ export default function EditScreen() {
         oneFingerPanEnabled={selectedIds.length === 0}
         doubleTapEnabled={false}>
         <View style={[styles.workspace, { backgroundColor: stageBg }]} pointerEvents="box-none">
+          {selectedIds.length > 0 ? (
+            <Pressable
+              accessibilityLabel="Deselect"
+              onPress={handleDeselectAll}
+              style={StyleSheet.absoluteFillObject}
+            />
+          ) : null}
           <View
             style={[
               styles.rulerFrame,
@@ -4013,6 +3978,7 @@ export default function EditScreen() {
               if (targetEl.id) {
                 clipartReplaceIdRef.current = targetEl.id;
               }
+              clipartPendingPlacementRef.current = null;
               router.push({ pathname: '/clipart', params: { from: 'edit' } });
             }}
           />
@@ -4174,6 +4140,30 @@ export default function EditScreen() {
                 numberOfLines={1}
                 style={[styles.printGridBtnText, printGridOn && styles.printGridBtnTextOn]}>
                 Print grid
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={togglePrintRuler}
+              hitSlop={10}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: printRulerOn }}
+              accessibilityLabel="Print ruler"
+              accessibilityHint="Prints an mm edge ruler on the top and left for alignment checks."
+              style={({ pressed }) => [
+                styles.printGridBtn,
+                printRulerOn && styles.canvasChromeBtnActive,
+                pressed && styles.pressed,
+              ]}>
+              <PrintRulerIcon
+                active={printRulerOn}
+                color={printRulerOn ? Palette.accent : Palette.muted}
+                size={16}
+              />
+              <Text
+                numberOfLines={1}
+                style={[styles.printGridBtnText, printRulerOn && styles.printGridBtnTextOn]}>
+                Print ruler
               </Text>
             </Pressable>
 

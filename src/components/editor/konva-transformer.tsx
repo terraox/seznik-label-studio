@@ -26,7 +26,7 @@ import {
   pointerMmToTableLocal,
   sameTableCellSelection,
 } from '@/lib/editor/table-cells';
-import { elementSizeMm, textBlockHeightMm, type LabelElement, type MediaShape } from '@/lib/label-document';
+import { elementSizeMm, type LabelElement, type MediaShape } from '@/lib/label-document';
 import { computeTextElementHeightMm } from '@/lib/text-metrics';
 import { clampToLabelBounds, fitFontSizeToLabel } from '@/lib/editor/label-bounds';
 import { DIVIDER_HIT_SIZE_PX } from '@/lib/editor/canvas-split';
@@ -580,19 +580,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       }
       const handle: ResizeAnchor = cur.handle === 1 ? 's' : 'e';
       const rawBehavior = handle === 'e' ? resizeBehaviorESv.value : resizeBehaviorSSv.value;
-      let naturalHeightMm: number | undefined;
-      if (isAutoTextSv.value && handle === 'e') {
-        naturalHeightMm = computeTextElementHeightMm({
-          text: textContentSv.value,
-          fontSize: textFontSizeSv.value,
-          widthMm: followerStartWidthMmSv.value * cur.scaleX,
-          autoWrapping: autoWrappingSv.value,
-          lineSpacing: lineSpacingSv.value,
-          charSpacing: charSpacingSv.value,
-          bold: boldSv.value,
-          verticalDisplay: verticalDisplaySv.value,
-        });
-      }
       const start = {
         left: followerStartLeftMmSv.value,
         top: followerStartTopMmSv.value,
@@ -611,7 +598,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
               aspect: aspectSv.value > 0 ? aspectSv.value : 1,
               minMm: minResizeMmSv.value,
               canvas: { widthMm: canvasWMmSv.value, heightMm: canvasHMmSv.value },
-              naturalHeightMm,
             });
       originLeftSv.value = (box.left + cur.dx) * sxSv.value;
       originTopSv.value = (box.top + cur.dy) * sySv.value;
@@ -684,29 +670,9 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
       let fontSize: number | undefined;
       let naturalHeightMm: number | undefined;
-      if (element.type === 'text' || element.type === 'degrees') {
-        const rawText =
-          element.contentType === 'Data Source' && element.columnNameContent
-            ? `{${element.columnNameContent}}`
-            : 'text' in element
-              ? element.text
-              : element.content;
-        const fs = 'fontSize' in element && typeof element.fontSize === 'number' ? element.fontSize : 12;
-        naturalHeightMm = computeTextElementHeightMm({
-          text: rawText,
-          fontSize: fs,
-          widthMm: startW * scaleX,
-          autoWrapping: element.autoWrapping ?? 'Word',
-          lineSpacing: element.lineSpacing ?? '1.0',
-          charSpacing: element.charSpacing ?? 0,
-          bold: element.bold ?? false,
-          verticalDisplay: element.verticalDisplay ?? false,
-        });
-        fontSize = fs;
-      } else if (element.type === 'time') {
-        const fs = 'fontSize' in element && typeof element.fontSize === 'number' ? element.fontSize : 12;
-        naturalHeightMm = textBlockHeightMm(fs, 1);
-        fontSize = fs;
+      if ('fontSize' in element && typeof element.fontSize === 'number') {
+        const drivingScale = handle === 'e' ? scaleX : scaleY;
+        fontSize = Math.max(4, Math.round(element.fontSize * drivingScale * 2) / 2);
       }
 
       const next = resizeMemberByScale({
@@ -1422,19 +1388,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
           const startWMm = originW / sxSv.value;
           const startHMm = originH / sySv.value;
-          let naturalHeightMm: number | undefined;
-          if (isAutoTextSv.value && handle === 'e') {
-            naturalHeightMm = computeTextElementHeightMm({
-              text: textContentSv.value,
-              fontSize: textFontSizeSv.value,
-              widthMm: startWMm * scaleX,
-              autoWrapping: autoWrappingSv.value,
-              lineSpacing: lineSpacingSv.value,
-              charSpacing: charSpacingSv.value,
-              bold: boldSv.value,
-              verticalDisplay: verticalDisplaySv.value,
-            });
-          }
 
           const box = resizeMemberByScale({
             start: {
@@ -1450,7 +1403,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             aspect: aspectSv.value > 0 ? aspectSv.value : 1,
             minMm: minResizeMmSv.value,
             canvas: { widthMm: canvasWMmSv.value, heightMm: canvasHMmSv.value },
-            naturalHeightMm,
           });
 
           animW.value = Math.max(1, box.width * sxSv.value);
@@ -1561,11 +1513,28 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     };
   });
 
-  const contentRotateStyle = useAnimatedStyle(() => ({
-    width: '100%',
-    height: '100%',
-    transform: [{ rotate: `${animRot.value}deg` }],
-  }));
+  const liveScaleContent = element.type !== 'border';
+
+  const contentRotateStyle = useAnimatedStyle(() => {
+    const rotate = { rotate: `${animRot.value}deg` };
+    if (!liveScaleContent) {
+      return {
+        width: '100%' as const,
+        height: '100%' as const,
+        transform: [rotate],
+      };
+    }
+    const baseW = Math.max(1, startW.value);
+    const baseH = Math.max(1, startH.value);
+    const liveW = Math.max(1, animW.value);
+    const liveH = Math.max(1, animH.value);
+    return {
+      width: baseW,
+      height: baseH,
+      transformOrigin: 'top left' as const,
+      transform: [{ scaleX: liveW / baseW }, { scaleY: liveH / baseH }, rotate],
+    };
+  });
 
   if (element.type === 'border' || element.needPrinting === false) {
     return (

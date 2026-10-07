@@ -22,6 +22,7 @@ import {
 import { dotsPerMm, mmToDots, rectMmToDots } from '@/lib/printer/print-spec';
 import { sortLayers } from '@/lib/template-schema';
 import { printGridKnockoutsMm, printGridRectsDots, printGridSpacingMm } from '@/lib/print-grid';
+import { drawPrintRuler, printRulerEnabled } from '@/lib/print-ruler';
 import { computeWrappedLines, layoutPrintText } from '@/lib/text-metrics';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { stretchThenRoundBars } from './barcode-stretch';
@@ -204,6 +205,10 @@ function drawDocumentToSurface(
     for (const r of printGridRectsDots(doc.widthMm, doc.heightMm, gridSpacing, dpi, knockouts)) {
       surface.fillRect(r.left * s, r.top * s, r.width * s, r.height * s, 0);
     }
+  }
+  if (printRulerEnabled(doc)) {
+    const s = activeDotScale;
+    drawPrintRuler(surface, doc.widthMm, doc.heightMm, dpi, s);
   }
   for (const el of sortLayers(doc.elements)) {
     if (el.needPrinting === false || el.visible === false) continue;

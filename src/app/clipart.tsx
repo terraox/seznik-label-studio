@@ -1,10 +1,14 @@
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -13,112 +17,166 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ClipartTile } from '@/components/clipart-tile';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import {
-  CLIPART_PILLS,
-  CLIPART_SIDEBAR,
+  CLIPART_CATEGORIES,
   allClipartCount,
-  getClipartSections,
-  type ClipartItem,
-  type ClipartPill,
-  type ClipartSidebar,
+  builtinClipartCount,
+  getClipartForCategory,
+  type ClipartCategoryId,
 } from '@/constants/clipart-library';
 import { editorBridge } from '@/constants/editor-bridge';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
+import { sanitizeUserSvg } from '@/lib/clipart/parse-svg';
+import type { ClipartItem } from '@/lib/clipart/types';
+import { generateId } from '@/lib/label-document';
+import { useUserClipartStore } from '@/stores/user-clipart-store';
+
+type GalleryCategory = ClipartCategoryId | 'mine';
 
 export default function ClipartScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ from?: string }>();
   const fromEdit = params.from === 'edit';
+  const userItems = useUserClipartStore((s) => s.items);
+  const addUser = useUserClipartStore((s) => s.add);
+  const removeUser = useUserClipartStore((s) => s.remove);
+
+  const [category, setCategory] = useState<GalleryCategory>('retail');
+  const [query, setQuery] = useState('');
 
   const handleSelect = (item: ClipartItem) => {
-    editorBridge.clipartResult = {
-      id: item.id,
-    };
+    editorBridge.clipartResult = { id: item.id };
     if (fromEdit) {
       router.back();
       return;
     }
     router.push('/edit');
   };
-  const [selectedPill, setSelectedPill] = useState<ClipartPill>('Animal');
-  const [selectedSidebar, setSelectedSidebar] = useState<ClipartSidebar>('Commercial Retail');
+
+  const handleUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/svg+xml', 'text/xml', 'application/xml', '*/*'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+      if (ext && ext !== 'svg' && ext !== 'xml') {
+        Alert.alert('Clipart', 'Please choose an .svg file.');
+        return;
+      }
+      const raw = await FileSystem.readAsStringAsync(file.uri);
+      const svg = sanitizeUserSvg(raw);
+      if (!svg) {
+        Alert.alert('Clipart', 'That file is not a usable SVG.');
+        return;
+      }
+      const label = file.name.replace(/\.svg$/i, '').replace(/[_-]+/g, ' ').trim() || 'My SVG';
+      const added = addUser({ id: generateId('svg'), label, svg });
+      if (!added) {
+        Alert.alert('Clipart', 'Your SVG library is full. Delete one to add another.');
+        return;
+      }
+      setCategory('mine');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not import that SVG.';
+      Alert.alert('Clipart', msg);
+    }
+  };
+
+  const handleLongPress = (item: ClipartItem) => {
+    if (item.source !== 'user') return;
+    Alert.alert('Remove SVG', `Delete “${item.label}” from this device?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => removeUser(item.id) },
+    ]);
+  };
 
   const layoutWidth = Math.min(width, MaxContentWidth);
-  const tileWidth = Math.floor((layoutWidth - 112 - Spacing.three * 2 - 8) / 3);
+  const tileWidth = Math.floor((layoutWidth - Spacing.three * 2 - 16) / 4);
 
-  const sections = useMemo(
-    () => getClipartSections(selectedSidebar, selectedPill),
-    [selectedSidebar, selectedPill]
-  );
+  const icons = useMemo(() => {
+    const list =
+      category === 'mine' ? userItems : getClipartForCategory(category);
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((item) => item.label.toLowerCase().includes(q) || item.id.includes(q));
+  }, [category, query, userItems]);
 
   return (
     <View style={styles.root}>
       <SettingsStackHeader title="Clipart" />
 
       <View style={[styles.topBar, { width: layoutWidth }]}>
-        <Text style={styles.cartoonTab}>B&W Stickers · {allClipartCount()} icons</Text>
+        <Text style={styles.cartoonTab}>
+          Indian stickers · {builtinClipartCount()} built-in · {allClipartCount() - builtinClipartCount()} mine
+        </Text>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search kirana, diya, GST…"
+          placeholderTextColor="#94A3B8"
+          style={styles.search}
+        />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
-          {CLIPART_PILLS.map((pill) => {
-            const active = pill === selectedPill;
+          {CLIPART_CATEGORIES.map((item) => {
+            const active = category === item.id;
             return (
               <Pressable
-                key={pill}
-                onPress={() => setSelectedPill(pill)}
+                key={item.id}
+                onPress={() => setCategory(item.id)}
                 style={[styles.pill, active && styles.pillActive]}>
                 <Text style={[styles.pillText, active && styles.pillTextActive]} numberOfLines={1}>
-                  {pill}
+                  {item.label}
                 </Text>
               </Pressable>
             );
           })}
+          <Pressable
+            onPress={() => setCategory('mine')}
+            style={[styles.pill, category === 'mine' && styles.pillActive]}>
+            <Text style={[styles.pillText, category === 'mine' && styles.pillTextActive]}>My SVGs</Text>
+          </Pressable>
         </ScrollView>
       </View>
 
-      <View style={[styles.body, { width: layoutWidth }]}>
-        <View style={styles.sidebar}>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {CLIPART_SIDEBAR.map((item) => {
-              const active = item === selectedSidebar;
-              return (
-                <Pressable
-                  key={item}
-                  onPress={() => setSelectedSidebar(item)}
-                  style={[styles.sidebarItem, active && styles.sidebarItemActive]}>
-                  <Text
-                    numberOfLines={2}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.75}
-                    style={[styles.sidebarText, active && styles.sidebarTextActive]}>
-                    {item}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+      <ScrollView
+        style={[styles.contentScroll, { width: layoutWidth }]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.three, paddingHorizontal: Spacing.one }}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionTitle}>
+            {category === 'mine'
+              ? 'Saved on this phone'
+              : CLIPART_CATEGORIES.find((c) => c.id === category)?.label}
+            {` · ${icons.length}`}
+          </Text>
+          <Pressable onPress={handleUpload} style={styles.uploadBtn}>
+            <Text style={styles.uploadText}>Upload SVG</Text>
+          </Pressable>
         </View>
 
-        <ScrollView
-          style={styles.contentScroll}
-          contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.three }}
-          showsVerticalScrollIndicator={false}>
-          {sections.map((section) => (
-            <View key={section.title} style={styles.section}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <View style={styles.grid}>
-                {section.icons.map((icon) => (
-                  <Pressable
-                    key={icon.id}
-                    style={({ pressed }) => [{ width: tileWidth }, pressed && { opacity: 0.6 }]}
-                    onPress={() => handleSelect(icon)}>
-                    <ClipartTile item={icon} />
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+        {category === 'mine' && icons.length === 0 ? (
+          <Text style={styles.empty}>
+            Upload your own .svg stickers. They stay on this phone and print with the label.
+          </Text>
+        ) : null}
+
+        <View style={styles.grid}>
+          {icons.map((icon) => (
+            <Pressable
+              key={icon.id}
+              style={({ pressed }) => [{ width: tileWidth }, pressed && { opacity: 0.6 }]}
+              onPress={() => handleSelect(icon)}
+              onLongPress={() => handleLongPress(icon)}>
+              <ClipartTile item={icon} />
+            </Pressable>
           ))}
-        </ScrollView>
-      </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -148,6 +206,16 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginLeft: Spacing.one,
   },
+  search: {
+    marginHorizontal: Spacing.one,
+    marginBottom: Spacing.two,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#0F172A',
+  },
   pillRow: {
     gap: 8,
     paddingHorizontal: Spacing.one,
@@ -169,49 +237,42 @@ const styles = StyleSheet.create({
   pillTextActive: {
     color: '#FFFFFF',
   },
-  body: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  sidebar: {
-    width: 108,
-    backgroundColor: '#F5F7FA',
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#E2E6EC',
-  },
-  sidebarItem: {
-    minHeight: 42,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sidebarItemActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  sidebarText: {
-    fontSize: 11.5,
-    fontWeight: '500',
-    color: '#556473',
-    textAlign: 'center',
-  },
-  sidebarTextActive: {
-    color: Palette.accent,
-    fontWeight: '700',
-  },
   contentScroll: {
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  section: {
-    paddingHorizontal: Spacing.one,
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingTop: Spacing.two,
+    paddingHorizontal: 4,
+    marginBottom: Spacing.one,
+    gap: 8,
   },
   sectionTitle: {
+    flex: 1,
     fontSize: 12,
     fontWeight: '600',
     color: '#8A97A4',
-    marginBottom: Spacing.one,
-    marginLeft: 4,
+  },
+  uploadBtn: {
+    backgroundColor: Palette.accent,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  uploadText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  empty: {
+    paddingHorizontal: 12,
+    paddingVertical: 24,
+    color: '#64748B',
+    fontSize: 14,
+    lineHeight: 20,
   },
   grid: {
     flexDirection: 'row',

@@ -42,65 +42,13 @@ export function aspectRatioOf(element: LabelElement): number {
 export function resizePolicyFor(element: LabelElement): ResizePolicy {
   const type: ElementType = element.type;
   switch (type) {
-    case 'image':
-    case 'clipart':
-    case 'signature': {
-      const locked = element.type === 'image' ? element.aspectRatioLocked !== false : true;
+    case 'border':
       return {
-        anchors: ['e', 's'],
-        behavior: locked ? { e: 'aspect', s: 'aspect' } : { e: 'width', s: 'height' },
-        rotateHandle: false,
-        minMm: RESIZE_MIN_PROPORTIONAL_MM,
-        comment:
-          'Image/clipart/signature: two edge handles. Default aspect-lock so photos never stretch; unlock on the image panel to resize axes independently. Rotate via the editing pad.',
-      };
-    }
-    case 'qrcode':
-    case 'arctext':
-      return {
-        anchors: ['e', 's'],
-        behavior: { e: 'square', s: 'square' },
-        rotateHandle: false,
-        minMm: RESIZE_MIN_PROPORTIONAL_MM,
-        comment: 'QR and ArcText must stay square (width = height) to maintain circular/square geometry.',
-      };
-    case 'barcode':
-      return {
-        anchors: ['e', 's'],
-        behavior: { e: 'width', s: 'height' },
+        anchors: [],
+        behavior: {},
         rotateHandle: false,
         minMm: MIN_ELEMENT_MM,
-        comment: 'Barcode: two independent single-axis handles (e = width only, s = height only) matching canvas.md §3.1.',
-      };
-    case 'text':
-    case 'degrees': {
-      const autoTextHeight = 'autoTextHeight' in element ? element.autoTextHeight !== false : true;
-      const autoWrapping = 'autoWrapping' in element ? element.autoWrapping : 'Word';
-      const isAutoHeight = autoTextHeight && autoWrapping !== 'Close';
-      if (!isAutoHeight) {
-        return {
-          anchors: ['e', 's'],
-          behavior: { e: 'width', s: 'height' },
-          rotateHandle: false,
-          minMm: MIN_ELEMENT_MM,
-          comment: 'Text/degrees with auto-wrapping off / fixed height allows independent width and height resizing.',
-        };
-      }
-      return {
-        anchors: ['e'],
-        behavior: { e: 'width' },
-        rotateHandle: false,
-        minMm: MIN_ELEMENT_MM,
-        comment: 'Text/degrees: width only (wrap width). Vertical handle is hidden while auto wrapping is active; height is resized only by font size setting and wrapped lines.',
-      };
-    }
-    case 'time':
-      return {
-        anchors: ['e'],
-        behavior: { e: 'width' },
-        rotateHandle: false,
-        minMm: MIN_ELEMENT_MM,
-        comment: 'Time: width only (wrap width). No vertical resizing; height is resized only by font size setting.',
+        comment: 'Border is locked to the label; no resize handles.',
       };
     case 'line':
       return {
@@ -110,22 +58,26 @@ export function resizePolicyFor(element: LabelElement): ResizePolicy {
         minMm: 0.1,
         comment: 'Line: length only. Stroke thickness is a property, not a drag axis.',
       };
-    case 'shape':
-    case 'table':
+    case 'qrcode':
+    case 'arctext':
       return {
         anchors: ['e', 's'],
-        behavior: { e: 'width', s: 'height' },
+        behavior: { e: 'square', s: 'square' },
         rotateHandle: false,
-        minMm: MIN_ELEMENT_MM,
-        comment: 'Shape/table: independent width and height. Not photos, so aspect is not forced.',
+        minMm: RESIZE_MIN_PROPORTIONAL_MM,
+        comment: 'QR and ArcText stay square and scale as a whole.',
       };
-    case 'border':
+    default:
       return {
-        anchors: [],
-        behavior: {},
+        anchors: ['e', 's'],
+        behavior: { e: 'aspect', s: 'aspect' },
         rotateHandle: false,
-        minMm: MIN_ELEMENT_MM,
-        comment: 'Border is locked to the label; no resize handles.',
+        minMm:
+          type === 'image' || type === 'clipart' || type === 'signature'
+            ? RESIZE_MIN_PROPORTIONAL_MM
+            : MIN_ELEMENT_MM,
+        comment:
+          'Every element scales as a whole: both handles keep aspect, and live preview scales the content with the box.',
       };
   }
 }

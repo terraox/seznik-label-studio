@@ -1,12 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ClipartIcon } from '@/components/clipart-icon';
-import type { ClipartItem } from '@/constants/clipart-library';
+import type { ClipartItem } from '@/lib/clipart/types';
 
 export function ClipartTile({ item }: { item: ClipartItem }) {
   return (
     <View style={styles.tile}>
-      <ClipartIcon shapes={item.shapes} size={34} color="#111111" />
+      <ClipartIcon svg={item.svg} size={34} color="#111111" />
       <Text style={styles.label} numberOfLines={1}>
         {item.label}
       </Text>

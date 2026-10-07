@@ -1,5 +1,4 @@
 import {
-  TIME_DISPLAY_SAMPLE,
   type ArcTextElementState,
   type BarcodeElementState,
   type DegreesElementState,
@@ -17,7 +16,7 @@ import type { BorderStyleId } from '@/constants/border-library';
 import type { MediaGeometry } from '@/lib/media-geometry';
 import type { BulkLabelSet } from '@/lib/bulk-labels';
 import type { LabelSettings } from '@/lib/label-settings';
-import { computeTextElementHeightMm, measureTextWidthMm } from '@/lib/text-metrics';
+import { computeTextElementHeightMm } from '@/lib/text-metrics';
 
 export type TemplateBackground =
   | { type: 'none' }
@@ -422,8 +421,7 @@ export function textBlockHeightMm(fontSizePt: number, lines: number, lineSpacing
 export function elementSizeMm(element: LabelElement): { width: number; height: number } {
   switch (element.type) {
     case 'text': {
-      const isAutoHeight = element.autoTextHeight !== false && element.autoWrapping !== 'Close';
-      if (!isAutoHeight && typeof element.height === 'number' && element.height > 0) {
+      if (typeof element.height === 'number' && element.height > 0) {
         return { width: element.width, height: element.height };
       }
       const rawText =
@@ -443,8 +441,7 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
       return { width: element.width, height };
     }
     case 'degrees': {
-      const isAutoHeight = element.autoTextHeight !== false && element.autoWrapping !== 'Close';
-      if (!isAutoHeight && typeof element.height === 'number' && element.height > 0) {
+      if (typeof element.height === 'number' && element.height > 0) {
         return { width: element.width, height: element.height };
       }
       const rawText =
@@ -464,9 +461,7 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
       return { width: element.width, height };
     }
     case 'time': {
-      const minWidth =
-        measureTextWidthMm(TIME_DISPLAY_SAMPLE, element.fontSize, 0, element.bold ?? false) + 1.5;
-      const width = Math.max(element.width, minWidth);
+      const width = Math.max(0.5, element.width);
       if (typeof element.height === 'number' && element.height > 0) {
         return { width, height: element.height };
       }

@@ -65,6 +65,49 @@ test('computeArcTextLayout differentiates character widths (e.g. i vs W)', () =>
   assert.ok(wideSpan > narrowSpan * 2, `Wide span (${wideSpan}) should be more than double narrow span (${narrowSpan})`);
 });
 
+test('computeArcTextLayout caps font size on very small boxes to avoid overlap', () => {
+  const result = computeArcTextLayout({
+    text: 'HELLO',
+    widthPx: 28,
+    heightPx: 28,
+    nominalFontSizePx: 16,
+  });
+
+  assert.ok(
+    result.effectiveFontSizePx < 16,
+    `Expected font to shrink for a 28px box, got ${result.effectiveFontSizePx}`,
+  );
+  assert.ok(
+    result.effectiveFontSizePx <= result.radius * 0.24 + 0.01,
+    `Font ${result.effectiveFontSizePx}px should stay within radius ${result.radius}px`,
+  );
+});
+
+test('computeArcTextLayout never lets letters wrap past a full circle', () => {
+  const result = computeArcTextLayout({
+    text: 'bestbestbestbestbestbestbestbest',
+    widthPx: 80,
+    heightPx: 80,
+    nominalFontSizePx: 48,
+  });
+
+  const angles = result.characters.map((item) =>
+    Math.atan2(item.y - result.cy, item.x - result.cx),
+  );
+  let span = 0;
+  for (let i = 1; i < angles.length; i++) {
+    let step = angles[i] - angles[i - 1];
+    while (step < 0) step += Math.PI * 2;
+    while (step > Math.PI) step -= Math.PI * 2;
+    span += Math.abs(step);
+  }
+  assert.ok(span < (330 * Math.PI) / 180, `Arc span ${span} rad should stay under 330 degrees`);
+  assert.ok(
+    result.effectiveFontSizePx <= result.radius * 0.24 + 0.01,
+    `Font ${result.effectiveFontSizePx}px too large for radius ${result.radius}px`,
+  );
+});
+
 test('computeArcTextLayout auto-shrinks font size to fit when text exceeds circumference', () => {
   const longText = 'THIS IS AN EXTREMELY LONG TEXT STRING THAT DEFINITELY EXCEEDS 360 DEGREES OF THE CIRCLE AT NOMINAL SIZE';
   const nominalFontSize = 16;

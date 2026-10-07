@@ -4,11 +4,13 @@ import { PixelRatio, StyleSheet, View, type StyleProp, type ViewStyle } from 're
 
 import { CableFlagDieCutOverlay } from '@/components/cable-flag-outline';
 import { PrintGridLayer } from '@/components/print-grid-layer';
+import { PrintRulerLayer } from '@/components/print-ruler-layer';
 import { StockSilhouetteOverlay } from '@/components/stock-silhouette';
 import { ElementContentView } from '@/components/editor/element-renderer';
 import { elementSizeMm, type LabelDocument } from '@/lib/label-document';
 import { fitLabelSize, mediaShapeClipStyle } from '@/lib/label-geometry';
 import { printGridKnockoutsMm, printGridSpacingMm } from '@/lib/print-grid';
+import { printRulerEnabled } from '@/lib/print-ruler';
 import { dotsPerMm, rectMmToDots, td404BorderOuterDots } from '@/lib/printer/print-spec';
 import { canvasFillFromDocument, sortLayers, templateUsesDieCutBackground } from '@/lib/template-schema';
 
@@ -297,6 +299,7 @@ function LabelCanvas({
   shiftMm?: ShiftMm;
 }) {
   const gridSpacingMm = printGridSpacingMm(document);
+  const rulerOn = printRulerEnabled(document);
   const elements = document.elements;
   const gridKnockouts = useMemo(() => printGridKnockoutsMm({ elements }), [elements]);
   return (
@@ -332,6 +335,16 @@ function LabelCanvas({
               heightMm={document.heightMm}
               spacingMm={gridSpacingMm}
               knockoutsMm={gridKnockouts}
+              widthPx={fitted.widthPx || 1}
+              heightPx={fitted.heightPx || 1}
+              printDpi={printDpi}
+              shiftMm={printDpi != null ? shiftMm : undefined}
+            />
+          ) : null}
+          {rulerOn ? (
+            <PrintRulerLayer
+              widthMm={document.widthMm}
+              heightMm={document.heightMm}
               widthPx={fitted.widthPx || 1}
               heightPx={fitted.heightPx || 1}
               printDpi={printDpi}

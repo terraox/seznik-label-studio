@@ -47,6 +47,7 @@ import { generateQrMatrix } from '@/printing/renderer/qrcode';
 import { applySerialOffset, lineSpacingMultiplier } from '@/lib/serial-content';
 import { FONT_LIBRARY } from '@/constants/font-library';
 import { getClipartById } from '@/constants/clipart-library';
+import { parseSvgDrawOps } from '@/lib/clipart/parse-svg';
 import { applyMonoToRgba, resolveEditorColorMode } from '@/lib/editor/image-mono';
 import {
   ptToMm,
@@ -653,17 +654,17 @@ export const SkiaClipart = memo(function SkiaClipart({
     return <Text x={(widthPx - size * 0.7) / 2} y={size * 0.75} text={glyph} font={font} color={color} />;
   }
 
-  // Draw sticker shapes
+  const ops = useMemo(() => (sticker ? parseSvgDrawOps(sticker.svg) : []), [sticker]);
   const stickerScale = size / 24;
   const ox = (widthPx - size) / 2;
   const oy = (heightPx - size) / 2;
 
   return (
     <Group transform={[{ translateX: ox }, { translateY: oy }, { scale: stickerScale }]}>
-      {sticker?.shapes.map((s, idx) => {
-        const stroke = 'f' in s && s.f === 0;
-        const sw = ('sw' in s && s.sw !== undefined) ? s.sw : 1.6;
-        if (s.t === 'c') {
+      {ops.map((s, idx) => {
+        const style = s.t === 'line' || !s.fill ? 'stroke' : 'fill';
+        const sw = s.sw;
+        if (s.t === 'circle') {
           return (
             <Circle
               key={`clip-${idx}`}
@@ -671,12 +672,12 @@ export const SkiaClipart = memo(function SkiaClipart({
               cy={s.y}
               r={s.r}
               color={color}
-              style={stroke ? 'stroke' : 'fill'}
-              strokeWidth={stroke ? sw : undefined}
+              style={style}
+              strokeWidth={style === 'stroke' ? sw : undefined}
             />
           );
         }
-        if (s.t === 'r') {
+        if (s.t === 'rect') {
           return (
             <Rect
               key={`clip-${idx}`}
@@ -685,12 +686,49 @@ export const SkiaClipart = memo(function SkiaClipart({
               width={s.w}
               height={s.h}
               color={color}
-              style={stroke ? 'stroke' : 'fill'}
-              strokeWidth={stroke ? sw : undefined}
+              style={style}
+              strokeWidth={style === 'stroke' ? sw : undefined}
             />
           );
         }
-        if (s.t === 'p') {
+        if (s.t === 'ellipse') {
+          const path = Skia.Path.Make();
+          path.addOval(rect(s.x - s.rx, s.y - s.ry, s.rx * 2, s.ry * 2));
+          return (
+            <Path
+              key={`clip-${idx}`}
+              path={path}
+              color={color}
+              style={style}
+              strokeWidth={style === 'stroke' ? sw : undefined}
+            />
+          );
+        }
+        if (s.t === 'line') {
+          return (
+            <Line
+              key={`clip-${idx}`}
+              p1={vec(s.a, s.b)}
+              p2={vec(s.c, s.d)}
+              color={color}
+              strokeWidth={sw}
+            />
+          );
+        }
+        if (s.t === 'polygon') {
+          const path = Skia.Path.MakeFromSVGString(`M${s.pts.replaceAll(' ', ' L')} Z`);
+          if (!path) return null;
+          return (
+            <Path
+              key={`clip-${idx}`}
+              path={path}
+              color={color}
+              style={style}
+              strokeWidth={style === 'stroke' ? sw : undefined}
+            />
+          );
+        }
+        if (s.t === 'path') {
           const path = Skia.Path.MakeFromSVGString(s.d);
           if (!path) return null;
           return (
@@ -698,8 +736,8 @@ export const SkiaClipart = memo(function SkiaClipart({
               key={`clip-${idx}`}
               path={path}
               color={color}
-              style={stroke ? 'stroke' : 'fill'}
-              strokeWidth={stroke ? sw : undefined}
+              style={style}
+              strokeWidth={style === 'stroke' ? sw : undefined}
             />
           );
         }

@@ -36,6 +36,8 @@ export type LabelSettings = {
   /** Print a square grid over the whole label (shown in the editor and the preview too). */
   printGrid: boolean;
   printGridSpacingMm: number;
+  /** L-shaped mm edge ruler on top + left (editor + print). */
+  printRuler: boolean;
 };
 
 export const LABEL_DRAWING_COLORS = [
@@ -68,6 +70,7 @@ export function defaultLabelSettings(): LabelSettings {
     dataSourceFileId: null,
     printGrid: false,
     printGridSpacingMm: 5,
+    printRuler: false,
   };
 }
 

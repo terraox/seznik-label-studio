@@ -3,6 +3,7 @@ import { insetBorderBox } from '@/lib/border-geometry';
 import { elementSizeMm, mmToPt, ptToMm, textBlockHeightMm, type LabelDocument, type LabelElement } from '@/lib/label-document';
 import { isRatTailGeometry, ratTailBodyRectMm, scaleMediaGeometry } from '@/lib/media-geometry';
 import { clampToLabelBounds } from '@/lib/editor/label-bounds';
+import { roundMm } from '@/lib/editor/engine';
 import { computeTextElementHeightMm, computeWrappedLines, measureTextWidthMm } from '@/lib/text-metrics';
 import { formatDataSourceColumn } from '@/lib/editor/data-source-display';
 import { ensureTableCells } from '@/lib/editor/table-cells';
@@ -26,10 +27,84 @@ function textRawContent(el: TextLikeElement): string {
   return base;
 }
 
+const CONTENT_FIT_KEYS = new Set([
+  'text',
+  'content',
+  'fontSize',
+  'charSpacing',
+  'lineSpacing',
+  'bold',
+  'verticalDisplay',
+  'autoWrapping',
+  'contentType',
+  'columnNameContent',
+  'degreesOffset',
+]);
+
+/** Extra room so glyphs are not flush against the selection frame. */
+function textContentPadMm(fontSizePt: number): number {
+  return Math.max(1.0, ptToMm(fontSizePt) * 0.55);
+}
+
+/**
+ * Size the text box to the entered string, with padding on the right and bottom.
+ * Grows with typing; wraps only when the label edge is reached.
+ */
+export function fitTextBoxToContent(
+  el: TextLikeElement,
+  canvas: { widthMm: number; heightMm: number },
+): { width: number; height: number } {
+  const raw = textRawContent(el);
+  const fontSize = typeof el.fontSize === 'number' ? el.fontSize : 12;
+  const charSpacing = el.charSpacing ?? 0;
+  const bold = el.bold ?? false;
+  const pad = textContentPadMm(fontSize);
+  const minW = Math.max(4, ptToMm(fontSize) * 1.4);
+  const minH = textBlockHeightMm(fontSize, 1, el.lineSpacing ?? '1.0') + pad;
+  const maxW = Math.max(minW, canvas.widthMm - Math.max(0, el.left));
+  const maxH = Math.max(minH, canvas.heightMm - Math.max(0, el.top));
+
+  if (el.verticalDisplay) {
+    const chars = raw.length > 0 ? raw.replace(/\n/g, '').split('') : [''];
+    const glyphW = Math.max(
+      measureTextWidthMm(raw.length ? raw.replace(/\n/g, '') : 'W', fontSize, charSpacing, bold) / Math.max(1, chars.length),
+      measureTextWidthMm('W', fontSize, 0, bold),
+    );
+    return {
+      width: roundMm(Math.min(maxW, Math.max(minW, glyphW + pad))),
+      height: roundMm(Math.min(maxH, Math.max(minH, textBlockHeightMm(fontSize, chars.length, el.lineSpacing ?? '1.0') + pad))),
+    };
+  }
+
+  const explicitLines = raw.length > 0 ? raw.split('\n') : [''];
+  let longestMm = 0;
+  for (const line of explicitLines) {
+    longestMm = Math.max(longestMm, measureTextWidthMm(line, fontSize, charSpacing, bold));
+  }
+
+  const width = roundMm(Math.min(maxW, Math.max(minW, longestMm + pad)));
+  const needsWrap = longestMm + pad > maxW + 0.05;
+  const heightMm = computeTextElementHeightMm({
+    text: raw,
+    fontSize,
+    widthMm: width,
+    autoWrapping: needsWrap ? el.autoWrapping === 'Close' ? 'Word' : el.autoWrapping ?? 'Word' : 'Close',
+    lineSpacing: el.lineSpacing ?? '1.0',
+    charSpacing,
+    bold,
+    verticalDisplay: false,
+  });
+  return {
+    width,
+    height: roundMm(Math.min(maxH, Math.max(minH, heightMm + pad))),
+  };
+}
+
 /** Merge typography patches and reflow/clear height for auto-text-height elements. */
 export function mergeTextElementPatch(
   el: TextLikeElement,
   updates: Record<string, unknown>,
+  canvas?: { widthMm: number; heightMm: number },
 ): LabelElement {
   let merged = { ...el, ...updates } as TextLikeElement;
 
@@ -55,6 +130,13 @@ export function mergeTextElementPatch(
   const touchesTypography = Object.keys(updates).some((key) => typographyKeys.has(key));
   if (!touchesTypography) {
     return merged as LabelElement;
+  }
+
+  const shouldFitBox = Object.keys(updates).some((key) => CONTENT_FIT_KEYS.has(key));
+  if (shouldFitBox && !('width' in updates) && !('height' in updates)) {
+    const bounds = canvas ?? { widthMm: 200, heightMm: 200 };
+    const fitted = fitTextBoxToContent(merged, bounds);
+    return { ...merged, width: fitted.width, height: fitted.height } as LabelElement;
   }
 
   const autoHeight = merged.autoTextHeight !== false && merged.autoWrapping !== 'Close';
@@ -277,7 +359,7 @@ export function fitTimeDefaults(widthMm: number, heightMm: number, existing: Lab
   const boxW = Math.min(maxW, Math.max(4, measured));
   const boxH = textBlockHeightMm(fontSize, 1);
   const placed = placeInLabel(widthMm, heightMm, boxW, boxH, existing);
-  return { left: placed.left, top: placed.top, width: placed.width, fontSize };
+  return { left: placed.left, top: placed.top, width: placed.width, height: boxH, fontSize };
 }
 
 export function fitTableDefaults(

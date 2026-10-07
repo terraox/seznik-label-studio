@@ -42,8 +42,10 @@ import {
 } from '@/components/editor/types';
 import { FONT_LIBRARY } from '@/constants/font-library';
 import { barcodeBarsForMode, barcodeModulesForMode } from '@/lib/barcode-code128';
-import { snap1DBarcodeModules } from '@/lib/barcode/barcode-snapping';
+import { snap1DBarcodeModules, type SnappedBar } from '@/lib/barcode/barcode-snapping';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
+import { dotsPerMm } from '@/lib/printer/print-spec';
+import { stretchThenRoundBars } from '@/printing/raster/barcode-stretch';
 import { encodeDataMatrix } from '@/lib/barcode/datamatrix';
 import { encodePdf417 } from '@/lib/barcode/pdf417';
 import { generateQrMatrix } from '@/printing/renderer/qrcode';
@@ -335,15 +337,56 @@ function TimeContent({
         {
           justifyContent: 'center',
           alignItems: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'stretch',
+          overflow: 'hidden',
         },
         element.antiColor && styles.antiBg,
       ]}>
       <Text
         allowFontScaling={false}
         numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.15}
         style={[style, styles.textFill, { textAlign: align }]}>
         {formatLiveDateTime(adjusted)}
       </Text>
+    </View>
+  );
+}
+
+/** Print capture: snap bar edges to whole printer dots (same as headless raster / TD-404 path). */
+function BarcodePrintBars({
+  bars,
+  boxWDots,
+  widthPx,
+  barsHPx,
+  color,
+}: {
+  bars: SnappedBar[];
+  boxWDots: number;
+  widthPx: number;
+  barsHPx: number;
+  color: string;
+}) {
+  const rounded = useMemo(
+    () => stretchThenRoundBars(bars, 0, boxWDots),
+    [bars, boxWDots],
+  );
+  const dotsToDip = boxWDots > 0 ? widthPx / boxWDots : 1;
+  return (
+    <View style={{ width: widthPx, height: barsHPx }}>
+      {rounded.map((bar, index) => (
+        <View
+          key={`bar-${index}`}
+          style={{
+            position: 'absolute',
+            left: bar.x0 * dotsToDip,
+            width: Math.max(dotsToDip, bar.width * dotsToDip),
+            top: 0,
+            height: barsHPx,
+            backgroundColor: color,
+          }}
+        />
+      ))}
     </View>
   );
 }
@@ -352,12 +395,20 @@ function BarcodeContent({
   element,
   widthPx,
   heightPx,
+  widthDots,
+  heightDots,
   scale,
+  forPrint = false,
+  printDpi,
 }: {
   element: BarcodeElementState;
   widthPx: number;
   heightPx: number;
+  widthDots?: number;
+  heightDots?: number;
   scale: number;
+  forPrint?: boolean;
+  printDpi?: number;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const content =
@@ -374,16 +425,37 @@ function BarcodeContent({
   const showLabel = element.textFlag !== 'Hide';
   const hri = formatBarcodeHri(element.encodeMode, content);
   const labelHeight = showLabel ? Math.max(8, Math.round(labelSize * 1.2)) : 0;
-  const widthMm = element.width > 0 ? element.width : widthPx / (scale || 1);
   const align = element.align === 'spacing' ? 'justify' : element.align;
   const labelStyle = textStyleFor(element, scale);
 
+  const useDotBars =
+    forPrint &&
+    widthDots != null &&
+    widthDots > 0 &&
+    heightDots != null &&
+    heightDots > 0 &&
+    printDpi != null;
+  const dpm = useDotBars ? dotsPerMm(printDpi) : null;
+  const widthMm =
+    useDotBars && dpm != null
+      ? widthDots! / dpm
+      : element.width > 0
+        ? element.width
+        : widthPx / (scale || 1);
+
   // Quantize barcode modules to integer hardware dots without internal quiet zone padding,
   // matching WePrint's tight fit where the selection box hugs the outermost bars and text exactly.
+  const snapDpi = forPrint && printDpi != null ? printDpi : 203;
   const snapped = useMemo(() => {
     if (!rawModules) return null;
-    return snap1DBarcodeModules(rawModules, widthMm, 203, false);
-  }, [rawModules, widthMm]);
+    return snap1DBarcodeModules(rawModules, widthMm, snapDpi, false);
+  }, [rawModules, widthMm, snapDpi]);
+
+  const fontHDots = useDotBars ? Math.max(8, Math.round(ptToMm(element.fontSize) * dpm!)) : 0;
+  const labelHDots = useDotBars && showLabel ? Math.max(8, Math.round(fontHDots * 1.2)) : 0;
+  const barsHDots = useDotBars ? Math.max(2, heightDots - labelHDots) : 0;
+  const dotsToDip = useDotBars && widthDots > 0 ? widthPx / widthDots : 1;
+  const barsHPx = useDotBars ? barsHDots * dotsToDip : 0;
 
   const label = showLabel ? (
     <View
@@ -414,28 +486,38 @@ function BarcodeContent({
     <View style={[styles.fill, { backgroundColor: bgColor, justifyContent: 'flex-start', alignItems: 'stretch' }]}>
       {element.textFlag === 'Top' ? label : null}
       {rawModules && snapped ? (
-        <View
-          style={{
-            flex: 1,
-            width: '100%',
-          }}>
-          <Svg
-            width="100%"
-            height="100%"
-            viewBox={`0 0 ${widthPx} 100`}
-            preserveAspectRatio="none">
-            <Path
-              d={snapped.bars
-                .map((bar) => {
-                  const barX = bar.x * widthPx;
-                  const barW = Math.max(bar.width * widthPx, 0.55);
-                  return `M${barX},0h${barW}v100h-${barW}Z`;
-                })
-                .join(' ')}
-              fill={color}
-            />
-          </Svg>
-        </View>
+        useDotBars ? (
+          <BarcodePrintBars
+            bars={snapped.bars}
+            boxWDots={widthDots}
+            widthPx={widthPx}
+            barsHPx={barsHPx}
+            color={color}
+          />
+        ) : (
+          <View
+            style={{
+              flex: 1,
+              width: '100%',
+            }}>
+            <Svg
+              width="100%"
+              height="100%"
+              viewBox={`0 0 ${widthPx} 100`}
+              preserveAspectRatio="none">
+              <Path
+                d={snapped.bars
+                  .map((bar) => {
+                    const barX = bar.x * widthPx;
+                    const barW = Math.max(bar.width * widthPx, 0.55);
+                    return `M${barX},0h${barW}v100h-${barW}Z`;
+                  })
+                  .join(' ')}
+                fill={color}
+              />
+            </Svg>
+          </View>
+        )
       ) : (
         <View style={styles.invalidBox}>
           <Text style={styles.invalidText}>Invalid barcode content</Text>
@@ -973,6 +1055,8 @@ function ArcTextContent({
                 : 'none'
             }
             textAnchor="middle"
+            alignmentBaseline="middle"
+            dominantBaseline="middle"
             transform={`rotate(${item.rotationDeg}, ${item.x}, ${item.y})`}>
             {item.char}
           </SvgText>
@@ -1048,7 +1132,16 @@ export function ElementContentView({
       return <TimeContent element={element} scale={scale} widthPx={widthPx} />;
     case 'barcode':
       return (
-        <BarcodeContent element={element} widthPx={widthPx} heightPx={heightPx} scale={scale} />
+        <BarcodeContent
+          element={element}
+          widthPx={widthPx}
+          heightPx={heightPx}
+          widthDots={widthDots}
+          heightDots={heightDots}
+          scale={scale}
+          forPrint={forPrint}
+          printDpi={printDpi}
+        />
       );
     case 'qrcode':
       return <QrcodeContent element={element} widthPx={widthPx} heightPx={heightPx} />;
@@ -1099,7 +1192,7 @@ export function ElementContentView({
 
       const renderGlyph = (size: number) =>
         sticker ? (
-          <ClipartIcon shapes={sticker.shapes} size={size} color={previewColor} />
+          <ClipartIcon svg={sticker.svg} size={size} color={previewColor} />
         ) : (
           <Text style={{ fontSize: size * 0.7, color: previewColor }}>{element.glyph ?? '★'}</Text>
         );

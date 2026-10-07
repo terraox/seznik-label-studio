@@ -28,6 +28,28 @@ export function SafeModeIcon({ active, color, size = 18 }: { active: boolean; co
 }
 
 /** Printed sheet with a grid: filled with white rules when on, outline when off. */
+/** Calibration ruler: tick marks when on, plain ruler when off. */
+export function PrintRulerIcon({ active, color, size = 18 }: { active: boolean; color: string; size?: number }) {
+  const ink = active ? '#FFFFFF' : color;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M4.5 18.5 H19.5 A1.5 1.5 0 0 0 21 17 V7 A1.5 1.5 0 0 0 19.5 5.5 H4.5 A1.5 1.5 0 0 0 3 7 V17 A1.5 1.5 0 0 0 4.5 18.5 Z"
+        fill={active ? color : 'none'}
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M7.2 14.2 V18 M10.2 12.2 V18 M13.2 10.2 V18 M16.2 14.2 V18"
+        stroke={ink}
+        strokeWidth={1.4}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 export function PrintGridIcon({ active, color, size = 18 }: { active: boolean; color: string; size?: number }) {
   const rule = active ? '#FFFFFF' : color;
   return (
