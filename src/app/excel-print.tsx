@@ -57,7 +57,7 @@ export default function ExcelPrintScreen() {
         dataStartRow: picked.dataStartRow,
       });
       router.replace({
-        pathname: '/excel-bulk-setup',
+        pathname: '/excel-data-preview',
         params: {
           excelFileId: entry.id,
           widthMm: String(size.widthMm),
@@ -96,7 +96,7 @@ export default function ExcelPrintScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled">
           <Text style={styles.lede}>
-            Choose the label size. The Excel file opens next, then you map each column.
+            Choose the label size. Next you review the spreadsheet, then pick columns and how they look.
           </Text>
           <View style={styles.card}>
             <LabelSizeEditor

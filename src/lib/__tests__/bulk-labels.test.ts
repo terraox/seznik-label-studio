@@ -7,9 +7,11 @@ import {
   applyGeometryToThisLabel,
   createBulkLabelDocument,
   geometryFromElements,
+  guessBulkSlotKind,
   layoutBulkSlotsEvenly,
   projectBulkDocument,
   resizeBulkDocumentToSize,
+  resolvedSlotContent,
   slotEncodePayload,
   syncBulkFromProjectedElements,
   type BulkColumnMapping,
@@ -341,3 +343,27 @@ function resolved(
 ) {
   return bulk.rowGeometryOverrides[String(row)]?.[slotId] ?? bulk.sharedGeometry[slotId];
 }
+
+test('guessBulkSlotKind maps common Excel headers', () => {
+  assert.equal(guessBulkSlotKind('Name'), 'text');
+  assert.equal(guessBulkSlotKind('Barcode'), 'barcode');
+  assert.equal(guessBulkSlotKind('SKU'), 'barcode');
+  assert.equal(guessBulkSlotKind('QR'), 'qrcode');
+});
+
+test('display head prefixes text slot values', () => {
+  const doc = createBulkLabelDocument({
+    name: 'headed',
+    widthMm: 50,
+    heightMm: 40,
+    excelFileId: 'xls_test',
+    sheetIndex: 0,
+    sheet,
+    mappings,
+    displayHead: true,
+  });
+  assert.ok(doc?.bulk);
+  const slot = doc.bulk.slots.find((s) => s.kind === 'text');
+  assert.ok(slot);
+  assert.equal(resolvedSlotContent(doc.bulk, sheet, 0, slot), 'Name: Widget');
+});

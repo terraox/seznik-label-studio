@@ -24,6 +24,13 @@ import type { ExcelSheet } from '@/stores/data-store';
 
 export type BulkSlotKind = 'text' | 'barcode' | 'qrcode';
 
+export function guessBulkSlotKind(columnName: string): BulkSlotKind {
+  const name = columnName.trim().toLowerCase();
+  if (/(^|[^a-z])qr([^a-z]|$)|qrcode|qr code/.test(name)) return 'qrcode';
+  if (/barcode|bar code|sku|ean|upc|gtin|isbn/.test(name)) return 'barcode';
+  return 'text';
+}
+
 export type BulkColumnMapping = {
   columnIndex: number;
   include: boolean;
@@ -59,6 +66,8 @@ export type BulkLabelSet = {
   activeRowIndex: number;
   barcodeEncodeMode: string;
   qrErrorLevel: QrErrorLevel;
+  /** When true, text slots render as `Column: value`. */
+  displayHead?: boolean;
 };
 
 export function bulkSlotId(columnIndex: number): string {
@@ -119,8 +128,11 @@ export function resolvedSlotContent(
   slot: BulkSlot,
 ): string {
   const override = bulk.rowContentOverrides[String(rowIndex)]?.[slot.id];
-  if (override !== undefined) return override;
-  return cellValue(sheet, rowIndex, slot.columnIndex);
+  const raw = override !== undefined ? override : cellValue(sheet, rowIndex, slot.columnIndex);
+  if (slot.kind === 'text' && bulk.displayHead && raw.trim()) {
+    return `${slot.columnName}: ${raw}`;
+  }
+  return raw;
 }
 
 function applyGeometry<T extends LabelElement>(el: T, geo: BulkGeometry): T {
@@ -431,6 +443,7 @@ export function createBulkLabelDocument(params: {
   mappings: BulkColumnMapping[];
   barcodeEncodeMode?: string;
   qrErrorLevel?: QrErrorLevel;
+  displayHead?: boolean;
 }): LabelDocument | null {
   const slots = mappingsToSlots(params.sheet, params.mappings);
   if (slots.length === 0) return null;
@@ -455,6 +468,7 @@ export function createBulkLabelDocument(params: {
     activeRowIndex: 0,
     barcodeEncodeMode,
     qrErrorLevel,
+    displayHead: Boolean(params.displayHead),
   };
   const doc = createLabelDocument({
     name: params.name,

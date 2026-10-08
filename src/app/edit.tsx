@@ -3461,7 +3461,7 @@ export default function EditScreen() {
       });
       const size = clampLabelMm(docRef.current.widthMm, docRef.current.heightMm);
       router.push({
-        pathname: '/excel-bulk-setup',
+        pathname: '/excel-data-preview',
         params: {
           excelFileId: entry.id,
           widthMm: String(size.widthMm),

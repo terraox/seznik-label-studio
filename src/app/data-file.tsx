@@ -193,7 +193,7 @@ export default function DataFileScreen() {
           text: 'Print',
           onPress: () =>
             router.push({
-              pathname: '/excel-bulk-setup',
+              pathname: '/excel-data-preview',
               params: { excelFileId: entry.id },
             }),
         },
@@ -453,7 +453,7 @@ export default function DataFileScreen() {
                     if (item.excel) {
                       setActiveExcelFile(item.excel.id);
                       router.push({
-                        pathname: '/excel-bulk-setup',
+                        pathname: '/excel-data-preview',
                         params: {
                           excelFileId: item.excel.id,
                         },

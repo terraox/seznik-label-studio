@@ -2,22 +2,17 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
     Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Switch,
     Text,
-    TextInput,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LabelSizeEditor } from '@/components/label-size-editor';
+import { LabelDimensionModal } from '@/components/label-dimension-modal';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
-import { CABLE_FLAG_DIECUT } from '@/constants/cable-flag-diecut';
 import { JEWELRY_DIECUT, JEWELRY_DIECUT_PREVIEW_SINGLE } from '@/constants/jewelry-diecut';
 import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
@@ -28,25 +23,37 @@ import {
     generateId,
     type LabelElement,
 } from '@/lib/label-document';
-import { clampLabelMm, containFitImageOnLabel, validateLabelSize } from '@/lib/label-geometry';
+import {
+    clampLabelMm,
+    containFitImageOnLabel,
+    fromMm,
+    validateLabelSize,
+    type LabelUnit,
+} from '@/lib/label-geometry';
 import { scaleDocumentToSize } from '@/lib/element-sizing';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { Image } from 'expo-image';
 
 const SETUP_PRESETS = [
-  { label: '80 × 10 mm', width: 80, height: 10 },
-  { label: '50 × 25 mm', width: 50, height: 25 },
-  { label: '50 × 70 mm', width: 50, height: 70 },
-  { label: '60 × 14 mm', width: 60, height: 14 },
-  { label: '50 × 50 mm (Square)', width: 50, height: 50 },
-  { label: '50 × 30 mm (Retail)', width: 50, height: 30 },
-  { label: '40 × 30 mm (Price Tag)', width: 40, height: 30 },
-  { label: '57 × 30 mm (Receipt)', width: 57, height: 30 },
-  { label: '14 × 96 mm (Jewellery Tag)', width: JEWELRY_DIECUT.tagWidthMm, height: JEWELRY_DIECUT.tagHeightMm },
-  { label: '54 × 96 mm (3-Up Sheet)', width: JEWELRY_DIECUT.sheetWidthMm, height: JEWELRY_DIECUT.sheetHeightMm },
-  { label: '50 × 73 mm (Cable Flag)', width: CABLE_FLAG_DIECUT.widthMm, height: CABLE_FLAG_DIECUT.heightMm },
+  { label: '50 × 25', width: 50, height: 25 },
+  { label: '50 × 50', width: 50, height: 50 },
+  { label: '50 × 30', width: 50, height: 30 },
+  { label: '50 × 75', width: 50, height: 75 },
+  { label: '50 × 15', width: 50, height: 15 },
+  { label: '100 × 150', width: 100, height: 150 },
 ];
+
+function formatDimension(mm: number, unit: LabelUnit): string {
+  const v = fromMm(mm, unit);
+  if (unit === 'in') return String(Math.round(v * 100) / 100);
+  if (unit === 'cm') return String(Math.round(v * 10) / 10);
+  return String(Math.round(v * 100) / 100);
+}
+
+function unitSuffix(unit: LabelUnit): string {
+  return unit === 'in' ? 'in' : unit;
+}
 
 export default function NewLabelSetupScreen() {
   const insets = useSafeAreaInsets();
@@ -100,9 +107,7 @@ export default function NewLabelSetupScreen() {
         ? JEWELRY_DIECUT.tagWidthMm
         : params.cloneWidth
           ? parseFloat(params.cloneWidth)
-          : isImportImage
-            ? 50
-            : 57,
+          : 50,
   );
   const [labelHeight, setLabelHeight] = useState(
     params.defaultHeight
@@ -111,9 +116,7 @@ export default function NewLabelSetupScreen() {
         ? JEWELRY_DIECUT.tagHeightMm
         : params.cloneHeight
           ? parseFloat(params.cloneHeight)
-          : isImportImage
-            ? 30
-            : 30,
+          : 30,
   );
   const [columns, setColumns] = useState(
     isSingleCanvas ? 1 : isJewellery3Up ? JEWELRY_DIECUT.columns : isTwoUps ? 2 : 1,
@@ -122,12 +125,14 @@ export default function NewLabelSetupScreen() {
   const [columnSpacing, setColumnSpacing] = useState(isJewellery3Up ? JEWELRY_DIECUT.gapMm : isTwoUps ? 0 : 1);
   const [batchEdit, setBatchEdit] = useState(false);
 
+  const [labelUnit, setLabelUnit] = useState<LabelUnit>('mm');
   const [nameModalVisible, setNameModalVisible] = useState(false);
-  const [sizeModalVisible, setSizeModalVisible] = useState(params.focusSize === '1');
+  const [widthModalVisible, setWidthModalVisible] = useState(params.focusSize === '1');
+  const [heightModalVisible, setHeightModalVisible] = useState(false);
   const [tempName, setTempName] = useState('');
 
   useEffect(() => {
-    if (params.focusSize === '1') setSizeModalVisible(true);
+    if (params.focusSize === '1') setWidthModalVisible(true);
   }, [params.focusSize]);
 
   const handleCreateLabel = () => {
@@ -320,13 +325,23 @@ export default function NewLabelSetupScreen() {
           )}
         </View>
 
-        {/* Quick Size Presets */}
-        <View style={styles.presetSection}>
-          <Text style={styles.presetHeading}>Size Presets</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.presetScrollContent}>
+        <View style={styles.section}>
+          <Text style={styles.sectionHeading}>Size presets</Text>
+          <View style={styles.presetFormatCard}>
+            <Text style={styles.presetFormatTitle}>Size format</Text>
+            <View style={styles.presetFormatRow}>
+              <View style={styles.presetFormatPill}>
+                <Text style={styles.presetFormatPillLabel}>Width</Text>
+              </View>
+              <Text style={styles.presetFormatTimes}>×</Text>
+              <View style={styles.presetFormatPill}>
+                <Text style={styles.presetFormatPillLabel}>Height</Text>
+              </View>
+              <Text style={styles.presetFormatUnit}>mm</Text>
+            </View>
+            <Text style={styles.presetFormatHint}>Each preset is shown as width × height in millimetres.</Text>
+          </View>
+          <View style={styles.presetGrid}>
             {SETUP_PRESETS.map((p) => {
               const active =
                 Math.abs(labelWidth - p.width) < 0.1 && Math.abs(labelHeight - p.height) < 0.1;
@@ -338,46 +353,77 @@ export default function NewLabelSetupScreen() {
                     setLabelHeight(p.height);
                   }}
                   style={[styles.presetChip, active && styles.presetChipActive]}>
-                  <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>
+                  <Text
+                    style={[styles.presetChipText, active && styles.presetChipTextActive]}
+                    numberOfLines={1}>
                     {p.label}
                   </Text>
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </View>
+
+          <Pressable
+            onPress={() => router.push('/(tabs)/template')}
+            style={({ pressed }) => [styles.templatesLink, pressed && styles.cardPressed]}>
+            <Text style={styles.templatesLinkText}>Browse our templates</Text>
+            <Text style={styles.chevronRight}>›</Text>
+          </Pressable>
         </View>
 
-        <Pressable
-          onPress={() => {
-            setTempName(labelName);
-            setNameModalVisible(true);
-          }}
-          style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
-          <Text style={styles.fieldLabel}>{t('editor.labelName')}</Text>
-          <View style={styles.fieldValueWrap}>
-            <Text style={styles.fieldValueText} numberOfLines={1}>
-              {labelName}
-            </Text>
-            <Text style={styles.chevronRight}>›</Text>
-          </View>
-        </Pressable>
+        <View style={styles.section}>
+          <Text style={styles.sectionHeading}>Custom size</Text>
+          <View style={styles.groupCard}>
+            <Pressable
+              onPress={() => {
+                setTempName(labelName);
+                setNameModalVisible(true);
+              }}
+              style={({ pressed }) => [styles.groupRow, pressed && styles.cardPressed]}>
+              <Text style={styles.fieldLabel}>{t('editor.labelName')}</Text>
+              <View style={styles.fieldValueWrap}>
+                <Text style={styles.fieldValueText} numberOfLines={1}>
+                  {labelName}
+                </Text>
+                <Text style={styles.chevronRight}>›</Text>
+              </View>
+            </Pressable>
 
-        <Pressable
-          onPress={() => setSizeModalVisible(true)}
-          style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
-          <Text style={styles.fieldLabel}>Custom Size (Width × Height)</Text>
-          <View style={styles.fieldValueWrap}>
-            <Text style={styles.fieldValueText}>
-              {labelWidth} × {labelHeight} mm
-              {columns > 1 ? ' (each)' : ''}
-            </Text>
-            <Text style={styles.chevronRight}>›</Text>
+            <View style={styles.groupDivider} />
+
+            <Pressable
+              onPress={() => setWidthModalVisible(true)}
+              style={({ pressed }) => [styles.groupRow, pressed && styles.cardPressed]}>
+              <Text style={styles.fieldLabel}>Width</Text>
+              <View style={styles.fieldValueWrap}>
+                <Text style={styles.fieldValueText}>
+                  {formatDimension(labelWidth, labelUnit)} {unitSuffix(labelUnit)}
+                </Text>
+                <Text style={styles.chevronRight}>›</Text>
+              </View>
+            </Pressable>
+
+            <View style={styles.groupDivider} />
+
+            <Pressable
+              onPress={() => setHeightModalVisible(true)}
+              style={({ pressed }) => [styles.groupRow, pressed && styles.cardPressed]}>
+              <Text style={styles.fieldLabel}>Height</Text>
+              <View style={styles.fieldValueWrap}>
+                <Text style={styles.fieldValueText}>
+                  {formatDimension(labelHeight, labelUnit)} {unitSuffix(labelUnit)}
+                </Text>
+                <Text style={styles.chevronRight}>›</Text>
+              </View>
+            </Pressable>
           </View>
-        </Pressable>
+        </View>
 
         {!isSingleCanvas && (
-          <>
-            <View style={styles.card}>
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading}>Multi-up layout</Text>
+            <View style={styles.groupCard}>
+            <View style={styles.groupRow}>
               <Text style={styles.fieldLabel}>{columns > 1 ? 'Labels across' : t('editor.columns')}</Text>
               <View style={styles.stepper}>
                 <Pressable
@@ -395,7 +441,9 @@ export default function NewLabelSetupScreen() {
             </View>
 
             {columns > 1 ? (
-              <View style={styles.card}>
+              <>
+              <View style={styles.groupDivider} />
+              <View style={styles.groupRow}>
                 <Text style={styles.fieldLabel}>{t('editor.columnSpacing')}</Text>
                 <View style={styles.stepper}>
                   <Pressable
@@ -408,13 +456,16 @@ export default function NewLabelSetupScreen() {
                     onPress={() => setColumnSpacing((s) => Math.min(8, Math.round((s + 0.5) * 10) / 10))}
                     style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}>
                     <Text style={styles.stepBtnText}>+</Text>
-                  </Pressable>
-                </View>
+                </Pressable>
               </View>
+            </View>
+              </>
             ) : null}
 
             {columns > 1 ? (
-              <View style={styles.card}>
+              <>
+              <View style={styles.groupDivider} />
+              <View style={styles.groupRow}>
                 <View style={styles.batchRow}>
                   <Text style={styles.fieldLabel}>{t('editor.batchEdit')}</Text>
                   <Pressable
@@ -435,8 +486,10 @@ export default function NewLabelSetupScreen() {
                   thumbColor="#FFFFFF"
                 />
               </View>
+              </>
             ) : null}
-          </>
+            </View>
+          </View>
         )}
       </ScrollView>
 
@@ -473,45 +526,29 @@ export default function NewLabelSetupScreen() {
         />
       </IosAlertModal>
 
-      <Modal
-        visible={sizeModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSizeModalVisible(false)}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.sizeModalScroll}
-            bounces={false}
-            showsVerticalScrollIndicator={false}>
-            <View style={[styles.modalCard, styles.sizeModalCard]}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalHeading}>Customize Label Size</Text>
-              </View>
-              {sizeModalVisible ? (
-                <LabelSizeEditor
-                  widthMm={labelWidth}
-                  heightMm={labelHeight}
-                  onChange={(w, h) => {
-                    setLabelWidth(w);
-                    setLabelHeight(h);
-                  }}
-                />
-              ) : null}
-              <View style={styles.modalFooter}>
-                <Pressable
-                  style={({ pressed }) => [styles.modalFooterBtn, pressed && styles.pressed]}
-                  onPress={() => setSizeModalVisible(false)}>
-                  <Text style={styles.modalDoneText}>Done</Text>
-                </Pressable>
-              </View>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
+      <LabelDimensionModal
+        visible={widthModalVisible}
+        title="Set width"
+        axis="width"
+        valueMm={labelWidth}
+        otherMm={labelHeight}
+        unit={labelUnit}
+        onUnitChange={setLabelUnit}
+        onClose={() => setWidthModalVisible(false)}
+        onConfirm={setLabelWidth}
+      />
+
+      <LabelDimensionModal
+        visible={heightModalVisible}
+        title="Set height"
+        axis="height"
+        valueMm={labelHeight}
+        otherMm={labelWidth}
+        unit={labelUnit}
+        onUnitChange={setLabelUnit}
+        onClose={() => setHeightModalVisible(false)}
+        onConfirm={setLabelHeight}
+      />
     </View>
   );
 }
@@ -570,12 +607,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
-  presetSection: {
+  section: {
     gap: 8,
-    marginTop: 2,
-    marginBottom: 4,
   },
-  presetHeading: {
+  sectionHeading: {
     fontSize: 13,
     fontWeight: '600',
     color: '#64748B',
@@ -583,40 +618,125 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginLeft: 2,
   },
-  presetScrollContent: {
+  presetFormatCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     gap: 8,
-    paddingVertical: 2,
   },
-  presetChip: {
+  presetFormatTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  presetFormatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  presetFormatPill: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  presetFormatPillLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Palette.ink,
+  },
+  presetFormatTimes: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  presetFormatUnit: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  presetFormatHint: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  presetGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  templatesLink: {
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  templatesLinkText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Palette.accent,
+  },
+  presetChip: {
+    width: '31.5%',
+    minHeight: 44,
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   presetChipActive: {
     backgroundColor: '#EEF2FF',
     borderColor: Palette.accent,
   },
   presetChipText: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
     color: '#475569',
+    lineHeight: 16,
+    textAlign: 'center',
   },
   presetChipTextActive: {
     color: Palette.accent,
     fontWeight: '600',
   },
-  card: {
+  groupCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  groupRow: {
     paddingHorizontal: 14,
     paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  groupDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E2E8F0',
+    marginLeft: 14,
   },
   cardPressed: { opacity: 0.88 },
   fieldLabel: { color: Palette.ink, fontSize: 15, fontWeight: '500', flexShrink: 1 },
@@ -663,63 +783,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   newButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '500' },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sizeModalScroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 290,
-    alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  sizeModalCard: {
-    maxWidth: 340,
-  },
-  modalHeader: {
-    paddingTop: 18,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D1D1D6',
-  },
-  modalHeading: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#000000',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  modalFooter: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#D1D1D6',
-    height: 45,
-  },
-  modalFooterBtn: {
-    flex: 1,
-    height: 45,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalDoneText: {
-    color: '#007AFF',
-    fontSize: 17,
-    fontWeight: '600',
-  },
   pressed: { opacity: 0.75 },
 });
