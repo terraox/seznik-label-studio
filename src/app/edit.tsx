@@ -680,6 +680,8 @@ export default function EditScreen() {
   const groupScaleMaxSv = useSharedValue(1000);
   const activeSelectedIdSv = useSharedValue(primaryId ?? (params.selectedElementId ?? ''));
   const resizeHudVisibleSv = useSharedValue(0);
+  const [chromeStatus, setChromeStatus] = useState<string | null>(null);
+  const chromeStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [panelOpen, setPanelOpen] = useState(() =>
     Boolean(params.autoOpenPanel === 'true' && params.selectedElementId)
   );
@@ -1282,6 +1284,7 @@ export default function EditScreen() {
     return () => {
       mountedRef.current = false;
       if (patchBurstTimer.current) clearTimeout(patchBurstTimer.current);
+      if (chromeStatusTimer.current) clearTimeout(chromeStatusTimer.current);
     };
   }, []);
 
@@ -1968,9 +1971,20 @@ export default function EditScreen() {
     setMultipleMode(turningOn);
   }, [multipleMode, topBarSelectionVisibleSv, bottomPanelVisibleSv]);
 
+  const flashChromeStatus = useCallback((message: string) => {
+    if (chromeStatusTimer.current) clearTimeout(chromeStatusTimer.current);
+    setChromeStatus(message);
+    chromeStatusTimer.current = setTimeout(() => {
+      chromeStatusTimer.current = null;
+      if (mountedRef.current) setChromeStatus(null);
+    }, 1600);
+  }, []);
+
   const toggleEditorGrid = useCallback(() => {
-    requestEditorGridToggle(!editorSettings.editorGrid, patchEditor);
-  }, [editorSettings.editorGrid, patchEditor]);
+    const next = !editorSettings.editorGrid;
+    requestEditorGridToggle(next, patchEditor);
+    flashChromeStatus(next ? 'Grid enabled' : 'Grid disabled');
+  }, [editorSettings.editorGrid, patchEditor, flashChromeStatus]);
 
   const gridSpacingMm =
     editorSettings.editorGridSpacingMm ?? DEFAULT_EDITOR_SETTINGS.editorGridSpacingMm;
@@ -4116,7 +4130,11 @@ export default function EditScreen() {
             ) : null}
 
             <Pressable
-              onPress={() => patchEditor({ safeMode: !editorSettings.safeMode })}
+              onPress={() => {
+                const next = !editorSettings.safeMode;
+                patchEditor({ safeMode: next });
+                flashChromeStatus(next ? 'Safe mode enabled' : 'Safe mode disabled');
+              }}
               hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel={editorSettings.safeMode ? 'Safe mode' : 'Free mode'}
@@ -4229,7 +4247,11 @@ export default function EditScreen() {
         </View>
 
         <View style={styles.resizeHudSlot} pointerEvents="none">
-          <ResizeSizeHud liveBounds={liveRulerBounds} visibleSv={resizeHudVisibleSv} />
+          <ResizeSizeHud
+            liveBounds={liveRulerBounds}
+            visibleSv={resizeHudVisibleSv}
+            statusText={chromeStatus}
+          />
         </View>
 
         {doc.bulk && doc.bulk.rowCount > 1 ? (

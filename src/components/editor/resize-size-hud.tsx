@@ -13,15 +13,17 @@ import { Palette } from '@/constants/ui';
 const HUD_THROTTLE_MS = 80;
 
 /**
- * Live size during resize. Sits in the chrome strip between the quick-action
- * bar and the horizontal ruler — never on the artboard.
+ * Live size during resize, or a short chrome status (safe mode / grid).
+ * Sits in the strip between the quick-action bar and the horizontal ruler.
  */
 export const ResizeSizeHud = memo(function ResizeSizeHud({
   liveBounds,
   visibleSv,
+  statusText,
 }: {
   liveBounds: LiveRulerBounds;
   visibleSv: SharedValue<number>;
+  statusText?: string | null;
 }) {
   const [text, setText] = useState<string | null>(null);
   const lastAtSv = useSharedValue(0);
@@ -61,12 +63,13 @@ export const ResizeSizeHud = memo(function ResizeSizeHud({
     },
   );
 
-  if (!text) return null;
+  const shown = text ?? statusText ?? null;
+  if (!shown) return null;
 
   return (
     <View pointerEvents="none" style={styles.host}>
       <View style={styles.pill}>
-        <Text style={styles.text}>{text}</Text>
+        <Text style={styles.text}>{shown}</Text>
       </View>
     </View>
   );
