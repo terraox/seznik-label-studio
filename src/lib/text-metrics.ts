@@ -59,6 +59,41 @@ export function usesMonospaceMetrics(fontFamily?: string): boolean {
   return key === 'mono' || key === 'monospace' || key === 'menlo' || key.indexOf('robotomono') >= 0;
 }
 
+/** Installed / decorative faces need extra vertical room vs Default metrics. */
+export function textLineHeightScale(fontFamily?: string): number {
+  'worklet';
+  if (!fontFamily || fontFamily === 'Default') return 1;
+  return 1.18;
+}
+
+/** Horizontal inset inside the selection frame. */
+export function textInnerWidthMm(boxWidthMm: number, fontSizePt: number): number {
+  'worklet';
+  const pad = Math.max(1, ptToMm(fontSizePt) * 0.55);
+  return Math.max(0.5, boxWidthMm - pad * 0.55);
+}
+
+/** Wrap width for layout. Conservative mode counts extra lines for height. */
+export function textWrapWidthMm(boxWidthMm: number, fontSizePt: number, conservative = false): number {
+  'worklet';
+  const inner = textInnerWidthMm(boxWidthMm, fontSizePt);
+  return conservative ? inner * 0.9 : inner;
+}
+
+/** One line box in mm — mirrors `textStyleFor` lineHeight. */
+export function textLineBoxHeightMm(fontSizePt: number, lineSpacing?: LineSpacing, fontFamily?: string): number {
+  'worklet';
+  const fontMm = ptToMm(fontSizePt);
+  const mult = lineSpacingMultiplier(lineSpacing);
+  return fontMm * 1.25 * mult * textLineHeightScale(fontFamily);
+}
+
+/** Top + bottom `paddingVertical` from the editor text style. */
+export function textVerticalPaddingMm(fontSizePt: number): number {
+  'worklet';
+  return ptToMm(fontSizePt) * 0.24;
+}
+
 /**
  * Character width estimation in em units relative to font size (1.0 em = 1 font size unit).
  * Calibrated against standard system / sans-serif fonts (Roboto, Inter, San Francisco, Arial).
@@ -428,20 +463,45 @@ export function computeTextElementHeightMm({
   fontFamily,
 }: ComputeTextElementHeightParams): number {
   'worklet';
+  const wrapMode = autoWrapping ?? 'Word';
   const lines = computeWrappedLines({
     text,
     fontSize,
-    widthMm,
-    autoWrapping,
+    widthMm: textWrapWidthMm(widthMm, fontSize, true),
+    autoWrapping: wrapMode,
     charSpacing,
     bold,
     verticalDisplay,
     fontFamily,
   });
 
-  const mult = lineSpacingMultiplier(lineSpacing);
-  const perLineMm = ptToMm(fontSize) * 1.25 * mult;
-  return Math.max(2.4, perLineMm * Math.max(1, lines.length));
+  const lineH = textLineBoxHeightMm(fontSize, lineSpacing, fontFamily);
+  const vertPad = textVerticalPaddingMm(fontSize);
+  const framePad = Math.max(0.6, ptToMm(fontSize) * 0.2);
+  return Math.max(2.4, vertPad + lineH * Math.max(1, lines.length) + framePad);
+}
+
+/**
+ * Box height that fits wrapped lines at a given width, including editor padding.
+ * Used when the user narrows a text frame so extra lines stay visible.
+ */
+export function heightForWrappedTextMm(
+  params: ComputeTextElementHeightParams & { minHeightMm?: number },
+): number {
+  'worklet';
+  const needed = computeTextElementHeightMm({
+    text: params.text,
+    fontSize: params.fontSize,
+    widthMm: params.widthMm,
+    autoWrapping: params.autoWrapping ?? 'Word',
+    lineSpacing: params.lineSpacing,
+    charSpacing: params.charSpacing,
+    bold: params.bold,
+    verticalDisplay: params.verticalDisplay,
+    fontFamily: params.fontFamily,
+  });
+  const minH = typeof params.minHeightMm === 'number' && Number.isFinite(params.minHeightMm) ? params.minHeightMm : 0;
+  return Math.max(minH, needed);
 }
 
 export type PrintTextLayout = {

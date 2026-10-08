@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -27,8 +27,7 @@ import {
   sameTableCellSelection,
 } from '@/lib/editor/table-cells';
 import { elementSizeMm, type LabelElement, type MediaShape } from '@/lib/label-document';
-import { computeTextElementHeightMm } from '@/lib/text-metrics';
-import { clampToLabelBounds, fitFontSizeToLabel } from '@/lib/editor/label-bounds';
+import { clampToLabelBounds } from '@/lib/editor/label-bounds';
 import { DIVIDER_HIT_SIZE_PX } from '@/lib/editor/canvas-split';
 import { finiteMm, roundMm } from '@/lib/editor/engine';
 import { fullyInsideLabelMm } from '@/lib/editor/safe-mode';
@@ -44,6 +43,7 @@ import {
   type ResizeAnchor,
   type ResizeBehavior,
 } from '@/lib/editor/resize-policy';
+import { heightForWrappedTextMm } from '@/lib/text-metrics';
 import {
   CHROME_HANDLE_FILL,
   CHROME_HANDLE_ICON_COLOR,
@@ -290,8 +290,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const textCharSpacing = 'charSpacing' in element && typeof element.charSpacing === 'number' ? element.charSpacing : 0;
   const textBold = 'bold' in element ? element.bold ?? false : false;
   const textVerticalDisplay = 'verticalDisplay' in element ? element.verticalDisplay ?? false : false;
+  const textFontFamily = 'fontFamily' in element && typeof element.fontFamily === 'string' ? element.fontFamily : '';
 
   const isAutoTextSv = useSharedValue(isAutoHeight);
+  const wrapTextOnWidthSv = useSharedValue(isTextElement);
   const textContentSv = useSharedValue(textContent);
   const textFontSizeSv = useSharedValue(textFontSize);
   const autoWrappingSv = useSharedValue(textAutoWrapping);
@@ -299,6 +301,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const charSpacingSv = useSharedValue(textCharSpacing);
   const boldSv = useSharedValue(textBold);
   const verticalDisplaySv = useSharedValue(textVerticalDisplay);
+  const fontFamilySv = useSharedValue(textFontFamily);
 
   const isInteracting = useSharedValue(false);
   const liftSv = useSharedValue(1);
@@ -315,6 +318,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const resizeBehaviorSSv = useSharedValue(resizePolicy.behavior.s ?? 'none');
   const beginTimeSv = useSharedValue(0);
   const containerRef = useRef<View>(null);
+  const [textResizing, setTextResizing] = useState(false);
 
   useEffect(() => {
     selectedSv.value = selected;
@@ -335,6 +339,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     minResizeMmSv.value = resizePolicy.minMm;
     aspectSv.value = aspectRatio;
     isAutoTextSv.value = isAutoHeight;
+    wrapTextOnWidthSv.value = isTextElement;
     textContentSv.value = textContent;
     textFontSizeSv.value = textFontSize;
     autoWrappingSv.value = textAutoWrapping;
@@ -342,6 +347,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     charSpacingSv.value = textCharSpacing;
     boldSv.value = textBold;
     verticalDisplaySv.value = textVerticalDisplay;
+    fontFamilySv.value = textFontFamily;
     resizeBehaviorESv.value = resizePolicy.behavior.e ?? 'none';
     resizeBehaviorSSv.value = resizePolicy.behavior.s ?? 'none';
   }, [
@@ -355,6 +361,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     resizePolicy.minMm,
     aspectRatio,
     isAutoHeight,
+    isTextElement,
     textContent,
     textFontSize,
     textAutoWrapping,
@@ -362,6 +369,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     textCharSpacing,
     textBold,
     textVerticalDisplay,
+    textFontFamily,
     padZoomSv,
     sizeWMmSv,
     sizeHMmSv,
@@ -372,6 +380,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     minResizeMmSv,
     aspectSv,
     isAutoTextSv,
+    wrapTextOnWidthSv,
     textContentSv,
     textFontSizeSv,
     autoWrappingSv,
@@ -379,6 +388,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     charSpacingSv,
     boldSv,
     verticalDisplaySv,
+    fontFamilySv,
     resizeBehaviorESv,
     resizeBehaviorSSv,
     resizePolicy.behavior.e,
@@ -649,6 +659,9 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     (handle: ResizeAnchor, nextWPx: number, nextHPx: number, rot: number) => {
       const behavior = resizePolicy.behavior[handle];
       if (!behavior) {
+        if (isTextElement) {
+          setTextResizing(false);
+        }
         isInteracting.value = false;
         return;
       }
@@ -662,6 +675,9 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       let naturalHeightMm: number | undefined;
       if (
         element.type !== 'barcode' &&
+        element.type !== 'text' &&
+        element.type !== 'degrees' &&
+        element.type !== 'time' &&
         'fontSize' in element &&
         typeof element.fontSize === 'number'
       ) {
@@ -680,6 +696,22 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         canvas: { widthMm: canvasWidthMm, heightMm: canvasHeightMm },
         naturalHeightMm,
       });
+      if (isTextElement && handle === 'e') {
+        const wrapH = heightForWrappedTextMm({
+          text: textContent,
+          fontSize: textFontSize,
+          widthMm: next.width,
+          autoWrapping: 'Word',
+          lineSpacing: textLineSpacing,
+          charSpacing: textCharSpacing,
+          bold: textBold,
+          verticalDisplay: textVerticalDisplay,
+          fontFamily: textFontFamily || undefined,
+          minHeightMm: next.height,
+        });
+        const maxH = Math.max(resizePolicy.minMm, canvasHeightMm - next.top);
+        next.height = roundMm(Math.min(maxH, wrapH));
+      }
 
       const rotation = ((Math.round(rot) % 360) + 360) % 360;
       logMultiTransformBox('commit', element.id, next.left, next.top, next.width, next.height);
@@ -693,6 +725,9 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         rotation,
         fontSize,
       });
+      if (isTextElement) {
+        setTextResizing(false);
+      }
       isInteracting.value = false;
     },
     [
@@ -702,6 +737,14 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       element,
       resizePolicy,
       isInteracting,
+      isTextElement,
+      textContent,
+      textFontSize,
+      textLineSpacing,
+      textCharSpacing,
+      textBold,
+      textVerticalDisplay,
+      textFontFamily,
     ],
   );
 
@@ -717,8 +760,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   }, [baseHeightPx, baseWidthPx]);
 
   const notifyTransformStartJS = useCallback((id: string, kind: TransformStartKind) => {
+    if (isTextElement && kind === 'resize') {
+      setTextResizing(true);
+    }
     callbacksRef.current.onTransformStart?.(id, kind);
-  }, []);
+  }, [isTextElement]);
 
   /**
    * Touch-down selection so drag on another element switches panel before the move threshold.
@@ -1387,6 +1433,23 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             canvas: { widthMm: canvasWMmSv.value, heightMm: canvasHMmSv.value },
           });
 
+          if (wrapTextOnWidthSv.value && handle === 'e') {
+            const wrapH = heightForWrappedTextMm({
+              text: textContentSv.value,
+              fontSize: textFontSizeSv.value,
+              widthMm: box.width,
+              autoWrapping: 'Word',
+              lineSpacing: lineSpacingSv.value,
+              charSpacing: charSpacingSv.value,
+              bold: boldSv.value,
+              verticalDisplay: verticalDisplaySv.value,
+              fontFamily: fontFamilySv.value || undefined,
+              minHeightMm: box.height,
+            });
+            const maxH = Math.max(minResizeMmSv.value, canvasHMmSv.value - box.top);
+            box.height = wrapH > maxH ? maxH : wrapH;
+          }
+
           animW.value = Math.max(1, box.width * sxSv.value);
           animH.value = Math.max(1, box.height * sySv.value);
           transX.value = 0;
@@ -1447,6 +1510,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       minResizeMmSv,
       aspectSv,
       isAutoTextSv,
+      wrapTextOnWidthSv,
       textContentSv,
       textFontSizeSv,
       autoWrappingSv,
@@ -1454,6 +1518,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       charSpacingSv,
       boldSv,
       verticalDisplaySv,
+      fontFamilySv,
       liveBounds,
       logLiveBoxJS,
     ],
@@ -1482,6 +1547,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       top: liveTop,
       width: liveW,
       height: liveH,
+      overflow: 'visible' as const,
       opacity: (element.opacity ?? 1) * liftSv.value,
       zIndex: zBoost + (element.zIndex ?? 1),
     };
@@ -1490,7 +1556,12 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   // Match pre-cb5cf2e QR/barcode: fill the live box. Transform-scaling the
   // inner SVG is what made modules flicker while dragging.
   const liveScaleContent =
-    element.type !== 'border' && element.type !== 'barcode' && element.type !== 'qrcode';
+    element.type !== 'border' &&
+    element.type !== 'barcode' &&
+    element.type !== 'qrcode' &&
+    element.type !== 'text' &&
+    element.type !== 'degrees' &&
+    element.type !== 'time';
 
   const contentRotateStyle = useAnimatedStyle(() => {
     const rotate = { rotate: `${animRot.value}deg` };
@@ -1545,62 +1616,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
   if (hidden) return null;
 
-  const naturalTextHeightMm = isTextElement && isAutoHeight
-    ? computeTextElementHeightMm({
-        text: textContent,
-        fontSize: textFontSize,
-        widthMm: sizeMm.width,
-        autoWrapping: textAutoWrapping,
-        lineSpacing: textLineSpacing,
-        charSpacing: textCharSpacing,
-        bold: textBold,
-        verticalDisplay: textVerticalDisplay,
-      })
-    : sizeMm.height;
-
-  const boundsCheck = clampToLabelBounds(
-    { left: element.left, top: element.top, width: sizeMm.width, height: naturalTextHeightMm },
-    { widthMm: canvasWidthMm, heightMm: canvasHeightMm },
-    { anchor: 'body', naturalHeight: naturalTextHeightMm },
-  );
-  const isOverflowed = isTextElement && boundsCheck.overflowed;
-
-  const handleFitToLabelAction = () => {
-    if (!isTextElement) return;
-    const targetMaxH = Math.max(2, canvasHeightMm - Math.max(0, element.top));
-    const fittedFs = fitFontSizeToLabel({
-      text: textContent,
-      widthMm: sizeMm.width,
-      maxHeightMm: targetMaxH,
-      initialFontSize: textFontSize,
-      autoWrapping: textAutoWrapping,
-      lineSpacing: textLineSpacing,
-      charSpacing: textCharSpacing,
-      bold: textBold,
-      verticalDisplay: textVerticalDisplay,
-    });
-    const fittedHMm = computeTextElementHeightMm({
-      text: textContent,
-      fontSize: fittedFs,
-      widthMm: sizeMm.width,
-      autoWrapping: textAutoWrapping,
-      lineSpacing: textLineSpacing,
-      charSpacing: textCharSpacing,
-      bold: textBold,
-      verticalDisplay: textVerticalDisplay,
-    });
-    callbacksRef.current.onTransformEnd({
-      id: element.id,
-      leftMm: roundMm(element.left),
-      topMm: roundMm(element.top),
-      widthMm: roundMm(sizeMm.width),
-      heightMm: roundMm(fittedHMm),
-      rotation: ((Math.round(baseRotation) % 360) + 360) % 360,
-      fontSize: fittedFs,
-    });
-  };
-
-  const borderStrokeColor = isOverflowed ? '#EF4444' : selectionColor || CHROME_SELECTION_STROKE;
+  const borderStrokeColor = selectionColor || CHROME_SELECTION_STROKE;
 
   const selectionOverlayStyle = useAnimatedStyle(() => {
     // In Multiple mode every selected member keeps its frame; keying on the touched id
@@ -1615,12 +1631,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     return {
       opacity: showChrome ? 1 : 0,
       pointerEvents: (showChrome ? 'box-none' : 'none') as 'box-none' | 'none',
-    };
-  });
-
-  const overflowBadgeStyle = useAnimatedStyle(() => {
-    return {
-      opacity: isInteracting.value ? 0 : 1,
     };
   });
 
@@ -1652,7 +1662,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             {liveScaleContent ? (
               <View
                 collapsable={false}
-                style={{ width: baseWidthPx, height: baseHeightPx, overflow: 'hidden' }}>
+                style={{
+                  width: baseWidthPx,
+                  height: baseHeightPx,
+                  overflow: isTextElement ? 'visible' : 'hidden',
+                }}>
                 <ElementContentView
                   element={element}
                   widthPx={baseWidthPx}
@@ -1661,6 +1675,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                   mediaShape={borderMediaShape}
                   selectedTableCell={element.type === 'table' ? selectedTableCell : null}
                   tableSelectionColor={tableSelectionColor}
+                  layoutWidthMm={isTextElement && !textResizing ? sizeMm.width : undefined}
                 />
               </View>
             ) : (
@@ -1672,6 +1687,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 mediaShape={borderMediaShape}
                 selectedTableCell={element.type === 'table' ? selectedTableCell : null}
                 tableSelectionColor={tableSelectionColor}
+                layoutWidthMm={isTextElement && !textResizing ? sizeMm.width : undefined}
               />
             )}
           </Animated.View>
@@ -1685,22 +1701,8 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           style={[
             styles.selectionOutline,
             { borderColor: borderStrokeColor },
-            isOverflowed && styles.selectionOutlineOverflow,
           ]}
         />
-
-        {isOverflowed ? (
-          <Animated.View style={overflowBadgeStyle}>
-            <Pressable
-              onPress={handleFitToLabelAction}
-              style={styles.overflowBadge}>
-              <AppIcon name="exclamationmark.triangle.fill" tintColor="#FFFFFF" size={11} />
-              <Text style={styles.overflowBadgeText}>
-                Overflow: text exceeds label height • <Text style={styles.overflowBadgeAction}>Fit</Text>
-              </Text>
-            </Pressable>
-          </Animated.View>
-        ) : null}
 
         {element.lockMovement ? null : (
           <>
@@ -1827,39 +1829,6 @@ const styles = StyleSheet.create({
     top: '50%',
     right: -CHROME_HANDLE_RADIUS_PX,
     marginTop: -CHROME_HANDLE_RADIUS_PX,
-  },
-  selectionOutlineOverflow: {
-    borderColor: '#EF4444',
-    borderWidth: 2,
-    borderStyle: 'dashed',
-  },
-  overflowBadge: {
-    position: 'absolute',
-    top: -36,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    zIndex: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
-    elevation: 4,
-  },
-  overflowBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  overflowBadgeAction: {
-    color: '#FEF08A',
-    fontWeight: '800',
-    textDecorationLine: 'underline',
   },
   lockBadge: {
     position: 'absolute',

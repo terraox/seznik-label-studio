@@ -13,10 +13,12 @@ import {
 } from '@/lib/label-document';
 import {
   fitBarcodeDefaults,
+  fitFontSizePt,
   fitQrcodeDefaults,
-  fitTextDefaults,
+  fitTextBoxToContent,
   repositionDocumentToSize,
   scaleDocumentToSize,
+  textBlockHeightMm,
 } from '@/lib/element-sizing';
 import type { ExcelSheet } from '@/stores/data-store';
 
@@ -158,6 +160,114 @@ function applyRowContent(el: LabelElement, kind: BulkSlotKind, value: string): L
   return el;
 }
 
+const BULK_PAD_RATIO = 0.05;
+const BULK_MIN_PAD_MM = 0.5;
+
+function bulkPadMm(widthMm: number, heightMm: number): number {
+  const ratioPad = Math.min(widthMm, heightMm) * BULK_PAD_RATIO;
+  return Math.max(BULK_MIN_PAD_MM, Math.min(ratioPad, Math.min(widthMm, heightMm) * 0.12));
+}
+
+type BulkSlotDraft = {
+  width: number;
+  height: number;
+  fontSize?: number;
+};
+
+/** Natural size for one Excel slot, budgeted for how many columns share the label. */
+function draftBulkSlotSize(
+  kind: BulkSlotKind,
+  widthMm: number,
+  heightMm: number,
+  slotCount: number,
+): BulkSlotDraft {
+  const pad = bulkPadMm(widthMm, heightMm);
+  const innerW = Math.max(4, widthMm - pad * 2);
+  const innerH = Math.max(4, heightMm - pad * 2);
+  const slotBudget = innerH / Math.max(1, slotCount);
+  const minGap = Math.max(0.5, pad * 0.35);
+  const targetH = Math.max(2, slotBudget - minGap);
+
+  if (kind === 'text') {
+    const fontSize = fitFontSizePt(widthMm, targetH, 1);
+    const height = Math.min(textBlockHeightMm(fontSize, 1), targetH * 0.92);
+    return { width: innerW, height: Math.max(2, height), fontSize };
+  }
+
+  if (kind === 'barcode') {
+    const fit = fitBarcodeDefaults(widthMm, targetH, []);
+    return {
+      width: Math.min(fit.width, innerW),
+      height: Math.max(2, Math.min(fit.height, targetH * 0.92)),
+      fontSize: fit.fontSize,
+    };
+  }
+
+  const fit = fitQrcodeDefaults(widthMm, targetH, []);
+  const size = Math.max(2, Math.min(fit.width, fit.height, innerW, targetH * 0.92));
+  return { width: size, height: size };
+}
+
+/**
+ * Stack Excel slots top-to-bottom with equal gaps (including top/bottom margins).
+ * Shrinks slot heights together when the label is too short to avoid overlap.
+ */
+export function layoutBulkSlotsEvenly(
+  slots: BulkSlot[],
+  drafts: BulkSlotDraft[],
+  widthMm: number,
+  heightMm: number,
+): BulkGeometry[] {
+  const n = slots.length;
+  if (n === 0) return [];
+
+  const pad = bulkPadMm(widthMm, heightMm);
+  const innerW = Math.max(4, widthMm - pad * 2);
+  const innerH = Math.max(4, heightMm - pad * 2);
+  const minGap = Math.max(0.5, pad * 0.35);
+
+  let heights = drafts.map((draft) => draft.height);
+  const naturalTotal = heights.reduce((sum, height) => sum + height, 0);
+  const minStack = naturalTotal + minGap * Math.max(0, n - 1);
+
+  if (minStack > innerH && naturalTotal > 0) {
+    const scale = (innerH - minGap * Math.max(0, n - 1)) / naturalTotal;
+    heights = heights.map((height) => height * scale);
+  }
+
+  const totalH = heights.reduce((sum, height) => sum + height, 0);
+  const gap = n === 1 ? Math.max(0, (innerH - totalH) / 2) : Math.max(minGap, (innerH - totalH) / (n + 1));
+
+  const geos: BulkGeometry[] = [];
+  let top = pad + gap;
+
+  for (let i = 0; i < n; i++) {
+    const kind = slots[i].kind;
+    const draft = drafts[i];
+    const height = heights[i];
+    const scale = draft.height > 0 ? height / draft.height : 1;
+
+    if (kind === 'text') {
+      geos.push({ left: pad, top, width: innerW, height });
+      top += height + gap;
+      continue;
+    }
+
+    if (kind === 'qrcode') {
+      const size = Math.max(2, Math.min(height, innerW));
+      geos.push({ left: pad + (innerW - size) / 2, top, width: size, height: size });
+      top += size + gap;
+      continue;
+    }
+
+    const width = Math.max(2, Math.min(draft.width * scale, innerW));
+    geos.push({ left: pad + (innerW - width) / 2, top, width, height });
+    top += height + gap;
+  }
+
+  return geos;
+}
+
 function layoutSlotTemplates(
   slots: BulkSlot[],
   widthMm: number,
@@ -167,29 +277,39 @@ function layoutSlotTemplates(
 ): { templates: Record<string, LabelElement>; geometry: Record<string, BulkGeometry> } {
   const templates: Record<string, LabelElement> = {};
   const geometry: Record<string, BulkGeometry> = {};
-  const placed: LabelElement[] = [];
+  const slotCount = slots.length;
+  const drafts = slots.map((slot) => draftBulkSlotSize(slot.kind, widthMm, heightMm, slotCount));
+  const positions = layoutBulkSlotsEvenly(slots, drafts, widthMm, heightMm);
 
-  for (const slot of slots) {
+  slots.forEach((slot, index) => {
+    const draft = drafts[index];
+    const geo = positions[index];
+    const scale = draft.height > 0 ? geo.height / draft.height : 1;
+    const fontSize =
+      draft.fontSize != null
+        ? Math.max(4, Math.round((draft.fontSize * scale) * 2) / 2)
+        : undefined;
+
     if (slot.kind === 'text') {
-      const fit = fitTextDefaults(widthMm, heightMm, placed);
       const el: LabelElement = {
         ...DEFAULT_ELEMENT_STATE,
         id: slot.id,
         type: 'text',
         text: '',
         contentType: 'Manual',
-        left: fit.left,
-        top: fit.top,
-        width: fit.width,
-        fontSize: fit.fontSize,
+        left: geo.left,
+        top: geo.top,
+        width: geo.width,
+        height: geo.height,
+        fontSize: fontSize ?? draft.fontSize ?? DEFAULT_ELEMENT_STATE.fontSize,
+        autoWrapping: 'Close',
       };
       templates[slot.id] = el;
       geometry[slot.id] = geometryOfElement(el);
-      placed.push(el);
-      continue;
+      return;
     }
+
     if (slot.kind === 'barcode') {
-      const fit = fitBarcodeDefaults(widthMm, heightMm, placed);
       const el: LabelElement = {
         ...DEFAULT_BARCODE_STATE,
         id: slot.id,
@@ -197,20 +317,19 @@ function layoutSlotTemplates(
         content: '',
         contentType: 'Manual',
         encodeMode: barcodeEncodeMode,
-        left: fit.left,
-        top: fit.top,
-        width: fit.width,
-        height: fit.height,
-        fontSize: fit.fontSize,
+        left: geo.left,
+        top: geo.top,
+        width: geo.width,
+        height: geo.height,
+        fontSize: fontSize ?? draft.fontSize ?? DEFAULT_BARCODE_STATE.fontSize,
         visible: false,
         needPrinting: false,
       };
       templates[slot.id] = el;
       geometry[slot.id] = geometryOfElement(el);
-      placed.push(el);
-      continue;
+      return;
     }
-    const fit = fitQrcodeDefaults(widthMm, heightMm, placed);
+
     const el: LabelElement = {
       ...DEFAULT_QRCODE_STATE,
       id: slot.id,
@@ -219,17 +338,16 @@ function layoutSlotTemplates(
       contentType: 'Manual',
       encodeMode: 'QRCode',
       errorLevel: qrErrorLevel,
-      left: fit.left,
-      top: fit.top,
-      width: fit.width,
-      height: fit.height,
+      left: geo.left,
+      top: geo.top,
+      width: geo.width,
+      height: geo.height,
       visible: false,
       needPrinting: false,
     };
     templates[slot.id] = el;
     geometry[slot.id] = geometryOfElement(el);
-    placed.push(el);
-  }
+  });
 
   return { templates, geometry };
 }
@@ -245,17 +363,32 @@ export function mappingsToSlots(sheet: ExcelSheet, mappings: BulkColumnMapping[]
     }));
 }
 
+function fitProjectedText(
+  el: LabelElement,
+  canvas: { widthMm: number; heightMm: number },
+): LabelElement {
+  if (el.type !== 'text') return el;
+  const fitted = fitTextBoxToContent(el, canvas);
+  return { ...el, width: fitted.width, height: fitted.height };
+}
+
 export function projectBulkElements(
   bulk: BulkLabelSet,
   sheet: ExcelSheet,
   rowIndex: number,
+  canvas?: { widthMm: number; heightMm: number },
 ): LabelElement[] {
   return bulk.slots.map((slot) => {
     const template = bulk.slotTemplates[slot.id];
     const geo = resolvedSlotGeometry(bulk, rowIndex, slot.id);
     const value = resolvedSlotContent(bulk, sheet, rowIndex, slot);
     const withGeo = applyGeometry(template, geo);
-    return applyRowContent(withGeo, slot.kind, value);
+    const withContent = applyRowContent(withGeo, slot.kind, value);
+    const hasRowBox = Boolean(bulk.rowGeometryOverrides[String(rowIndex)]?.[slot.id]);
+    if (slot.kind === 'text' && withContent.type === 'text' && !hasRowBox) {
+      return fitProjectedText(withContent, canvas ?? { widthMm: 200, heightMm: 200 });
+    }
+    return withContent;
   });
 }
 
@@ -268,7 +401,10 @@ export function projectBulkDocument(
   const clamped = Math.max(0, Math.min(rowIndex, Math.max(0, doc.bulk.rowCount - 1)));
   return {
     ...doc,
-    elements: projectBulkElements(doc.bulk, sheet, clamped),
+    elements: projectBulkElements(doc.bulk, sheet, clamped, {
+      widthMm: doc.widthMm,
+      heightMm: doc.heightMm,
+    }),
     bulk: { ...doc.bulk, activeRowIndex: clamped },
   };
 }
@@ -326,7 +462,10 @@ export function createBulkLabelDocument(params: {
     heightMm: params.heightMm,
     orientation: params.orientation,
     paperType: params.paperType,
-    elements: projectBulkElements(bulk, params.sheet, 0),
+    elements: projectBulkElements(bulk, params.sheet, 0, {
+      widthMm: params.widthMm,
+      heightMm: params.heightMm,
+    }),
   });
   doc.bulk = bulk;
   return doc;

@@ -509,7 +509,7 @@ export default function DataFileScreen() {
           onPress={handleFooterPress}
           style={({ pressed }) => [styles.importBtn, pressed && styles.pressed]}>
           <Text style={styles.importBtnText}>
-            {activeTab === 'Remote Data' ? 'Create Link' : 'Import from Files or Drive'}
+            {activeTab === 'Remote Data' ? 'Create Link' : 'Import from This Device or Google Drive'}
           </Text>
         </Pressable>
       </View>

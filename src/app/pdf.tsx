@@ -246,7 +246,7 @@ export default function PdfEditorScreen() {
           <Text style={styles.emptyTitle}>Import a PDF</Text>
           <Text style={styles.emptyBody}>Crop, rotate, sharpen, and watermark — then export a new PDF. Printing is not part of this editor.</Text>
           <Pressable onPress={importPdf} style={styles.importBtn}>
-            <Text style={styles.importText}>Import from Files or Drive</Text>
+            <Text style={styles.importText}>Import from This Device or Google Drive</Text>
           </Pressable>
         </View>
       ) : (
@@ -349,7 +349,7 @@ export default function PdfEditorScreen() {
           </PdfToolPanel>
           {exportProgress ? <Text style={styles.progress}>{exportProgress}</Text> : null}
           <Pressable onPress={importPdf} style={styles.replace}>
-            <Text style={styles.replaceText}>Replace from Files or Drive</Text>
+            <Text style={styles.replaceText}>Replace from This Device or Google Drive</Text>
           </Pressable>
         </ScrollView>
       )}

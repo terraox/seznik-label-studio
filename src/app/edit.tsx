@@ -43,6 +43,7 @@ import {
   fitNewTextDefaults,
   fitTimeDefaults,
   mergeTextElementPatch,
+  growTextFrameHeightForWidth,
   NEW_TEXT_PLACEHOLDER,
   computeTextElementHeightMm,
   textBlockHeightMm,
@@ -320,7 +321,15 @@ function scaledFontSizeForResize(
   scaleY: number,
   fallbackFontSize?: number,
 ): number | undefined {
-  if (el.type !== 'barcode' && 'fontSize' in el && typeof el.fontSize === 'number') {
+  if (
+    el.type === 'barcode' ||
+    el.type === 'text' ||
+    el.type === 'degrees' ||
+    el.type === 'time'
+  ) {
+    return undefined;
+  }
+  if ('fontSize' in el && typeof el.fontSize === 'number') {
     const drivingScale = handle === 'e' ? scaleX : scaleY;
     return Math.max(4, Math.round(el.fontSize * drivingScale * 2) / 2);
   }
@@ -559,6 +568,7 @@ export default function EditScreen() {
   const patchEditor = useSettingsStore((s) => s.patchEditor);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const savedDocuments = useLabelStore((s) => s.documents);
+  const excelFiles = useDataStore((s) => s.excelFiles);
   const { t } = useTranslation();
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
   const { importExcel, excelImportModal, documentSourceSheet } = useExcelImportFlow();
@@ -651,6 +661,7 @@ export default function EditScreen() {
   });
   const [savedToStore, setSavedToStore] = useState(() => Boolean(params.labelId));
   const [dirty, setDirty] = useState(false);
+  const bulkSheet = doc.bulk ? resolveBulkSheet(excelFiles, doc.bulk) : null;
 
   const [selectedIds, setSelectedIds] = useState<string[]>(() =>
     params.selectedElementId ? [params.selectedElementId] : []
@@ -1609,40 +1620,25 @@ export default function EditScreen() {
             left: fit.left,
             top: fit.top,
             width: fit.width,
-            fontSize: fit.fontSize,
+            fontSize: DEFAULT_ELEMENT_STATE.fontSize,
             autoWrapping: defaults.autoWrap,
             autoTextHeight: defaults.autoTextHeight,
             ...overrides,
           };
-          if (defaults.autoFitFont && element.type === 'text') {
-            const targetMaxH = Math.max(2, maxH - Math.max(0, element.top));
-            const fittedFs = fitFontSizeToLabel({
-              text: element.text,
-              widthMm: element.width,
-              maxHeightMm: targetMaxH,
-              initialFontSize: element.fontSize,
-              autoWrapping: element.autoWrapping,
-              lineSpacing: element.lineSpacing,
-              charSpacing: element.charSpacing,
-              bold: element.bold,
-              verticalDisplay: element.verticalDisplay,
-            });
-            element = { ...element, fontSize: fittedFs };
-            if (element.autoTextHeight) {
-              element = {
-                ...element,
-                height: computeTextElementHeightMm({
-                  text: element.text,
-                  fontSize: fittedFs,
-                  widthMm: element.width,
-                  autoWrapping: element.autoWrapping,
-                  lineSpacing: element.lineSpacing,
-                  charSpacing: element.charSpacing,
-                  bold: element.bold,
-                  verticalDisplay: element.verticalDisplay,
-                }),
-              };
-            }
+          if (element.autoTextHeight && element.type === 'text') {
+            element = {
+              ...element,
+              height: computeTextElementHeightMm({
+                text: element.text,
+                fontSize: element.fontSize,
+                widthMm: element.width,
+                autoWrapping: element.autoWrapping,
+                lineSpacing: element.lineSpacing,
+                charSpacing: element.charSpacing,
+                bold: element.bold,
+                verticalDisplay: element.verticalDisplay,
+              }),
+            };
           }
           break;
         }
@@ -1763,7 +1759,7 @@ export default function EditScreen() {
             left: fit.left,
             top: fit.top,
             width: fit.width,
-            fontSize: fit.fontSize,
+            fontSize: DEFAULT_DEGREES_STATE.fontSize,
             ...overrides,
           };
           break;
@@ -2541,9 +2537,16 @@ export default function EditScreen() {
               if (!start) return el;
               const fs = scaledFontSizeForResize(el, handle, scaleX, scaleY, clean.fontSize);
               const live = resizeElementByScale(el, start, handle, scaleX, scaleY, canvas, fs);
+              if (handle === 'e' && (el.type === 'text' || el.type === 'degrees')) {
+                live.height = growTextFrameHeightForWidth(el, live.width, live.height);
+              }
               logMultiTransformBox('live', el.id, live);
               logMultiTransformBox('commit', el.id, live);
-              return patchBox(el, live, clean.rotation, fs);
+              let patched = patchBox(el, live, clean.rotation, fs);
+              if (patched.type === 'text' || patched.type === 'degrees') {
+                patched = { ...patched, autoWrapping: 'Word', autoTextHeight: false };
+              }
+              return patched;
             }),
           recordHistory,
         );
@@ -2606,6 +2609,9 @@ export default function EditScreen() {
                 clean.rotation,
                 fs,
               );
+              if (next.type === 'text' || next.type === 'degrees') {
+                next = { ...next, autoWrapping: 'Word', autoTextHeight: false };
+              }
             } else {
               const clamped = clampToLabelBounds(
                 { left: clean.leftMm, top: clean.topMm, width: clean.widthMm, height: targetHeight },
@@ -3044,11 +3050,43 @@ export default function EditScreen() {
     void sweepEditorImageFiles(keep);
   }, [doc.elements, historyRev, savedDocuments]);
 
+  useEffect(() => {
+    const rehydrateBulk = () => {
+      setDoc((prev) => {
+        if (!prev.bulk) return prev;
+        const next = hydrateBulkDocument(prev, useDataStore.getState().excelFiles);
+        const projected = JSON.stringify(next.elements);
+        const current = JSON.stringify(prev.elements);
+        return projected === current ? prev : next;
+      });
+    };
+
+    const unsub = useDataStore.persist.onFinishHydration(rehydrateBulk);
+    if (useDataStore.persist.hasHydrated()) rehydrateBulk();
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (!doc.bulk || !bulkSheet) return;
+    setDoc((prev) => {
+      if (!prev.bulk) return prev;
+      const sheet = resolveBulkSheet(excelFiles, prev.bulk);
+      if (!sheet) return prev;
+      const next = projectBulkDocument(prev, sheet, prev.bulk.activeRowIndex);
+      const projected = JSON.stringify(next.elements);
+      const current = JSON.stringify(prev.elements);
+      return projected === current ? prev : next;
+    });
+  }, [bulkSheet, doc.bulk?.excelFileId, doc.bulk?.activeRowIndex, doc.id, excelFiles]);
+
   useFocusEffect(
     useCallback(() => {
       const stored = useLabelStore.getState().getDocument(docRef.current.id);
       if (stored && stored.updatedAt > docRef.current.updatedAt && !dirtyRef.current) {
-        let normalized = { ...stored, elements: normalizeDocumentElements(stored) };
+        let normalized = hydrateBulkDocument(
+          { ...stored, elements: normalizeDocumentElements(stored) },
+          useDataStore.getState().excelFiles,
+        );
         if (isJewelryDieCutDocument(normalized)) {
           normalized = canonicalizeJewelryDieCutDocument(normalized);
         } else if (isRatTail143Document(normalized)) {
@@ -4107,13 +4145,13 @@ export default function EditScreen() {
                 setSizeModalVisible(true);
               }}
               style={({ pressed }) => [styles.subToolbar, pressed && styles.pressed]}>
-              <Text style={styles.dimText}>
+              <Text numberOfLines={1} style={styles.dimText}>
                 {doc.widthMm.toFixed(1)} × {doc.heightMm.toFixed(1)} mm · {doc.paperType}
                 {doc.orientation ? ` · ${doc.orientation}°` : ''}
                 {doc.ups ? ` · ${doc.ups.columns}ups` : ''}
                 {doc.bulk ? ` · ${doc.bulk.rowCount} labels` : ''}
               </Text>
-              <Text style={styles.sizeHint}>
+              <Text numberOfLines={1} style={styles.sizeHint}>
                 {isRatTail143Document(doc)
                   ? 'Prints 14.3 × 101.6 mm wrap stock · content locked on the paddle'
                   : doc.bulk
@@ -4122,127 +4160,133 @@ export default function EditScreen() {
               </Text>
             </Pressable>
 
-            {Math.abs(padZoom - 1) > 0.02 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.subToolbarChromeScroll}
+              contentContainerStyle={styles.subToolbarChromeRow}>
+              {Math.abs(padZoom - 1) > 0.02 ? (
+                <Pressable
+                  onPress={() => setPadZoom(1)}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.fitZoomBtn, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reset zoom to fit">
+                  <Text style={styles.fitZoomBtnText}>
+                    Fit ({Math.round(padZoom * 100)}%)
+                  </Text>
+                </Pressable>
+              ) : null}
+
               <Pressable
-                onPress={() => setPadZoom(1)}
-                hitSlop={8}
-                style={({ pressed }) => [styles.fitZoomBtn, pressed && styles.pressed]}
+                onPress={() => {
+                  const next = !editorSettings.safeMode;
+                  patchEditor({ safeMode: next });
+                  flashChromeStatus(next ? 'Safe mode enabled' : 'Safe mode disabled');
+                }}
+                hitSlop={10}
                 accessibilityRole="button"
-                accessibilityLabel="Reset zoom to fit">
-                <Text style={styles.fitZoomBtnText}>
-                  Fit ({Math.round(padZoom * 100)}%)
+                accessibilityLabel={editorSettings.safeMode ? 'Safe mode' : 'Free mode'}
+                style={({ pressed }) => [
+                  styles.splitMaxBtn,
+                  editorSettings.safeMode && styles.canvasChromeBtnActive,
+                  pressed && styles.pressed,
+                ]}>
+                <SafeModeIcon
+                  active={editorSettings.safeMode}
+                  color={editorSettings.safeMode ? Palette.accent : Palette.muted}
+                />
+              </Pressable>
+
+              <Pressable
+                onPress={togglePrintGrid}
+                hitSlop={10}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: printGridOn }}
+                accessibilityLabel="Print grid"
+                accessibilityHint="Prints the grid on the label and shows it in the preview."
+                style={({ pressed }) => [
+                  styles.printGridBtn,
+                  printGridOn && styles.canvasChromeBtnActive,
+                  pressed && styles.pressed,
+                ]}>
+                <PrintGridIcon
+                  active={printGridOn}
+                  color={printGridOn ? Palette.accent : Palette.muted}
+                  size={16}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={[styles.printGridBtnText, printGridOn && styles.printGridBtnTextOn]}>
+                  Print grid
                 </Text>
               </Pressable>
-            ) : null}
 
-            <Pressable
-              onPress={() => {
-                const next = !editorSettings.safeMode;
-                patchEditor({ safeMode: next });
-                flashChromeStatus(next ? 'Safe mode enabled' : 'Safe mode disabled');
-              }}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={editorSettings.safeMode ? 'Safe mode' : 'Free mode'}
-              style={({ pressed }) => [
-                styles.splitMaxBtn,
-                editorSettings.safeMode && styles.canvasChromeBtnActive,
-                pressed && styles.pressed,
-              ]}>
-              <SafeModeIcon
-                active={editorSettings.safeMode}
-                color={editorSettings.safeMode ? Palette.accent : Palette.muted}
-              />
-            </Pressable>
+              <Pressable
+                onPress={togglePrintRuler}
+                hitSlop={10}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: printRulerOn }}
+                accessibilityLabel="Print ruler"
+                accessibilityHint="Prints an mm edge ruler on the top and left for alignment checks."
+                style={({ pressed }) => [
+                  styles.printGridBtn,
+                  printRulerOn && styles.canvasChromeBtnActive,
+                  pressed && styles.pressed,
+                ]}>
+                <PrintRulerIcon
+                  active={printRulerOn}
+                  color={printRulerOn ? Palette.accent : Palette.muted}
+                  size={16}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={[styles.printGridBtnText, printRulerOn && styles.printGridBtnTextOn]}>
+                  Print ruler
+                </Text>
+              </Pressable>
 
-            <Pressable
-              onPress={togglePrintGrid}
-              hitSlop={10}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: printGridOn }}
-              accessibilityLabel="Print grid"
-              accessibilityHint="Prints the grid on the label and shows it in the preview."
-              style={({ pressed }) => [
-                styles.printGridBtn,
-                printGridOn && styles.canvasChromeBtnActive,
-                pressed && styles.pressed,
-              ]}>
-              <PrintGridIcon
-                active={printGridOn}
-                color={printGridOn ? Palette.accent : Palette.muted}
-                size={16}
-              />
-              <Text
-                numberOfLines={1}
-                style={[styles.printGridBtnText, printGridOn && styles.printGridBtnTextOn]}>
-                Print grid
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={togglePrintRuler}
-              hitSlop={10}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: printRulerOn }}
-              accessibilityLabel="Print ruler"
-              accessibilityHint="Prints an mm edge ruler on the top and left for alignment checks."
-              style={({ pressed }) => [
-                styles.printGridBtn,
-                printRulerOn && styles.canvasChromeBtnActive,
-                pressed && styles.pressed,
-              ]}>
-              <PrintRulerIcon
-                active={printRulerOn}
-                color={printRulerOn ? Palette.accent : Palette.muted}
-                size={16}
-              />
-              <Text
-                numberOfLines={1}
-                style={[styles.printGridBtnText, printRulerOn && styles.printGridBtnTextOn]}>
-                Print ruler
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={toggleEditorGrid}
-              onLongPress={() => setGridSpacingPopoverVisible(true)}
-              delayLongPress={280}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={
-                editorSettings.editorGrid
-                  ? 'Hide design grid'
-                  : 'Show design grid'
-              }
-              accessibilityHint="Long press to change grid spacing."
-              style={({ pressed }) => [
-                styles.splitMaxBtn,
-                editorSettings.editorGrid && styles.canvasChromeBtnActive,
-                pressed && styles.pressed,
-              ]}>
-              <AppIcon
-                name={editorSettings.editorGrid ? 'square.grid.2x2.fill' : 'square.grid.2x2'}
-                tintColor={editorSettings.editorGrid ? Palette.accent : Palette.muted}
-                size={18}
-              />
-            </Pressable>
-
-            <Pressable
-              onPress={toggleCanvasFullscreen}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={canvasFullscreen ? 'Restore editing panel' : 'Maximize canvas'}
-              style={({ pressed }) => [styles.splitMaxBtn, pressed && styles.pressed]}>
-              <AppIcon
-                name={
-                  canvasFullscreen
-                    ? 'arrow.down.right.and.arrow.up.left'
-                    : 'arrow.up.left.and.arrow.down.right'
+              <Pressable
+                onPress={toggleEditorGrid}
+                onLongPress={() => setGridSpacingPopoverVisible(true)}
+                delayLongPress={280}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  editorSettings.editorGrid
+                    ? 'Hide design grid'
+                    : 'Show design grid'
                 }
-                tintColor={Palette.accent}
-                size={18}
-              />
-            </Pressable>
+                accessibilityHint="Long press to change grid spacing."
+                style={({ pressed }) => [
+                  styles.splitMaxBtn,
+                  editorSettings.editorGrid && styles.canvasChromeBtnActive,
+                  pressed && styles.pressed,
+                ]}>
+                <AppIcon
+                  name={editorSettings.editorGrid ? 'square.grid.2x2.fill' : 'square.grid.2x2'}
+                  tintColor={editorSettings.editorGrid ? Palette.accent : Palette.muted}
+                  size={18}
+                />
+              </Pressable>
+
+              <Pressable
+                onPress={toggleCanvasFullscreen}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={canvasFullscreen ? 'Restore editing panel' : 'Maximize canvas'}
+                style={({ pressed }) => [styles.splitMaxBtn, pressed && styles.pressed]}>
+                <AppIcon
+                  name={
+                    canvasFullscreen
+                      ? 'arrow.down.right.and.arrow.up.left'
+                      : 'arrow.up.left.and.arrow.down.right'
+                  }
+                  tintColor={Palette.accent}
+                  size={18}
+                />
+              </Pressable>
+            </ScrollView>
           </View>
 
           <View style={styles.contextualToolbarHost}>
@@ -4259,6 +4303,12 @@ export default function EditScreen() {
             statusText={chromeStatus}
           />
         </View>
+
+        {doc.bulk && !bulkSheet ? (
+          <Text style={styles.bulkMissingBanner}>
+            Excel data is missing — re-import the spreadsheet from Data or Excel.
+          </Text>
+        ) : null}
 
         {doc.bulk && doc.bulk.rowCount > 1 ? (
           <View style={styles.bulkNav}>
@@ -4890,6 +4940,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E2E8F0',
   },
+  subToolbarChromeScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  subToolbarChromeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: Spacing.one,
+  },
+  bulkMissingBanner: {
+    color: '#B45309',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 4,
+    backgroundColor: '#FFFFFF',
+  },
   contextualToolbarHost: {
     position: 'relative',
     width: '100%',
@@ -4915,6 +4983,7 @@ const styles = StyleSheet.create({
   },
   subToolbar: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.three,

@@ -49,7 +49,7 @@ async function pickFromDrive(): Promise<PickedImage | null> {
 }
 
 /**
- * Ask Local File vs Drive, then open the photo library or system file picker.
+ * Ask This Device vs Google Drive, then open the photo library or system file picker.
  * Render `imageSourceSheet` on the same screen.
  */
 export function useImageSourcePicker(): {

@@ -50,9 +50,12 @@ export type EditorElementState = {
 
 export const DRAWING_COLORS = ['#FFFFFF', '#000000', '#FFFFFF', '#E53935', '#43A047', '#48C3C7'] as const;
 
+/** Starting body size when the user adds a new text box. */
+export const DEFAULT_TEXT_FONT_PT = 8.5;
+
 export const DEFAULT_ELEMENT_STATE: EditorElementState = {
   text: 'Text',
-  fontSize: 12,
+  fontSize: DEFAULT_TEXT_FONT_PT,
   fontFamily: 'Default',
   bold: false,
   italic: false,
@@ -119,7 +122,7 @@ export const DEFAULT_BARCODE_STATE: BarcodeElementState = {
   encodeMode: 'CODE-128',
   textFlag: 'Bottom',
   fontFamily: 'Barcode',
-  fontSize: 8,
+  fontSize: 12,
   bold: false,
   italic: false,
   underline: false,
@@ -476,7 +479,7 @@ export const DEFAULT_DEGREES_STATE: DegreesElementState = {
   verticalDisplay: false,
   autoTextHeight: true,
   fontFamily: 'Default',
-  fontSize: 12,
+  fontSize: DEFAULT_TEXT_FONT_PT,
   bold: false,
   italic: false,
   underline: false,

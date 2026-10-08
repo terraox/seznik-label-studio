@@ -7,7 +7,7 @@ export type FileSourceChoice = 'local' | 'drive';
 const PICKER_DELAY_MS = 280;
 
 /**
- * Ask whether the user wants a local file or cloud drive before opening a picker.
+ * Ask whether the user wants This Device or Google Drive before opening a picker.
  * Render `fileSourceSheet` on the same screen.
  */
 export function useFileSourceSheet(): {
@@ -53,8 +53,8 @@ export function useFileSourceSheet(): {
       visible={visible}
       onClose={closeSheet}
       items={[
-        { label: 'Local File', onPress: () => choose('local') },
-        { label: 'Drive', onPress: () => choose('drive') },
+        { label: 'This Device', onPress: () => choose('local') },
+        { label: 'Google Drive', onPress: () => choose('drive') },
       ]}
     />
   );

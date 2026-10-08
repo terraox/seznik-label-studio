@@ -4,12 +4,18 @@ import { elementSizeMm, mmToPt, ptToMm, textBlockHeightMm, type LabelDocument, t
 import { isRatTailGeometry, ratTailBodyRectMm, scaleMediaGeometry } from '@/lib/media-geometry';
 import { clampToLabelBounds } from '@/lib/editor/label-bounds';
 import { roundMm } from '@/lib/editor/engine';
-import { computeTextElementHeightMm, computeWrappedLines, measureTextWidthMm } from '@/lib/text-metrics';
+import { DEFAULT_TEXT_FONT_PT } from '@/components/editor/types';
+import {
+  computeTextElementHeightMm,
+  computeWrappedLines,
+  heightForWrappedTextMm,
+  measureTextWidthMm,
+} from '@/lib/text-metrics';
 import { formatDataSourceColumn } from '@/lib/editor/data-source-display';
 import { ensureTableCells } from '@/lib/editor/table-cells';
 import { applySerialOffset } from '@/lib/serial-content';
 import { useSettingsStore } from '@/stores/settings-store';
-export { computeTextElementHeightMm, computeWrappedLines, measureTextWidthMm } from '@/lib/text-metrics';
+export { computeTextElementHeightMm, computeWrappedLines, heightForWrappedTextMm, measureTextWidthMm } from '@/lib/text-metrics';
 export { textBlockHeightMm } from '@/lib/label-document';
 
 type TextLikeElement = Extract<LabelElement, { type: 'text' } | { type: 'degrees' }>;
@@ -40,6 +46,16 @@ const CONTENT_FIT_KEYS = new Set([
   'contentType',
   'columnNameContent',
   'degreesOffset',
+]);
+
+/** Changing these may grow width to hug the typed string. */
+const CONTENT_GROW_KEYS = new Set([
+  'text',
+  'content',
+  'contentType',
+  'columnNameContent',
+  'degreesOffset',
+  'verticalDisplay',
 ]);
 
 /** Extra room so glyphs are not flush against the selection frame. */
@@ -86,7 +102,7 @@ export function fitTextBoxToContent(
 
   const width = roundMm(Math.min(maxW, Math.max(minW, longestMm + pad)));
   const needsWrap = longestMm + pad > maxW + 0.05;
-  const heightMm = computeTextElementHeightMm({
+  const heightMm = heightForWrappedTextMm({
     text: raw,
     fontSize,
     widthMm: width,
@@ -99,8 +115,30 @@ export function fitTextBoxToContent(
   });
   return {
     width,
-    height: roundMm(Math.min(maxH, Math.max(minH, heightMm + pad))),
+    height: roundMm(Math.min(maxH, Math.max(minH, heightMm))),
   };
+}
+
+/** Grow a text frame's height so wrapped lines stay visible at `widthMm`. */
+export function growTextFrameHeightForWidth(
+  el: TextLikeElement,
+  widthMm: number,
+  minHeightMm: number,
+): number {
+  return roundMm(
+    heightForWrappedTextMm({
+      text: textRawContent(el),
+      fontSize: el.fontSize,
+      widthMm,
+      autoWrapping: 'Word',
+      lineSpacing: el.lineSpacing ?? '1.0',
+      charSpacing: el.charSpacing ?? 0,
+      bold: el.bold ?? false,
+      verticalDisplay: el.verticalDisplay ?? false,
+      fontFamily: el.fontFamily,
+      minHeightMm,
+    }),
+  );
 }
 
 /** Merge typography patches and reflow/clear height for auto-text-height elements. */
@@ -139,8 +177,19 @@ export function mergeTextElementPatch(
   const shouldFitBox = Object.keys(updates).some((key) => CONTENT_FIT_KEYS.has(key));
   if (shouldFitBox && !('width' in updates) && !('height' in updates)) {
     const bounds = canvas ?? { widthMm: 200, heightMm: 200 };
-    const fitted = fitTextBoxToContent(merged, bounds);
-    return { ...merged, width: fitted.width, height: fitted.height } as LabelElement;
+    const growsWidth = Object.keys(updates).some((key) => CONTENT_GROW_KEYS.has(key));
+    if (growsWidth) {
+      const fitted = fitTextBoxToContent(merged, bounds);
+      return { ...merged, width: fitted.width, height: fitted.height } as LabelElement;
+    }
+    const autoHeight = merged.autoTextHeight !== false && merged.autoWrapping !== 'Close';
+    if (autoHeight) {
+      const { height: _removed, ...withoutHeight } = merged as TextLikeElement & { height?: number };
+      return withoutHeight as LabelElement;
+    }
+    const minH = typeof merged.height === 'number' ? merged.height : 0;
+    const height = growTextFrameHeightForWidth(merged, merged.width, minH);
+    return { ...merged, height, autoTextHeight: false } as LabelElement;
   }
 
   const autoHeight = merged.autoTextHeight !== false && merged.autoWrapping !== 'Close';
@@ -156,6 +205,10 @@ export function mergeTextElementPatch(
     fontFamily: merged.fontFamily,
   });
 
+  if (typeof updates.height === 'number') {
+    return merged as LabelElement;
+  }
+
   if (updates.autoTextHeight === true || (autoHeight && updates.autoTextHeight !== false)) {
     const { height: _removed, ...withoutHeight } = merged as TextLikeElement & { height?: number };
     return withoutHeight as LabelElement;
@@ -168,10 +221,6 @@ export function mergeTextElementPatch(
   if (autoHeight) {
     const { height: _removed, ...withoutHeight } = merged as TextLikeElement & { height?: number };
     return withoutHeight as LabelElement;
-  }
-
-  if (typeof updates.height === 'number') {
-    return merged as LabelElement;
   }
 
   return merged as LabelElement;
@@ -288,11 +337,12 @@ export function fitTextDefaults(widthMm: number, heightMm: number, existing: Lab
 /** New text box hugs the placeholder line instead of spanning most of the label. */
 export function fitNewTextDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {
   const base = fitTextDefaults(widthMm, heightMm, existing);
-  const measured = measureTextWidthMm(NEW_TEXT_PLACEHOLDER, base.fontSize) + 1.5;
+  const fontSize = DEFAULT_TEXT_FONT_PT;
+  const measured = measureTextWidthMm(NEW_TEXT_PLACEHOLDER, fontSize) + 1.5;
   const boxW = Math.min(base.width, Math.max(4, measured));
-  const boxH = textBlockHeightMm(base.fontSize, 1);
+  const boxH = textBlockHeightMm(fontSize, 1);
   const placed = placeInLabel(widthMm, heightMm, boxW, boxH, existing);
-  return { left: placed.left, top: placed.top, width: placed.width, fontSize: base.fontSize };
+  return { left: placed.left, top: placed.top, width: placed.width, fontSize };
 }
 
 export function fitBarcodeDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {

@@ -368,7 +368,7 @@ export default function PdfScreen() {
         <Pressable
           onPress={handleImportPdf}
           style={({ pressed }) => [styles.importBtn, pressed && styles.pressed]}>
-          <Text style={styles.importBtnText}>Import from Files or Drive</Text>
+          <Text style={styles.importBtnText}>Import from This Device or Google Drive</Text>
         </Pressable>
       </View>
 

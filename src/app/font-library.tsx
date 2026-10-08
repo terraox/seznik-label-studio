@@ -228,7 +228,7 @@ export default function FontLibraryScreen() {
                 {busyId === 'import' ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.importLabel}>Import from Files or Drive</Text>
+                  <Text style={styles.importLabel}>Import from This Device or Google Drive</Text>
                 )}
               </Pressable>
             </View>

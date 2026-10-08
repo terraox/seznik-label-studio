@@ -75,6 +75,25 @@ export function resizePolicyFor(element: LabelElement): ResizePolicy {
         minMm: MIN_ELEMENT_MM,
         comment: 'Barcode: width and height independently. Live preview stretches the same bars; it does not re-snap modules while dragging.',
       };
+    case 'text':
+      return {
+        anchors: ['e'],
+        behavior: { e: 'width' },
+        rotateHandle: false,
+        minMm: MIN_ELEMENT_MM,
+        comment:
+          'Text: width only. Font size stays put; narrowing the box wraps onto more lines and the frame grows with them.',
+      };
+    case 'degrees':
+    case 'time':
+      return {
+        anchors: ['e', 's'],
+        behavior: { e: 'width', s: 'height' },
+        rotateHandle: false,
+        minMm: MIN_ELEMENT_MM,
+        comment:
+          'Text: box width and height only. Font size stays put; narrowing the box wraps onto more lines.',
+      };
     default:
       return {
         anchors: ['e', 's'],

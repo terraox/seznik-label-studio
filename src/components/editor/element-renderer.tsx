@@ -52,6 +52,7 @@ import {
   charSpacingToLetterSpacing,
   computeWrappedLines,
   measureTextWidthMm,
+  textWrapWidthMm,
 } from "@/lib/text-metrics";
 import { stretchThenRoundBars } from "@/printing/raster/barcode-stretch";
 import { borderShapeForMedia } from "@/printing/raster/border-shapes";
@@ -109,6 +110,8 @@ type ContentProps = {
   strokeFromOuterEdge?: boolean;
   selectedTableCell?: { row: number; col: number } | null;
   tableSelectionColor?: string;
+  /** When set, text wraps to this width instead of `element.width`. */
+  layoutWidthMm?: number;
 };
 
 function textStyleFor(
@@ -204,7 +207,11 @@ function dataColumnHighlightStyle(
   return null;
 }
 
-function formatTextForRender(element: TextLayoutFields, raw: string) {
+function formatTextForRender(
+  element: TextLayoutFields,
+  raw: string,
+  layoutWidthMm?: number,
+) {
   if (element.verticalDisplay) {
     return {
       text: raw.split("").join("\n"),
@@ -218,10 +225,11 @@ function formatTextForRender(element: TextLayoutFields, raw: string) {
       ellipsizeMode: "tail" as const,
     };
   }
+  const boxWidth = layoutWidthMm ?? element.width;
   const lines = computeWrappedLines({
     text: raw,
     fontSize: element.fontSize,
-    widthMm: element.width,
+    widthMm: textWrapWidthMm(boxWidth, element.fontSize, false),
     autoWrapping: element.autoWrapping ?? "Word",
     charSpacing: element.charSpacing ?? 0,
     bold: element.bold ?? false,
@@ -251,10 +259,12 @@ function letterSpacingStyle(
 function TextContent({
   element,
   scale,
+  layoutWidthMm,
 }: {
   element: TextLayoutFields & { text: string };
   scale: number;
   widthPx: number;
+  layoutWidthMm?: number;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -262,20 +272,21 @@ function TextContent({
   );
   const style = textStyleFor(element, scale);
   const raw = resolveTextRaw(element, element.text, showColumnName);
-  const formatted = formatTextForRender(element, raw);
+  const formatted = formatTextForRender(element, raw, layoutWidthMm);
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
       style={[
         styles.fill,
         {
-          justifyContent: "center",
+          justifyContent: "flex-start",
           alignItems:
             align === "center"
               ? "center"
               : align === "right"
                 ? "flex-end"
                 : "stretch",
+          overflow: "visible",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
@@ -303,10 +314,12 @@ function TextContent({
 function DegreesContent({
   element,
   scale,
+  layoutWidthMm,
 }: {
   element: DegreesElementState;
   scale: number;
   widthPx: number;
+  layoutWidthMm?: number;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -314,20 +327,21 @@ function DegreesContent({
   );
   const style = textStyleFor(element, scale);
   const raw = resolveTextRaw(element, element.content, showColumnName);
-  const formatted = formatTextForRender(element, raw);
+  const formatted = formatTextForRender(element, raw, layoutWidthMm);
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
       style={[
         styles.fill,
         {
-          justifyContent: "center",
+          justifyContent: "flex-start",
           alignItems:
             align === "center"
               ? "center"
               : align === "right"
                 ? "flex-end"
                 : "stretch",
+          overflow: "visible",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
@@ -383,9 +397,6 @@ function TimeContent({
     >
       <Text
         allowFontScaling={false}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.15}
         style={[style, styles.textFill, { textAlign: align }]}
       >
         {formatLiveDateTime(adjusted)}
@@ -1285,14 +1296,27 @@ export function ElementContentView({
   strokeFromOuterEdge,
   selectedTableCell,
   tableSelectionColor,
+  layoutWidthMm,
 }: ContentProps) {
   useInstalledFontStore((state) => state.revision);
   switch (element.type) {
     case "text":
-      return <TextContent element={element} scale={scale} widthPx={widthPx} />;
+      return (
+        <TextContent
+          element={element}
+          scale={scale}
+          widthPx={widthPx}
+          layoutWidthMm={layoutWidthMm}
+        />
+      );
     case "degrees":
       return (
-        <DegreesContent element={element} scale={scale} widthPx={widthPx} />
+        <DegreesContent
+          element={element}
+          scale={scale}
+          widthPx={widthPx}
+          layoutWidthMm={layoutWidthMm}
+        />
       );
     case "time":
       return <TimeContent element={element} scale={scale} widthPx={widthPx} />;

@@ -152,7 +152,7 @@ export default function JewelleryLabelScreen() {
           <View style={styles.optionText}>
             <Text style={styles.optionTitle}>Choose Image</Text>
             <Text style={styles.optionDetail}>
-              Local file or Drive
+              This Device or Google Drive
             </Text>
           </View>
           <AppIcon name="chevron.right" tintColor="#94A3B8" size={18} />

@@ -7,11 +7,13 @@ import {
   applyGeometryToThisLabel,
   createBulkLabelDocument,
   geometryFromElements,
+  layoutBulkSlotsEvenly,
   projectBulkDocument,
   resizeBulkDocumentToSize,
   slotEncodePayload,
   syncBulkFromProjectedElements,
   type BulkColumnMapping,
+  type BulkSlot,
 } from '@/lib/bulk-labels';
 import type { ExcelSheet } from '@/stores/data-store';
 
@@ -47,6 +49,87 @@ function created() {
   assert.ok(doc);
   return doc!;
 }
+
+function elementBottom(el: { top: number; height?: number }) {
+  return el.top + (el.height ?? 0);
+}
+
+test('bulk import spaces slots evenly without overlap', () => {
+  const doc = created();
+  const sorted = [...doc.elements].sort((a, b) => a.top - b.top);
+  for (let i = 1; i < sorted.length; i++) {
+    assert.ok(sorted[i].top >= elementBottom(sorted[i - 1]) - 0.05);
+  }
+  const geos = doc.bulk!.slots.map((slot) => doc.bulk!.sharedGeometry[slot.id]);
+  const laidOut = [...geos].sort((a, b) => a.top - b.top);
+  if (laidOut.length >= 2) {
+    const gaps = laidOut.slice(1).map((geo, index) => geo.top - (laidOut[index].top + laidOut[index].height));
+    const first = gaps[0];
+    for (const gap of gaps) {
+      assert.ok(Math.abs(gap - first) < 0.2, `uneven gap: ${gap} vs ${first}`);
+    }
+  }
+});
+
+test('many Excel columns on a small label stay inside the stock', () => {
+  const mappings: BulkColumnMapping[] = [
+    { columnIndex: 0, include: true, kind: 'text' },
+    { columnIndex: 1, include: true, kind: 'text' },
+    { columnIndex: 2, include: true, kind: 'barcode' },
+    { columnIndex: 3, include: true, kind: 'qrcode' },
+  ];
+  const doc = createBulkLabelDocument({
+    name: 'dense.xlsx · 3 labels',
+    widthMm: 40,
+    heightMm: 30,
+    excelFileId: 'xls_test',
+    sheetIndex: 0,
+    sheet,
+    mappings,
+  });
+  assert.ok(doc);
+  for (const el of doc!.elements) {
+    assert.ok(el.left >= 0);
+    assert.ok(el.top >= 0);
+    assert.ok(el.left + el.width <= doc!.widthMm + 0.1);
+    assert.ok(elementBottom(el) <= doc!.heightMm + 0.1);
+  }
+});
+
+test('layoutBulkSlotsEvenly keeps equal gaps for mixed slot kinds', () => {
+  const slots: BulkSlot[] = [
+    { id: 'col:0', columnIndex: 0, columnName: 'A', kind: 'text' },
+    { id: 'col:1', columnIndex: 1, columnName: 'B', kind: 'barcode' },
+    { id: 'col:2', columnIndex: 2, columnName: 'C', kind: 'qrcode' },
+  ];
+  const drafts = [
+    { width: 34, height: 5, fontSize: 8 },
+    { width: 20, height: 8, fontSize: 6 },
+    { width: 10, height: 10 },
+  ];
+  const geos = layoutBulkSlotsEvenly(slots, drafts, 40, 30);
+  const gaps = geos.slice(1).map((geo, index) => geo.top - (geos[index].top + geos[index].height));
+  assert.equal(gaps.length, 2);
+  assert.ok(Math.abs(gaps[0] - gaps[1]) < 0.2);
+});
+
+test('Excel text slots hug the cell string instead of spanning the label', () => {
+  const doc = created();
+  const text = doc.elements.find((el) => el.id === 'col:0');
+  assert.ok(text && text.type === 'text');
+  assert.equal(text.text, 'Widget');
+  assert.ok(
+    text.width < doc.widthMm * 0.7,
+    `text box ${text.width}mm should be tighter than the ${doc.widthMm}mm label`,
+  );
+  const longer = projectBulkDocument(doc, {
+    ...sheet,
+    rows: [['Widget Extra Long Name', 'SKU-100', 'https://a.example/1', 'first']],
+  }, 0);
+  const longEl = longer.elements.find((el) => el.id === 'col:0');
+  assert.ok(longEl && longEl.type === 'text');
+  assert.ok(longEl.width > text.width, `longer cell ${longEl.width} should exceed ${text.width}`);
+});
 
 test('included columns become typed elements; excluded columns are omitted', () => {
   const doc = created();

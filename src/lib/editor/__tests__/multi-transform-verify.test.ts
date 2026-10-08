@@ -161,3 +161,25 @@ test('item 7: shrinking stops the whole group when one member hits minMm', () =>
   });
   assert.ok(boxes[1].width >= 5 - 0.02);
 });
+
+test('text resize is width-only with no south handle', () => {
+  const el = { id: 't', type: 'text', left: 4, top: 4, width: 20, height: 6, fontSize: 12 } as LabelElement;
+  const policy = resizePolicyFor(el);
+  assert.deepEqual(policy.anchors, ['e']);
+  assert.equal(policy.behavior.e, 'width');
+  assert.equal(policy.behavior.s, undefined);
+  const east = resizeMemberByScale({
+    start: { left: 4, top: 4, width: 20, height: 6 },
+    handle: 'e',
+    behavior: 'width',
+    scaleX: 0.4,
+    scaleY: 1,
+    aspect: aspectRatioOf(el),
+    minMm: policy.minMm,
+    canvas,
+  });
+  assert.equal(east.left, 4);
+  assert.equal(east.top, 4);
+  assert.equal(east.height, 6);
+  assert.ok(east.width < 20);
+});
