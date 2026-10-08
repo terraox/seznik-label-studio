@@ -11,19 +11,20 @@ import {
 import { AppIcon } from '@/components/app-icon';
 import { Palette } from '@/constants/ui';
 import {
-  PRINTER_MODEL_LIST,
-  SEZNIK_PRINTER_MODELS,
-  type SeznikPrinterModel,
+  CONSUMER_PRINTER_LIST,
+  toDriverModel,
+  type ConsumerPrinter,
+  type ConsumerPrinterId,
   type SeznikPrinterModelId,
 } from '@/constants/printer-models';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore } from '@/stores/printer-store';
 
 interface SeznikPrinterGridProps {
-  onSelectModel?: (model: SeznikPrinterModel) => void;
-  selectedModelId?: SeznikPrinterModelId | null;
-  onTestPrint?: (model: SeznikPrinterModel) => void | Promise<void>;
-  onDisconnect?: (model: SeznikPrinterModel) => void | Promise<void>;
+  onSelectModel?: (model: ConsumerPrinter) => void;
+  selectedModelId?: ConsumerPrinterId | null;
+  onTestPrint?: (model: ConsumerPrinter) => void | Promise<void>;
+  onDisconnect?: (model: ConsumerPrinter) => void | Promise<void>;
   compact?: boolean;
 }
 
@@ -69,21 +70,22 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
     return () => clearInterval(interval);
   }, [refreshSdkStates]);
 
-  const getModelStatus = (model: SeznikPrinterModel) => {
-    if (connectedSdk === model.id && (status === 'connected' || getPrinterManager().isModelConnected(model.id))) {
+  const getModelStatus = (model: ConsumerPrinter) => {
+    const driver = toDriverModel(model.id);
+    if (connectedSdk === driver && (status === 'connected' || getPrinterManager().isModelConnected(driver))) {
       return 'connected';
     }
     return 'disconnected';
   };
 
-  const handleSelect = async (model: SeznikPrinterModel) => {
+  const handleSelect = async (model: ConsumerPrinter) => {
     setSelectedPrinterModel(model.id);
     if (onSelectModel) {
       onSelectModel(model);
     }
   };
 
-  const handleInternalDisconnect = async (model: SeznikPrinterModel) => {
+  const handleInternalDisconnect = async (model: ConsumerPrinter) => {
     setIsDisconnecting(true);
     try {
       if (onDisconnect) {
@@ -100,7 +102,7 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
     }
   };
 
-  const handleInternalTestPrint = async (model: SeznikPrinterModel) => {
+  const handleInternalTestPrint = async (model: ConsumerPrinter) => {
     setIsTesting(true);
     try {
       if (onTestPrint) {
@@ -124,7 +126,7 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
 
   return (
     <View style={styles.container}>
-      {PRINTER_MODEL_LIST.map((model) => {
+      {CONSUMER_PRINTER_LIST.map((model) => {
         const modelConnected = getModelStatus(model) === 'connected';
         const isSelected = currentSelection === model.id;
 
@@ -143,11 +145,11 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
               <View
                 style={[
                   styles.iconContainer,
-                  { backgroundColor: model.badgeColor },
+                  { backgroundColor: model.accentSoft },
                 ]}>
                 <AppIcon
                   name="printer"
-                  tintColor={model.badgeTextColor}
+                  tintColor={model.accent}
                   size={compact ? 20 : 24}
                 />
               </View>
@@ -162,11 +164,11 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
                     style={[
                       styles.typeBadge,
                       {
-                        backgroundColor: model.badgeColor,
-                        borderColor: model.badgeBorderColor,
+                        backgroundColor: model.accentSoft,
+                        borderColor: model.accentBorder,
                       },
                     ]}>
-                    <Text style={[styles.typeBadgeText, { color: model.badgeTextColor }]}>
+                    <Text style={[styles.typeBadgeText, { color: model.accent }]}>
                       {model.shortName}
                     </Text>
                   </View>
@@ -240,9 +242,9 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
               </View>
             )}
 
-            {!modelConnected && !compact && model.warningNotice && (
-              <View style={[styles.warningBox, { borderColor: model.badgeBorderColor }]}>
-                <Text style={styles.warningText}>{model.warningNotice}</Text>
+            {!modelConnected && !compact && model.howToConnect ? (
+              <View style={[styles.warningBox, { borderColor: model.accentBorder }]}>
+                <Text style={styles.warningText}>{model.howToConnect}</Text>
               </View>
             )}
           </View>

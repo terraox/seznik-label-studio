@@ -158,7 +158,7 @@ export default function SerialLabelScreen() {
     if (!isConn) {
       Alert.alert(
         'Printer Not Connected',
-        'Connect your thermal printer (TD-404, Josh, Tez, Dev, LabelX) before printing.',
+        'Connect a Tejas, Rudra, or Josh printer before printing.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Connect Printer', onPress: () => router.push('/printer-connect') },

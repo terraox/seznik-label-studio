@@ -100,6 +100,7 @@ export const SEZNIK_PRINTER_MODELS: Record<SeznikPrinterModelId, SeznikPrinterMo
   },
 };
 
+/** Internal driver catalog. Connect UI uses CONSUMER_PRINTER_LIST instead. */
 export const PRINTER_MODEL_LIST: SeznikPrinterModel[] = [
   SEZNIK_PRINTER_MODELS.td404,
   SEZNIK_PRINTER_MODELS.josh,
@@ -107,3 +108,92 @@ export const PRINTER_MODEL_LIST: SeznikPrinterModel[] = [
   SEZNIK_PRINTER_MODELS.tez,
   SEZNIK_PRINTER_MODELS.labelx,
 ];
+
+/** Printer the user picks on the connect screen. Tejas and Rudra share the TD-404 driver. */
+export type ConsumerPrinterId = 'tejas' | 'rudra' | 'josh';
+
+export type ConsumerPrinter = {
+  id: ConsumerPrinterId;
+  name: string;
+  shortName: string;
+  tagline: string;
+  howToConnect: string;
+  accent: string;
+  accentSoft: string;
+  accentBorder: string;
+};
+
+export const CONSUMER_PRINTERS: Record<ConsumerPrinterId, ConsumerPrinter> = {
+  tejas: {
+    id: 'tejas',
+    name: 'SEZNIK Tejas',
+    shortName: 'Tejas',
+    tagline: 'High-resolution labels for jewellery and stickers',
+    howToConnect: 'Turn the printer on, then scan and tap Connect.',
+    accent: '#0284C7',
+    accentSoft: '#F0F9FF',
+    accentBorder: '#BAE6FD',
+  },
+  rudra: {
+    id: 'rudra',
+    name: 'SEZNIK Rudra',
+    shortName: 'Rudra',
+    tagline: 'Same fast label engine, sized for daily shop work',
+    howToConnect: 'Turn the printer on, then scan and tap Connect.',
+    accent: '#0F766E',
+    accentSoft: '#F0FDFA',
+    accentBorder: '#99F6E4',
+  },
+  josh: {
+    id: 'josh',
+    name: 'SEZNIK Josh',
+    shortName: 'Josh',
+    tagline: 'Compact printer with automatic die-cut alignment',
+    howToConnect: 'Turn Josh on, then scan and tap Connect.',
+    accent: '#7C3AED',
+    accentSoft: '#F5F3FF',
+    accentBorder: '#DDD6FE',
+  },
+};
+
+export const CONSUMER_PRINTER_LIST: ConsumerPrinter[] = [
+  CONSUMER_PRINTERS.tejas,
+  CONSUMER_PRINTERS.rudra,
+  CONSUMER_PRINTERS.josh,
+];
+
+const CONSUMER_IDS = new Set<string>(['tejas', 'rudra', 'josh']);
+
+export function isConsumerPrinterId(value: unknown): value is ConsumerPrinterId {
+  return typeof value === 'string' && CONSUMER_IDS.has(value);
+}
+
+/** Driver used by scan and connect. Tejas and Rudra both use TD-404. */
+export function toDriverModel(id: ConsumerPrinterId): 'td404' | 'josh' {
+  return id === 'josh' ? 'josh' : 'td404';
+}
+
+/**
+ * Map a persisted driver id (or already-migrated consumer id) to the connect-screen choice.
+ * Unknown legacy drivers land on Tejas unless the live SDK is Josh.
+ */
+export function consumerIdFromLegacy(
+  model: string | null | undefined,
+  sdkId?: string | null,
+): ConsumerPrinterId {
+  if (isConsumerPrinterId(model)) return model;
+  if (model === 'josh' || sdkId === 'josh') return 'josh';
+  return 'tejas';
+}
+
+export function migrateLastDeviceForModel(
+  raw: Partial<Record<string, { id: string; name: string }>> | null | undefined,
+): Partial<Record<ConsumerPrinterId, { id: string; name: string }>> {
+  const source = raw ?? {};
+  const next: Partial<Record<ConsumerPrinterId, { id: string; name: string }>> = {};
+  if (source.tejas) next.tejas = source.tejas;
+  else if (source.td404) next.tejas = source.td404;
+  if (source.rudra) next.rudra = source.rudra;
+  if (source.josh) next.josh = source.josh;
+  return next;
+}

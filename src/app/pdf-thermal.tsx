@@ -204,7 +204,7 @@ export default function PdfScreen() {
     if (!manager.isConnected) {
       Alert.alert(
         'Printer Not Connected',
-        'Please connect your thermal printer (TD-404, Tez, Dev, Josh) before printing.',
+        'Please connect a Tejas, Rudra, or Josh printer before printing.',
         [
           { text: 'Cancel', style: 'cancel' },
           {

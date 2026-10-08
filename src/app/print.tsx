@@ -33,7 +33,7 @@ import {
   extractJewelryFirstColumnDocument,
   isJewelryDieCutDocument,
 } from '@/constants/jewelry-diecut';
-import { SEZNIK_PRINTER_MODELS } from '@/constants/printer-models';
+import { CONSUMER_PRINTERS } from '@/constants/printer-models';
 import { canonicalizeJewelryDieCutDocument } from '@/constants/jewelry-template-elements';
 import { resolvePrintQuality } from '@/lib/printer/print-quality';
 import {
@@ -400,7 +400,7 @@ export default function PrintScreen() {
   const excelFiles = useDataStore((s) => s.excelFiles);
   const activeExcelFileId = useDataStore((s) => s.activeExcelFileId);
 
-  const activeModelMeta = SEZNIK_PRINTER_MODELS[selectedModel] || SEZNIK_PRINTER_MODELS.td404;
+  const activeModelMeta = CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas;
 
   const excelSheet = useMemo<ExcelSheet | null>(() => {
     const fileId = params.excelFileId ?? activeExcelFileId;
@@ -834,7 +834,7 @@ export default function PrintScreen() {
         printingLockRef.current = false;
         Alert.alert(
           'Printer Not Connected',
-          'Connect your thermal printer (TD-404, Tez, Dev, Josh) before printing.',
+          'Connect a Tejas, Rudra, or Josh printer before printing.',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Connect', onPress: () => router.push('/printer-connect') },
@@ -881,7 +881,7 @@ export default function PrintScreen() {
       printingLockRef.current = false;
       Alert.alert(
         'Printer Not Connected',
-        'Connect your TD-404 (Bluetooth or Wi‑Fi) before printing.',
+        'Connect a Tejas, Rudra, or Josh printer before printing.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Connect', onPress: () => router.push('/printer-connect') },

@@ -2,7 +2,7 @@
  * PDF Thermal Print Engine
  *
  * Renders PDF documents natively to printer-resolution bitmaps and
- * dispatches them directly to the connected thermal printer (TD-404, Tez, Dev, Josh).
+ * dispatches them directly to the connected thermal printer (Tejas, Rudra, or Josh).
  */
 
 import { renderPdfPages, type RenderedPdfPage, type RenderPdfResult } from 'td404-printer';

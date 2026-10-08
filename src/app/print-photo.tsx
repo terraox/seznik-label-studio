@@ -258,7 +258,7 @@ export default function PrintPhotoScreen() {
 
     const manager = getPrinterManager();
     if (!manager.isConnected) {
-      Alert.alert('Printer Not Connected', 'Connect your TD-404 (Bluetooth or Wi‑Fi) before printing.', [
+      Alert.alert('Printer Not Connected', 'Connect a Tejas, Rudra, or Josh printer before printing.', [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Connect', onPress: () => router.push('/printer-connect') },
       ]);

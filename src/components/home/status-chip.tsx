@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
-import { SEZNIK_PRINTER_MODELS } from '@/constants/printer-models';
+import { CONSUMER_PRINTERS } from '@/constants/printer-models';
 import { androidRipple, HomeLayout, HomeStatusColors } from '@/constants/ui';
 import { usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-store';
 
@@ -19,7 +19,7 @@ export function StatusChip() {
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
   const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
-  const modelName = (SEZNIK_PRINTER_MODELS[selectedModel] || SEZNIK_PRINTER_MODELS.td404).shortName;
+  const modelName = (CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas).shortName;
 
   const live = status === 'connected' || status === 'printing';
   const busy = status === 'scanning' || status === 'connecting';

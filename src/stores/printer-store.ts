@@ -2,7 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { type SeznikPrinterModelId } from '@/constants/printer-models';
+import {
+  consumerIdFromLegacy,
+  migrateLastDeviceForModel,
+  toDriverModel,
+  type ConsumerPrinterId,
+  type SeznikPrinterModelId,
+} from '@/constants/printer-models';
 import type { PrintHistoryEntry } from '@/lib/print-history/types';
 import { usePrintHistoryStore } from '@/stores/print-history-store';
 
@@ -27,7 +33,7 @@ export type PrintCalibrationEntry = {
 
 type PrinterStoreState = {
   status: PrinterConnectionStatus;
-  selectedPrinterModel: SeznikPrinterModelId;
+  selectedPrinterModel: ConsumerPrinterId;
   deviceId: string | null;
   deviceName: string | null;
   transport: PrinterTransport | null;
@@ -36,7 +42,7 @@ type PrinterStoreState = {
   backendPrinterId: string | null;
   lastDeviceId: string | null;
   lastDeviceName: string | null;
-  lastDeviceForModel: Partial<Record<SeznikPrinterModelId, { id: string; name: string }>>;
+  lastDeviceForModel: Partial<Record<ConsumerPrinterId, { id: string; name: string }>>;
   /** MAC → model pin. Overrides name heuristics on reconnect (addendum §5). */
   pinnedDriverByMac: Partial<Record<string, SeznikPrinterModelId>>;
   /** @deprecated Legacy field — migrated to print-history store. Kept for rehydrate migration only. */
@@ -53,7 +59,7 @@ type PrinterStoreState = {
    */
   printCalibration: Record<string, PrintCalibrationEntry>;
   setStatus: (status: PrinterConnectionStatus) => void;
-  setSelectedPrinterModel: (model: SeznikPrinterModelId) => void;
+  setSelectedPrinterModel: (model: ConsumerPrinterId) => void;
   setDevCommandSet: (cmd: 'tspl' | 'escpos') => void;
   setPrintCalibration: (key: string, entry: PrintCalibrationEntry) => void;
   setConnectedDevice: (
@@ -63,7 +69,10 @@ type PrinterStoreState = {
       transport?: PrinterTransport;
       sdkId?: 'td404' | 'josh' | 'generic' | 'tez' | 'dev' | 'labelx';
       backendPrinterId?: string | null;
+      /** Driver used to pin this MAC. Defaults from sdkId. */
       model?: SeznikPrinterModelId;
+      /** Connect-screen choice remembered for this device. */
+      consumer?: ConsumerPrinterId;
     },
   ) => void;
   clearConnection: () => void;
@@ -71,6 +80,20 @@ type PrinterStoreState = {
   addHistoryEntry: (entry: Omit<PrintHistoryEntry, 'id' | 'printedAt'>) => void;
   clearHistory: () => void;
 };
+
+function resolvePinnedDriver(
+  model: SeznikPrinterModelId | undefined,
+  sdkId: string | null | undefined,
+  selected: ConsumerPrinterId,
+): SeznikPrinterModelId {
+  if (model === 'td404' || model === 'josh' || model === 'dev' || model === 'tez' || model === 'labelx') {
+    return model;
+  }
+  if (sdkId === 'td404' || sdkId === 'josh' || sdkId === 'dev' || sdkId === 'tez' || sdkId === 'labelx') {
+    return sdkId;
+  }
+  return toDriverModel(selected);
+}
 
 /** Normalize Bluetooth MAC for stable pin keys (AA:BB:CC:DD:EE:FF). */
 export function normalizePrinterMac(mac: string): string {
@@ -83,7 +106,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
   persist(
     (set) => ({
       status: 'disconnected',
-      selectedPrinterModel: 'td404',
+      selectedPrinterModel: 'tejas',
       deviceId: null,
       deviceName: null,
       transport: null,
@@ -107,7 +130,12 @@ export const usePrinterStore = create<PrinterStoreState>()(
 
       setConnectedDevice: (deviceId, deviceName, meta) =>
         set((state) => {
-          const model = meta?.model ?? (meta?.sdkId as SeznikPrinterModelId) ?? state.selectedPrinterModel;
+          const driver = resolvePinnedDriver(meta?.model, meta?.sdkId, state.selectedPrinterModel);
+          const consumer =
+            meta?.consumer ??
+            (toDriverModel(state.selectedPrinterModel) === toDriverModel(consumerIdFromLegacy(driver, meta?.sdkId))
+              ? state.selectedPrinterModel
+              : consumerIdFromLegacy(driver, meta?.sdkId));
           const macKey = normalizePrinterMac(deviceId);
           return {
             status: 'connected',
@@ -118,14 +146,14 @@ export const usePrinterStore = create<PrinterStoreState>()(
             backendPrinterId: meta?.backendPrinterId ?? null,
             lastDeviceId: deviceId,
             lastDeviceName: deviceName,
-            selectedPrinterModel: model,
+            selectedPrinterModel: consumer,
             lastDeviceForModel: {
               ...state.lastDeviceForModel,
-              [model]: { id: deviceId, name: deviceName },
+              [consumer]: { id: deviceId, name: deviceName },
             },
             pinnedDriverByMac: {
               ...state.pinnedDriverByMac,
-              [macKey]: model,
+              [macKey]: driver,
             },
           };
         }),
@@ -167,7 +195,18 @@ export const usePrinterStore = create<PrinterStoreState>()(
         pinnedDriverByMac: state.pinnedDriverByMac,
         printCalibration: state.printCalibration,
       }),
-      merge: (persisted, current) => ({ ...current, ...(persisted as object) }),
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<PrinterStoreState> & {
+          selectedPrinterModel?: string;
+          sdkId?: PrinterStoreState['sdkId'];
+        };
+        return {
+          ...current,
+          ...saved,
+          selectedPrinterModel: consumerIdFromLegacy(saved.selectedPrinterModel, saved.sdkId),
+          lastDeviceForModel: migrateLastDeviceForModel(saved.lastDeviceForModel),
+        };
+      },
     },
   ),
 );
