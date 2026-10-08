@@ -5,19 +5,17 @@ import {
   Alert,
   FlatList,
   Linking,
-  Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { editorBridge } from '@/constants/editor-bridge';
-import { Palette, Type } from '@/constants/ui';
+import { cardShadow, Palette, Type } from '@/constants/ui';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { useExcelImportFlow, type ExcelImportSuccess } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
@@ -29,10 +27,96 @@ interface ImportedDataFile {
   id: string;
   name: string;
   type: 'Excel' | 'PDF' | 'CSV' | 'Other';
-  size?: number;
+  sizeBytes?: number;
   uri: string;
-  importedAt: string;
+  importedAt: number;
   excel?: ImportedExcelFile;
+}
+
+const GRID_COLUMNS = 3;
+const GRID_GAP = 10;
+const GRID_PAD = 12;
+
+function formatSizeCompact(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+  const mb = bytes / (1024 * 1024);
+  return mb >= 10 ? `${Math.round(mb)}M` : `${mb.toFixed(1).replace(/\.0$/, '')}M`;
+}
+
+function DataFileTypeIcon({ type }: { type: ImportedDataFile['type'] | 'URL' }) {
+  if (type === 'Excel' || type === 'CSV') {
+    return (
+      <View style={styles.typeIconExcel}>
+        <View style={styles.excelSheet} />
+        <Text style={styles.typeIconLetter}>X</Text>
+      </View>
+    );
+  }
+  if (type === 'PDF') {
+    return (
+      <View style={styles.typeIconPdf}>
+        <Text style={styles.typeIconPdfLabel}>PDF</Text>
+      </View>
+    );
+  }
+  if (type === 'URL') {
+    return (
+      <View style={styles.typeIconUrl}>
+        <Text style={styles.typeIconUrlLabel}>URL</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.typeIconOther}>
+      <AppIcon name="doc.text" tintColor="#64748B" size={18} />
+    </View>
+  );
+}
+
+function DataFileGridTile({
+  name,
+  type,
+  sizeBytes,
+  width,
+  editing,
+  onPress,
+}: {
+  name: string;
+  type: ImportedDataFile['type'] | 'URL';
+  sizeBytes?: number;
+  width: number;
+  editing: boolean;
+  onPress: () => void;
+}) {
+  const sizeLabel = formatSizeCompact(sizeBytes);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.gridTile,
+        { width },
+        editing && styles.gridTileEditing,
+        pressed && styles.pressed,
+      ]}>
+      <View style={styles.gridTileTop}>
+        <DataFileTypeIcon type={type} />
+        {sizeLabel ? <Text style={styles.gridSize}>{sizeLabel}</Text> : <View />}
+      </View>
+      <View style={styles.gridNameWrap}>
+        <Text style={styles.gridName} numberOfLines={4}>
+          {name}
+        </Text>
+      </View>
+      {editing ? (
+        <View style={styles.gridEditBadge}>
+          <AppIcon name="trash" tintColor="#DC2626" size={14} />
+        </View>
+      ) : null}
+    </Pressable>
+  );
 }
 
 function EmptyIllustration() {
@@ -63,62 +147,9 @@ function inferFileType(name: string): ImportedDataFile['type'] {
   return 'Other';
 }
 
-function ExcelSpreadsheetPreview({ file }: { file: ImportedExcelFile }) {
-  const sheet = file.sheets[file.activeSheetIndex] ?? file.sheets[0];
-  if (!sheet) return null;
-  const previewColumns = sheet.columns.slice(0, 4);
-  const previewRows = sheet.rows.slice(0, 3).map((row) => row.slice(0, 4));
-
-  return (
-    <View style={styles.excelPreview}>
-      <View style={styles.excelToolbar}>
-        <View style={styles.excelBadge}>
-          <Text style={styles.excelBadgeText}>EXCEL</Text>
-        </View>
-        <Text style={styles.excelFileName} numberOfLines={1}>
-          {sheet.name} · {sheet.rows.length} row{sheet.rows.length === 1 ? '' : 's'} ·{' '}
-          {sheet.columns.length} col{sheet.columns.length === 1 ? '' : 's'}
-        </Text>
-      </View>
-      <View style={styles.excelGrid}>
-        <View style={styles.excelRow}>
-          {previewColumns.map((cell, cellIndex) => (
-            <View
-              key={`h-${cellIndex}`}
-              style={[
-                styles.excelCell,
-                styles.excelHeaderCell,
-                cellIndex === previewColumns.length - 1 && styles.excelCellLast,
-              ]}>
-              <Text style={[styles.excelCellText, styles.excelHeaderCellText]} numberOfLines={1}>
-                {cell}
-              </Text>
-            </View>
-          ))}
-        </View>
-        {previewRows.map((row, rowIndex) => (
-          <View key={`row-${rowIndex}`} style={styles.excelRow}>
-            {previewColumns.map((_, cellIndex) => (
-              <View
-                key={`cell-${rowIndex}-${cellIndex}`}
-                style={[
-                  styles.excelCell,
-                  cellIndex === previewColumns.length - 1 && styles.excelCellLast,
-                ]}>
-                <Text style={styles.excelCellText} numberOfLines={1}>
-                  {row[cellIndex] ?? ''}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
 export default function DataFileScreen() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const params = useLocalSearchParams<{
     type?: string | string[];
     from?: string | string[];
@@ -127,9 +158,14 @@ export default function DataFileScreen() {
   const paramType = Array.isArray(params.type) ? params.type[0] : params.type;
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
   const returnToLabelSettings = fromParam === 'label-settings';
-  const initialTab = (paramType as (typeof TABS)[number]) || 'Excel';
+  const initialTab = (paramType as (typeof TABS)[number]) || 'All';
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]>(
-    TABS.includes(initialTab) ? initialTab : 'Excel'
+    TABS.includes(initialTab) ? initialTab : 'All',
+  );
+  const [editing, setEditing] = useState(false);
+
+  const gridTileWidth = Math.floor(
+    (Math.min(windowWidth, MaxContentWidth) - GRID_PAD * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
   );
 
   const excelFiles = useDataStore((s) => s.excelFiles);
@@ -155,24 +191,19 @@ export default function DataFileScreen() {
       name: f.name,
       type: f.name.toLowerCase().endsWith('.csv') ? 'CSV' : 'Excel',
       uri: f.uri,
-      importedAt: new Date(f.importedAt).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      sizeBytes: f.sizeBytes,
+      importedAt: f.importedAt,
       excel: f,
     }));
     const pdf: ImportedDataFile[] = pdfFiles.map((f) => ({
       id: f.id,
       name: f.name,
       type: 'PDF',
-      size: f.sizeBytes,
+      sizeBytes: f.sizeBytes,
       uri: f.uri,
-      importedAt: new Date(f.importedAt).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      importedAt: f.importedAt,
     }));
-    return [...excel, ...pdf].sort((a, b) => (a.id < b.id ? 1 : -1));
+    return [...excel, ...pdf].sort((a, b) => b.importedAt - a.importedAt);
   }, [excelFiles, pdfFiles]);
 
   const finishExcelImport = async (imported: ExcelImportSuccess) => {
@@ -180,6 +211,7 @@ export default function DataFileScreen() {
     const entry = addExcelFile({
       name: imported.name,
       uri: storedUri,
+      sizeBytes: imported.size,
       sheets: imported.sheets,
       activeSheetIndex: 0,
       hasHeaderRow: imported.hasHeaderRow,
@@ -311,11 +343,49 @@ export default function DataFileScreen() {
     handleImportFile();
   };
 
-  const formatSize = (bytes?: number) => {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const openFile = (item: ImportedDataFile) => {
+    if (returnToLabelSettings) {
+      if (!item.excel) return;
+      editorBridge.dataSourceFileId = item.excel.id;
+      router.back();
+      return;
+    }
+    if (item.excel) {
+      setActiveExcelFile(item.excel.id);
+      router.push({
+        pathname: '/excel-data-preview',
+        params: { excelFileId: item.excel.id },
+      });
+    } else if (item.type === 'PDF') {
+      router.push({
+        pathname: '/pdf',
+        params: { docName: item.name, docUri: item.uri },
+      });
+    } else {
+      router.push({
+        pathname: '/print',
+        params: { docName: item.name, docUri: item.uri, docType: item.type },
+      });
+    }
+  };
+
+  const confirmRemoveFile = (item: ImportedDataFile) => {
+    Alert.alert('Remove File', `Remove "${item.name}" from the list?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => (item.excel ? removeExcelFile(item.id) : removePdfFile(item.id)),
+      },
+    ]);
+  };
+
+  const handleFileTilePress = (item: ImportedDataFile) => {
+    if (editing) {
+      confirmRemoveFile(item);
+      return;
+    }
+    openFile(item);
   };
 
   return (
@@ -329,14 +399,17 @@ export default function DataFileScreen() {
         </Pressable>
 
         <Text style={styles.headerTitle}>Data File</Text>
-        <View style={styles.headerSpacer} />
+        <Pressable
+          onPress={() => setEditing((v) => !v)}
+          hitSlop={8}
+          style={({ pressed }) => [styles.editBtn, pressed && styles.pressed]}>
+          <Text style={[styles.editBtnText, editing && styles.editBtnTextActive]}>
+            {editing ? 'Done' : 'Edit'}
+          </Text>
+        </Pressable>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabBarScroll}
-        contentContainerStyle={styles.tabBarContent}>
+      <View style={styles.tabBar}>
         {TABS.map((tab) => {
           const active = tab === activeTab;
           return (
@@ -348,14 +421,14 @@ export default function DataFileScreen() {
                 style={[styles.tabText, active && styles.tabTextActive]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
-                minimumFontScale={0.85}>
+                minimumFontScale={0.72}>
                 {tab}
               </Text>
               {active ? <View style={styles.tabIndicator} /> : <View style={styles.tabIndicatorSpacer} />}
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       <View style={styles.body}>
         {activeTab === 'Remote Data' ? (
@@ -371,26 +444,17 @@ export default function DataFileScreen() {
             <FlatList
               data={remoteLinks}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
+              numColumns={GRID_COLUMNS}
+              columnWrapperStyle={styles.gridRow}
+              contentContainerStyle={styles.gridContent}
               renderItem={({ item }) => (
-                <View style={styles.fileItemCard}>
-                  <View style={[styles.badgeIcon, styles.badgeCsv]}>
-                    <Text style={styles.badgeText}>URL</Text>
-                  </View>
-                  <Pressable
-                    style={styles.fileDetails}
-                    onPress={() => openRemoteLink(item.url)}>
-                    <Text style={styles.fileTitle} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.fileSub} numberOfLines={1}>
-                      {item.url}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    hitSlop={8}
-                    style={({ pressed }) => [pressed && styles.pressed]}
-                    onPress={() =>
+                <DataFileGridTile
+                  name={item.name}
+                  type="URL"
+                  width={gridTileWidth}
+                  editing={editing}
+                  onPress={() => {
+                    if (editing) {
                       Alert.alert('Remove Link', `Remove "${item.name}"?`, [
                         { text: 'Cancel', style: 'cancel' },
                         {
@@ -398,11 +462,12 @@ export default function DataFileScreen() {
                           style: 'destructive',
                           onPress: () => removeRemoteLink(item.id),
                         },
-                      ])
-                    }>
-                    <AppIcon name="trash" tintColor="#DC2626" size={18} />
-                  </Pressable>
-                </View>
+                      ]);
+                      return;
+                    }
+                    openRemoteLink(item.url);
+                  }}
+                />
               )}
             />
           )
@@ -410,7 +475,7 @@ export default function DataFileScreen() {
           <View style={styles.emptyWrap}>
             <EmptyIllustration />
             <Text style={styles.emptyText}>No data file was found</Text>
-            {activeTab === 'Excel' ? (
+            {activeTab === 'Excel' || activeTab === 'All' ? (
               <Text style={styles.emptyHint}>
                 Import an Excel workbook (.xlsx / .xls) or CSV to use as label data.
               </Text>
@@ -420,88 +485,18 @@ export default function DataFileScreen() {
           <FlatList
             data={filteredFiles}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
+            numColumns={GRID_COLUMNS}
+            columnWrapperStyle={styles.gridRow}
+            contentContainerStyle={styles.gridContent}
             renderItem={({ item }) => (
-              <View style={styles.fileItemCard}>
-                <View
-                  style={[
-                    styles.badgeIcon,
-                    item.type === 'Excel'
-                      ? styles.badgeExcel
-                      : item.type === 'PDF'
-                      ? styles.badgePdf
-                      : styles.badgeCsv,
-                  ]}>
-                  <Text style={styles.badgeText}>{item.type.toUpperCase()}</Text>
-                </View>
-
-                <View style={styles.fileDetails}>
-                  <Text style={styles.fileTitle} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.fileSub}>
-                    {formatSize(item.size)} • {item.importedAt}
-                  </Text>
-                </View>
-
-                <Pressable
-                  style={({ pressed }) => [styles.actionPrintBtn, pressed && styles.pressed]}
-                  onPress={() => {
-                    if (returnToLabelSettings) {
-                      if (!item.excel) return;
-                      editorBridge.dataSourceFileId = item.excel.id;
-                      router.back();
-                      return;
-                    }
-                    if (item.excel) {
-                      setActiveExcelFile(item.excel.id);
-                      router.push({
-                        pathname: '/excel-data-preview',
-                        params: {
-                          excelFileId: item.excel.id,
-                        },
-                      });
-                    } else if (item.type === 'PDF') {
-                      router.push({
-                        pathname: '/pdf',
-                        params: {
-                          docName: item.name,
-                          docUri: item.uri,
-                        },
-                      });
-                    } else {
-                      router.push({
-                        pathname: '/print',
-                        params: {
-                          docName: item.name,
-                          docUri: item.uri,
-                          docType: item.type,
-                        },
-                      });
-                    }
-                  }}>
-                  <Text style={styles.actionPrintText}>{returnToLabelSettings ? 'Use' : 'Print'}</Text>
-                </Pressable>
-
-                <Pressable
-                  hitSlop={8}
-                  style={({ pressed }) => [pressed && styles.pressed]}
-                  onPress={() =>
-                    Alert.alert('Remove File', `Remove "${item.name}" from the list?`, [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Remove',
-                        style: 'destructive',
-                        onPress: () =>
-                          item.excel ? removeExcelFile(item.id) : removePdfFile(item.id),
-                      },
-                    ])
-                  }>
-                  <AppIcon name="trash" tintColor="#DC2626" size={18} />
-                </Pressable>
-
-                {item.excel ? <ExcelSpreadsheetPreview file={item.excel} /> : null}
-              </View>
+              <DataFileGridTile
+                name={item.name}
+                type={item.type}
+                sizeBytes={item.sizeBytes}
+                width={gridTileWidth}
+                editing={editing}
+                onPress={() => handleFileTilePress(item)}
+              />
             )}
           />
         )}
@@ -512,7 +507,7 @@ export default function DataFileScreen() {
           onPress={handleFooterPress}
           style={({ pressed }) => [styles.importBtn, pressed && styles.pressed]}>
           <Text style={styles.importBtnText}>
-            {activeTab === 'Remote Data' ? 'Create Link' : 'Import from This Device or Google Drive'}
+            {activeTab === 'Remote Data' ? 'Create Link' : 'Import File'}
           </Text>
         </Pressable>
       </View>
@@ -571,29 +566,40 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '500',
   },
-  headerSpacer: {
-    width: 36,
-  },
-  tabBarScroll: {
-    backgroundColor: Palette.header,
-    flexGrow: 0,
-  },
-  tabBarContent: {
-    paddingHorizontal: 6,
-    paddingBottom: 10,
+  editBtn: {
+    width: 52,
+    height: 36,
     alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  editBtnText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  editBtnTextActive: {
+    fontWeight: '700',
+  },
+  tabBar: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    backgroundColor: Palette.header,
+    flexDirection: 'row',
+    paddingBottom: 10,
   },
   tabItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 2,
     paddingVertical: 6,
-    minWidth: 56,
+    minWidth: 0,
   },
   tabItemActive: {},
   tabText: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 12.5,
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 13,
     fontWeight: '400',
     textAlign: 'center',
   },
@@ -603,9 +609,7 @@ const styles = StyleSheet.create({
   },
   tabIndicator: {
     marginTop: 8,
-    width: '100%',
-    minWidth: 28,
-    maxWidth: 72,
+    alignSelf: 'stretch',
     height: 3,
     borderRadius: 2,
     backgroundColor: '#FFFFFF',
@@ -726,138 +730,124 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     lineHeight: 18,
   },
-  excelPreview: {
-    width: '100%',
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#D7E3D9',
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-  },
-  excelToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#EAF7EE',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D7E3D9',
-  },
-  excelBadge: {
-    backgroundColor: '#22C55E',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  excelBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  excelFileName: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#14532D',
-  },
-  excelGrid: {
-    backgroundColor: '#FFFFFF',
-  },
-  excelRow: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
-  },
-  excelCell: {
-    flex: 1,
-    minWidth: 0,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#E2E8F0',
-  },
-  excelCellLast: {
-    borderRightWidth: 0,
-  },
-  excelHeaderCell: {
-    backgroundColor: '#F8FAFC',
-  },
-  excelCellText: {
-    fontSize: 10,
-    color: '#334155',
-  },
-  excelHeaderCellText: {
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  listContent: {
-    padding: 16,
-    gap: 10,
-  },
-  fileItemCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: '#0B1F33',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+  gridContent: {
+    paddingHorizontal: GRID_PAD,
+    paddingTop: GRID_PAD,
+    paddingBottom: GRID_PAD,
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
     width: '100%',
   },
-  badgeIcon: {
-    width: 44,
-    height: 44,
+  gridRow: {
+    gap: GRID_GAP,
+    marginBottom: GRID_GAP,
+  },
+  gridTile: {
+    position: 'relative',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
+    minHeight: 118,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 10,
+    ...cardShadow,
+  },
+  gridTileEditing: {
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  gridTileTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  gridSize: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '500',
+    maxWidth: '50%',
+    textAlign: 'right',
+  },
+  gridNameWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  gridName: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#334155',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  gridEditBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 10,
+    padding: 4,
+  },
+  typeIconPdf: {
+    width: 26,
+    height: 30,
+    borderRadius: 3,
+    backgroundColor: '#E11D48',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 3,
+  },
+  typeIconPdfLabel: {
+    color: '#FFFFFF',
+    fontSize: 7,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  typeIconExcel: {
+    width: 26,
+    height: 30,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  excelSheet: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    width: 14,
+    height: 10,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderTopLeftRadius: 2,
+  },
+  typeIconLetter: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  typeIconUrl: {
+    width: 26,
+    height: 30,
+    borderRadius: 3,
+    backgroundColor: '#0EA5E9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeExcel: {
-    backgroundColor: '#DCFCE7',
-  },
-  badgePdf: {
-    backgroundColor: '#FEE2E2',
-  },
-  badgeCsv: {
-    backgroundColor: '#E0F2FE',
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  fileDetails: {
-    flex: 1,
-    minWidth: 0,
-  },
-  fileTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 4,
-  },
-  fileSub: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  actionPrintBtn: {
-    backgroundColor: Palette.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 6,
-  },
-  actionPrintText: {
+  typeIconUrlLabel: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 7,
+    fontWeight: '800',
+  },
+  typeIconOther: {
+    width: 26,
+    height: 30,
+    borderRadius: 3,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   footer: {
     paddingHorizontal: 24,

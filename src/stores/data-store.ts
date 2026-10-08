@@ -16,6 +16,7 @@ export type ImportedExcelFile = {
   id: string;
   name: string;
   uri: string;
+  sizeBytes?: number;
   sheets: ExcelSheet[];
   activeSheetIndex: number;
   importedAt: number;
