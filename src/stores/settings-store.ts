@@ -14,6 +14,9 @@ export const EDITOR_BORDER_SELECTION_COLORS = ['#111111', '#9CA3AF'] as const;
 /** Selection outline swatches — Editor Settings → Color of The Selected Table Cell. */
 export const EDITOR_TABLE_SELECTION_COLORS = ['#111111', '#D1D5DB'] as const;
 
+/** Editor design grid line colors (Editor Settings → Color of Grid). */
+export const EDITOR_GRID_COLORS = ['#000000', '#6B7280', '#D1D5DB', '#FFFFFF', '#FCE7F3'] as const;
+
 export type EditorSettings = {
   showColumnName: boolean;
   highlightColumnName: boolean;
@@ -147,6 +150,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       patchDefaults: (updates) =>
         set((state) => ({ defaults: { ...state.defaults, ...updates } })),
       patchPrinting: (updates) =>
+      restoreDefaultPropertyDefaults: () => set({ defaults: DEFAULT_PROPERTY_SETTINGS }),
         set((state) => ({ printing: { ...state.printing, ...updates } })),
       setLanguage: (language) => set({ language }),
       setTutorialSeen: (seen) => set({ tutorialSeen: seen }),

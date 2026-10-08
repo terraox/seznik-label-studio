@@ -41,6 +41,7 @@ type KonvaCanvasProps = {
   /** Editor-only design grid (not included in print capture via LabelPreview). */
   showGrid?: boolean;
   gridSpacingMm?: number;
+  gridColor?: string;
   liveBounds?: LiveRulerBounds;
   activeSelectedIdSv?: SharedValue<string>;
   topBarSelectionVisibleSv?: SharedValue<number>;
@@ -671,6 +672,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
             spacingMm={resolvedGridSpacingMm}
             visible={showGrid}
           />
+            gridColor={gridColor}
           {showGrid
             ? sortedElements.map((el) => {
                 if (el.visible === false || el.id === gridLiveElementId) return null;

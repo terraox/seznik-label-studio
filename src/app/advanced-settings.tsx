@@ -23,8 +23,12 @@ export default function AdvancedSettingsScreen() {
       </SettingsCard>
 
       <SettingsCard>
+        <SettingsNavRow label="Editor Settings" onPress={() => router.push('/editor-settings')} />
+      </SettingsCard>
+
+      <SettingsCard>
         <SettingsNavRow
-          label="Editing Settings"
+          label="Default Property Settings"
           onPress={() => router.push('/editing-settings')}
         />
       </SettingsCard>

@@ -371,14 +371,25 @@ export function SettingsStepperRow({
   );
 }
 
+export function SettingsCacheRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.cacheRow}>
+      <Text style={styles.cacheLabel}>{label}</Text>
+      <Text style={styles.cacheValue}>{value}</Text>
+    </View>
+  );
+}
+
 export function SettingsActionCard({
   label,
   onPress,
   danger,
+  accent,
 }: {
   label: string;
   onPress?: () => void;
   danger?: boolean;
+  accent?: boolean;
 }) {
   return (
     <Pressable
@@ -386,7 +397,14 @@ export function SettingsActionCard({
       hitSlop={SETTINGS_HIT_SLOP}
       android_ripple={androidRipple}
       style={({ pressed }) => [styles.actionCard, pressed && styles.pressed]}>
-      <Text style={[styles.actionText, danger && styles.actionTextDanger]}>{label}</Text>
+      <Text
+        style={[
+          styles.actionText,
+          danger && styles.actionTextDanger,
+          accent && styles.actionTextAccent,
+        ]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -487,7 +505,8 @@ const styles = StyleSheet.create({
   },
   valueText: {
     fontSize: 14,
-    color: '#64748B',
+    fontWeight: '500',
+    color: Palette.accent,
   },
   statusText: {
     fontSize: 14,
@@ -676,6 +695,30 @@ const styles = StyleSheet.create({
   actionTextDanger: {
     color: '#EF5350',
     fontWeight: '600',
+  },
+  actionTextAccent: {
+    color: '#459E83',
+    fontWeight: '600',
+  },
+  cacheRow: {
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cacheLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '400',
+    color: '#7D7D7D',
+    paddingRight: 8,
+  },
+  cacheValue: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#E15B64',
   },
   pressed: {
     opacity: 0.7,

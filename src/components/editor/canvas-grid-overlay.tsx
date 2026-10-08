@@ -15,6 +15,7 @@ type CanvasGridOverlayProps = {
   pxPerMM: number;
   spacingMm: number;
   visible: boolean;
+  gridColor?: string;
 };
 
 export const CanvasGridOverlay = memo(function CanvasGridOverlay({
@@ -23,8 +24,9 @@ export const CanvasGridOverlay = memo(function CanvasGridOverlay({
   pxPerMM,
   spacingMm,
   visible,
+  gridColor,
 }: CanvasGridOverlayProps) {
-  const stroke = DEFAULT_GRID_COLOR;
+  const stroke = gridColor ?? DEFAULT_GRID_COLOR;
   const paths = useMemo(() => {
     const lines = buildCanvasGridLines({ widthPx, heightPx, pxPerMM, spacingMm });
     if (!lines) return null;

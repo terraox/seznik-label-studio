@@ -1641,7 +1641,10 @@ export default function EditScreen() {
             left: fit.left,
             top: fit.top,
             width: fit.width,
-            fontSize: DEFAULT_ELEMENT_STATE.fontSize,
+            fontSize:
+              defaults.autoFitFont || defaults.autoFitSize
+                ? fit.fontSize
+                : DEFAULT_ELEMENT_STATE.fontSize,
             autoWrapping: defaults.autoWrap,
             autoTextHeight: defaults.autoTextHeight,
             ...overrides,
@@ -3876,6 +3879,7 @@ export default function EditScreen() {
                     surfaceColor={artboardFill}
                     showGrid={Boolean(editorSettings.editorGrid)}
                     gridSpacingMm={gridSpacingMm}
+                    gridColor={editorSettings.editorGridColor}
                     liveBounds={liveRulerBounds}
                     activeSelectedIdSv={activeSelectedIdSv}
                     topBarSelectionVisibleSv={topBarSelectionVisibleSv}

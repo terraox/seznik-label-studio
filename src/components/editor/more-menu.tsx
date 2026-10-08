@@ -33,7 +33,7 @@ export function LabelSettingsMenu({
     {
       label: 'Label Settings',
       icon: 'hexagon',
-      onPress: onLabelSettings ?? (() => router.push('/default-property-settings')),
+      onPress: onLabelSettings ?? (() => router.push('/label-settings')),
     },
     {
       label: 'Skia Canvas Test (Dev)',
@@ -43,7 +43,7 @@ export function LabelSettingsMenu({
     {
       label: 'Editing Settings',
       icon: 'square.and.pencil',
-      onPress: () => router.push('/editing-settings'),
+      onPress: () => router.push('/editor-settings'),
     },
     {
       label: 'New',

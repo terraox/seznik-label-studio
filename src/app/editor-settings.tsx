@@ -6,25 +6,36 @@ import {
   SettingsCard,
   SettingsColorRow,
   SettingsScreenShell,
+  SettingsStepperRow,
   SettingsToggleGroup,
   SettingsToggleRow,
 } from '@/components/settings-ui';
+import { clampGridSpacingMm } from '@/lib/editor/canvas-grid';
 import { requestEditorGridToggle } from '@/lib/editor/editor-grid-toggle';
 import {
   EDITOR_BORDER_SELECTION_COLORS,
+  EDITOR_GRID_COLORS,
   EDITOR_TABLE_SELECTION_COLORS,
   useSettingsStore,
 } from '@/stores/settings-store';
 
+function gridColorIndex(hex: string): number {
+  const idx = EDITOR_GRID_COLORS.indexOf(hex as (typeof EDITOR_GRID_COLORS)[number]);
+  return idx >= 0 ? idx : 0;
+}
+
 export default function EditorSettingsScreen() {
+  const editor = useSettingsStore((s) => s.editor);
   const {
     showColumnName,
     highlightColumnName,
     pictureAdsorption,
     editorGrid,
+    editorGridSpacingMm,
+    editorGridColor,
     borderColorIndex: storedBorderColorIndex,
     tableColorIndex: storedTableColorIndex,
-  } = useSettingsStore((s) => s.editor);
+  } = editor;
   const borderColorIndex = Math.max(
     0,
     Math.min(EDITOR_BORDER_SELECTION_COLORS.length - 1, storedBorderColorIndex),
@@ -36,13 +47,6 @@ export default function EditorSettingsScreen() {
   const patchEditor = useSettingsStore((s) => s.patchEditor);
   const restoreEditorDefaults = useSettingsStore((s) => s.restoreEditorDefaults);
 
-  const setShowColumnName = (v: boolean) => patchEditor({ showColumnName: v });
-  const setHighlightColumnName = (v: boolean) => patchEditor({ highlightColumnName: v });
-  const setPictureAdsorption = (v: boolean) => patchEditor({ pictureAdsorption: v });
-  const setBorderColorIndex = (v: number) =>
-    patchEditor({ borderColorIndex: Math.max(0, Math.min(EDITOR_BORDER_SELECTION_COLORS.length - 1, v)) });
-  const setTableColorIndex = (v: number) =>
-    patchEditor({ tableColorIndex: Math.max(0, Math.min(EDITOR_TABLE_SELECTION_COLORS.length - 1, v)) });
   const setEditorGrid = (v: boolean) => requestEditorGridToggle(v, patchEditor);
 
   useEffect(() => {
@@ -65,38 +69,81 @@ export default function EditorSettingsScreen() {
         <SettingsToggleRow
           label="Display Data Column Name"
           value={showColumnName}
-          onValueChange={setShowColumnName}
+          onValueChange={(v) => patchEditor({ showColumnName: v })}
           showDivider
         />
         <SettingsToggleRow
           label="Highlight Data Column Name"
           value={highlightColumnName}
-          onValueChange={setHighlightColumnName}
+          onValueChange={(v) => patchEditor({ highlightColumnName: v })}
         />
       </SettingsCard>
 
       <SettingsToggleGroup
         label="Picture Adsorption"
         value={pictureAdsorption}
-        onValueChange={setPictureAdsorption}
+        onValueChange={(v) => patchEditor({ pictureAdsorption: v })}
         description="Place a Image or Logo close to the QR code and it will automatically be displayed in the center of the QR code."
       />
 
-      <SettingsToggleGroup label="Editor Grid" value={editorGrid} onValueChange={setEditorGrid} />
+      <SettingsCard>
+        <SettingsToggleRow
+          label="Editor Grid"
+          value={editorGrid}
+          onValueChange={setEditorGrid}
+          showDivider={editorGrid}
+        />
+        {editorGrid ? (
+          <>
+            <SettingsStepperRow
+              label="Size of Grid"
+              value={`${editorGridSpacingMm.toFixed(2)} mm`}
+              minusDisabled={editorGridSpacingMm <= 1}
+              onMinus={() =>
+                patchEditor({
+                  editorGridSpacingMm: clampGridSpacingMm(editorGridSpacingMm - 0.5),
+                })
+              }
+              onPlus={() =>
+                patchEditor({
+                  editorGridSpacingMm: clampGridSpacingMm(editorGridSpacingMm + 0.5),
+                })
+              }
+              showDivider
+            />
+            <SettingsColorRow
+              label="Color of Grid"
+              colors={[...EDITOR_GRID_COLORS]}
+              selectedIndex={gridColorIndex(editorGridColor)}
+              onSelect={(index) =>
+                patchEditor({ editorGridColor: EDITOR_GRID_COLORS[index] ?? EDITOR_GRID_COLORS[0] })
+              }
+            />
+          </>
+        ) : null}
+      </SettingsCard>
 
       <SettingsCard>
         <SettingsColorRow
           label="Color of The Selected Border"
           colors={[...EDITOR_BORDER_SELECTION_COLORS]}
           selectedIndex={borderColorIndex}
-          onSelect={setBorderColorIndex}
+          onSelect={(v) =>
+            patchEditor({
+              borderColorIndex: Math.max(0, Math.min(EDITOR_BORDER_SELECTION_COLORS.length - 1, v)),
+            })
+          }
           showDivider
         />
         <SettingsColorRow
           label="Color of The Selected Table Cell"
           colors={[...EDITOR_TABLE_SELECTION_COLORS]}
           selectedIndex={tableColorIndex}
-          onSelect={setTableColorIndex}
+          onSelect={(v) =>
+            patchEditor({
+              tableColorIndex: Math.max(0, Math.min(EDITOR_TABLE_SELECTION_COLORS.length - 1, v)),
+            })
+          }
         />
       </SettingsCard>
 
