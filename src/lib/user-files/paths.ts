@@ -11,7 +11,15 @@
 
 export const SEZPRINT_DIR_NAME = 'sezprint';
 
-export const SEZPRINT_SUBDIRS = ['clipart', 'fonts', 'labels', 'excel', 'pdf', 'images'] as const;
+export const SEZPRINT_SUBDIRS = [
+  'clipart',
+  'fonts',
+  'labels',
+  'excel',
+  'pdf',
+  'images',
+  'print-history',
+] as const;
 
 export type SezprintSubdir = (typeof SEZPRINT_SUBDIRS)[number];
 

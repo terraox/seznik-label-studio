@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppIcon } from '@/components/app-icon';
 import { PrintHistoryEntryPreview } from '@/components/print-history-entry-preview';
 import {
@@ -14,34 +14,116 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow, Palette } from '@/constants/ui';
 import { migratePrintHistoryOnce } from '@/lib/print-history/migrate';
+import { resolveHistoryLabelDocumentAsync } from '@/lib/print-history/resolve-preview';
+import { cloneDocument, generateId, type LabelDocument } from '@/lib/label-document';
 import { useLabelStore } from '@/stores/label-store';
-import { usePrintHistoryStore, type PrintHistoryEntry } from '@/stores/print-history-store';
-
-type HistoryViewMode = 'tiles' | 'list';
-
-const SOURCE_LABELS: Record<PrintHistoryEntry['source'], string> = {
-  label: 'Label',
-  photo: 'Photo',
-  pdf: 'PDF',
-  scan: 'Scan',
-  excel: 'Data File',
-  'img-to-label': 'Image to Label',
-};
+import {
+  printHistoryDayKey,
+  usePrintHistoryStore,
+  type PrintHistoryEntry,
+} from '@/stores/print-history-store';
 
 const TILE_GAP = Spacing.two;
-const LIST_PREVIEW = 76;
-const TILE_PREVIEW_HEIGHT = 132;
+const CARD_PREVIEW_HEIGHT = 148;
 
-function formatDate(timestamp: number): string {
-  const date = new Date(timestamp);
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  })}`;
+function formatPrintTime(timestamp: number): string {
+  const d = new Date(timestamp);
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const s = String(d.getSeconds()).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+function HistoryDayTile({
+  entry,
+  width,
+  getDocument,
+  upsertDocument,
+  onReprint,
+  onDelete,
+}: {
+  entry: PrintHistoryEntry;
+  width: number;
+  getDocument: (id: string) => LabelDocument | undefined;
+  upsertDocument: (doc: LabelDocument) => void;
+  onReprint: (entry: PrintHistoryEntry) => void;
+  onDelete: (entry: PrintHistoryEntry) => void;
+}) {
+  const [sizeLabel, setSizeLabel] = useState('—');
+  const previewWidth = width - Spacing.two * 2;
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveHistoryLabelDocumentAsync(entry, getDocument).then((doc) => {
+      if (cancelled || !doc) return;
+      setSizeLabel(`${Math.round(doc.widthMm)}X${Math.round(doc.heightMm)}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.id, entry.snapshotFileId, entry.documentId, getDocument]);
+
+  const handleEdit = () => {
+    if (entry.documentId && getDocument(entry.documentId)) {
+      router.push({ pathname: '/edit', params: { labelId: entry.documentId } });
+      return;
+    }
+    void resolveHistoryLabelDocumentAsync(entry, getDocument).then((snap) => {
+      if (!snap) {
+        Alert.alert('Unavailable', 'This entry cannot be opened in the editor.');
+        return;
+      }
+      const copy = cloneDocument(snap);
+      copy.id = generateId('label');
+      copy.name = entry.labelName;
+      copy.createdAt = Date.now();
+      copy.updatedAt = Date.now();
+      upsertDocument(copy);
+      router.push({ pathname: '/edit', params: { labelId: copy.id } });
+    });
+  };
+
+  return (
+    <View style={[styles.tileCard, { width }]}>
+      <View style={styles.tileCardHeader}>
+        <Text style={styles.sizeLabel}>{sizeLabel}</Text>
+        <Text style={styles.timeLabel}>{formatPrintTime(entry.printedAt)}</Text>
+      </View>
+      <PrintHistoryEntryPreview
+        entry={entry}
+        getDocument={getDocument}
+        width={previewWidth}
+        maxHeight={CARD_PREVIEW_HEIGHT}
+        compact
+      />
+      <View style={styles.iconActions}>
+        <Pressable
+          onPress={() => onReprint(entry)}
+          style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Reprint">
+          <AppIcon name="printer" tintColor={Palette.accent} size={22} />
+        </Pressable>
+        <Pressable
+          onPress={handleEdit}
+          style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Edit label">
+          <AppIcon name="square.and.pencil" tintColor={Palette.accent} size={22} />
+        </Pressable>
+        <Pressable
+          onPress={() => onDelete(entry)}
+          style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Delete from history">
+          <AppIcon name="trash" tintColor={Palette.accent} size={22} />
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 export default function PrintingHistoryScreen() {
@@ -49,14 +131,40 @@ export default function PrintingHistoryScreen() {
   const { width } = useWindowDimensions();
   const entries = usePrintHistoryStore((s) => s.entries);
   const removeEntry = usePrintHistoryStore((s) => s.removeEntry);
-  const clearAll = usePrintHistoryStore((s) => s.clearAll);
+  const removeEntriesForDay = usePrintHistoryStore((s) => s.removeEntriesForDay);
   const getDocument = useLabelStore((s) => s.getDocument);
+  const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const [ready, setReady] = useState(usePrintHistoryStore.persist.hasHydrated());
-  const [viewMode, setViewMode] = useState<HistoryViewMode>('tiles');
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const contentWidth = Math.min(width, MaxContentWidth);
   const tileColumnWidth = Math.floor((contentWidth - Spacing.three * 2 - TILE_GAP) / 2);
-  const tilePreviewWidth = tileColumnWidth - Spacing.two * 2;
+
+  const dayKeys = useMemo(() => {
+    const keys = new Set(entries.map((e) => printHistoryDayKey(e.printedAt)));
+    return [...keys].sort((a, b) => b.localeCompare(a));
+  }, [entries]);
+
+  useEffect(() => {
+    if (dayKeys.length === 0) {
+      setSelectedDay(null);
+      return;
+    }
+    if (!selectedDay || !dayKeys.includes(selectedDay)) {
+      setSelectedDay(dayKeys[0]);
+    }
+  }, [dayKeys, selectedDay]);
+
+  const dayEntries = useMemo(() => {
+    if (!selectedDay) return [];
+    return entries
+      .filter((e) => printHistoryDayKey(e.printedAt) === selectedDay)
+      .sort((a, b) => b.printedAt - a.printedAt);
+  }, [entries, selectedDay]);
+
+  const dayIndex = selectedDay ? dayKeys.indexOf(selectedDay) : -1;
+  const canGoOlder = dayIndex >= 0 && dayIndex < dayKeys.length - 1;
+  const canGoNewer = dayIndex > 0;
 
   useEffect(() => {
     const finish = () => setReady(true);
@@ -68,15 +176,7 @@ export default function PrintingHistoryScreen() {
     return unsub;
   }, []);
 
-  const handleClearAll = () => {
-    if (entries.length === 0) return;
-    Alert.alert('Clear history', 'Remove all printing history entries from this device?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear all', style: 'destructive', onPress: clearAll },
-    ]);
-  };
-
-  const handleDeleteOne = (entry: PrintHistoryEntry) => {
+  const handleDeleteOne = useCallback((entry: PrintHistoryEntry) => {
     Alert.alert('Delete entry', `Remove “${entry.labelName}” from history?`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -85,165 +185,144 @@ export default function PrintingHistoryScreen() {
         onPress: () => removeEntry(entry.id),
       },
     ]);
-  };
+  }, [removeEntry]);
 
-  const handleReprint = (entry: PrintHistoryEntry) => {
-    if (entry.documentId && getDocument(entry.documentId)) {
-      router.push({ pathname: '/print', params: { labelId: entry.documentId } });
-      return;
-    }
-    if (entry.documentSnapshot) {
-      Alert.alert(
-        'Unavailable',
-        'This label was removed from your library. Open the original design again before reprinting.',
-      );
-      return;
-    }
+  const handleReprint = useCallback(
+    (entry: PrintHistoryEntry) => {
+      if (entry.documentId && getDocument(entry.documentId)) {
+        router.push({ pathname: '/print', params: { labelId: entry.documentId } });
+        return;
+      }
+      void resolveHistoryLabelDocumentAsync(entry, getDocument).then((snap) => {
+        if (snap) {
+          Alert.alert(
+            'Label removed',
+            'This design was deleted from your library. The preview is kept in history, but reprinting needs the label restored to your library.',
+          );
+          return;
+        }
+        Alert.alert(
+          'Unavailable',
+          'The original label for this entry no longer exists, so it cannot be reprinted.',
+        );
+      });
+    },
+    [getDocument],
+  );
+
+  const handleClearDay = () => {
+    if (!selectedDay || dayEntries.length === 0) return;
     Alert.alert(
-      'Unavailable',
-      'The original label for this entry no longer exists, so it cannot be reprinted.',
+      'Delete all-day printing history',
+      `Remove all ${dayEntries.length} entries from ${selectedDay}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => removeEntriesForDay(selectedDay),
+        },
+      ],
     );
   };
 
-  const listHeader = useMemo(
-    () =>
-      entries.length > 0 ? (
-        <View style={styles.toolbar}>
-          <View style={styles.viewToggle}>
-            <Pressable
-              onPress={() => setViewMode('tiles')}
-              style={[styles.viewBtn, viewMode === 'tiles' && styles.viewBtnActive]}
-              accessibilityRole="button"
-              accessibilityLabel="Tiles view">
-              <AppIcon
-                name={viewMode === 'tiles' ? 'square.grid.2x2.fill' : 'square.grid.2x2'}
-                tintColor={viewMode === 'tiles' ? Palette.accent : Palette.muted}
-                size={20}
-              />
-            </Pressable>
-            <Pressable
-              onPress={() => setViewMode('list')}
-              style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
-              accessibilityRole="button"
-              accessibilityLabel="List view">
-              <AppIcon
-                name="list.number"
-                tintColor={viewMode === 'list' ? Palette.accent : Palette.muted}
-                size={20}
-              />
-            </Pressable>
-          </View>
-          <Pressable
-            onPress={handleClearAll}
-            style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}>
-            <AppIcon name="trash" tintColor="#DC2626" size={15} />
-            <Text style={styles.clearText}>Clear all ({entries.length})</Text>
-          </Pressable>
-        </View>
-      ) : null,
-    [entries.length, viewMode],
-  );
+  const summaryLine =
+    dayEntries.length === 1
+      ? '1 label was printed this day'
+      : `${dayEntries.length} labels were printed this day`;
 
   const renderTile = ({ item }: { item: PrintHistoryEntry }) => (
-    <View style={[styles.tileCard, { width: tileColumnWidth }]}>
-      <PrintHistoryEntryPreview
-        entry={item}
-        getDocument={getDocument}
-        width={tilePreviewWidth}
-        maxHeight={TILE_PREVIEW_HEIGHT}
-      />
-      <Text style={styles.cardTitle} numberOfLines={2}>
-        {item.labelName}
-      </Text>
-      <Text style={styles.cardMeta} numberOfLines={2}>
-        {SOURCE_LABELS[item.source]} · {item.copies} {item.copies === 1 ? 'copy' : 'copies'}
-      </Text>
-      <Text style={styles.cardDate}>{formatDate(item.printedAt)}</Text>
-      <View style={styles.tileActions}>
-        <Pressable
-          onPress={() => handleReprint(item)}
-          style={({ pressed }) => [styles.reprintBtn, styles.reprintBtnFlex, pressed && styles.pressed]}>
-          <AppIcon name="printer" tintColor="#FFFFFF" size={15} />
-          <Text style={styles.reprintText}>Reprint</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => handleDeleteOne(item)}
-          hitSlop={8}
-          style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}>
-          <AppIcon name="trash" tintColor="#DC2626" size={18} />
-        </Pressable>
-      </View>
-    </View>
-  );
-
-  const renderListRow = ({ item }: { item: PrintHistoryEntry }) => (
-    <View style={styles.listCard}>
-      <PrintHistoryEntryPreview
-        entry={item}
-        getDocument={getDocument}
-        width={LIST_PREVIEW}
-        maxHeight={LIST_PREVIEW}
-        compact
-      />
-      <View style={styles.listMain}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {item.labelName}
-        </Text>
-        <Text style={styles.cardMeta}>
-          {SOURCE_LABELS[item.source]} · {item.copies} {item.copies === 1 ? 'copy' : 'copies'}
-        </Text>
-        <Text style={styles.cardDate}>{formatDate(item.printedAt)}</Text>
-      </View>
-      <View style={styles.listActions}>
-        <Pressable
-          onPress={() => handleReprint(item)}
-          style={({ pressed }) => [styles.reprintBtn, pressed && styles.pressed]}>
-          <AppIcon name="printer" tintColor="#FFFFFF" size={15} />
-        </Pressable>
-        <Pressable
-          onPress={() => handleDeleteOne(item)}
-          hitSlop={8}
-          style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}>
-          <AppIcon name="trash" tintColor="#DC2626" size={18} />
-        </Pressable>
-      </View>
-    </View>
+    <HistoryDayTile
+      entry={item}
+      width={tileColumnWidth}
+      getDocument={getDocument}
+      upsertDocument={upsertDocument}
+      onReprint={handleReprint}
+      onDelete={handleDeleteOne}
+    />
   );
 
   return (
     <View style={styles.root}>
-      <SettingsStackHeader title="Printing History" />
+      <View style={[styles.dateHeader, { paddingTop: insets.top + Spacing.one }]}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          android_ripple={androidRipple}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
+          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+        </Pressable>
+        <View style={styles.dateNav}>
+          <Pressable
+            disabled={!canGoOlder}
+            onPress={() => canGoOlder && setSelectedDay(dayKeys[dayIndex + 1])}
+            hitSlop={10}
+            style={({ pressed }) => [styles.dateArrow, pressed && canGoOlder && styles.pressed]}>
+            <AppIcon
+              name="chevron.left"
+              tintColor={canGoOlder ? '#FFFFFF' : 'rgba(255,255,255,0.35)'}
+              size={18}
+            />
+          </Pressable>
+          <Text style={styles.dateTitle}>{selectedDay ?? '—'}</Text>
+          <Pressable
+            disabled={!canGoNewer}
+            onPress={() => canGoNewer && setSelectedDay(dayKeys[dayIndex - 1])}
+            hitSlop={10}
+            style={({ pressed }) => [styles.dateArrow, pressed && canGoNewer && styles.pressed]}>
+            <AppIcon
+              name="chevron.right"
+              tintColor={canGoNewer ? '#FFFFFF' : 'rgba(255,255,255,0.35)'}
+              size={18}
+            />
+          </Pressable>
+        </View>
+        <View style={styles.headerSpacer} />
+      </View>
 
       {!ready ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={Palette.accent} />
         </View>
+      ) : entries.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <AppIcon name="clock.arrow.circlepath" tintColor="#B8C0C8" size={44} />
+          <Text style={styles.emptyTitle}>No printing history</Text>
+          <Text style={styles.emptySub}>
+            Each successful print is saved on this device with a label preview. Turn on recording in
+            Printing Settings if entries are missing after you print.
+          </Text>
+        </View>
       ) : (
-        <FlatList
-          key={viewMode}
-          style={styles.list}
-          data={entries}
-          keyExtractor={(item) => item.id}
-          numColumns={viewMode === 'tiles' ? 2 : 1}
-          columnWrapperStyle={viewMode === 'tiles' ? styles.tileRow : undefined}
-          contentContainerStyle={[
-            styles.listContent,
-            entries.length === 0 && styles.listContentEmpty,
-            { paddingBottom: insets.bottom + Spacing.four },
-          ]}
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <AppIcon name="clock.arrow.circlepath" tintColor="#B8C0C8" size={44} />
-              <Text style={styles.emptyTitle}>No printing history</Text>
-              <Text style={styles.emptySub}>
-                Each successful print is saved on this device with a label preview. Turn on recording
-                in Printing Settings if entries are missing after you print.
-              </Text>
+        <>
+          <Text style={styles.summary}>{summaryLine}</Text>
+          <FlatList
+            style={styles.list}
+            data={dayEntries}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={styles.tileRow}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: insets.bottom + 88 },
+            ]}
+            ListEmptyComponent={
+              <View style={styles.emptyDay}>
+                <Text style={styles.emptySub}>No prints recorded for this day.</Text>
+              </View>
+            }
+            renderItem={renderTile}
+          />
+          {dayEntries.length > 0 ? (
+            <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}>
+              <Pressable
+                onPress={handleClearDay}
+                style={({ pressed }) => [styles.clearDayBtn, pressed && styles.pressed]}>
+                <Text style={styles.clearDayText}>Delete all-day printing history</Text>
+              </Pressable>
             </View>
-          }
-          ListHeaderComponent={listHeader}
-          renderItem={viewMode === 'tiles' ? renderTile : renderListRow}
-        />
+          ) : null}
+        </>
       )}
     </View>
   );
@@ -253,6 +332,55 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Palette.screen,
+  },
+  dateHeader: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    backgroundColor: Palette.header,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.two,
+    paddingBottom: Spacing.three,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateNav: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dateArrow: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+    minWidth: 108,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  summary: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.one,
+    fontSize: 13,
+    color: Palette.muted,
   },
   loadingWrap: {
     flex: 1,
@@ -267,47 +395,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.two,
-  },
-  listContentEmpty: {
-    flexGrow: 1,
-  },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.two,
-    gap: Spacing.two,
-  },
-  viewToggle: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 4,
-    gap: 4,
-    ...cardShadow,
-  },
-  viewBtn: {
-    width: 40,
-    height: 36,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  viewBtnActive: {
-    backgroundColor: '#E8F0FE',
-  },
-  clearBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    minHeight: 40,
-    paddingHorizontal: 4,
-  },
-  clearText: {
-    color: '#DC2626',
-    fontSize: 13,
-    fontWeight: '600',
+    paddingTop: Spacing.one,
   },
   tileRow: {
     gap: TILE_GAP,
@@ -315,79 +403,77 @@ const styles = StyleSheet.create({
   },
   tileCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: Spacing.two,
-    ...cardShadow,
-  },
-  listCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: Spacing.two,
-    marginBottom: Spacing.two,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
     ...cardShadow,
   },
-  listMain: {
-    flex: 1,
-    minWidth: 0,
-  },
-  listActions: {
+  tileCardHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'space-between',
+    marginBottom: Spacing.one,
   },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+  sizeLabel: {
+    fontSize: 13,
+    fontWeight: '700',
     color: Palette.ink,
-    marginTop: Spacing.one,
+    letterSpacing: 0.3,
   },
-  cardMeta: {
-    marginTop: 2,
+  timeLabel: {
     fontSize: 12,
-    color: Palette.muted,
-  },
-  cardDate: {
-    marginTop: 2,
-    fontSize: 11,
+    fontWeight: '500',
     color: '#94A3B8',
   },
-  tileActions: {
+  iconActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: Spacing.one,
+    justifyContent: 'space-around',
+    marginTop: Spacing.two,
+    paddingTop: Spacing.one,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E8ECF0',
   },
-  reprintBtn: {
-    flexDirection: 'row',
+  iconActionBtn: {
+    minWidth: 44,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+  },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.two,
+    backgroundColor: Palette.screen,
+  },
+  clearDayBtn: {
     backgroundColor: Palette.accent,
-    minHeight: 36,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 24,
+    minHeight: 48,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: MaxContentWidth - Spacing.three * 2,
   },
-  reprintBtnFlex: {
-    flex: 1,
-  },
-  reprintText: {
+  clearDayText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '600',
   },
-  deleteBtn: {
-    minHeight: 36,
-    minWidth: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   emptyWrap: {
+    flex: 1,
     alignItems: 'center',
     paddingTop: 90,
     paddingHorizontal: Spacing.four,
     gap: 10,
+  },
+  emptyDay: {
+    paddingTop: 48,
+    alignItems: 'center',
   },
   emptyTitle: {
     fontSize: 16,

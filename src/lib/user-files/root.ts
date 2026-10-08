@@ -68,7 +68,7 @@ async function deletePublicTwin(subdir: SezprintSubdir, fileName: string): Promi
 }
 
 function subdirFromUri(uri: string): SezprintSubdir | null {
-  const match = uri.match(/\/sezprint\/(clipart|fonts|labels|excel|pdf|images)\//);
+  const match = uri.match(/\/sezprint\/(clipart|fonts|labels|excel|pdf|images|print-history)\//);
   return (match?.[1] as SezprintSubdir | undefined) ?? null;
 }
 

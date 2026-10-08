@@ -1,7 +1,9 @@
 import { collectImageFileUris } from '@/lib/editor/image-ingest';
 import { sweepEditorImageFiles } from '@/lib/editor/image-ingest-native';
+import { collectPrintHistoryImageUris } from '@/lib/print-history/snapshot-file';
 import type { LabelDocument, LabelElement } from '@/lib/label-document';
 import { deleteSezprintFile, ensureSezprintDir, writeTextIntoSezprint } from '@/lib/user-files/root';
+import { usePrintHistoryStore } from '@/stores/print-history-store';
 
 function elementGroups(docs: LabelDocument[]): LabelElement[][] {
   const groups: LabelElement[][] = [];
@@ -27,5 +29,9 @@ export async function cleanupDeletedLabel(
   remaining: LabelDocument[],
 ): Promise<void> {
   await deleteLabelFile(id);
-  await sweepEditorImageFiles(collectImageFileUris(elementGroups(remaining)));
+  const keepFromLabels = collectImageFileUris(elementGroups(remaining));
+  const keepFromHistory = await collectPrintHistoryImageUris(
+    usePrintHistoryStore.getState().entries,
+  );
+  await sweepEditorImageFiles([...keepFromLabels, ...keepFromHistory]);
 }

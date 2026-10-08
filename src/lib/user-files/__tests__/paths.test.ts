@@ -16,7 +16,15 @@ test('sezprint paths stay under the app folder and never mention cache', () => {
   const fonts = sezprintSubdirUri(doc, 'fonts');
   assert.equal(fonts, `${doc}${SEZPRINT_DIR_NAME}/fonts/`);
   assert.equal(fonts.includes('cache'), false);
-  assert.deepEqual(SEZPRINT_SUBDIRS, ['clipart', 'fonts', 'labels', 'excel', 'pdf', 'images']);
+  assert.deepEqual(SEZPRINT_SUBDIRS, [
+    'clipart',
+    'fonts',
+    'labels',
+    'excel',
+    'pdf',
+    'images',
+    'print-history',
+  ]);
 });
 
 test('android public mirror is Documents/sezprint', () => {

@@ -7,7 +7,9 @@ export type PrintHistoryEntry = {
   printedAt: number;
   documentId?: string;
   source: 'label' | 'photo' | 'pdf' | 'scan' | 'excel' | 'img-to-label';
-  /** Frozen label layout at print time (for preview when the live label is gone). */
+  /** On-disk snapshot under sezprint/print-history (survives label library deletes). */
+  snapshotFileId?: string;
+  /** @deprecated Migrated to snapshotFileId on disk — not persisted in AsyncStorage. */
   documentSnapshot?: LabelDocument;
   /** Raster jobs (photo, image-to-label, etc.). */
   previewImageUri?: string;

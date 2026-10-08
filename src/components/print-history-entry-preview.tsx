@@ -1,9 +1,10 @@
 import { Image } from 'expo-image';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { CATALOG_STOCK_LINER, LabelPreview } from '@/components/label-preview';
-import { resolveHistoryLabelDocument } from '@/lib/print-history/resolve-preview';
+import { resolveHistoryLabelDocumentAsync } from '@/lib/print-history/resolve-preview';
 import type { PrintHistoryEntry } from '@/lib/print-history/types';
 import type { LabelDocument } from '@/lib/label-document';
 import { Palette } from '@/constants/ui';
@@ -29,7 +30,18 @@ export function PrintHistoryEntryPreview({
   maxHeight,
   compact = false,
 }: PrintHistoryEntryPreviewProps) {
-  const document = resolveHistoryLabelDocument(entry, getDocument);
+  const [document, setDocument] = useState<LabelDocument | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveHistoryLabelDocumentAsync(entry, getDocument).then((doc) => {
+      if (!cancelled) setDocument(doc);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.id, entry.snapshotFileId, entry.documentId, entry.documentSnapshot, entry.previewImageUri, getDocument]);
+
   const imageUri = entry.previewImageUri;
 
   if (document) {
