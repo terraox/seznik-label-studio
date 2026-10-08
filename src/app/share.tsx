@@ -1,4 +1,3 @@
-import * as FileSystem from 'expo-file-system/legacy';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { AppIcon } from '@/components/app-icon';
@@ -10,6 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LabelPreview } from '@/components/label-preview';
 import { Spacing } from '@/constants/theme';
 import { Palette, Type } from '@/constants/ui';
+import { persistLabelFile } from '@/lib/user-files/labels';
+import { ensureSezprintDir } from '@/lib/user-files/root';
 import { useLabelStore } from '@/stores/label-store';
 
 const CAPTURE_WIDTH = 720;
@@ -51,8 +52,6 @@ export default function ShareModal() {
       : null;
   }, [params.labelId, documents]);
 
-  const safeName = (doc?.name ?? 'label').replace(/[^a-zA-Z0-9-_]+/g, '_');
-
   const ensureSharingAvailable = async () => {
     if (Platform.OS === 'web' || !(await Sharing.isAvailableAsync())) {
       Alert.alert('Unavailable', 'Sharing is not available on this platform.');
@@ -66,8 +65,8 @@ export default function ShareModal() {
     if (!(await ensureSharingAvailable())) return;
     setBusy(true);
     try {
-      const fileUri = `${FileSystem.cacheDirectory}${safeName}.sezlabel.json`;
-      await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(doc, null, 2));
+      await persistLabelFile(doc);
+      const fileUri = `${await ensureSezprintDir('labels')}${doc.id}.sezlabel.json`;
       await Sharing.shareAsync(fileUri, {
         mimeType: 'application/json',
         dialogTitle: `Share template "${doc.name}"`,

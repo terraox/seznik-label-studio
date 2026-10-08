@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { migrateDocumentBorders } from '@/lib/border-geometry';
 import { cloneDocument, generateId, type LabelDocument } from '@/lib/label-document';
+import { cleanupDeletedLabel, persistLabelFile } from '@/lib/user-files/labels';
 
 export type LabelGroup = {
   id: string;
@@ -59,19 +60,24 @@ export const useLabelStore = create<LabelStoreState>()(
       cloudProfile: null,
       cloudTemplates: [],
 
-      upsertDocument: (doc) =>
+      upsertDocument: (doc) => {
+        const updated = { ...doc, updatedAt: Date.now() };
         set((state) => {
-          const updated = { ...doc, updatedAt: Date.now() };
           const exists = state.documents.some((d) => d.id === doc.id);
           return {
             documents: exists
               ? state.documents.map((d) => (d.id === doc.id ? updated : d))
               : [updated, ...state.documents],
           };
-        }),
+        });
+        void persistLabelFile(updated).catch(() => undefined);
+      },
 
-      deleteDocument: (id) =>
-        set((state) => ({ documents: state.documents.filter((d) => d.id !== id) })),
+      deleteDocument: (id) => {
+        const remaining = get().documents.filter((d) => d.id !== id);
+        set({ documents: remaining });
+        void cleanupDeletedLabel(id, remaining).catch(() => undefined);
+      },
 
       duplicateDocument: (id, newName) => {
         const source = get().documents.find((d) => d.id === id);
@@ -82,6 +88,7 @@ export const useLabelStore = create<LabelStoreState>()(
         copy.createdAt = Date.now();
         copy.updatedAt = Date.now();
         set((state) => ({ documents: [copy, ...state.documents] }));
+        void persistLabelFile(copy).catch(() => undefined);
         return copy;
       },
 
@@ -108,6 +115,7 @@ export const useLabelStore = create<LabelStoreState>()(
         const copy = migrateDocumentBorders(cloneDocument(cloud));
         copy.updatedAt = Date.now();
         set((state) => ({ documents: [copy, ...state.documents] }));
+        void persistLabelFile(copy).catch(() => undefined);
         return copy;
       },
 

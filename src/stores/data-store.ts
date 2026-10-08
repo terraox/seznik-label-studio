@@ -3,6 +3,8 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { generateId } from '@/lib/label-document';
+import { deleteSezprintFile } from '@/lib/user-files/root';
+import { isInsideSezprint } from '@/lib/user-files/paths';
 
 export type ExcelSheet = {
   name: string;
@@ -59,7 +61,7 @@ type DataStoreState = {
 
 export const useDataStore = create<DataStoreState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       excelFiles: [],
       pdfFiles: [],
       remoteLinks: [],
@@ -83,11 +85,14 @@ export const useDataStore = create<DataStoreState>()(
         return entry;
       },
 
-      removeExcelFile: (id) =>
+      removeExcelFile: (id) => {
+        const file = get().excelFiles.find((entry) => entry.id === id);
+        if (file && isInsideSezprint(file.uri, 'excel')) void deleteSezprintFile(file.uri);
         set((state) => ({
           excelFiles: state.excelFiles.filter((f) => f.id !== id),
           activeExcelFileId: state.activeExcelFileId === id ? null : state.activeExcelFileId,
-        })),
+        }));
+      },
 
       setActiveExcelFile: (id) => set({ activeExcelFileId: id, activeRowIndex: 0 }),
 
@@ -108,8 +113,11 @@ export const useDataStore = create<DataStoreState>()(
         return entry;
       },
 
-      removePdfFile: (id) =>
-        set((state) => ({ pdfFiles: state.pdfFiles.filter((f) => f.id !== id) })),
+      removePdfFile: (id) => {
+        const file = get().pdfFiles.find((entry) => entry.id === id);
+        if (file && isInsideSezprint(file.uri, 'pdf')) void deleteSezprintFile(file.uri);
+        set((state) => ({ pdfFiles: state.pdfFiles.filter((f) => f.id !== id) }));
+      },
 
       addRemoteLink: (link) => {
         const entry: RemoteDataLink = {

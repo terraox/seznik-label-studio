@@ -225,11 +225,14 @@ import {
   type LabelDocument,
   type LabelElement,
 } from '@/lib/label-document';
+import { isFontNameReady } from '@/lib/fonts/font-ready';
 import { resolveLabelSettings } from '@/lib/label-settings';
 import { BulkLabelNav } from '@/components/bulk-label-nav';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
+import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore } from '@/stores/data-store';
+import { useInstalledFontStore } from '@/stores/installed-font-store';
 import { CANVAS_BOTTOM_CHIP_CLEARANCE_PX, STAGE_PADDING_PX, clampLabelMm, fitEditorPadBoard } from '@/lib/label-geometry';
 import { applyDocumentStockSize, stockSizePromptCopy, type StockSizeHandling } from '@/lib/stock-size';
 import { sortLayers } from '@/lib/template-schema';
@@ -3254,14 +3257,21 @@ export default function EditScreen() {
       if (editorBridge.fontResult) {
         const fontName = editorBridge.fontResult;
         editorBridge.fontResult = null;
-        const tableCell = selectedTableCellRef.current;
-        const targetId = primaryIdRef.current;
-        if (tableCell) {
-          patchTableCellAt(tableCell, { fontFamily: fontName });
-        } else if (targetId) {
-          const el = docRef.current.elements.find((e) => e.id === targetId);
-          if (el && 'fontFamily' in el) {
-            patchElement(el.id, { fontFamily: fontName });
+        if (!isFontNameReady(fontName, useInstalledFontStore.getState().items)) {
+          Alert.alert(
+            'Download font first',
+            'This font must be downloaded in the font library before you can use it on a label.',
+          );
+        } else {
+          const tableCell = selectedTableCellRef.current;
+          const targetId = primaryIdRef.current;
+          if (tableCell) {
+            patchTableCellAt(tableCell, { fontFamily: fontName });
+          } else if (targetId) {
+            const el = docRef.current.elements.find((e) => e.id === targetId);
+            if (el && 'fontFamily' in el) {
+              patchElement(el.id, { fontFamily: fontName });
+            }
           }
         }
       }
@@ -3469,9 +3479,10 @@ export default function EditScreen() {
     try {
       const picked = await importExcel();
       if (!picked) return;
+      const storedUri = await stageImportedFile('excel', picked.uri, picked.name);
       const entry = useDataStore.getState().addExcelFile({
         name: picked.name,
-        uri: picked.uri,
+        uri: storedUri,
         sheets: picked.sheets,
         activeSheetIndex: 0,
         hasHeaderRow: picked.hasHeaderRow,

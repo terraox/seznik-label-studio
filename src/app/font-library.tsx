@@ -19,6 +19,7 @@ import { FONT_LIBRARY, FONT_RAILS, type FontLibraryItem } from '@/constants/font
 import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
+import { isCatalogFontInstalled } from '@/lib/fonts/availability';
 import { downloadCatalogFont, importFontFile, removeInstalledFont } from '@/lib/fonts/install';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import type { FontRail, InstalledFontRecord } from '@/lib/fonts/types';
@@ -31,15 +32,30 @@ type FontRow = {
   source: 'bundled' | 'catalog' | 'downloaded' | 'imported';
   removable: boolean;
   downloadable: boolean;
+  ready: boolean;
   catalogItem?: FontLibraryItem;
 };
 
 function rowsForRail(rail: FontRail, installed: InstalledFontRecord[]): FontRow[] {
+  if (rail === 'local') {
+    return installed
+      .filter((font) => font.source === 'imported')
+      .map((font) => ({
+        id: font.id,
+        name: font.name,
+        family: font.familyKey,
+        source: font.source,
+        removable: true,
+        downloadable: false,
+        ready: true,
+      }));
+  }
+
   const catalog = FONT_LIBRARY.filter((font) => font.category === rail);
   const catalogIds = new Set(catalog.map((font) => font.id));
   const rows: FontRow[] = catalog.map((item) => {
     const saved = installed.find((font) => font.id === item.id);
-    const ready = item.source === 'bundled' || saved != null;
+    const ready = isCatalogFontInstalled(item, installed);
     return {
       id: item.id,
       name: item.name,
@@ -47,11 +63,12 @@ function rowsForRail(rail: FontRail, installed: InstalledFontRecord[]): FontRow[
       source: saved?.source ?? item.source,
       removable: saved != null,
       downloadable: !ready && item.source === 'catalog',
+      ready,
       catalogItem: item,
     };
   });
   for (const extra of installed) {
-    if (extra.category !== rail || catalogIds.has(extra.id)) continue;
+    if (extra.source === 'imported' || extra.category !== rail || catalogIds.has(extra.id)) continue;
     rows.push({
       id: extra.id,
       name: extra.name,
@@ -59,6 +76,7 @@ function rowsForRail(rail: FontRail, installed: InstalledFontRecord[]): FontRow[
       source: extra.source,
       removable: true,
       downloadable: false,
+      ready: true,
     });
   }
   return rows;
@@ -78,17 +96,22 @@ export default function FontLibraryScreen() {
   const rows = useMemo(() => rowsForRail(rail, installed), [rail, installed]);
 
   const applyFont = (row: FontRow) => {
-    if (editing || row.downloadable || busyId) return;
+    if (editing || row.downloadable || !row.ready || busyId) return;
     if (!fromEdit) return;
     editorBridge.fontResult = row.name;
     router.back();
   };
 
-  const download = async (row: FontRow) => {
+  const download = async (row: FontRow, applyAfterDownload = false) => {
     if (!row.catalogItem || busyId) return;
     setBusyId(row.id);
     try {
       await downloadCatalogFont(row.catalogItem);
+      if (applyAfterDownload && fromEdit) {
+        editorBridge.fontResult = row.name;
+        router.back();
+        return;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not download that font.';
       Alert.alert('Font', message);
@@ -125,7 +148,7 @@ export default function FontLibraryScreen() {
       }
       setBusyId('import');
       await importFontFile(picked.uri, picked.name || 'Imported Font.ttf');
-      setRail('creative');
+      setRail('local');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not import that font.';
       Alert.alert('Font', message);
@@ -161,11 +184,11 @@ export default function FontLibraryScreen() {
             })}
           </View>
           <View style={styles.listWrap}>
-            {!fromEdit ? (
-              <Text style={styles.browseHint}>
-                Download or import a font, then open Font on a text element to use it.
-              </Text>
-            ) : null}
+            <Text style={styles.browseHint}>
+              {fromEdit
+                ? 'Catalog fonts must be downloaded before use. Tap Download, then the font is applied to your label.'
+                : 'Download catalog fonts before using them on a label. Bundled fonts are ready immediately.'}
+            </Text>
             <FlatList
               style={styles.list}
               data={rows}
@@ -175,24 +198,45 @@ export default function FontLibraryScreen() {
                 paddingTop: Spacing.two,
                 paddingBottom: insets.bottom + 88,
                 gap: Spacing.two,
+                flexGrow: 1,
               }}
+              ListEmptyComponent={
+                rail === 'local' ? (
+                  <Text style={styles.emptyLocal}>
+                    No local fonts yet. Tap Import font below to add one from this device or Google Drive.
+                  </Text>
+                ) : null
+              }
               renderItem={({ item }) => {
                 const busy = busyId === item.id;
                 return (
                   <Pressable
                     onPress={() => {
                       if (item.downloadable) {
-                        void download(item);
+                        void download(item, fromEdit);
                         return;
                       }
                       applyFont(item);
                     }}
-                    style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.fontName, item.family ? { fontFamily: item.family } : null]}>
-                      {item.name}
-                    </Text>
+                    style={({ pressed }) => [
+                      styles.card,
+                      item.downloadable && styles.cardNeedsDownload,
+                      pressed && styles.pressed,
+                    ]}>
+                    <View style={styles.fontMeta}>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.fontName,
+                          item.downloadable && styles.fontNameMuted,
+                          item.family ? { fontFamily: item.family } : null,
+                        ]}>
+                        {item.name}
+                      </Text>
+                      {item.downloadable ? (
+                        <Text style={styles.downloadHint}>Download to use on labels</Text>
+                      ) : null}
+                    </View>
                     {editing && item.removable ? (
                       <Pressable
                         onPress={() => confirmRemove(item)}
@@ -202,13 +246,16 @@ export default function FontLibraryScreen() {
                       </Pressable>
                     ) : item.downloadable ? (
                       <Pressable
-                        onPress={() => void download(item)}
+                        onPress={() => void download(item, fromEdit)}
                         disabled={busyId != null}
                         style={styles.downloadBtn}>
                         {busy ? (
                           <ActivityIndicator color="#FFFFFF" size="small" />
                         ) : (
-                          <AppIcon name="arrow.down" tintColor="#FFFFFF" size={18} />
+                          <>
+                            <AppIcon name="arrow.down" tintColor="#FFFFFF" size={16} />
+                            <Text style={styles.downloadBtnText}>Download</Text>
+                          </>
                         )}
                       </Pressable>
                     ) : null}
@@ -228,7 +275,7 @@ export default function FontLibraryScreen() {
                 {busyId === 'import' ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.importLabel}>Import from This Device or Google Drive</Text>
+                  <Text style={styles.importLabel}>Import font</Text>
                 )}
               </Pressable>
             </View>
@@ -276,6 +323,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     paddingTop: Spacing.two,
   },
+  emptyLocal: {
+    color: Palette.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.four,
+  },
   card: {
     minHeight: 64,
     borderRadius: 12,
@@ -285,18 +340,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  fontName: {
+  cardNeedsDownload: {
+    backgroundColor: '#EEF2F6',
+    borderWidth: 1,
+    borderColor: '#D7DEE8',
+    borderStyle: 'dashed',
+  },
+  fontMeta: {
     flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  fontName: {
     fontSize: 22,
     color: '#1E293B',
   },
+  fontNameMuted: {
+    color: '#64748B',
+  },
+  downloadHint: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
   downloadBtn: {
-    width: 36,
+    minWidth: 96,
     height: 36,
+    paddingHorizontal: 12,
     borderRadius: 18,
     backgroundColor: Palette.accent,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+  },
+  downloadBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   deleteBtn: {
     width: 36,

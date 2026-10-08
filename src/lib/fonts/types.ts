@@ -1,4 +1,4 @@
-export type FontRail = 'common' | 'normal' | 'creative' | 'indian';
+export type FontRail = 'common' | 'normal' | 'creative' | 'indian' | 'local';
 
 export type InstalledFontRecord = {
   id: string;

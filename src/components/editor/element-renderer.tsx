@@ -1,6 +1,6 @@
 import { computeArcTextLayout } from "@/lib/editor/arctext-layout";
 import { useEffect, useMemo, useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Image, Platform, StyleSheet, Text, View } from "react-native";
 import Svg, {
   Circle,
   Ellipse,
@@ -29,6 +29,8 @@ import {
   type TimeElementState,
 } from "@/components/editor/types";
 import { getClipartById } from "@/constants/clipart-library";
+import { clipartImageUri, clipartSvgSource } from "@/lib/clipart/types";
+import { useUserClipartStore } from "@/stores/user-clipart-store";
 import { resolveFontFamily } from "@/lib/fonts/resolve-font";
 import { useInstalledFontStore } from "@/stores/installed-font-store";
 import { barcodeModulesForMode } from "@/lib/barcode-code128";
@@ -1299,6 +1301,7 @@ export function ElementContentView({
   layoutWidthMm,
 }: ContentProps) {
   useInstalledFontStore((state) => state.revision);
+  useUserClipartStore((state) => state.revision);
   switch (element.type) {
     case "text":
       return (
@@ -1398,9 +1401,17 @@ export function ElementContentView({
       const unit = Math.min(widthPx, heightPx);
       const iconSize = element.tile ? Math.max(8, Math.round(unit / 5)) : unit;
 
+      const svg = clipartSvgSource(sticker);
+      const imageUri = clipartImageUri(sticker);
       const renderGlyph = (size: number) =>
-        sticker ? (
-          <ClipartIcon svg={sticker.svg} size={size} color={previewColor} />
+        imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={{ width: size, height: size }}
+            resizeMode="contain"
+          />
+        ) : svg ? (
+          <ClipartIcon svg={svg} size={size} color={previewColor} />
         ) : (
           <Text style={{ fontSize: size * 0.7, color: previewColor }}>
             {element.glyph ?? "★"}

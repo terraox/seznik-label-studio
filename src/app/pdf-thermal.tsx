@@ -22,6 +22,7 @@ import { loadAndRenderPdf, printPdfToThermal, type RenderedPdfPage } from '@/lib
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import { formatPrintFailure } from '@/lib/printer/print-job';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
+import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore, type PdfFile } from '@/stores/data-store';
 import { usePrinterStore } from '@/stores/printer-store';
 
@@ -183,13 +184,14 @@ export default function PdfScreen() {
         if (picked.reason === 'invalid') Alert.alert('Invalid File', 'Please choose a PDF document.');
         return;
       }
-      addPdfFile({ name: picked.name, uri: picked.uri, sizeBytes: picked.size ?? 0 });
+      const storedUri = await stageImportedFile('pdf', picked.uri, picked.name);
+      addPdfFile({ name: picked.name, uri: storedUri, sizeBytes: picked.size ?? 0 });
 
       const manager = getPrinterManager();
       if (manager.isConnected) {
-        await directPrintPdf({ name: picked.name, uri: picked.uri });
+        await directPrintPdf({ name: picked.name, uri: storedUri });
       } else {
-        await openPdfPrintModal({ name: picked.name, uri: picked.uri });
+        await openPdfPrintModal({ name: picked.name, uri: storedUri });
       }
     } catch {
       Alert.alert('Error', 'Could not open document picker.');

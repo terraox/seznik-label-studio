@@ -1,4 +1,4 @@
-export type DocumentPreset = 'image' | 'excel' | 'csv' | 'pdf' | 'font' | 'svg' | 'any';
+export type DocumentPreset = 'image' | 'excel' | 'csv' | 'pdf' | 'font' | 'svg' | 'clipart' | 'any';
 
 export type DocumentPresetConfig = {
   mimeTypes: string[];
@@ -49,6 +49,20 @@ export const DOCUMENT_PRESETS: Record<Exclude<DocumentPreset, 'any'>, DocumentPr
   svg: {
     mimeTypes: ['image/svg+xml', 'text/xml', 'application/xml', 'public.svg-image', '*/*'],
     extensions: new Set(['svg', 'xml']),
+  },
+  clipart: {
+    mimeTypes: [
+      'image/svg+xml',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'public.svg-image',
+      'public.image',
+      'application/octet-stream',
+      '*/*',
+    ],
+    extensions: new Set(['svg', 'xml', 'png', 'jpg', 'jpeg', 'webp']),
   },
 };
 

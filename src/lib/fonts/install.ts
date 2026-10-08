@@ -4,21 +4,14 @@ import * as Font from 'expo-font';
 import { FONT_LIBRARY, type FontLibraryItem } from '@/constants/font-library';
 import { generateId } from '@/lib/label-document';
 import type { InstalledFontRecord } from '@/lib/fonts/types';
+import { safeImportFileName } from '@/lib/user-files/paths';
+import { copyImportIntoSezprint, deleteSezprintFile, ensureSezprintDir, publishSezprintFile } from '@/lib/user-files/root';
 import { dropPrintTypeface } from '@/printing/raster/print-typeface-map';
 import { registerPrintTypeface } from '@/printing/raster/print-typeface';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
 
-const FONTS_DIR = 'user-fonts';
-
 export async function ensureUserFontsDir(): Promise<string> {
-  const root = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
-  if (!root) throw new Error('This device cannot store fonts.');
-  const dir = `${root}${FONTS_DIR}/`;
-  const info = await FileSystem.getInfoAsync(dir);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-  }
-  return dir;
+  return ensureSezprintDir('fonts');
 }
 
 async function activateFace(familyKey: string, fileUri: string): Promise<void> {
@@ -44,14 +37,13 @@ export async function downloadCatalogFont(item: FontLibraryItem): Promise<Instal
   }
   const dir = await ensureUserFontsDir();
   const dest = `${dir}${item.id}.ttf`;
-  const existing = await FileSystem.getInfoAsync(dest);
-  if (existing.exists) {
-    await FileSystem.deleteAsync(dest, { idempotent: true });
-  }
+  await deleteSezprintFile(dest);
   const result = await FileSystem.downloadAsync(item.downloadUrl, dest);
   if (result.status !== 200) {
+    await deleteSezprintFile(dest);
     throw new Error(`Could not download ${item.name}.`);
   }
+  await publishSezprintFile('fonts', dest);
   await activateFace(item.family, dest);
   const saved = useInstalledFontStore.getState().add({
     id: item.id,
@@ -63,7 +55,7 @@ export async function downloadCatalogFont(item: FontLibraryItem): Promise<Instal
   });
   if (!saved) {
     dropPrintTypeface(item.family);
-    await FileSystem.deleteAsync(dest, { idempotent: true }).catch(() => undefined);
+    await deleteSezprintFile(dest);
     throw new Error('The font library is full. Delete one to add another.');
   }
   return saved;
@@ -74,10 +66,9 @@ export async function importFontFile(sourceUri: string, fileName: string): Promi
   if (ext !== 'ttf' && ext !== 'otf') {
     throw new Error('Please choose a .ttf or .otf file.');
   }
-  const dir = await ensureUserFontsDir();
   const id = generateId('font');
-  const dest = `${dir}${id}.${ext}`;
-  await FileSystem.copyAsync({ from: sourceUri, to: dest });
+  const destName = safeImportFileName(id, fileName, ext);
+  const dest = await copyImportIntoSezprint('fonts', sourceUri, destName);
   const familyKey = `user_${id.replace(/[^a-zA-Z0-9_]/g, '')}`;
   const label = fileName.replace(/\.(ttf|otf)$/i, '').replace(/[_-]+/g, ' ').trim() || 'Imported Font';
   await activateFace(familyKey, dest);
@@ -86,11 +77,11 @@ export async function importFontFile(sourceUri: string, fileName: string): Promi
     name: uniqueFontName(label),
     familyKey,
     fileUri: dest,
-    category: 'creative',
+    category: 'local',
     source: 'imported',
   });
   if (!saved) {
-    await FileSystem.deleteAsync(dest, { idempotent: true }).catch(() => undefined);
+    await deleteSezprintFile(dest);
     throw new Error('The font library is full. Delete one to add another.');
   }
   return saved;
@@ -101,9 +92,5 @@ export async function removeInstalledFont(id: string): Promise<void> {
   if (!item) return;
   useInstalledFontStore.getState().remove(id);
   dropPrintTypeface(item.familyKey);
-  try {
-    await FileSystem.deleteAsync(item.fileUri, { idempotent: true });
-  } catch {
-    // The catalog entry is already gone; a leftover file is unused.
-  }
+  await deleteSezprintFile(item.fileUri);
 }

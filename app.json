@@ -18,7 +18,9 @@
         "NSSpeechRecognitionUsageDescription": "Allow Sez Print to convert your speech into label text.",
         "NSMicrophoneUsageDescription": "Allow Sez Print to use the microphone for voice-to-text on labels.",
         "NSBluetoothAlwaysUsageDescription": "Allow Sez Print to connect to your Bluetooth label printer.",
-        "NSBluetoothPeripheralUsageDescription": "Allow Sez Print to connect to your Bluetooth label printer."
+        "NSBluetoothPeripheralUsageDescription": "Allow Sez Print to connect to your Bluetooth label printer.",
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
       }
     },
     "android": {
@@ -39,7 +41,9 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {

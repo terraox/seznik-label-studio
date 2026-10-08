@@ -20,6 +20,7 @@ import { editorBridge } from '@/constants/editor-bridge';
 import { Palette, Type } from '@/constants/ui';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { useExcelImportFlow, type ExcelImportSuccess } from '@/lib/use-excel-import-flow';
+import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore, type ImportedExcelFile } from '@/stores/data-store';
 
 const TABS = ['All', 'Excel', 'PDF', 'CSV', 'Remote Data'] as const;
@@ -174,10 +175,11 @@ export default function DataFileScreen() {
     return [...excel, ...pdf].sort((a, b) => (a.id < b.id ? 1 : -1));
   }, [excelFiles, pdfFiles]);
 
-  const finishExcelImport = (imported: ExcelImportSuccess) => {
+  const finishExcelImport = async (imported: ExcelImportSuccess) => {
+    const storedUri = await stageImportedFile('excel', imported.uri, imported.name);
     const entry = addExcelFile({
       name: imported.name,
-      uri: imported.uri,
+      uri: storedUri,
       sheets: imported.sheets,
       activeSheetIndex: 0,
       hasHeaderRow: imported.hasHeaderRow,
@@ -201,8 +203,9 @@ export default function DataFileScreen() {
     );
   };
 
-  const finishPdfImport = (file: { name: string; uri: string; size?: number }) => {
-    addPdfFile({ name: file.name, uri: file.uri, sizeBytes: file.size ?? 0 });
+  const finishPdfImport = async (file: { name: string; uri: string; size?: number }) => {
+    const storedUri = await stageImportedFile('pdf', file.uri, file.name);
+    addPdfFile({ name: file.name, uri: storedUri, sizeBytes: file.size ?? 0 });
     Alert.alert('File Imported', `"${file.name}" was imported successfully.`, [
       { text: 'OK' },
       {
@@ -210,7 +213,7 @@ export default function DataFileScreen() {
         onPress: () =>
           router.push({
             pathname: '/pdf',
-            params: { docName: file.name, docUri: file.uri },
+            params: { docName: file.name, docUri: storedUri },
           }),
       },
     ]);
@@ -234,7 +237,7 @@ export default function DataFileScreen() {
           return;
         }
         const imported = await importExcelFromFile(picked);
-        if (imported) finishExcelImport(imported);
+        if (imported) await finishExcelImport(imported);
         return;
       }
 
@@ -246,12 +249,12 @@ export default function DataFileScreen() {
 
       const fileType = inferFileType(picked.name);
       if (fileType === 'PDF') {
-        finishPdfImport(picked);
+        await finishPdfImport(picked);
         return;
       }
       if (fileType === 'Excel' || fileType === 'CSV') {
         const imported = await importExcelFromFile(picked);
-        if (imported) finishExcelImport(imported);
+        if (imported) await finishExcelImport(imported);
         return;
       }
       Alert.alert('Invalid File', 'Please choose an Excel workbook, CSV, or PDF.');

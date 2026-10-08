@@ -11,7 +11,8 @@ import { roundMm, type CanvasBounds } from '@/lib/editor/engine';
 import type { LabelElement } from '@/lib/label-document';
 
 export const EDITOR_IMAGE_MAX_EDGE_PX = 2000;
-export const EDITOR_IMAGE_DIR_NAME = 'sez-editor-images';
+/** Working copies live in `{documentDirectory}sezprint/images/`. */
+export const EDITOR_IMAGE_DIR_NAME = 'sezprint/images';
 
 export type WorkingImageSize = {
   widthPx: number;

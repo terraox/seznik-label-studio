@@ -9,11 +9,11 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { generateId } from '@/lib/label-document';
 import {
-  EDITOR_IMAGE_DIR_NAME,
   EDITOR_IMAGE_MAX_EDGE_PX,
   unreferencedManagedFiles,
   workingSizePx,
 } from '@/lib/editor/image-ingest';
+import { deleteSezprintFile, ensureSezprintDir, publishSezprintFile } from '@/lib/user-files/root';
 
 export type IngestedEditorImage = {
   previewUri: string;
@@ -25,32 +25,16 @@ export type IngestedEditorImage = {
   originalAspect: number;
 };
 
-function editorImageDir(): string | null {
-  const root = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
-  if (!root) return null;
-  return `${root}${EDITOR_IMAGE_DIR_NAME}/`;
-}
-
-async function ensureEditorImageDir(): Promise<string | null> {
-  const dir = editorImageDir();
-  if (!dir) return null;
-  const info = await FileSystem.getInfoAsync(dir);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-  }
-  return dir;
+async function editorImageDir(): Promise<string> {
+  return ensureSezprintDir('images');
 }
 
 async function persistToEditorDir(sourceUri: string, fileName: string): Promise<string> {
-  const dir = await ensureEditorImageDir();
-  if (!dir) return sourceUri;
+  const dir = await editorImageDir();
   const dest = `${dir}${fileName}`;
-  try {
-    await FileSystem.copyAsync({ from: sourceUri, to: dest });
-    return dest;
-  } catch {
-    return sourceUri;
-  }
+  await FileSystem.copyAsync({ from: sourceUri, to: dest });
+  await publishSezprintFile('images', dest);
+  return dest;
 }
 
 /**
@@ -110,13 +94,11 @@ export async function ingestEditorImage(source: {
 }
 
 export async function sweepEditorImageFiles(keepUris: string[]): Promise<void> {
-  const dir = editorImageDir();
+  const dir = await editorImageDir().catch(() => null);
   if (!dir) return;
   const info = await FileSystem.getInfoAsync(dir);
   if (!info.exists || !info.isDirectory) return;
   const names = await FileSystem.readDirectoryAsync(dir).catch(() => [] as string[]);
   const stale = unreferencedManagedFiles(names, keepUris);
-  await Promise.all(
-    stale.map((name) => FileSystem.deleteAsync(`${dir}${name}`, { idempotent: true })),
-  );
+  await Promise.all(stale.map((name) => deleteSezprintFile(`${dir}${name}`)));
 }

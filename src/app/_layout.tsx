@@ -9,6 +9,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { startInstalledFontHydration } from '@/lib/fonts/runtime';
+import { hydrateUserClipartSvgs } from '@/lib/clipart/user-storage';
+import { migrateLegacyUserFiles } from '@/lib/user-files/migrate';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -47,6 +49,14 @@ function AppRoot() {
   useFonts(APP_FONT_MAP);
 
   useEffect(() => startInstalledFontHydration(), []);
+
+  useEffect(() => {
+    void migrateLegacyUserFiles()
+      .catch(() => undefined)
+      .finally(() => {
+        void hydrateUserClipartSvgs().catch(() => undefined);
+      });
+  }, []);
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});

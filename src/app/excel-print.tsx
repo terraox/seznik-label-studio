@@ -16,6 +16,7 @@ import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
 import { clampLabelMm, validateLabelSize, type LabelUnit } from '@/lib/label-geometry';
+import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore } from '@/stores/data-store';
 
 /**
@@ -44,9 +45,10 @@ export default function ExcelPrintScreen() {
       const picked = await importExcel();
       if (!picked) return;
 
+      const storedUri = await stageImportedFile('excel', picked.uri, picked.name);
       const entry = addExcelFile({
         name: picked.name,
-        uri: picked.uri,
+        uri: storedUri,
         sheets: picked.sheets,
         activeSheetIndex: 0,
         hasHeaderRow: picked.hasHeaderRow,

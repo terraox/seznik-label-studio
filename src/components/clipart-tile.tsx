@@ -1,12 +1,21 @@
+import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ClipartIcon } from '@/components/clipart-icon';
-import type { ClipartItem } from '@/lib/clipart/types';
+import { clipartImageUri, clipartSvgSource, type ClipartItem } from '@/lib/clipart/types';
 
 export function ClipartTile({ item }: { item: ClipartItem }) {
+  const svg = clipartSvgSource(item);
+  const imageUri = clipartImageUri(item);
   return (
     <View style={styles.tile}>
-      <ClipartIcon svg={item.svg} size={34} color="#111111" />
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={styles.image} contentFit="contain" />
+      ) : svg ? (
+        <ClipartIcon svg={svg} size={34} color="#111111" />
+      ) : (
+        <View style={styles.image} />
+      )}
       <Text style={styles.label} numberOfLines={1}>
         {item.label}
       </Text>
@@ -29,6 +38,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 4,
   },
+  image: { width: 34, height: 34 },
   label: {
     fontSize: 10,
     color: '#4B5563',

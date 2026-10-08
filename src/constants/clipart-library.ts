@@ -6,8 +6,9 @@ import {
   type ClipartCategoryId,
 } from '@/constants/clipart-catalog';
 import { buildClipartSvg } from '@/lib/clipart/build-svg';
+import { cachedUserSvg } from '@/lib/clipart/user-storage';
 import type { ClipartItem } from '@/lib/clipart/types';
-import { useUserClipartStore } from '@/stores/user-clipart-store';
+import { useUserClipartStore, type StoredUserClipart } from '@/stores/user-clipart-store';
 
 export { CLIPART_CATEGORIES, type ClipartCategoryId };
 export type { ClipartItem } from '@/lib/clipart/types';
@@ -26,17 +27,42 @@ export function getBuiltinClipart(): ClipartItem[] {
   return BUILTIN;
 }
 
+function toUserClipart(item: StoredUserClipart): ClipartItem {
+  if (item.kind === 'image') {
+    return {
+      id: item.id,
+      label: item.label,
+      category: 'local',
+      source: 'user',
+      kind: 'image',
+      fileUri: item.fileUri,
+      widthPx: item.widthPx,
+      heightPx: item.heightPx,
+    };
+  }
+  return {
+    id: item.id,
+    label: item.label,
+    category: 'local',
+    source: 'user',
+    kind: 'svg',
+    fileUri: item.fileUri,
+    svg: cachedUserSvg(item.id),
+  };
+}
+
 export function getClipartById(id: string | undefined): ClipartItem | undefined {
   if (!id) return undefined;
   const aliased = CLIPART_ID_ALIASES[id] ?? id;
   const builtin = BY_ID.get(aliased);
   if (builtin) return builtin;
-  return useUserClipartStore.getState().items.find((item) => item.id === id);
+  const user = useUserClipartStore.getState().items.find((item) => item.id === id);
+  return user ? toUserClipart(user) : undefined;
 }
 
-export function getClipartForCategory(category: ClipartCategoryId | 'mine'): ClipartItem[] {
-  if (category === 'mine') {
-    return useUserClipartStore.getState().items;
+export function getClipartForCategory(category: ClipartCategoryId | 'local' | 'mine'): ClipartItem[] {
+  if (category === 'local' || category === 'mine') {
+    return useUserClipartStore.getState().items.map(toUserClipart);
   }
   return BUILTIN.filter((item) => item.category === category);
 }

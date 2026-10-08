@@ -49,6 +49,8 @@ import { resolveFontFamily } from '@/lib/fonts/resolve-font';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
 import { getClipartById } from '@/constants/clipart-library';
 import { parseSvgDrawOps } from '@/lib/clipart/parse-svg';
+import { clipartImageUri, clipartSvgSource } from '@/lib/clipart/types';
+import { useUserClipartStore } from '@/stores/user-clipart-store';
 import { applyMonoToRgba, resolveEditorColorMode } from '@/lib/editor/image-mono';
 import {
   ptToMm,
@@ -632,9 +634,12 @@ export const SkiaClipart = memo(function SkiaClipart({
   widthPx: number;
   heightPx: number;
 }) {
+  useUserClipartStore((state) => state.revision);
   const color = inkColor(element.drawingColorIndex);
   const size = Math.min(widthPx, heightPx);
   const sticker = getClipartById(element.clipartId);
+  const imageUri = clipartImageUri(sticker);
+  const svg = clipartSvgSource(sticker);
 
   const font = useMemo(() => {
     try {
@@ -647,13 +652,25 @@ export const SkiaClipart = memo(function SkiaClipart({
       return null;
     }
   }, [size]);
+  const ops = useMemo(() => (svg ? parseSvgDrawOps(svg) : []), [svg]);
 
-  if (!sticker && font) {
+  if (imageUri) {
+    return (
+      <SkiaImageElement
+        uri={imageUri}
+        widthPx={widthPx}
+        heightPx={heightPx}
+        colorMode={element.colorMode}
+        contentFit="contain"
+      />
+    );
+  }
+
+  if (!svg && font) {
     const glyph = element.glyph ?? '★';
     return <Text x={(widthPx - size * 0.7) / 2} y={size * 0.75} text={glyph} font={font} color={color} />;
   }
 
-  const ops = useMemo(() => (sticker ? parseSvgDrawOps(sticker.svg) : []), [sticker]);
   const stickerScale = size / 24;
   const ox = (widthPx - size) / 2;
   const oy = (heightPx - size) / 2;

@@ -28,15 +28,7 @@ export async function loadPdfMetadata(uri: string): Promise<{
 }
 
 export async function copyPdfToCache(sourceUri: string, name: string): Promise<string> {
-  const root = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-  if (!root) return sourceUri;
-  const safe = name.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/\.pdf$/i, '');
-  const dest = `${root}pdf-editor/${Date.now()}_${safe}.pdf`;
-  const dir = `${root}pdf-editor/`;
-  const info = await FileSystem.getInfoAsync(dir);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-  }
-  await FileSystem.copyAsync({ from: sourceUri, to: dest });
-  return dest;
+  const { stageImportedFile } = await import('@/lib/user-files/stage-import');
+  const safe = name.trim() || 'document.pdf';
+  return stageImportedFile('pdf', sourceUri, safe.toLowerCase().endsWith('.pdf') ? safe : `${safe}.pdf`);
 }
