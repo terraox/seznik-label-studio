@@ -63,13 +63,11 @@ import {
   type ScaleCapMember,
 } from '@/lib/editor/resize-policy';
 import {
-  DEFAULT_CANVAS_SPLIT_RATIO,
   DIVIDER_HIT_SIZE_PX,
   NUDGE_PAD_SPLIT_EXTRA_PX,
   PANEL_DEFAULT_HEIGHT_PX,
   PANEL_MIN_HEIGHT_PX,
   SPLIT_ANIMATION_MS,
-  clampCanvasSplitHeight,
   clampStoredSplitRatio,
   persistableSplitRatio,
   restoreCanvasSplitHeight,
@@ -763,7 +761,9 @@ export default function EditScreen() {
   const basePxPerMMSv = useSharedValue(1);
   const liveScaleSv = useSharedValue(1);
   const panelDefaultForSplit =
-    PANEL_DEFAULT_HEIGHT_PX + (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0);
+    PANEL_DEFAULT_HEIGHT_PX +
+    (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0) +
+    Math.max(0, Math.round(insets.bottom));
   const panelMinForSplit =
     PANEL_MIN_HEIGHT_PX + (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0);
   const panelMinForSplitSv = useSharedValue(panelMinForSplit);
@@ -876,6 +876,7 @@ export default function EditScreen() {
   const initialSplitRestoredRef = useRef(false);
   const lastViewportHRef = useRef(0);
   const lastPanelMinRef = useRef(panelMinForSplit);
+  const lastPanelDefaultRef = useRef(panelDefaultForSplit);
 
   useEffect(() => {
     if (splitViewportH <= 0) return;
@@ -884,6 +885,7 @@ export default function EditScreen() {
       initialSplitRestoredRef.current = true;
       lastViewportHRef.current = splitViewportH;
       lastPanelMinRef.current = panelMinForSplit;
+      lastPanelDefaultRef.current = panelDefaultForSplit;
       setCanvasSplitH(
         restoreCanvasSplitHeight({
           ratio: effectiveSplitRatio,
@@ -899,36 +901,40 @@ export default function EditScreen() {
     const prevVp = lastViewportHRef.current;
     const vpChanged = Math.abs(splitViewportH - prevVp) > 2;
     const panelMinChanged = panelMinForSplit !== lastPanelMinRef.current;
+    const panelDefaultChanged = panelDefaultForSplit !== lastPanelDefaultRef.current;
 
-    if (vpChanged || panelMinChanged) {
+    if (vpChanged || panelMinChanged || panelDefaultChanged) {
       lastViewportHRef.current = splitViewportH;
       lastPanelMinRef.current = panelMinForSplit;
+      lastPanelDefaultRef.current = panelDefaultForSplit;
       setCanvasSplitH((prevH) => {
         if (canvasFullscreen) {
-          return clampCanvasSplitHeight({
+          return restoreCanvasSplitHeight({
+            ratio: effectiveSplitRatio,
+            fullscreen: true,
             viewportPx: splitViewportH,
-            requestedCanvasPx: splitViewportH,
             panelMinPx: panelMinForSplit,
+            panelDefaultPx: panelDefaultForSplit,
           });
         }
-        if (vpChanged && prevVp > 0) {
-          const prevUsable = usableSplitViewportPx(prevVp);
-          const ratio = prevUsable > 0 ? prevH / prevUsable : DEFAULT_CANVAS_SPLIT_RATIO;
-          const newUsable = usableSplitViewportPx(splitViewportH);
-          return clampCanvasSplitHeight({
-            viewportPx: splitViewportH,
-            requestedCanvasPx: Math.round(newUsable * ratio),
-            panelMinPx: panelMinForSplit,
-          });
-        }
-        return clampCanvasSplitHeight({
+        const prevUsable = usableSplitViewportPx(prevVp > 0 ? prevVp : splitViewportH);
+        const ratio = prevUsable > 0 ? prevH / prevUsable : effectiveSplitRatio;
+        return restoreCanvasSplitHeight({
+          ratio,
+          fullscreen: false,
           viewportPx: splitViewportH,
-          requestedCanvasPx: prevH,
           panelMinPx: panelMinForSplit,
+          panelDefaultPx: panelDefaultForSplit,
         });
       });
     }
-  }, [splitViewportH, panelMinForSplit, canvasFullscreen, effectiveSplitRatio]);
+  }, [
+    splitViewportH,
+    panelMinForSplit,
+    panelDefaultForSplit,
+    canvasFullscreen,
+    effectiveSplitRatio,
+  ]);
 
   const layoutWidth = stageWidth > 0 ? stageWidth : initialStageWidth;
   // Phone workspace is constant. Label millimetres only change the inner artboard.

@@ -40,6 +40,33 @@ test('restoreCanvasSplitHeight with null ratio uses PANEL_DEFAULT_HEIGHT_PX', ()
   assert.equal(restoredH, usable - 318);
 });
 
+test('restoreCanvasSplitHeight never opens with a sheet shorter than the full tool menu', () => {
+  const viewportPx = 700;
+  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
+  const restoredH = restoreCanvasSplitHeight({
+    ratio: 0.85,
+    fullscreen: false,
+    viewportPx,
+    panelMinPx: PANEL_MIN_HEIGHT_PX,
+    panelDefaultPx: PANEL_DEFAULT_HEIGHT_PX,
+  });
+  assert.equal(usable - restoredH, PANEL_DEFAULT_HEIGHT_PX);
+});
+
+test('restoreCanvasSplitHeight keeps a taller sheet when the saved ratio already shows the full menu', () => {
+  const viewportPx = 700;
+  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
+  const restoredH = restoreCanvasSplitHeight({
+    ratio: 0.2,
+    fullscreen: false,
+    viewportPx,
+    panelMinPx: PANEL_MIN_HEIGHT_PX,
+    panelDefaultPx: PANEL_DEFAULT_HEIGHT_PX,
+  });
+  assert.ok(usable - restoredH >= PANEL_DEFAULT_HEIGHT_PX);
+  assert.equal(restoredH, Math.round(usable * 0.2));
+});
+
 test('canvasHeightAfterDrag allows dragging down to PANEL_MIN_HEIGHT_PX (48px sheet / toolbar row)', () => {
   const viewportPx = 700;
   const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX); // 656
