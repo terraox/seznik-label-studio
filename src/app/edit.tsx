@@ -2559,7 +2559,7 @@ export default function EditScreen() {
               const fs = scaledFontSizeForResize(el, handle, scaleX, scaleY, clean.fontSize);
               const live = resizeElementByScale(el, start, handle, scaleX, scaleY, canvas, fs);
               if (handle === 'e' && (el.type === 'text' || el.type === 'degrees')) {
-                live.height = growTextFrameHeightForWidth(el, live.width, live.height);
+                live.height = growTextFrameHeightForWidth(el, live.width, 0);
               }
               logMultiTransformBox('live', el.id, live);
               logMultiTransformBox('commit', el.id, live);
@@ -2631,7 +2631,34 @@ export default function EditScreen() {
                 fs,
               );
               if (next.type === 'text' || next.type === 'degrees') {
-                next = { ...next, autoWrapping: 'Word', autoTextHeight: false };
+                const widthChanged = Math.abs(clean.widthMm - el.width) > 0.02;
+                if (widthChanged) {
+                  const textEl = next as Extract<LabelElement, { type: 'text' } | { type: 'degrees' }>;
+                  const reflowed = computeTextElementHeightMm({
+                    text:
+                      textEl.contentType === 'Data Source' && textEl.columnNameContent
+                        ? `{${textEl.columnNameContent}}`
+                        : 'text' in textEl
+                          ? textEl.text
+                          : textEl.content,
+                    fontSize: textEl.fontSize,
+                    widthMm: textEl.width,
+                    autoWrapping: 'Word',
+                    lineSpacing: textEl.lineSpacing ?? '1.0',
+                    charSpacing: textEl.charSpacing ?? 0,
+                    bold: textEl.bold ?? false,
+                    verticalDisplay: textEl.verticalDisplay ?? false,
+                    fontFamily: textEl.fontFamily,
+                  });
+                  next = {
+                    ...textEl,
+                    height: reflowed,
+                    autoWrapping: 'Word',
+                    autoTextHeight: false,
+                  };
+                } else {
+                  next = { ...next, autoWrapping: 'Word', autoTextHeight: false };
+                }
               }
             } else {
               const clamped = clampToLabelBounds(

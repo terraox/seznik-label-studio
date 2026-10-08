@@ -51,6 +51,8 @@ import { ptToMm, type LabelElement } from "@/lib/label-document";
 import { dotsPerMm } from "@/lib/printer/print-spec";
 import { applySerialOffset, lineSpacingMultiplier } from "@/lib/serial-content";
 import {
+  TEXT_FRAME_PADDING_X_RATIO,
+  TEXT_FRAME_PADDING_Y_RATIO,
   charSpacingToLetterSpacing,
   computeWrappedLines,
   measureTextWidthMm,
@@ -139,7 +141,8 @@ function textStyleFor(
   return {
     fontSize: size,
     lineHeight: size * 1.25 * lineMult,
-    paddingVertical: size * 0.12,
+    paddingVertical: size * TEXT_FRAME_PADDING_Y_RATIO,
+    paddingHorizontal: size * TEXT_FRAME_PADDING_X_RATIO,
     includeFontPadding: false,
     fontFamily: resolveFontFamily(state.fontFamily),
     fontWeight: state.bold ? ("600" as const) : ("400" as const),

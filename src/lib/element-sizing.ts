@@ -10,6 +10,8 @@ import {
   computeWrappedLines,
   heightForWrappedTextMm,
   measureTextWidthMm,
+  textHorizontalPaddingMm,
+  textVerticalPaddingMm,
 } from '@/lib/text-metrics';
 import { formatDataSourceColumn } from '@/lib/editor/data-source-display';
 import { ensureTableCells } from '@/lib/editor/table-cells';
@@ -58,13 +60,8 @@ const CONTENT_GROW_KEYS = new Set([
   'verticalDisplay',
 ]);
 
-/** Extra room so glyphs are not flush against the selection frame. */
-function textContentPadMm(fontSizePt: number): number {
-  return Math.max(1.0, ptToMm(fontSizePt) * 0.55);
-}
-
 /**
- * Size the text box to the entered string, with padding on the right and bottom.
+ * Size the text box to the entered string with even side insets (reference layout).
  * Grows with typing; wraps only when the label edge is reached.
  */
 export function fitTextBoxToContent(
@@ -75,11 +72,10 @@ export function fitTextBoxToContent(
   const fontSize = typeof el.fontSize === 'number' ? el.fontSize : 12;
   const charSpacing = el.charSpacing ?? 0;
   const bold = el.bold ?? false;
-  const pad = textContentPadMm(fontSize);
-  const minW = Math.max(4, ptToMm(fontSize) * 1.4);
-  const minH = textBlockHeightMm(fontSize, 1, el.lineSpacing ?? '1.0') + pad;
+  const insetX = textHorizontalPaddingMm(fontSize);
+  const minW = Math.max(4, ptToMm(fontSize) * 1.4 + insetX * 2);
   const maxW = Math.max(minW, canvas.widthMm - Math.max(0, el.left));
-  const maxH = Math.max(minH, canvas.heightMm - Math.max(0, el.top));
+  const maxH = Math.max(minW, canvas.heightMm - Math.max(0, el.top));
 
   if (el.verticalDisplay) {
     const chars = raw.length > 0 ? raw.replace(/\n/g, '').split('') : [''];
@@ -88,9 +84,21 @@ export function fitTextBoxToContent(
         Math.max(1, chars.length),
       measureTextWidthMm('W', fontSize, 0, bold, el.fontFamily),
     );
+    const width = roundMm(Math.min(maxW, Math.max(minW, glyphW + insetX * 2)));
+    const height = computeTextElementHeightMm({
+      text: raw,
+      fontSize,
+      widthMm: width,
+      autoWrapping: el.autoWrapping ?? 'Word',
+      lineSpacing: el.lineSpacing ?? '1.0',
+      charSpacing,
+      bold,
+      verticalDisplay: true,
+      fontFamily: el.fontFamily,
+    });
     return {
-      width: roundMm(Math.min(maxW, Math.max(minW, glyphW + pad))),
-      height: roundMm(Math.min(maxH, Math.max(minH, textBlockHeightMm(fontSize, chars.length, el.lineSpacing ?? '1.0') + pad))),
+      width,
+      height: roundMm(Math.min(maxH, Math.max(textVerticalPaddingMm(fontSize) * 2 + 2, height))),
     };
   }
 
@@ -100,13 +108,17 @@ export function fitTextBoxToContent(
     longestMm = Math.max(longestMm, measureTextWidthMm(line, fontSize, charSpacing, bold, el.fontFamily));
   }
 
-  const width = roundMm(Math.min(maxW, Math.max(minW, longestMm + pad)));
-  const needsWrap = longestMm + pad > maxW + 0.05;
-  const heightMm = heightForWrappedTextMm({
+  const width = roundMm(Math.min(maxW, Math.max(minW, longestMm + insetX * 2)));
+  const needsWrap = longestMm + insetX * 2 > maxW + 0.05;
+  const heightMm = computeTextElementHeightMm({
     text: raw,
     fontSize,
     widthMm: width,
-    autoWrapping: needsWrap ? el.autoWrapping === 'Close' ? 'Word' : el.autoWrapping ?? 'Word' : 'Close',
+    autoWrapping: needsWrap
+      ? el.autoWrapping === 'Close'
+        ? 'Word'
+        : el.autoWrapping ?? 'Word'
+      : 'Close',
     lineSpacing: el.lineSpacing ?? '1.0',
     charSpacing,
     bold,
@@ -115,7 +127,7 @@ export function fitTextBoxToContent(
   });
   return {
     width,
-    height: roundMm(Math.min(maxH, Math.max(minH, heightMm))),
+    height: roundMm(Math.min(maxH, Math.max(textVerticalPaddingMm(fontSize) * 2 + 2, heightMm))),
   };
 }
 
@@ -172,6 +184,51 @@ export function mergeTextElementPatch(
   const touchesTypography = Object.keys(updates).some((key) => typographyKeys.has(key));
   if (!touchesTypography) {
     return merged as LabelElement;
+  }
+
+  const widthInPatch = 'width' in updates && typeof updates.width === 'number';
+  const heightInPatch = 'height' in updates && typeof updates.height === 'number';
+  const fontSizeInPatch = 'fontSize' in updates && typeof updates.fontSize === 'number';
+
+  if (fontSizeInPatch && !widthInPatch) {
+    const withFont = { ...el, ...updates, width: el.width } as TextLikeElement;
+    const autoHeight = withFont.autoTextHeight !== false && withFont.autoWrapping !== 'Close';
+    if (autoHeight && !heightInPatch) {
+      const { height: _removed, ...withoutHeight } = withFont as TextLikeElement & { height?: number };
+      return withoutHeight as LabelElement;
+    }
+    const height = computeTextElementHeightMm({
+      text: textRawContent(withFont),
+      fontSize: withFont.fontSize,
+      widthMm: withFont.width,
+      autoWrapping: withFont.autoWrapping ?? 'Word',
+      lineSpacing: withFont.lineSpacing ?? '1.0',
+      charSpacing: withFont.charSpacing ?? 0,
+      bold: withFont.bold ?? false,
+      verticalDisplay: withFont.verticalDisplay ?? false,
+      fontFamily: withFont.fontFamily,
+    });
+    return { ...withFont, height, autoTextHeight: false } as LabelElement;
+  }
+
+  if (widthInPatch && Math.abs((updates.width as number) - el.width) > 0.02) {
+    const reflowed = computeTextElementHeightMm({
+      text: textRawContent(merged),
+      fontSize: merged.fontSize,
+      widthMm: merged.width,
+      autoWrapping: merged.autoWrapping ?? 'Word',
+      lineSpacing: merged.lineSpacing ?? '1.0',
+      charSpacing: merged.charSpacing ?? 0,
+      bold: merged.bold ?? false,
+      verticalDisplay: merged.verticalDisplay ?? false,
+      fontFamily: merged.fontFamily,
+    });
+    return {
+      ...merged,
+      height: reflowed,
+      autoTextHeight: false,
+      autoWrapping: merged.autoWrapping === 'Close' ? 'Word' : merged.autoWrapping ?? 'Word',
+    } as LabelElement;
   }
 
   const shouldFitBox = Object.keys(updates).some((key) => CONTENT_FIT_KEYS.has(key));

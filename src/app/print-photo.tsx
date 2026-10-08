@@ -424,6 +424,7 @@ export default function PrintPhotoScreen() {
           labelName: frame?.name ?? 'Print Photo',
           copies,
           source: 'photo',
+          previewImageUri: primaryPhoto ?? undefined,
         });
       }
       Alert.alert('Print Sent', `Job sent to ${deviceName ?? 'the printer'}.`);

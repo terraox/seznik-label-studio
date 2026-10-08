@@ -1491,11 +1491,13 @@ export default function PrintScreen() {
       manager.setLastPrintTiming(timer.getEntries());
 
       if (printingSettings.recordHistory) {
+        const docForHistory = displayDocument ?? previewDocument;
         addHistoryEntry({
           labelName: jobName,
           copies: copies * pageCount,
           documentId: params.labelId,
           source: historySource,
+          documentSnapshot: docForHistory ?? undefined,
         });
       }
 

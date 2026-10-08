@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { DEFAULT_ELEMENT_STATE } from '@/components/editor/types';
 import { fitTextBoxToContent, growTextFrameHeightForWidth, mergeTextElementPatch } from '@/lib/element-sizing';
+import { computeTextElementHeightMm } from '@/lib/text-metrics';
 import { measureTextWidthMm } from '@/lib/text-metrics';
 import type { LabelElement } from '@/lib/label-document';
 
@@ -52,13 +53,20 @@ test('mergeTextElementPatch keeps width and reflows height when the font changes
   assert.ok(typeof next.height === 'number' && next.height >= 4);
 });
 
-test('mergeTextElementPatch keeps an explicit box height from a resize', () => {
+test('mergeTextElementPatch reflows height when width narrows (ignores stale height in patch)', () => {
   const start = textEl('Hello world', { width: 24, height: 6, autoTextHeight: true, autoWrapping: 'Close' });
   const next = mergeTextElementPatch(start, { width: 8, height: 12, autoWrapping: 'Word', autoTextHeight: false }, canvas);
   assert.equal(next.type, 'text');
   if (next.type !== 'text') return;
   assert.equal(next.width, 8);
-  assert.equal(next.height, 12);
+  const expected = computeTextElementHeightMm({
+    text: 'Hello world',
+    fontSize: 12,
+    widthMm: 8,
+    autoWrapping: 'Word',
+  });
+  assert.equal(next.height, expected);
+  assert.ok(expected > 12, 'narrower box should need more vertical space than a short manual height');
   assert.equal(next.fontSize, 12);
   assert.equal(next.autoWrapping, 'Word');
 });
@@ -67,6 +75,27 @@ test('narrowing a text frame grows height so wrapped lines stay visible', () => 
   const start = textEl('PACKED FRESH TODAY', { width: 40, height: 6, fontSize: 12 });
   const tall = growTextFrameHeightForWidth(start, 8, start.height);
   assert.ok(tall > start.height, `wrapped height ${tall} should exceed ${start.height}`);
+});
+
+test('fontSize-only patch keeps width and reflows height to content lines', () => {
+  const start = textEl('Hi', {
+    width: 14,
+    height: 8,
+    fontSize: 12,
+    autoTextHeight: false,
+  });
+  const next = mergeTextElementPatch(start, { fontSize: 18 }, canvas);
+  assert.equal(next.type, 'text');
+  if (next.type !== 'text') return;
+  assert.equal(next.fontSize, 18);
+  assert.equal(next.width, 14);
+  const expected = computeTextElementHeightMm({
+    text: 'Hi',
+    fontSize: 18,
+    widthMm: 14,
+    autoWrapping: 'Word',
+  });
+  assert.equal(next.height, expected);
 });
 
 test('changing font keeps width and grows height for wrapped text', () => {

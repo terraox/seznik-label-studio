@@ -3,6 +3,7 @@ import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { useCallback, useEffect, useRef } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
 import { formatDataSourceColumn } from '@/lib/editor/data-source-display';
 import { fitFontSizeToLabel } from '@/lib/editor/label-bounds';
@@ -144,9 +145,13 @@ function NavRow({ label, value, onPress }: { label: string; value: string; onPre
       onPress={onPress}
       hitSlop={PRESS_HIT_SLOP}
       style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}>
-      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={[styles.rowLabel, styles.navRowLabel]} numberOfLines={1}>
+        {label}
+      </Text>
       <View style={styles.navRight}>
-        <Text style={styles.navValue}>{value}</Text>
+        <Text style={styles.navValue} numberOfLines={1}>
+          {value}
+        </Text>
         <AppIcon name="chevron.right" tintColor="#B8C0C8" size={14} weight="semibold" />
       </View>
     </Pressable>
@@ -208,36 +213,6 @@ function AlignButtons({
           <AppIcon name={icon} tintColor={state.align === align ? '#FFFFFF' : '#556473'} size={16} />
         </Pressable>
       ))}
-    </View>
-  );
-}
-
-function FontSlider({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (next: number) => void;
-}) {
-  const min = 6;
-  const max = 72;
-  const ratio = (value - min) / (max - min);
-  return (
-    <View style={styles.sliderBlock}>
-      <View style={styles.sliderTrack}>
-        <View style={[styles.sliderFill, { width: `${ratio * 100}%` }]} />
-        <View style={[styles.sliderThumb, { left: `${ratio * 100}%` }]} />
-      </View>
-      <View style={styles.sliderTicks}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <Pressable
-            key={i}
-            style={styles.sliderTickHit}
-            hitSlop={PRESS_HIT_SLOP}
-            onPress={() => onChange(min + ((max - min) * i) / 4)}
-          />
-        ))}
-      </View>
     </View>
   );
 }
@@ -899,15 +874,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
+  },
+  navRowLabel: {
+    flexShrink: 0,
+    maxWidth: '42%',
   },
   navRight: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'flex-end',
+    gap: 10,
+    minWidth: 0,
   },
   navValue: {
+    flexShrink: 1,
     fontSize: 14,
     color: '#64748B',
+    textAlign: 'right',
   },
   styleRow: {
     flexDirection: 'row',
@@ -960,46 +945,6 @@ const styles = StyleSheet.create({
   },
   alignBtnActive: {
     backgroundColor: ACCENT,
-  },
-  sliderBlock: {
-    marginTop: 10,
-    paddingBottom: 4,
-  },
-  sliderTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E2E8F0',
-    position: 'relative',
-  },
-  sliderFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 2,
-    backgroundColor: ACCENT,
-  },
-  sliderThumb: {
-    position: 'absolute',
-    top: -8,
-    marginLeft: -10,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: ACCENT,
-  },
-  sliderTicks: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    flexDirection: 'row',
-  },
-  sliderTickHit: {
-    flex: 1,
   },
   colorRow: {
     paddingHorizontal: 16,

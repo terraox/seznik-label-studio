@@ -10,7 +10,7 @@ import {
 } from '@/components/settings-ui';
 import { useDataStore } from '@/stores/data-store';
 import { useLabelStore } from '@/stores/label-store';
-import { usePrinterStore } from '@/stores/printer-store';
+import { usePrintHistoryStore } from '@/stores/print-history-store';
 
 type CacheItemId = 'local' | 'cloud' | 'data' | 'history' | 'files';
 
@@ -59,8 +59,8 @@ export default function CacheSettingsScreen() {
   const cloudTemplates = useLabelStore((s) => s.cloudTemplates);
   const excelFiles = useDataStore((s) => s.excelFiles);
   const pdfFiles = useDataStore((s) => s.pdfFiles);
-  const history = usePrinterStore((s) => s.history);
-  const clearHistory = usePrinterStore((s) => s.clearHistory);
+  const history = usePrintHistoryStore((s) => s.entries);
+  const clearHistory = usePrintHistoryStore((s) => s.clearAll);
 
   const [selectedIds, setSelectedIds] = useState<CacheItemId[]>([]);
   const [fileCacheBytes, setFileCacheBytes] = useState(0);

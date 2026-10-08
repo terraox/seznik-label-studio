@@ -619,6 +619,7 @@ export default function ImgToLabelScreen() {
           labelName: `Img to Label ${Math.round(oriented.widthMm)}×${Math.round(oriented.heightMm)}`,
           copies,
           source: 'img-to-label',
+          previewImageUri: imageUri ?? undefined,
         });
       }
 

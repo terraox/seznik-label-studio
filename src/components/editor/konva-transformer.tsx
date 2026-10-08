@@ -43,7 +43,7 @@ import {
   type ResizeAnchor,
   type ResizeBehavior,
 } from '@/lib/editor/resize-policy';
-import { heightForWrappedTextMm } from '@/lib/text-metrics';
+import { computeTextElementHeightMm } from '@/lib/text-metrics';
 import {
   CHROME_HANDLE_FILL,
   CHROME_HANDLE_ICON_COLOR,
@@ -697,7 +697,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         naturalHeightMm,
       });
       if (isTextElement && handle === 'e') {
-        const wrapH = heightForWrappedTextMm({
+        const wrapH = computeTextElementHeightMm({
           text: textContent,
           fontSize: textFontSize,
           widthMm: next.width,
@@ -707,7 +707,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           bold: textBold,
           verticalDisplay: textVerticalDisplay,
           fontFamily: textFontFamily || undefined,
-          minHeightMm: next.height,
         });
         const maxH = Math.max(resizePolicy.minMm, canvasHeightMm - next.top);
         next.height = roundMm(Math.min(maxH, wrapH));
@@ -1434,7 +1433,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           });
 
           if (wrapTextOnWidthSv.value && handle === 'e') {
-            const wrapH = heightForWrappedTextMm({
+            const wrapH = computeTextElementHeightMm({
               text: textContentSv.value,
               fontSize: textFontSizeSv.value,
               widthMm: box.width,
@@ -1444,7 +1443,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
               bold: boldSv.value,
               verticalDisplay: verticalDisplaySv.value,
               fontFamily: fontFamilySv.value || undefined,
-              minHeightMm: box.height,
             });
             const maxH = Math.max(minResizeMmSv.value, canvasHMmSv.value - box.top);
             box.height = wrapH > maxH ? maxH : wrapH;

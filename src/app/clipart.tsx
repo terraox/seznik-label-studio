@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,9 +30,20 @@ import { useUserClipartStore } from '@/stores/user-clipart-store';
 
 type GalleryCategory = ClipartCategoryId | 'local';
 
+const RAIL_WIDTH = 84;
+const GRID_COLUMNS = 3;
+const GRID_GAP = 6;
+
 const RAILS: { id: GalleryCategory; label: string }[] = [
-  ...CLIPART_CATEGORIES.map((item) => ({ id: item.id as GalleryCategory, label: item.label })),
-  { id: 'local', label: 'Local clipart' },
+  { id: 'retail', label: 'Retail' },
+  { id: 'food', label: 'Food' },
+  { id: 'festivals', label: 'Festivals' },
+  { id: 'farm', label: 'Farm' },
+  { id: 'transport', label: 'Transport' },
+  { id: 'home', label: 'Home' },
+  { id: 'health', label: 'Health' },
+  { id: 'office', label: 'Office' },
+  { id: 'local', label: 'Local' },
 ];
 
 export default function ClipartScreen() {
@@ -97,8 +109,11 @@ export default function ClipartScreen() {
     ]);
   };
 
-  const railWidth = 108;
-  const tileWidth = Math.floor((width - railWidth - Spacing.two * 2 - 16) / 3);
+  const mainWidth = width - RAIL_WIDTH;
+  const gridPad = Spacing.two * 2;
+  const tileWidth = Math.floor(
+    (mainWidth - gridPad - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
+  );
 
   const icons = useMemo(() => {
     const list = getClipartForCategory(category);
@@ -116,21 +131,7 @@ export default function ClipartScreen() {
     <View style={styles.root}>
       <SettingsStackHeader title="Clipart" />
       <View style={styles.body}>
-        <ScrollView style={styles.rail} contentContainerStyle={{ paddingBottom: insets.bottom + 12 }} showsVerticalScrollIndicator={false}>
-          {RAILS.map((item) => {
-            const active = category === item.id;
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => setCategory(item.id)}
-                style={[styles.railItem, active && styles.railItemActive]}>
-                <Text style={[styles.railLabel, active && styles.railLabelActive]}>{item.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        <View style={styles.listWrap}>
+        <View style={styles.topBar}>
           <TextInput
             value={query}
             onChangeText={setQuery}
@@ -138,36 +139,72 @@ export default function ClipartScreen() {
             placeholderTextColor="#94A3B8"
             style={styles.search}
           />
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>
-              {sectionTitle} · {icons.length}
-            </Text>
-            <Pressable onPress={() => void handleUpload()} disabled={importing} style={styles.uploadBtn}>
-              <Text style={styles.uploadText}>{importing ? 'Importing…' : 'Import clipart'}</Text>
-            </Pressable>
-          </View>
+          <Pressable onPress={() => void handleUpload()} disabled={importing} style={styles.uploadBtn}>
+            <Text style={styles.uploadText}>{importing ? '…' : 'Import'}</Text>
+          </Pressable>
+        </View>
 
+        <Text style={styles.sectionTitle} numberOfLines={1}>
+          {sectionTitle} · {icons.length}
+        </Text>
+
+        <View style={styles.galleryRow}>
           <ScrollView
-            style={styles.contentScroll}
-            contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.three }}
+            style={styles.rail}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 12 }}
             showsVerticalScrollIndicator={false}>
-            {category === 'local' && icons.length === 0 ? (
-              <Text style={styles.empty}>
-                Import SVG or image files. They are saved in the sezprint folder on this device and removed when you delete them here.
-              </Text>
-            ) : null}
-            <View style={styles.grid}>
-              {icons.map((icon) => (
+            {RAILS.map((item) => {
+              const active = category === item.id;
+              return (
                 <Pressable
-                  key={icon.id}
-                  style={({ pressed }) => [{ width: Math.max(72, tileWidth) }, pressed && { opacity: 0.6 }]}
-                  onPress={() => handleSelect(icon)}
-                  onLongPress={() => handleLongPress(icon)}>
-                  <ClipartTile item={icon} />
+                  key={item.id}
+                  onPress={() => setCategory(item.id)}
+                  style={[styles.railItem, active && styles.railItemActive]}>
+                  <Text
+                    style={[styles.railLabel, active && styles.railLabelActive]}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.85}>
+                    {item.label}
+                  </Text>
                 </Pressable>
-              ))}
-            </View>
+              );
+            })}
           </ScrollView>
+
+          <FlatList
+            style={styles.gridList}
+            data={icons}
+            key={category}
+            numColumns={GRID_COLUMNS}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: Spacing.two,
+              paddingBottom: insets.bottom + Spacing.three,
+              flexGrow: 1,
+            }}
+            columnWrapperStyle={styles.gridRow}
+            ListEmptyComponent={
+              category === 'local' ? (
+                <Text style={styles.empty}>
+                  Import SVG or image files. They are saved in the sezprint folder on this device and removed when you delete them here.
+                </Text>
+              ) : null
+            }
+            renderItem={({ item }) => (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.gridCell,
+                  { width: tileWidth },
+                  pressed && { opacity: 0.6 },
+                ]}
+                onPress={() => handleSelect(item)}
+                onLongPress={() => handleLongPress(item)}>
+                <ClipartTile item={item} size={tileWidth} />
+              </Pressable>
+            )}
+          />
         </View>
       </View>
       {documentSourceSheet}
@@ -177,29 +214,39 @@ export default function ClipartScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#FFFFFF' },
-  body: { flex: 1, flexDirection: 'row' },
+  body: { flex: 1, minHeight: 0 },
+  galleryRow: { flex: 1, flexDirection: 'row', minHeight: 0 },
   rail: {
-    width: 108,
+    width: RAIL_WIDTH,
+    flexGrow: 0,
     backgroundColor: '#F4F6F8',
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: '#E3E7ED',
   },
   railItem: {
-    paddingHorizontal: 10,
-    paddingVertical: 14,
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   railItemActive: { backgroundColor: '#FFFFFF' },
   railLabel: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 14,
     color: '#9AA3AD',
-    fontWeight: '500',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   railLabelActive: { color: Palette.accent },
-  listWrap: { flex: 1, backgroundColor: '#FFFFFF' },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: Spacing.two,
+    paddingTop: Spacing.two,
+  },
   search: {
-    marginHorizontal: Spacing.two,
-    marginTop: Spacing.two,
+    flex: 1,
     backgroundColor: '#F1F5F9',
     borderRadius: 10,
     paddingHorizontal: 12,
@@ -207,30 +254,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
   },
-  sectionHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.two,
-    paddingHorizontal: Spacing.two,
-    marginBottom: Spacing.one,
-    gap: 8,
-  },
-  sectionTitle: { flex: 1, fontSize: 12, fontWeight: '600', color: '#8A97A4' },
   uploadBtn: {
     backgroundColor: Palette.accent,
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  uploadText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-  contentScroll: { flex: 1 },
+  uploadText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8A97A4',
+    paddingHorizontal: Spacing.two,
+    paddingTop: Spacing.one,
+    paddingBottom: 6,
+  },
+  gridList: { flex: 1, minHeight: 0 },
+  gridRow: { gap: GRID_GAP, marginBottom: GRID_GAP },
+  gridCell: { alignItems: 'stretch' },
   empty: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingVertical: 24,
     color: '#64748B',
     fontSize: 14,
     lineHeight: 20,
   },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 4 },
 });

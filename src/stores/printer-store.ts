@@ -2,8 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { generateId } from '@/lib/label-document';
 import { type SeznikPrinterModelId } from '@/constants/printer-models';
+import type { PrintHistoryEntry } from '@/lib/print-history/types';
+import { usePrintHistoryStore } from '@/stores/print-history-store';
 
 export type PrinterConnectionStatus =
   | 'disconnected'
@@ -14,14 +15,7 @@ export type PrinterConnectionStatus =
 
 export type PrinterTransport = 'bluetooth-spp' | 'bluetooth-ble' | 'wifi' | 'josh-lpapi' | 'tez-spp' | 'dev-spp' | 'labelx-spp';
 
-export type PrintHistoryEntry = {
-  id: string;
-  labelName: string;
-  copies: number;
-  printedAt: number;
-  documentId?: string;
-  source: 'label' | 'photo' | 'pdf' | 'scan' | 'excel' | 'img-to-label';
-};
+export type { PrintHistoryEntry } from '@/lib/print-history/types';
 
 export type PrintCalibrationEntry = {
   hOffsetMm: number;
@@ -45,6 +39,7 @@ type PrinterStoreState = {
   lastDeviceForModel: Partial<Record<SeznikPrinterModelId, { id: string; name: string }>>;
   /** MAC → model pin. Overrides name heuristics on reconnect (addendum §5). */
   pinnedDriverByMac: Partial<Record<string, SeznikPrinterModelId>>;
+  /** @deprecated Legacy field — migrated to print-history store. Kept for rehydrate migration only. */
   history: PrintHistoryEntry[];
   devCommandSet: 'tspl' | 'escpos';
   /**
@@ -153,15 +148,13 @@ export const usePrinterStore = create<PrinterStoreState>()(
           backendPrinterId: null,
         }),
 
-      addHistoryEntry: (entry) =>
-        set((state) => ({
-          history: [
-            { ...entry, id: generateId('print'), printedAt: Date.now() },
-            ...state.history,
-          ].slice(0, 200),
-        })),
+      addHistoryEntry: (entry) => {
+        usePrintHistoryStore.getState().addEntry(entry);
+      },
 
-      clearHistory: () => set({ history: [] }),
+      clearHistory: () => {
+        usePrintHistoryStore.getState().clearAll();
+      },
     }),
     {
       name: 'sez-print/printer',
@@ -172,7 +165,6 @@ export const usePrinterStore = create<PrinterStoreState>()(
         lastDeviceName: state.lastDeviceName,
         lastDeviceForModel: state.lastDeviceForModel,
         pinnedDriverByMac: state.pinnedDriverByMac,
-        history: state.history,
         printCalibration: state.printCalibration,
       }),
       merge: (persisted, current) => ({ ...current, ...(persisted as object) }),

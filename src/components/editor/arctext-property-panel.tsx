@@ -3,6 +3,7 @@ import { AppIcon, type AppIconName } from '@/components/app-icon';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
 import {
   DRAWING_COLORS,
@@ -165,29 +166,6 @@ function StyleButtons({
           </Text>
         </Pressable>
       ))}
-    </View>
-  );
-}
-
-function FontSlider({ value, onChange }: { value: number; onChange: (next: number) => void }) {
-  const min = 4;
-  const max = 24;
-  const ratio = (value - min) / (max - min);
-  return (
-    <View style={styles.sliderBlock}>
-      <View style={styles.sliderTrack}>
-        <View style={[styles.sliderFill, { width: `${ratio * 100}%` }]} />
-        <View style={[styles.sliderThumb, { left: `${ratio * 100}%` }]} />
-      </View>
-      <View style={styles.sliderTicks}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <Pressable
-            key={i}
-            style={styles.sliderTickHit}
-            onPress={() => onChange(min + ((max - min) * i) / 4)}
-          />
-        ))}
-      </View>
     </View>
   );
 }

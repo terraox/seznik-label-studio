@@ -4,17 +4,18 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ClipartIcon } from '@/components/clipart-icon';
 import { clipartImageUri, clipartSvgSource, type ClipartItem } from '@/lib/clipart/types';
 
-export function ClipartTile({ item }: { item: ClipartItem }) {
+export function ClipartTile({ item, size = 76 }: { item: ClipartItem; size?: number }) {
   const svg = clipartSvgSource(item);
   const imageUri = clipartImageUri(item);
+  const iconSize = Math.max(22, Math.min(34, Math.round(size * 0.42)));
   return (
-    <View style={styles.tile}>
+    <View style={[styles.tile, { minHeight: size }]}>
       {imageUri ? (
-        <Image source={{ uri: imageUri }} style={styles.image} contentFit="contain" />
+        <Image source={{ uri: imageUri }} style={{ width: iconSize, height: iconSize }} contentFit="contain" />
       ) : svg ? (
-        <ClipartIcon svg={svg} size={34} color="#111111" />
+        <ClipartIcon svg={svg} size={iconSize} color="#111111" />
       ) : (
-        <View style={styles.image} />
+        <View style={{ width: iconSize, height: iconSize }} />
       )}
       <Text style={styles.label} numberOfLines={1}>
         {item.label}
@@ -26,19 +27,16 @@ export function ClipartTile({ item }: { item: ClipartItem }) {
 const styles = StyleSheet.create({
   tile: {
     flex: 1,
-    aspectRatio: 1,
     backgroundColor: '#F4F6F8',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    margin: 4,
-    minHeight: 76,
     borderWidth: 1,
     borderColor: '#E2E6EC',
-    gap: 4,
-    paddingHorizontal: 4,
+    gap: 2,
+    paddingHorizontal: 2,
+    paddingVertical: 6,
   },
-  image: { width: 34, height: 34 },
   label: {
     fontSize: 10,
     color: '#4B5563',

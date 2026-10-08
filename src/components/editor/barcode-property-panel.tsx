@@ -3,6 +3,7 @@ import { AppIcon } from '@/components/app-icon';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useMemo } from 'react';
 
+import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
 import { TextAlignButtons } from '@/components/editor/text-align-buttons';
 import {
@@ -247,29 +248,6 @@ function AlignButtons({
   return <TextAlignButtons align={align} onChange={(value) => patch({ align: value })} />;
 }
 
-function FontSlider({ value, onChange }: { value: number; onChange: (next: number) => void }) {
-  const min = 4;
-  const max = 24;
-  const ratio = (value - min) / (max - min);
-  return (
-    <View style={styles.sliderBlock}>
-      <View style={styles.sliderTrack}>
-        <View style={[styles.sliderFill, { width: `${ratio * 100}%` }]} />
-        <View style={[styles.sliderThumb, { left: `${ratio * 100}%` }]} />
-      </View>
-      <View style={styles.sliderTicks}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <Pressable
-            key={i}
-            style={styles.sliderTickHit}
-            onPress={() => onChange(min + ((max - min) * i) / 4)}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
 function ColorRow({
   selectedIndex,
   onSelect,
@@ -327,7 +305,7 @@ function FontSection({
       <Divider />
       <View style={styles.block}>
         <Text style={styles.rowLabel}>Font Size</Text>
-        <FontSlider value={state.fontSize} onChange={(fontSize) => patch({ fontSize })} />
+        <FontSlider min={4} max={24} step={1} value={state.fontSize} onChange={(fontSize) => patch({ fontSize })} />
       </View>
       <Divider />
       <View style={styles.block}>
@@ -577,7 +555,7 @@ export function BarcodePropertyPanel({
             <Divider />
             <View style={styles.block}>
               <Text style={styles.rowLabel}>Font Size</Text>
-              <FontSlider value={state.fontSize} onChange={(fontSize) => patch({ fontSize })} />
+              <FontSlider min={4} max={24} step={1} value={state.fontSize} onChange={(fontSize) => patch({ fontSize })} />
             </View>
             <Divider />
             <View style={styles.block}>

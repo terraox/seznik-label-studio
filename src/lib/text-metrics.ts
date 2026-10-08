@@ -66,11 +66,22 @@ export function textLineHeightScale(fontFamily?: string): number {
   return 1.18;
 }
 
+/** Fraction of font size used as left/right inset inside the selection frame (editor + layout). */
+export const TEXT_FRAME_PADDING_X_RATIO = 0.26;
+/** Fraction of font size used as top/bottom inset. */
+export const TEXT_FRAME_PADDING_Y_RATIO = 0.1;
+
+/** Side inset inside the dashed frame — matches editor `paddingHorizontal`. */
+export function textHorizontalPaddingMm(fontSizePt: number): number {
+  'worklet';
+  return Math.max(0.55, ptToMm(fontSizePt) * TEXT_FRAME_PADDING_X_RATIO);
+}
+
 /** Horizontal inset inside the selection frame. */
 export function textInnerWidthMm(boxWidthMm: number, fontSizePt: number): number {
   'worklet';
-  const pad = Math.max(1, ptToMm(fontSizePt) * 0.55);
-  return Math.max(0.5, boxWidthMm - pad * 0.55);
+  const inset = textHorizontalPaddingMm(fontSizePt) * 2;
+  return Math.max(0.5, boxWidthMm - inset);
 }
 
 /** Wrap width for layout. Conservative mode counts extra lines for height. */
@@ -88,10 +99,10 @@ export function textLineBoxHeightMm(fontSizePt: number, lineSpacing?: LineSpacin
   return fontMm * 1.25 * mult * textLineHeightScale(fontFamily);
 }
 
-/** Top + bottom `paddingVertical` from the editor text style. */
+/** Top + bottom inset — matches editor `paddingVertical`. */
 export function textVerticalPaddingMm(fontSizePt: number): number {
   'worklet';
-  return ptToMm(fontSizePt) * 0.24;
+  return Math.max(0.32, ptToMm(fontSizePt) * TEXT_FRAME_PADDING_Y_RATIO);
 }
 
 /**
@@ -467,7 +478,7 @@ export function computeTextElementHeightMm({
   const lines = computeWrappedLines({
     text,
     fontSize,
-    widthMm: textWrapWidthMm(widthMm, fontSize, true),
+    widthMm: textWrapWidthMm(widthMm, fontSize, false),
     autoWrapping: wrapMode,
     charSpacing,
     bold,
@@ -477,8 +488,7 @@ export function computeTextElementHeightMm({
 
   const lineH = textLineBoxHeightMm(fontSize, lineSpacing, fontFamily);
   const vertPad = textVerticalPaddingMm(fontSize);
-  const framePad = Math.max(0.6, ptToMm(fontSize) * 0.2);
-  return Math.max(2.4, vertPad + lineH * Math.max(1, lines.length) + framePad);
+  return Math.max(2.2, vertPad * 2 + lineH * Math.max(1, lines.length));
 }
 
 /**
