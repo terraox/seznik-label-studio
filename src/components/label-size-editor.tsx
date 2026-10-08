@@ -90,12 +90,6 @@ export function LabelSizeEditor({ widthMm, heightMm, onChange }: LabelSizeEditor
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       bounces={false}>
-      <Text style={styles.hint}>
-        Screen preview fits millimetres into the editor. Print uses the connected
-        printer DPI from Printing Settings (dots = mm × dots-per-mm). 203 DPI is
-        8 dots/mm; 304 DPI is 12 dots/mm. Inch sizes such as 2×1 in are stored as
-        millimetres (50.8×25.4).
-      </Text>
       <View style={styles.unitRow}>
         {UNITS.map((item) => (
           <Pressable
@@ -177,7 +171,6 @@ export function LabelSizeEditor({ widthMm, heightMm, onChange }: LabelSizeEditor
 const styles = StyleSheet.create({
   scroll: { flexGrow: 0 },
   root: { gap: 12, paddingBottom: 8 },
-  hint: { fontSize: 12, color: '#64748B', lineHeight: 16 },
   unitRow: { flexDirection: 'row', gap: 8 },
   unitChip: {
     paddingHorizontal: 12,

@@ -64,6 +64,8 @@ import {
   type ScaleCapMember,
 } from '@/lib/editor/resize-policy';
 import {
+  BULK_LABEL_NAV_HEIGHT_PX,
+  BULK_PANEL_DEFAULT_HEIGHT_PX,
   DIVIDER_HIT_SIZE_PX,
   NUDGE_PAD_SPLIT_EXTRA_PX,
   PANEL_DEFAULT_HEIGHT_PX,
@@ -224,7 +226,7 @@ import {
   type LabelElement,
 } from '@/lib/label-document';
 import { resolveLabelSettings } from '@/lib/label-settings';
-import { PdfPageNav } from '@/components/pdf-editor/pdf-page-nav';
+import { BulkLabelNav } from '@/components/bulk-label-nav';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
 import { useDataStore } from '@/stores/data-store';
@@ -771,13 +773,18 @@ export default function EditScreen() {
   const docHeightMmSv = useSharedValue(doc.heightMm);
   const basePxPerMMSv = useSharedValue(1);
   const liveScaleSv = useSharedValue(1);
+  const showBulkNav = Boolean(doc.bulk && doc.bulk.rowCount > 1);
+  const bulkNavReservePx = showBulkNav ? BULK_LABEL_NAV_HEIGHT_PX : 0;
+  const splitViewportForCanvas = Math.max(0, splitViewportH - bulkNavReservePx);
+  const panelDefaultBase = showBulkNav ? BULK_PANEL_DEFAULT_HEIGHT_PX : PANEL_DEFAULT_HEIGHT_PX;
   const panelDefaultForSplit =
-    PANEL_DEFAULT_HEIGHT_PX +
+    panelDefaultBase +
     (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0) +
     Math.max(0, Math.round(insets.bottom));
   const panelMinForSplit =
     PANEL_MIN_HEIGHT_PX + (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0);
   const panelMinForSplitSv = useSharedValue(panelMinForSplit);
+  const bulkNavReserveSv = useSharedValue(bulkNavReservePx);
 
   const topBarSelectionVisibleSv = useSharedValue(selectedIds.length > 0 ? 1 : 0);
   const bottomPanelVisibleSv = useSharedValue(panelOpen && selectedIds.length > 0 ? 1 : 0);
@@ -894,14 +901,14 @@ export default function EditScreen() {
 
     if (!initialSplitRestoredRef.current) {
       initialSplitRestoredRef.current = true;
-      lastViewportHRef.current = splitViewportH;
+      lastViewportHRef.current = splitViewportForCanvas;
       lastPanelMinRef.current = panelMinForSplit;
       lastPanelDefaultRef.current = panelDefaultForSplit;
       setCanvasSplitH(
         restoreCanvasSplitHeight({
           ratio: effectiveSplitRatio,
           fullscreen: canvasFullscreen,
-          viewportPx: splitViewportH,
+          viewportPx: splitViewportForCanvas,
           panelMinPx: panelMinForSplit,
           panelDefaultPx: panelDefaultForSplit,
         }),
@@ -910,12 +917,12 @@ export default function EditScreen() {
     }
 
     const prevVp = lastViewportHRef.current;
-    const vpChanged = Math.abs(splitViewportH - prevVp) > 2;
+    const vpChanged = Math.abs(splitViewportForCanvas - prevVp) > 2;
     const panelMinChanged = panelMinForSplit !== lastPanelMinRef.current;
     const panelDefaultChanged = panelDefaultForSplit !== lastPanelDefaultRef.current;
 
     if (vpChanged || panelMinChanged || panelDefaultChanged) {
-      lastViewportHRef.current = splitViewportH;
+      lastViewportHRef.current = splitViewportForCanvas;
       lastPanelMinRef.current = panelMinForSplit;
       lastPanelDefaultRef.current = panelDefaultForSplit;
       setCanvasSplitH((prevH) => {
@@ -923,24 +930,24 @@ export default function EditScreen() {
           return restoreCanvasSplitHeight({
             ratio: effectiveSplitRatio,
             fullscreen: true,
-            viewportPx: splitViewportH,
+            viewportPx: splitViewportForCanvas,
             panelMinPx: panelMinForSplit,
             panelDefaultPx: panelDefaultForSplit,
           });
         }
-        const prevUsable = usableSplitViewportPx(prevVp > 0 ? prevVp : splitViewportH);
+        const prevUsable = usableSplitViewportPx(prevVp > 0 ? prevVp : splitViewportForCanvas);
         const ratio = prevUsable > 0 ? prevH / prevUsable : effectiveSplitRatio;
         return restoreCanvasSplitHeight({
           ratio,
           fullscreen: false,
-          viewportPx: splitViewportH,
+          viewportPx: splitViewportForCanvas,
           panelMinPx: panelMinForSplit,
           panelDefaultPx: panelDefaultForSplit,
         });
       });
     }
   }, [
-    splitViewportH,
+    splitViewportForCanvas,
     panelMinForSplit,
     panelDefaultForSplit,
     canvasFullscreen,
@@ -1025,13 +1032,20 @@ export default function EditScreen() {
     panelMinForSplitSv.value = panelMinForSplit;
   }, [panelMinForSplit, panelMinForSplitSv]);
 
+  useEffect(() => {
+    bulkNavReserveSv.value = bulkNavReservePx;
+  }, [bulkNavReservePx, bulkNavReserveSv]);
+
   const stageAnimatedStyle = useAnimatedStyle(() => ({
     height: canvasHeightSv.value,
   }));
 
   const toolGridAnimatedStyle = useAnimatedStyle(() => {
     const vpH = splitViewportHSv.value > 0 ? splitViewportHSv.value : 600;
-    const belowDividerH = Math.max(0, vpH - canvasHeightSv.value - DIVIDER_HIT_SIZE_PX);
+    const belowDividerH = Math.max(
+      0,
+      vpH - canvasHeightSv.value - bulkNavReserveSv.value - DIVIDER_HIT_SIZE_PX,
+    );
     const nudgeH = panelMinForSplitSv.value - PANEL_MIN_HEIGHT_PX;
     const gridH = Math.max(0, belowDividerH - nudgeH - PANEL_MIN_HEIGHT_PX);
     return {
@@ -1087,19 +1101,22 @@ export default function EditScreen() {
         canvasSplitFullscreen: fullscreen,
         canvasSplitRatio: persistableSplitRatio({
           canvasPx,
-          viewportPx: splitViewportH,
+          viewportPx: splitViewportForCanvas,
           fullscreen,
           lastRatio: effectiveSplitRatio ?? undefined,
         }),
       });
     },
-    [patchEditor, splitViewportH, effectiveSplitRatio],
+    [patchEditor, splitViewportForCanvas, effectiveSplitRatio],
   );
 
   const toggleCanvasFullscreen = useCallback(() => {
     animateEditorSplit();
     const next = !canvasFullscreen;
-    const viewport = splitViewportH > 0 ? splitViewportH : canvasSplitH + panelMinForSplit;
+    const viewport =
+      splitViewportForCanvas > 0
+        ? splitViewportForCanvas
+        : canvasSplitH + panelMinForSplit + bulkNavReservePx;
     const height = restoreCanvasSplitHeight({
       ratio: effectiveSplitRatio,
       fullscreen: next,
@@ -1116,7 +1133,8 @@ export default function EditScreen() {
     effectiveSplitRatio,
     panelMinForSplit,
     persistSplit,
-    splitViewportH,
+    splitViewportForCanvas,
+    bulkNavReservePx,
   ]);
 
   const handleSplitDragStart = useCallback(() => {
@@ -4310,45 +4328,6 @@ export default function EditScreen() {
           </Text>
         ) : null}
 
-        {doc.bulk && doc.bulk.rowCount > 1 ? (
-          <View style={styles.bulkNav}>
-            <PdfPageNav
-              index={doc.bulk.activeRowIndex}
-              total={doc.bulk.rowCount}
-              onPrev={() => goToBulkRow(doc.bulk!.activeRowIndex - 1)}
-              onNext={() => goToBulkRow(doc.bulk!.activeRowIndex + 1)}
-            />
-            <View style={styles.bulkScopeSwitch}>
-              <Pressable
-                onPress={() => setBulkScopeApplyAll(false)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: !bulkScopeApplyAll }}
-                style={({ pressed }) => [
-                  styles.bulkScopeSeg,
-                  !bulkScopeApplyAll && styles.bulkScopeSegOn,
-                  pressed && styles.pressed,
-                ]}>
-                <Text style={[styles.bulkScopeSegText, !bulkScopeApplyAll && styles.bulkScopeSegTextOn]}>
-                  This
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setBulkScopeApplyAll(true)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: bulkScopeApplyAll }}
-                style={({ pressed }) => [
-                  styles.bulkScopeSeg,
-                  bulkScopeApplyAll && styles.bulkScopeSegOn,
-                  pressed && styles.pressed,
-                ]}>
-                <Text style={[styles.bulkScopeSegText, bulkScopeApplyAll && styles.bulkScopeSegTextOn]}>
-                  All labels
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
         {doc.ups && doc.ups.columns > 1 ? (
           doc.ups.columns >= 3 ? (
             /* Jewellery 3-up style: individual tab buttons */
@@ -4426,11 +4405,28 @@ export default function EditScreen() {
           }}>
           {renderCanvas()}
 
+          {showBulkNav ? (
+            <BulkLabelNav
+              index={doc.bulk!.activeRowIndex}
+              total={doc.bulk!.rowCount}
+              onFirst={() => goToBulkRow(0)}
+              onPrev={() => goToBulkRow(doc.bulk!.activeRowIndex - 1)}
+              onNext={() => goToBulkRow(doc.bulk!.activeRowIndex + 1)}
+              onLast={() => goToBulkRow(doc.bulk!.rowCount - 1)}
+              applyAll={bulkScopeApplyAll}
+              onApplyAllChange={setBulkScopeApplyAll}
+            />
+          ) : null}
+
           <CanvasPanelDivider
             canvasHeightPx={canvasSplitH}
             canvasHeightSv={canvasHeightSv}
             isDraggingSv={isDividerDraggingSv}
-            viewportPx={splitViewportH > 0 ? splitViewportH : canvasSplitH + panelMinForSplit}
+            viewportPx={
+              splitViewportForCanvas > 0
+                ? splitViewportForCanvas
+                : canvasSplitH + panelMinForSplit
+            }
             panelMinPx={panelMinForSplit}
             onDragStart={handleSplitDragStart}
             onDragEnd={handleSplitDragEnd}
@@ -5053,37 +5049,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
-  },
-  bulkNav: {
-    alignSelf: 'center',
-    marginTop: 8,
-    marginBottom: 2,
-    alignItems: 'center',
-    gap: 6,
-  },
-  bulkScopeSwitch: {
-    flexDirection: 'row',
-    backgroundColor: '#E6EBF0',
-    borderRadius: 16,
-    padding: 3,
-  },
-  bulkScopeSeg: {
-    minWidth: 88,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 13,
-    alignItems: 'center',
-  },
-  bulkScopeSegOn: {
-    backgroundColor: Palette.header,
-  },
-  bulkScopeSegText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Palette.ink,
-  },
-  bulkScopeSegTextOn: {
-    color: '#FFFFFF',
   },
   upsPagerBtn: {
     width: 28,

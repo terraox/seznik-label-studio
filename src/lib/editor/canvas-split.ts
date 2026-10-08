@@ -34,6 +34,12 @@ export const PANEL_MIN_HEIGHT_PX = 48;
 /** Extra sheet reservation when the millimetre nudge pad is visible. */
 export const NUDGE_PAD_SPLIT_EXTRA_PX = 96;
 
+/** Slim Excel row navigator sitting between canvas and the sheet divider. */
+export const BULK_LABEL_NAV_HEIGHT_PX = 62;
+
+/** Shorter default sheet when bulk Excel labels reserve a row navigator. */
+export const BULK_PANEL_DEFAULT_HEIGHT_PX = 232;
+
 /** Drag-release past this share of usable height snaps to full-screen canvas. */
 export const FULLSCREEN_SNAP_RATIO = 0.9;
 
