@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { router } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import {
   Modal,
   Pressable,
@@ -20,6 +19,7 @@ import { JEWELRY_DIECUT } from '@/constants/jewelry-diecut';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { TEMPLATES, type TemplateItem } from '@/app/(tabs)/template';
 import { useLabelStore } from '@/stores/label-store';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 
 const ACCENT = '#48C3C7';
 const DEFAULT_TAG_W = JEWELRY_DIECUT.tagWidthMm;
@@ -35,6 +35,7 @@ const SIZE_PRESETS = [
 export default function JewelleryLabelScreen() {
   const insets = useSafeAreaInsets();
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
 
   // Filter all jewelry templates from the Industry catalog
   const jewelryTemplates = useMemo(
@@ -55,22 +56,16 @@ export default function JewelleryLabelScreen() {
   };
 
   const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-      allowsEditing: false,
-    });
-
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
+    const asset = await pickImageAsset();
+    if (!asset) return;
 
     // Direct to dedicated sizing page with single-canvas mode
     router.replace({
       pathname: '/new-label-setup',
       params: {
         importImageUri: asset.uri,
-        importImageWidth: String(asset.width || 0),
-        importImageHeight: String(asset.height || 0),
+        importImageWidth: String(asset.width),
+        importImageHeight: String(asset.height),
         defaultWidth: String(DEFAULT_TAG_W),
         defaultHeight: String(DEFAULT_TAG_H),
         isSingleCanvas: 'true',
@@ -155,9 +150,9 @@ export default function JewelleryLabelScreen() {
             <AppIcon name="photo" tintColor="#FFFFFF" size={24} />
           </View>
           <View style={styles.optionText}>
-            <Text style={styles.optionTitle}>Choose Image from Gallery</Text>
+            <Text style={styles.optionTitle}>Choose Image</Text>
             <Text style={styles.optionDetail}>
-              Pick, crop & set label size before editing on a single canvas
+              Local file or Drive
             </Text>
           </View>
           <AppIcon name="chevron.right" tintColor="#94A3B8" size={18} />
@@ -171,6 +166,7 @@ export default function JewelleryLabelScreen() {
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
       </View>
+      {imageSourceSheet}
     </View>
   );
 }

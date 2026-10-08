@@ -1,4 +1,3 @@
-import * as DocumentPicker from 'expo-document-picker';
 import { useFonts } from 'expo-font';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -21,6 +20,7 @@ import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { downloadCatalogFont, importFontFile, removeInstalledFont } from '@/lib/fonts/install';
+import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import type { FontRail, InstalledFontRecord } from '@/lib/fonts/types';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
 
@@ -73,6 +73,7 @@ export default function FontLibraryScreen() {
   const [rail, setRail] = useState<FontRail>('common');
   const [editing, setEditing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
 
   const rows = useMemo(() => rowsForRail(rail, installed), [rail, installed]);
 
@@ -115,22 +116,15 @@ export default function FontLibraryScreen() {
   const importFont = async () => {
     if (busyId) return;
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'font/ttf',
-          'font/otf',
-          'application/x-font-ttf',
-          'application/x-font-otf',
-          'application/octet-stream',
-          '*/*',
-        ],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-      if (result.canceled || !result.assets?.[0]) return;
-      const file = result.assets[0];
+      const picked = await pickDocumentWithSource({ preset: 'font' });
+      if (!picked.ok) {
+        if (picked.reason === 'invalid') {
+          Alert.alert('Font', 'Please choose a .ttf or .otf file.');
+        }
+        return;
+      }
       setBusyId('import');
-      await importFontFile(file.uri, file.name || 'Imported Font.ttf');
+      await importFontFile(picked.uri, picked.name || 'Imported Font.ttf');
       setRail('creative');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not import that font.';
@@ -234,13 +228,14 @@ export default function FontLibraryScreen() {
                 {busyId === 'import' ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.importLabel}>Import Font</Text>
+                  <Text style={styles.importLabel}>Import from Files or Drive</Text>
                 )}
               </Pressable>
             </View>
           </View>
         </View>
       )}
+      {documentSourceSheet}
     </View>
   );
 }

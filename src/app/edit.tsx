@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { PrintGridIcon, PrintRulerIcon, SafeModeIcon } from '@/components/editor/chrome-icons';
@@ -227,7 +226,8 @@ import {
 } from '@/lib/label-document';
 import { resolveLabelSettings } from '@/lib/label-settings';
 import { PdfPageNav } from '@/components/pdf-editor/pdf-page-nav';
-import { pickExcelWorkbook } from '@/lib/excel-import';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
 import { useDataStore } from '@/stores/data-store';
 import { CANVAS_BOTTOM_CHIP_CLEARANCE_PX, STAGE_PADDING_PX, clampLabelMm, fitEditorPadBoard } from '@/lib/label-geometry';
 import { applyDocumentStockSize, stockSizePromptCopy, type StockSizeHandling } from '@/lib/stock-size';
@@ -562,6 +562,8 @@ export default function EditScreen() {
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const savedDocuments = useLabelStore((s) => s.documents);
   const { t } = useTranslation();
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
+  const { importExcel, excelImportModal, documentSourceSheet } = useExcelImportFlow();
 
   const [doc, setDoc] = useState<LabelDocument>(() => {
     const name = params.labelName ?? 'New Label_1';
@@ -2999,26 +3001,19 @@ export default function EditScreen() {
   );
 
   const handlePickImage = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-      allowsEditing: false,
-    });
-    if (!mountedRef.current) return;
-    if (result.canceled || result.assets.length === 0) return;
-    const asset = result.assets[0];
-    if (!asset.uri) return;
+    const asset = await pickImageAsset();
+    if (!mountedRef.current || !asset) return;
 
     router.push({
       pathname: '/image-crop',
       params: {
         uri: asset.uri,
-        width: String(asset.width ?? 0),
-        height: String(asset.height ?? 0),
+        width: String(asset.width),
+        height: String(asset.height),
         mode: 'import',
       },
     });
-  }, []);
+  }, [pickImageAsset]);
 
   useEffect(() => {
     const keep = collectImageFileUris([
@@ -3396,22 +3391,15 @@ export default function EditScreen() {
 
   const importExcelFromCanvas = async () => {
     try {
-      const picked = await pickExcelWorkbook();
-      if (!picked.ok) {
-        if (picked.reason === 'cancelled') return;
-        Alert.alert(
-          picked.reason === 'invalid' ? 'Invalid File' : 'Empty File',
-          picked.reason === 'invalid'
-            ? 'Please choose an Excel workbook (.xlsx / .xls) or CSV file.'
-            : 'No data rows were found in this file.',
-        );
-        return;
-      }
+      const picked = await importExcel();
+      if (!picked) return;
       const entry = useDataStore.getState().addExcelFile({
         name: picked.name,
         uri: picked.uri,
         sheets: picked.sheets,
         activeSheetIndex: 0,
+        hasHeaderRow: picked.hasHeaderRow,
+        dataStartRow: picked.dataStartRow,
       });
       const size = clampLabelMm(docRef.current.widthMm, docRef.current.heightMm);
       router.push({
@@ -4684,6 +4672,9 @@ export default function EditScreen() {
         onCancel={handleQuickEditCancel}
         onConfirm={handleQuickEditConfirm}
       />
+      {imageSourceSheet}
+      {documentSourceSheet}
+      {excelImportModal}
     </View>
   );
 }

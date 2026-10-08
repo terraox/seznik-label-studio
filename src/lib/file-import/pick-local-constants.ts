@@ -1,0 +1,1 @@
+export const LOCAL_FILE_PICKER_MAX_BYTES = 100 * 1024 * 1024;

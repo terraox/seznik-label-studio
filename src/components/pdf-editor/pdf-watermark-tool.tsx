@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Palette } from '@/constants/ui';
@@ -10,6 +9,7 @@ import {
   type NinePoint,
   type PdfWatermark,
 } from '@/lib/pdf-editor/session';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 
 const WORD_PRESETS = [
   'CONFIDENTIAL',
@@ -75,15 +75,16 @@ export function PdfWatermarkTool({
   onChange: (next: PdfWatermark) => void;
   onPickImage: (uri: string) => void;
 }) {
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
   const rangeError =
     value.scope.mode === 'range'
       ? parsePageRange(String(value.scope.start), String(value.scope.end), pageCount).error
       : undefined;
 
   const pick = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-    if (res.canceled || !res.assets?.[0]) return;
-    onPickImage(res.assets[0].uri);
+    const asset = await pickImageAsset();
+    if (!asset) return;
+    onPickImage(asset.uri);
   };
 
   const setAnchor = (anchor: NinePoint) => {
@@ -516,6 +517,7 @@ export function PdfWatermarkTool({
           onChange({ ...value, scope });
         }}
       />
+      {imageSourceSheet}
     </View>
   );
 }

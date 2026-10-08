@@ -1,4 +1,3 @@
-import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -25,6 +24,7 @@ import { PdfWatermarkTool } from '@/components/pdf-editor/pdf-watermark-tool';
 import { Palette } from '@/constants/ui';
 import { exportEditedPdf } from '@/lib/pdf-editor/export';
 import { copyPdfToCache, loadPdfMetadata } from '@/lib/pdf-editor/load';
+import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import {
   PREVIEW_DPI,
   clearRasterCache,
@@ -69,6 +69,7 @@ export default function PdfEditorScreen() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<string | null>(null);
+  const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
 
   useEffect(() => {
     return () => {
@@ -139,18 +140,17 @@ export default function PdfEditorScreen() {
 
   const importPdf = useCallback(async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf'],
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled || !result.assets?.[0]) return;
-      const file = result.assets[0];
+      const picked = await pickDocumentWithSource({ preset: 'pdf' });
+      if (!picked.ok) {
+        if (picked.reason === 'invalid') Alert.alert('PDF', 'Please choose a PDF document.');
+        return;
+      }
       setLoading(true);
-      const cached = await copyPdfToCache(file.uri, file.name);
+      const cached = await copyPdfToCache(picked.uri, picked.name);
       const meta = await loadPdfMetadata(cached);
       startSession({
         sourceUri: cached,
-        sourceName: file.name,
+        sourceName: picked.name,
         pageCount: meta.pageCount,
         pageSizesPt: meta.pageSizesPt,
       });
@@ -160,7 +160,7 @@ export default function PdfEditorScreen() {
     } finally {
       setLoading(false);
     }
-  }, [startSession]);
+  }, [pickDocumentWithSource, startSession]);
 
   const exportPdf = useCallback(async () => {
     if (!session || exporting) return;
@@ -246,7 +246,7 @@ export default function PdfEditorScreen() {
           <Text style={styles.emptyTitle}>Import a PDF</Text>
           <Text style={styles.emptyBody}>Crop, rotate, sharpen, and watermark — then export a new PDF. Printing is not part of this editor.</Text>
           <Pressable onPress={importPdf} style={styles.importBtn}>
-            <Text style={styles.importText}>Choose PDF</Text>
+            <Text style={styles.importText}>Import from Files or Drive</Text>
           </Pressable>
         </View>
       ) : (
@@ -349,10 +349,11 @@ export default function PdfEditorScreen() {
           </PdfToolPanel>
           {exportProgress ? <Text style={styles.progress}>{exportProgress}</Text> : null}
           <Pressable onPress={importPdf} style={styles.replace}>
-            <Text style={styles.replaceText}>Replace PDF</Text>
+            <Text style={styles.replaceText}>Replace from Files or Drive</Text>
           </Pressable>
         </ScrollView>
       )}
+      {documentSourceSheet}
     </View>
   );
 }

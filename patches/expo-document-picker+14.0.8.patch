@@ -1,0 +1,174 @@
+diff --git a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerModule.kt b/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerModule.kt
+index 472a5ab..e44fa04 100644
+--- a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerModule.kt
++++ b/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerModule.kt
+@@ -6,6 +6,7 @@ import android.content.Intent
+ import android.net.Uri
+ import android.os.Build
+ import android.os.FileUtils
++import android.provider.DocumentsContract
+ import expo.modules.core.utilities.FileUtilities
+ import expo.modules.kotlin.Promise
+ import expo.modules.kotlin.exception.Exceptions
+@@ -37,6 +38,14 @@ class DocumentPickerModule : Module() {
+       val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+         addCategory(Intent.CATEGORY_OPENABLE)
+         putExtra(Intent.EXTRA_ALLOW_MULTIPLE, options.multiple)
++        if (options.localOnly) {
++          putExtra(Intent.EXTRA_LOCAL_ONLY, true)
++          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
++            resolveInitialFolderUri(options.initialFolder)?.let { uri ->
++              putExtra(DocumentsContract.EXTRA_INITIAL_URI, uri)
++            }
++          }
++        }
+         type = if (options.type.size > 1) {
+           putExtra(Intent.EXTRA_MIME_TYPES, options.type.toTypedArray())
+           "*/*"
+@@ -74,6 +83,14 @@ class DocumentPickerModule : Module() {
+     }
+   }
+ 
++  private fun resolveInitialFolderUri(folder: String?): Uri? {
++    return when (folder) {
++      "downloads" -> Uri.parse("content://com.android.externalstorage.documents/document/primary:Download")
++      "primary", "root" -> Uri.parse("content://com.android.externalstorage.documents/document/primary:")
++      else -> null
++    }
++  }
++
+   private fun copyDocumentToCacheDirectory(documentUri: Uri, name: String): Uri {
+     val outputFilePath = FileUtilities.generateOutputPath(
+       context.cacheDir,
+diff --git a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerOptions.kt b/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerOptions.kt
+index 0e781b6..6c207f8 100644
+--- a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerOptions.kt
++++ b/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerOptions.kt
+@@ -13,5 +13,11 @@ data class DocumentPickerOptions(
+   val type: List<String>,
+ 
+   @Field
+-  val multiple: Boolean
++  val multiple: Boolean,
++
++  @Field
++  val localOnly: Boolean = false,
++
++  @Field
++  val initialFolder: String? = null
+ ) : Record
+diff --git a/node_modules/expo-document-picker/build/index.d.ts b/node_modules/expo-document-picker/build/index.d.ts
+index 78e080b..f5d079f 100644
+--- a/node_modules/expo-document-picker/build/index.d.ts
++++ b/node_modules/expo-document-picker/build/index.d.ts
+@@ -10,6 +10,6 @@ import { DocumentPickerOptions, DocumentPickerResult } from './types';
+  *
+  * If the user cancelled the document picking, the promise resolves to `{ type: 'cancel' }`.
+  */
+-export declare function getDocumentAsync({ type, copyToCacheDirectory, multiple, base64, }?: DocumentPickerOptions): Promise<DocumentPickerResult>;
++export declare function getDocumentAsync({ type, copyToCacheDirectory, multiple, base64, localOnly, initialFolder, }?: DocumentPickerOptions): Promise<DocumentPickerResult>;
+ export * from './types';
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/node_modules/expo-document-picker/build/index.js b/node_modules/expo-document-picker/build/index.js
+index 803d989..723a105 100644
+--- a/node_modules/expo-document-picker/build/index.js
++++ b/node_modules/expo-document-picker/build/index.js
+@@ -11,7 +11,7 @@ import ExpoDocumentPicker from './ExpoDocumentPicker';
+  *
+  * If the user cancelled the document picking, the promise resolves to `{ type: 'cancel' }`.
+  */
+-export async function getDocumentAsync({ type = '*/*', copyToCacheDirectory = true, multiple = false, base64 = true, } = {}) {
++export async function getDocumentAsync({ type = '*/*', copyToCacheDirectory = true, multiple = false, base64 = true, localOnly = false, initialFolder, } = {}) {
+     if (typeof type === 'string') {
+         type = [type];
+     }
+@@ -20,6 +20,8 @@ export async function getDocumentAsync({ type = '*/*', copyToCacheDirectory = tr
+         copyToCacheDirectory,
+         multiple,
+         base64,
++        localOnly,
++        initialFolder,
+     });
+ }
+ export * from './types';
+diff --git a/node_modules/expo-document-picker/build/types.d.ts b/node_modules/expo-document-picker/build/types.d.ts
+index a7d727b..d1eb49e 100644
+--- a/node_modules/expo-document-picker/build/types.d.ts
++++ b/node_modules/expo-document-picker/build/types.d.ts
+@@ -22,6 +22,17 @@ export type DocumentPickerOptions = {
+      *
+      */
+     multiple?: boolean;
++    /**
++     * If `true`, only local files are shown in the system picker.
++     * @platform android
++     */
++    localOnly?: boolean;
++    /**
++     * Opens the picker at a local folder when `localOnly` is true.
++     * Values: `downloads`, `primary` (internal storage root).
++     * @platform android
++     */
++    initialFolder?: 'downloads' | 'primary';
+     /**
+      * If `true`, asset url is base64 from the file
+      * If `false`, asset url is the file url parameter
+diff --git a/node_modules/expo-document-picker/ios/DocumentPickerOptions.swift b/node_modules/expo-document-picker/ios/DocumentPickerOptions.swift
+index 54c71af..c99d83c 100644
+--- a/node_modules/expo-document-picker/ios/DocumentPickerOptions.swift
++++ b/node_modules/expo-document-picker/ios/DocumentPickerOptions.swift
+@@ -10,4 +10,7 @@ struct DocumentPickerOptions: Record {
+ 
+   @Field
+   var multiple: Bool
++
++  @Field
++  var localOnly: Bool = false
+ }
+diff --git a/node_modules/expo-document-picker/src/index.ts b/node_modules/expo-document-picker/src/index.ts
+index 4254176..205d881 100644
+--- a/node_modules/expo-document-picker/src/index.ts
++++ b/node_modules/expo-document-picker/src/index.ts
+@@ -18,6 +18,8 @@ export async function getDocumentAsync({
+   copyToCacheDirectory = true,
+   multiple = false,
+   base64 = true,
++  localOnly = false,
++  initialFolder,
+ }: DocumentPickerOptions = {}): Promise<DocumentPickerResult> {
+   if (typeof type === 'string') {
+     type = [type] as string[];
+@@ -27,6 +29,8 @@ export async function getDocumentAsync({
+     copyToCacheDirectory,
+     multiple,
+     base64,
++    localOnly,
++    initialFolder,
+   });
+ }
+ 
+diff --git a/node_modules/expo-document-picker/src/types.ts b/node_modules/expo-document-picker/src/types.ts
+index a8176db..18a47f8 100644
+--- a/node_modules/expo-document-picker/src/types.ts
++++ b/node_modules/expo-document-picker/src/types.ts
+@@ -22,7 +22,18 @@ export type DocumentPickerOptions = {
+    * @default false
+    *
+    */
+-  multiple?: boolean;
++    multiple?: boolean;
++  /**
++   * If `true`, only local files are shown in the system picker.
++   * @platform android
++   */
++  localOnly?: boolean;
++  /**
++   * Opens the picker at a local folder when `localOnly` is true.
++   * Values: `downloads`, `primary` (internal storage root).
++   * @platform android
++   */
++  initialFolder?: 'downloads' | 'primary';
+   /**
+    * If `true`, asset url is base64 from the file
+    * If `false`, asset url is the file url parameter

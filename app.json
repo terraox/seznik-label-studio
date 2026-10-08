@@ -49,6 +49,7 @@
     "plugins": [
       "./plugins/with-google-code-scanner.js",
       "./plugins/with-android-packaging.js",
+      "./plugins/with-local-file-picker-queries.js",
       "expo-router",
       [
         "expo-dev-client",

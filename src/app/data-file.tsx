@@ -1,6 +1,5 @@
-import * as DocumentPicker from 'expo-document-picker';
-import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   Alert,
@@ -20,7 +19,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { editorBridge } from '@/constants/editor-bridge';
 import { Palette, Type } from '@/constants/ui';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
-import { parseExcelFile } from '@/lib/excel';
+import { useExcelImportFlow, type ExcelImportSuccess } from '@/lib/use-excel-import-flow';
 import { useDataStore, type ImportedExcelFile } from '@/stores/data-store';
 
 const TABS = ['All', 'Excel', 'PDF', 'CSV', 'Remote Data'] as const;
@@ -54,16 +53,6 @@ function EmptyIllustration() {
     </View>
   );
 }
-
-const EXCEL_MIME_TYPES = [
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-excel',
-  'application/vnd.ms-excel.sheet.macroEnabled.12',
-  'text/csv',
-  'text/comma-separated-values',
-  'public.spreadsheet',
-  'public.composite-content',
-];
 
 function inferFileType(name: string): ImportedDataFile['type'] {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -153,6 +142,8 @@ export default function DataFileScreen() {
   const removeRemoteLink = useDataStore((s) => s.removeRemoteLink);
   const setActiveExcelFile = useDataStore((s) => s.setActiveExcelFile);
   const [importing, setImporting] = useState(false);
+  const { importExcelFromFile, pickDocumentWithSource, excelImportModal, documentSourceSheet } =
+    useExcelImportFlow();
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkName, setLinkName] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
@@ -183,103 +174,94 @@ export default function DataFileScreen() {
     return [...excel, ...pdf].sort((a, b) => (a.id < b.id ? 1 : -1));
   }, [excelFiles, pdfFiles]);
 
+  const finishExcelImport = (imported: ExcelImportSuccess) => {
+    const entry = addExcelFile({
+      name: imported.name,
+      uri: imported.uri,
+      sheets: imported.sheets,
+      activeSheetIndex: 0,
+      hasHeaderRow: imported.hasHeaderRow,
+      dataStartRow: imported.dataStartRow,
+    });
+    const sheet = imported.sheets[0];
+    Alert.alert(
+      'File Imported',
+      `"${imported.name}" parsed: ${sheet?.rows.length ?? 0} rows, ${sheet?.columns.length ?? 0} columns. It is now the active data source for data-bound labels.`,
+      [
+        { text: 'OK' },
+        {
+          text: 'Print',
+          onPress: () =>
+            router.push({
+              pathname: '/excel-bulk-setup',
+              params: { excelFileId: entry.id },
+            }),
+        },
+      ],
+    );
+  };
+
+  const finishPdfImport = (file: { name: string; uri: string; size?: number }) => {
+    addPdfFile({ name: file.name, uri: file.uri, sizeBytes: file.size ?? 0 });
+    Alert.alert('File Imported', `"${file.name}" was imported successfully.`, [
+      { text: 'OK' },
+      {
+        text: 'Edit PDF',
+        onPress: () =>
+          router.push({
+            pathname: '/pdf',
+            params: { docName: file.name, docUri: file.uri },
+          }),
+      },
+    ]);
+  };
+
   const handleImportFile = async () => {
     if (importing) return;
+    setImporting(true);
     try {
-      const mimeTypes =
-        activeTab === 'Excel'
-          ? EXCEL_MIME_TYPES
-          : activeTab === 'PDF'
-          ? ['application/pdf']
-          : activeTab === 'CSV'
-          ? ['text/csv', 'text/comma-separated-values']
-          : ['*/*'];
-
-      const result = await DocumentPicker.getDocumentAsync({
-        type: mimeTypes,
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (result.canceled || !result.assets?.length) {
-        return;
-      }
-
-      const file = result.assets[0];
-      const fileType = inferFileType(file.name);
-
-      if (activeTab === 'Excel' && fileType !== 'Excel' && fileType !== 'CSV') {
-        Alert.alert('Invalid File', 'Please choose an Excel workbook (.xlsx / .xls) or CSV file.');
-        return;
-      }
-
-      if (activeTab === 'PDF' && fileType !== 'PDF') {
-        Alert.alert('Invalid File', 'Please choose a PDF document.');
-        return;
-      }
-
-      if (activeTab === 'CSV' && fileType !== 'CSV') {
-        Alert.alert('Invalid File', 'Please choose a CSV file.');
-        return;
-      }
-
-      if (fileType === 'PDF') {
-        addPdfFile({ name: file.name, uri: file.uri, sizeBytes: file.size ?? 0 });
-        Alert.alert(
-          'File Imported',
-          `"${file.name}" was imported successfully.`,
-          [
-            { text: 'OK' },
-            {
-              text: 'Edit PDF',
-              onPress: () =>
-                router.push({
-                  pathname: '/pdf',
-                  params: { docName: file.name, docUri: file.uri },
-                }),
-            },
-          ],
-        );
-        return;
-      }
-
-      setImporting(true);
-      try {
-        const sheets = await parseExcelFile(file.uri, file.name);
-        if (sheets.length === 0) {
-          Alert.alert('Empty File', 'No data rows were found in this file.');
+      if (activeTab === 'Excel' || activeTab === 'CSV') {
+        const picked = await pickDocumentWithSource({ preset: activeTab === 'CSV' ? 'csv' : 'excel' });
+        if (!picked.ok) {
+          if (picked.reason === 'invalid') {
+            Alert.alert(
+              'Invalid File',
+              activeTab === 'CSV'
+                ? 'Please choose a CSV file.'
+                : 'Please choose an Excel workbook (.xlsx / .xls) or CSV file.',
+            );
+          }
           return;
         }
-        const entry = addExcelFile({
-          name: file.name,
-          uri: file.uri,
-          sheets,
-          activeSheetIndex: 0,
-        });
-        const sheet = sheets[0];
-        Alert.alert(
-          'File Imported',
-          `"${file.name}" parsed: ${sheet.rows.length} rows, ${sheet.columns.length} columns. It is now the active data source for data-bound labels.`,
-          [
-            { text: 'OK' },
-            {
-              text: 'Print',
-              onPress: () =>
-                router.push({
-                  pathname: '/excel-bulk-setup',
-                  params: { excelFileId: entry.id },
-                }),
-            },
-          ],
-        );
-      } finally {
-        setImporting(false);
+        const imported = await importExcelFromFile(picked);
+        if (imported) finishExcelImport(imported);
+        return;
       }
+
+      const picked = await pickDocumentWithSource({ preset: activeTab === 'PDF' ? 'pdf' : 'any' });
+      if (!picked.ok) {
+        if (picked.reason === 'invalid') Alert.alert('Invalid File', 'Please choose a PDF document.');
+        return;
+      }
+
+      const fileType = inferFileType(picked.name);
+      if (fileType === 'PDF') {
+        finishPdfImport(picked);
+        return;
+      }
+      if (fileType === 'Excel' || fileType === 'CSV') {
+        const imported = await importExcelFromFile(picked);
+        if (imported) finishExcelImport(imported);
+        return;
+      }
+      Alert.alert('Invalid File', 'Please choose an Excel workbook, CSV, or PDF.');
     } catch (error) {
       Alert.alert(
         'Error',
         error instanceof Error ? error.message : 'Unable to pick or parse the document.',
       );
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -527,7 +509,7 @@ export default function DataFileScreen() {
           onPress={handleFooterPress}
           style={({ pressed }) => [styles.importBtn, pressed && styles.pressed]}>
           <Text style={styles.importBtnText}>
-            {activeTab === 'Remote Data' ? 'Create Link' : 'Import File'}
+            {activeTab === 'Remote Data' ? 'Create Link' : 'Import from Files or Drive'}
           </Text>
         </Pressable>
       </View>
@@ -555,6 +537,8 @@ export default function DataFileScreen() {
           style={{ marginTop: 8 }}
         />
       </IosAlertModal>
+      {documentSourceSheet}
+      {excelImportModal}
     </View>
   );
 }

@@ -560,6 +560,12 @@ export default function CalibrationPrintScreen() {
         </Pressable>
 
         <Pressable
+          onPress={() => router.push('/file-picker-diagnostics')}
+          style={({ pressed }) => [styles.gateABtn, pressed && styles.pressed]}>
+          <Text style={styles.printBtnText}>File picker diagnostics (Android local vs Drive)</Text>
+        </Pressable>
+
+        <Pressable
           onPress={() => router.push('/phase9-robustness')}
           style={({ pressed }) => [styles.phase9Btn, pressed && styles.pressed]}>
           <Text style={styles.printBtnText}>Open Phase 9 Robustness & Batch Engine</Text>

@@ -1,5 +1,4 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -31,6 +30,7 @@ import { DRAWING_COLORS } from '@/components/editor/types';
 import { defaultBorderPlacement } from '@/lib/border-geometry';
 import { generateId, parseOrientation, type LabelDocument, type LabelOrientation, type PaperType } from '@/lib/label-document';
 import { clampLabelMm } from '@/lib/label-geometry';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import {
   backgroundSummary,
   borderSummary,
@@ -62,6 +62,7 @@ export default function LabelSettingsScreen() {
   const printerStatus = usePrinterStore((s) => s.status);
   const printerTransport = usePrinterStore((s) => s.transport);
   const printerSdkId = usePrinterStore((s) => s.sdkId);
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
   const qualityCaps = useMemo(
     () =>
       qualityCapsFor(
@@ -233,12 +234,9 @@ export default function LabelSettingsScreen() {
           label="Background"
           value={backgroundSummary(doc)}
           onPress={async () => {
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ['images'],
-              quality: 1,
-            });
-            if (result.canceled || !result.assets[0]?.uri) return;
-            commit({ background: { type: 'image', uri: result.assets[0].uri } });
+            const asset = await pickImageAsset();
+            if (!asset) return;
+            commit({ background: { type: 'image', uri: asset.uri } });
           }}
           showDivider
         />
@@ -535,6 +533,7 @@ export default function LabelSettingsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {imageSourceSheet}
     </SettingsScreenShell>
   );
 }

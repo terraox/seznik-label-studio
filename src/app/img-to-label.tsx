@@ -8,13 +8,11 @@
 
 import { AppIcon } from '@/components/app-icon';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image as RNImage,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -39,6 +37,7 @@ import {
   type LabelSizeMm,
   type LabelUnit,
 } from '@/lib/label-geometry';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import {
   IMG_TO_LABEL_PRESETS,
   formatPrintSize,
@@ -380,35 +379,21 @@ export default function ImgToLabelScreen() {
   const [decoding, setDecoding] = useState(false);
   const [renderMode, setRenderMode] = useState<RenderQualityMode>('halftone');
   const isPrintingRef = useRef(false);
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
 
   // ─── Image Pick ────────────────────────────────────────────────────────
   const pickImage = useCallback(async () => {
     try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 1,
-        exif: true,
-      });
-      if (res.canceled || !res.assets?.[0]) return;
-      const asset = res.assets[0];
+      const asset = await pickImageAsset();
+      if (!asset) return;
       setImageUri(asset.uri);
       setSourceGray(null);
-      if (asset.width && asset.height) {
-        setImagePixels({ width: asset.width, height: asset.height });
-      } else {
-        // Fallback: get size from RNImage
-        RNImage.getSize(
-          asset.uri,
-          (w, h) => setImagePixels({ width: w, height: h }),
-          () => Alert.alert('Error', 'Unable to load this image.\nPlease try another image.'),
-        );
-      }
+      setImagePixels({ width: asset.width, height: asset.height });
       setStep('size');
     } catch {
       Alert.alert('Error', 'Unable to load this image.\nPlease try another image.');
     }
-  }, []);
+  }, [pickImageAsset]);
 
   // Auto-pick on first mount
   useEffect(() => {
@@ -1074,6 +1059,7 @@ export default function ImgToLabelScreen() {
         onCancel={() => setSizeSheetOpen(false)}
         onSelect={handleSizeSelect}
       />
+      {imageSourceSheet}
     </View>
   );
 }

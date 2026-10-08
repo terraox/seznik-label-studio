@@ -1,6 +1,5 @@
 import { AppIcon } from '@/components/app-icon';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -28,6 +27,7 @@ import { decodeGalleryImage } from '@/lib/printer/gallery-decode';
 import { pngBase64ToGray, rotateGray } from '@/lib/printer/escpos';
 import { flipHorizontal } from '@/lib/printer/exif-orientation';
 import { formatPrintSize, suggestPrintSizeFromAspect } from '@/lib/print-sizes';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { createPrintGeometry } from '@/lib/printer/print-spec';
 import {
     formatPrintFailure,
@@ -197,6 +197,7 @@ export default function PrintPhotoScreen() {
     return w > 0 && h > 0 ? { width: w, height: h } : null;
   });
   const pendingPrintRef = useRef(false);
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
 
   const shotRef = useRef<ViewShot>(null);
   const contentWidth = Math.min(width, MaxContentWidth);
@@ -221,30 +222,21 @@ export default function PrintPhotoScreen() {
 
   const pickPhoto = useCallback(async () => {
     try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 1,
-        exif: true,
-      });
-      if (res.canceled || !res.assets?.[0]) return;
-      const asset = res.assets[0];
-      const uri = asset.uri;
-      if (asset.width && asset.height) {
-        setPhotoPixels({ width: asset.width, height: asset.height });
-        setSuggestedSize(suggestPrintSizeFromAspect(asset.width, asset.height));
-      }
+      const asset = await pickImageAsset();
+      if (!asset) return;
+      setPhotoPixels({ width: asset.width, height: asset.height });
+      setSuggestedSize(suggestPrintSizeFromAspect(asset.width, asset.height));
       setPhotos((prev) => {
         const next = [...prev];
         const empty = next.findIndex((p) => !p);
-        if (empty >= 0) next[empty] = uri;
-        else next[0] = uri;
+        if (empty >= 0) next[empty] = asset.uri;
+        else next[0] = asset.uri;
         return next;
       });
     } catch {
       Alert.alert('Notice', 'Unable to open photo library.');
     }
-  }, []);
+  }, [pickImageAsset]);
 
   const clearPhoto = useCallback((index: number) => {
     setPhotos((prev) => {
@@ -784,6 +776,7 @@ export default function PrintPhotoScreen() {
           setSizeSheetOpen(false);
         }}
       />
+      {imageSourceSheet}
     </View>
   );
 }

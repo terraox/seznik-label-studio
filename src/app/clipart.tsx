@@ -1,4 +1,3 @@
-import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -29,6 +28,7 @@ import { Palette } from '@/constants/ui';
 import { sanitizeUserSvg } from '@/lib/clipart/parse-svg';
 import type { ClipartItem } from '@/lib/clipart/types';
 import { generateId } from '@/lib/label-document';
+import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import { useUserClipartStore } from '@/stores/user-clipart-store';
 
 type GalleryCategory = ClipartCategoryId | 'mine';
@@ -44,6 +44,7 @@ export default function ClipartScreen() {
 
   const [category, setCategory] = useState<GalleryCategory>('retail');
   const [query, setQuery] = useState('');
+  const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
 
   const handleSelect = (item: ClipartItem) => {
     editorBridge.clipartResult = { id: item.id };
@@ -56,25 +57,18 @@ export default function ClipartScreen() {
 
   const handleUpload = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/svg+xml', 'text/xml', 'application/xml', '*/*'],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-      if (result.canceled || !result.assets?.[0]) return;
-      const file = result.assets[0];
-      const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-      if (ext && ext !== 'svg' && ext !== 'xml') {
-        Alert.alert('Clipart', 'Please choose an .svg file.');
+      const picked = await pickDocumentWithSource({ preset: 'svg' });
+      if (!picked.ok) {
+        if (picked.reason === 'invalid') Alert.alert('Clipart', 'Please choose an .svg file.');
         return;
       }
-      const raw = await FileSystem.readAsStringAsync(file.uri);
+      const raw = await FileSystem.readAsStringAsync(picked.uri);
       const svg = sanitizeUserSvg(raw);
       if (!svg) {
         Alert.alert('Clipart', 'That file is not a usable SVG.');
         return;
       }
-      const label = file.name.replace(/\.svg$/i, '').replace(/[_-]+/g, ' ').trim() || 'My SVG';
+      const label = picked.name.replace(/\.svg$/i, '').replace(/[_-]+/g, ' ').trim() || 'My SVG';
       const added = addUser({ id: generateId('svg'), label, svg });
       if (!added) {
         Alert.alert('Clipart', 'Your SVG library is full. Delete one to add another.');
@@ -155,7 +149,7 @@ export default function ClipartScreen() {
             {` · ${icons.length}`}
           </Text>
           <Pressable onPress={handleUpload} style={styles.uploadBtn}>
-            <Text style={styles.uploadText}>Upload SVG</Text>
+            <Text style={styles.uploadText}>Import SVG</Text>
           </Pressable>
         </View>
 
@@ -177,6 +171,7 @@ export default function ClipartScreen() {
           ))}
         </View>
       </ScrollView>
+      {documentSourceSheet}
     </View>
   );
 }

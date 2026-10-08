@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   CameraView,
@@ -27,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { editorBridge } from '@/constants/editor-bridge';
 import { isScanEmptyError, payloadFromBarcodeResult, SCAN_CODE_TYPES } from '@/lib/scan-codes';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SCAN_FRAME_SIZE = Math.min(Math.round(SCREEN_WIDTH * 0.72), 280);
@@ -78,6 +78,7 @@ export default function ScanScreen() {
   const [manualModalVisible, setManualModalVisible] = useState(false);
   const [manualInput, setManualInput] = useState('');
   const [scanCooldown, setScanCooldown] = useState(false);
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
 
   // Animated laser scan bar
   const scanLineAnim = useRef(new Animated.Value(0)).current;
@@ -162,16 +163,9 @@ export default function ScanScreen() {
 
   const handleImportLabelFromImage = async () => {
     try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 1,
-      });
-
-      if (res.canceled || !res.assets?.[0]?.uri) return;
-
-      const asset = res.assets[0];
-      await processLabelCloneImage(asset.uri, asset.width ?? 0, asset.height ?? 0);
+      const asset = await pickImageAsset();
+      if (!asset) return;
+      await processLabelCloneImage(asset.uri, asset.width, asset.height);
     } catch {
       Alert.alert('Error', 'Unable to open this image. Try another photo.');
     }
@@ -179,17 +173,10 @@ export default function ScanScreen() {
 
   const handlePhotoPick = async () => {
     try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 1,
-      });
-
-      if (res.canceled || !res.assets?.[0]?.uri) return;
-
-      const asset = res.assets[0];
+      const asset = await pickImageAsset();
+      if (!asset) return;
       if (isLabelClone) {
-        await processLabelCloneImage(asset.uri, asset.width ?? 0, asset.height ?? 0);
+        await processLabelCloneImage(asset.uri, asset.width, asset.height);
         return;
       }
 
@@ -333,6 +320,7 @@ export default function ScanScreen() {
             autoFocus
           />
         </IosAlertModal>
+        {imageSourceSheet}
       </View>
     );
   }
@@ -502,6 +490,7 @@ export default function ScanScreen() {
           </View>
         </View>
       </Modal>
+      {imageSourceSheet}
     </View>
   );
 }

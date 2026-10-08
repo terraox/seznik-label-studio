@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -27,6 +26,7 @@ import { editorBridge, type OcrResultType } from '@/constants/editor-bridge';
 import { isScanEmptyError, payloadFromBarcodeResult } from '@/lib/scan-codes';
 import { Palette } from '@/constants/ui';
 import { recognizeTextFromImage } from '@/lib/text-recognition';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PREVIEW_SIZE = Math.min(Math.round(SCREEN_WIDTH * 0.62), 260);
@@ -70,6 +70,7 @@ export default function OcrScreen() {
   const params = useLocalSearchParams<{ from?: string | string[] }>();
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
   const returnToEdit = fromParam === 'edit';
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
 
   const cameraRef = useRef<CameraView>(null);
   const previewInputRef = useRef<TextInput>(null);
@@ -121,15 +122,8 @@ export default function OcrScreen() {
 
   const handleGalleryPick = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.9,
-        allowsEditing: false,
-      });
-
-      if (!result.canceled && result.assets[0]?.uri) {
-        openIdentifyStep(result.assets[0].uri);
-      }
+      const asset = await pickImageAsset();
+      if (asset) openIdentifyStep(asset.uri);
     } catch {
       Alert.alert('Error', 'Unable to open photo library.');
     }
@@ -280,6 +274,7 @@ export default function OcrScreen() {
             <Text style={styles.permissionSecondaryText}>Choose Photo Instead</Text>
           </Pressable>
         </View>
+        {imageSourceSheet}
       </View>
     );
   }
@@ -333,6 +328,7 @@ export default function OcrScreen() {
             <AppIcon name="photo.on.rectangle" tintColor="#FFFFFF" size={28} />
           </Pressable>
         </View>
+        {imageSourceSheet}
       </View>
     );
   }

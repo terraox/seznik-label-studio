@@ -17,7 +17,7 @@ import { AppIcon } from '@/components/app-icon';
 import { LabelSizeEditor } from '@/components/label-size-editor';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
-import { pickExcelWorkbook } from '@/lib/excel-import';
+import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
 import { clampLabelMm, validateLabelSize } from '@/lib/label-geometry';
 import { useDataStore } from '@/stores/data-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -29,6 +29,7 @@ export default function ExcelPrintScreen() {
   const insets = useSafeAreaInsets();
   const defaults = useSettingsStore((s) => s.defaults);
   const addExcelFile = useDataStore((s) => s.addExcelFile);
+  const { importExcel, excelImportModal, documentSourceSheet } = useExcelImportFlow();
   const [widthMm, setWidthMm] = useState(defaults.labelWidth);
   const [heightMm, setHeightMm] = useState(defaults.labelHeight);
   const [picking, setPicking] = useState(false);
@@ -44,23 +45,16 @@ export default function ExcelPrintScreen() {
 
     setPicking(true);
     try {
-      const picked = await pickExcelWorkbook();
-      if (!picked.ok) {
-        if (picked.reason === 'cancelled') return;
-        Alert.alert(
-          picked.reason === 'invalid' ? 'Invalid File' : 'Empty File',
-          picked.reason === 'invalid'
-            ? 'Please choose an Excel workbook (.xlsx / .xls) or CSV file.'
-            : 'No data rows were found in this file.',
-        );
-        return;
-      }
+      const picked = await importExcel();
+      if (!picked) return;
 
       const entry = addExcelFile({
         name: picked.name,
         uri: picked.uri,
         sheets: picked.sheets,
         activeSheetIndex: 0,
+        hasHeaderRow: picked.hasHeaderRow,
+        dataStartRow: picked.dataStartRow,
       });
       router.replace({
         pathname: '/excel-bulk-setup',
@@ -133,6 +127,8 @@ export default function ExcelPrintScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      {documentSourceSheet}
+      {excelImportModal}
     </View>
   );
 }

@@ -17,6 +17,10 @@ export type ImportedExcelFile = {
   sheets: ExcelSheet[];
   activeSheetIndex: number;
   importedAt: number;
+  /** True when sheet row 1 was used as column names. */
+  hasHeaderRow: boolean;
+  /** 1-based sheet row where imported data starts. */
+  dataStartRow: number;
 };
 
 export type ImportedPdfFile = {
@@ -63,7 +67,14 @@ export const useDataStore = create<DataStoreState>()(
       activeRowIndex: 0,
 
       addExcelFile: (file) => {
-        const entry: ImportedExcelFile = { ...file, id: generateId('xls'), importedAt: Date.now() };
+        const hasHeaderRow = file.hasHeaderRow ?? true;
+        const entry: ImportedExcelFile = {
+          ...file,
+          hasHeaderRow,
+          dataStartRow: file.dataStartRow ?? (hasHeaderRow ? 2 : 1),
+          id: generateId('xls'),
+          importedAt: Date.now(),
+        };
         set((state) => ({
           excelFiles: [entry, ...state.excelFiles.filter((f) => f.uri !== file.uri)],
           activeExcelFileId: entry.id,
@@ -118,6 +129,18 @@ export const useDataStore = create<DataStoreState>()(
     {
       name: 'sez-print/data-files',
       storage: createJSONStorage(() => AsyncStorage),
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<DataStoreState>;
+        const excelFiles = (saved.excelFiles ?? current.excelFiles).map((file) => {
+          const hasHeaderRow = file.hasHeaderRow ?? true;
+          return {
+            ...file,
+            hasHeaderRow,
+            dataStartRow: file.dataStartRow ?? (hasHeaderRow ? 2 : 1),
+          };
+        });
+        return { ...current, ...saved, excelFiles };
+      },
     },
   ),
 );

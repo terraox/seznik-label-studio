@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 
@@ -10,6 +9,7 @@ import { formatMm, normalizeRotation } from '@/components/editor/types';
 import { GrayThresholdSlider } from '@/components/editor/gray-threshold-slider';
 import type { ImageElementState } from '@/lib/label-document';
 import { resolveEditorColorMode } from '@/lib/editor/image-mono';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 
 const ACCENT = '#48C3C7';
 const TABS = ['Regular', 'Position', 'Image', 'Effect'] as const;
@@ -133,6 +133,7 @@ export function ImagePropertyPanel({
   elementHeightMm,
   onColumnNamePress,
 }: ImagePropertyPanelProps) {
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
   const currentRotation = normalizeRotation(state.rotation ?? 0);
   const isAspectLocked = state.aspectRatioLocked ?? true;
   const currentAspect = state.width > 0 && state.height > 0 ? state.width / state.height : 1;
@@ -173,16 +174,10 @@ export function ImagePropertyPanel({
   }, [openCropScreen, state.printUri, state.uri, state.workingWidthPx, state.workingHeightPx]);
 
   const handleReplaceImage = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-      allowsEditing: false,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    if (!asset.uri) return;
-    openCropScreen(asset.uri, asset.width ?? 0, asset.height ?? 0, 'replace');
-  }, [openCropScreen]);
+    const asset = await pickImageAsset();
+    if (!asset) return;
+    openCropScreen(asset.uri, asset.width, asset.height, 'replace');
+  }, [openCropScreen, pickImageAsset]);
 
   const handleFlipH = useCallback(() => {
     patch({ flipH: !state.flipH });
@@ -522,6 +517,7 @@ export function ImagePropertyPanel({
           </GraySection>
         )}
       </ScrollView>
+      {imageSourceSheet}
     </View>
   );
 }

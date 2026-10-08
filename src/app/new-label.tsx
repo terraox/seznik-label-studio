@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import { AppIcon } from '@/components/app-icon';
 import { type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -7,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Spacing } from '@/constants/theme';
 import { Palette, Type } from '@/constants/ui';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 
 function CreationOption({
   label,
@@ -31,6 +31,7 @@ function CreationOption({
 
 export default function NewLabelModal() {
   const insets = useSafeAreaInsets();
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
 
   return (
     <View style={styles.overlay}>
@@ -73,19 +74,14 @@ export default function NewLabelModal() {
               label="Import Image"
               color="#8B5CF6"
               onPress={async () => {
-                const result = await ImagePicker.launchImageLibraryAsync({
-                  mediaTypes: ['images'],
-                  quality: 1,
-                  allowsEditing: false,
-                });
-                if (result.canceled || !result.assets?.[0]) return;
-                const asset = result.assets[0];
+                const asset = await pickImageAsset();
+                if (!asset) return;
                 router.replace({
                   pathname: '/new-label-setup',
                   params: {
                     importImageUri: asset.uri,
-                    importImageWidth: String(asset.width || 0),
-                    importImageHeight: String(asset.height || 0),
+                    importImageWidth: String(asset.width),
+                    importImageHeight: String(asset.height),
                     isSingleCanvas: 'true',
                   },
                 });
@@ -107,6 +103,7 @@ export default function NewLabelModal() {
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
       </View>
+      {imageSourceSheet}
     </View>
   );
 }

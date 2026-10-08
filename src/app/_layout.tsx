@@ -118,6 +118,7 @@ function AppRoot() {
         <Stack.Screen name="ground-truth-parity" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="calibration-dots" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="location-dots" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="file-picker-diagnostics" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="dot-buffer-1k" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="new-label-setup" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen

@@ -1,4 +1,3 @@
-import * as DocumentPicker from 'expo-document-picker';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -20,6 +19,7 @@ import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import { loadAndRenderPdf, printPdfToThermal, type RenderedPdfPage } from '@/lib/pdf-printer';
+import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import { formatPrintFailure } from '@/lib/printer/print-job';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { useDataStore, type PdfFile } from '@/stores/data-store';
@@ -90,6 +90,7 @@ export default function PdfScreen() {
   const [mediaType, setMediaType] = useState<'gap' | 'continuous'>('gap');
   const [printing, setPrinting] = useState(false);
   const [printProgress, setPrintProgress] = useState<{ current: number; total: number } | null>(null);
+  const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
 
   const directPrintPdf = useCallback(
     async (doc: { name: string; uri: string }) => {
@@ -177,23 +178,18 @@ export default function PdfScreen() {
 
   const handleImportPdf = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf'],
-        copyToCacheDirectory: true,
-      });
+      const picked = await pickDocumentWithSource({ preset: 'pdf' });
+      if (!picked.ok) {
+        if (picked.reason === 'invalid') Alert.alert('Invalid File', 'Please choose a PDF document.');
+        return;
+      }
+      addPdfFile({ name: picked.name, uri: picked.uri, sizeBytes: picked.size ?? 0 });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        addPdfFile({ name: file.name, uri: file.uri, sizeBytes: file.size ?? 0 });
-
-        const manager = getPrinterManager();
-        if (manager.isConnected) {
-          // DIRECT PRINT: Printer is connected, print immediately to the thermal printer!
-          await directPrintPdf({ name: file.name, uri: file.uri });
-        } else {
-          // If printer is not connected yet, open modal with connection banner
-          await openPdfPrintModal({ name: file.name, uri: file.uri });
-        }
+      const manager = getPrinterManager();
+      if (manager.isConnected) {
+        await directPrintPdf({ name: picked.name, uri: picked.uri });
+      } else {
+        await openPdfPrintModal({ name: picked.name, uri: picked.uri });
       }
     } catch {
       Alert.alert('Error', 'Could not open document picker.');
@@ -372,7 +368,7 @@ export default function PdfScreen() {
         <Pressable
           onPress={handleImportPdf}
           style={({ pressed }) => [styles.importBtn, pressed && styles.pressed]}>
-          <Text style={styles.importBtnText}>Import File</Text>
+          <Text style={styles.importBtnText}>Import from Files or Drive</Text>
         </Pressable>
       </View>
 
@@ -641,6 +637,7 @@ export default function PdfScreen() {
           </View>
         </View>
       </Modal>
+      {documentSourceSheet}
     </View>
   );
 }

@@ -1,13 +1,14 @@
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrintDirectlyIcon, UseFrameIcon } from '@/components/home-icons';
 import { Palette, Type } from '@/constants/ui';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 
 export default function PrintPhotoModal() {
   const insets = useSafeAreaInsets();
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
 
   const handleUseFrame = () => {
     router.replace('/photo-frames');
@@ -15,25 +16,17 @@ export default function PrintPhotoModal() {
 
   const handlePrintDirectly = async () => {
     try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 1,
-        exif: true,
+      const asset = await pickImageAsset();
+      if (!asset) return;
+      router.replace({
+        pathname: '/print-photo',
+        params: {
+          mode: 'direct',
+          imageUri: asset.uri,
+          imageWidth: String(asset.width),
+          imageHeight: String(asset.height),
+        },
       });
-
-      if (!res.canceled && res.assets && res.assets.length > 0) {
-        const asset = res.assets[0];
-        router.replace({
-          pathname: '/print-photo',
-          params: {
-            mode: 'direct',
-            imageUri: asset.uri,
-            imageWidth: String(asset.width ?? ''),
-            imageHeight: String(asset.height ?? ''),
-          },
-        });
-      }
     } catch {
       Alert.alert('Notice', 'Unable to open photo library.');
     }
@@ -75,6 +68,7 @@ export default function PrintPhotoModal() {
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
       </View>
+      {imageSourceSheet}
     </View>
   );
 }
