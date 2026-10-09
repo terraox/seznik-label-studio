@@ -31,7 +31,11 @@ import {
 import { getClipartById } from "@/constants/clipart-library";
 import { clipartImageUri, clipartSvgSource } from "@/lib/clipart/types";
 import { useUserClipartStore } from "@/stores/user-clipart-store";
-import { resolveEditorFontFamily } from "@/lib/fonts/text-font-family";
+import {
+  isIndicScriptFamily,
+  needsComplexTextShaping,
+  resolveEditorFontFamily,
+} from "@/lib/fonts/text-font-family";
 import { useInstalledFontStore } from "@/stores/installed-font-store";
 import { barcodeModulesForMode } from "@/lib/barcode-code128";
 import {
@@ -139,6 +143,7 @@ function textStyleFor(
   const decorations: string[] = [];
   if (state.underline) decorations.push("underline");
   if (state.strikethrough) decorations.push("line-through");
+  const indicFace = isIndicScriptFamily(resolvedFamily);
   return {
     fontSize: size,
     lineHeight: size * 1.25 * lineMult,
@@ -146,7 +151,12 @@ function textStyleFor(
     paddingHorizontal: size * TEXT_FRAME_PADDING_X_RATIO,
     includeFontPadding: false,
     fontFamily: resolvedFamily,
-    fontWeight: state.bold ? ("600" as const) : ("400" as const),
+    // Android may drop the bundled Indic face when fontWeight is set on a single-weight TTF.
+    fontWeight: indicFace
+      ? undefined
+      : state.bold
+        ? ("600" as const)
+        : ("400" as const),
     fontStyle: state.italic ? ("italic" as const) : ("normal" as const),
     textDecorationLine: (decorations.join(" ") || "none") as
       | "none"
@@ -251,9 +261,11 @@ function formatTextForRender(
 
 function letterSpacingStyle(
   element: Pick<TextLayoutFields, "charSpacing" | "fontSize">,
+  text?: string,
 ) {
   const spacing = element.charSpacing ?? 0;
   if (spacing <= 0) return null;
+  if (text && needsComplexTextShaping(text)) return null;
   return {
     letterSpacing: charSpacingToLetterSpacing(
       spacing,
@@ -306,7 +318,7 @@ function TextContent({
           style,
           styles.textFill,
           { textAlign: align },
-          letterSpacingStyle(element),
+          letterSpacingStyle(element, raw),
         ]}
         numberOfLines={formatted.numberOfLines}
         ellipsizeMode={
@@ -362,7 +374,7 @@ function DegreesContent({
           style,
           styles.textFill,
           { textAlign: align },
-          letterSpacingStyle(element),
+          letterSpacingStyle(element, raw),
         ]}
         numberOfLines={formatted.numberOfLines}
         ellipsizeMode={
@@ -1127,7 +1139,7 @@ function TableContent({
                 ellipsizeMode="clip"
                 style={[
                   style,
-                  letterSpacingStyle(cell),
+                  letterSpacingStyle(cell, flat),
                   {
                     textAlign: align,
                     width: scaleX < 1 ? measuredPx : "100%",

@@ -5,6 +5,7 @@ import type { LookupFont } from '@/lib/fonts/lookup';
 import {
   detectScriptFamily,
   INDIC_SCRIPT_FAMILIES,
+  needsComplexTextShaping,
   requiredPrintFamilyKeys,
   resolveTextFontFamily,
 } from '@/lib/fonts/text-font-family';
@@ -33,6 +34,11 @@ test('Default and Latin-only text stay unset', () => {
   assert.equal(resolveTextFontFamily('Hello', 'Default', bundled), undefined);
   assert.equal(resolveTextFontFamily('Hello', undefined, bundled), undefined);
   assert.equal(resolveTextFontFamily('', 'Default', bundled), undefined);
+});
+
+test('Indic strings need complex shaping', () => {
+  assert.equal(needsComplexTextShaping('Hello'), false);
+  assert.equal(needsComplexTextShaping('नमस्ते'), true);
 });
 
 test('Default Hindi uses Noto Sans Devanagari', () => {

@@ -5,7 +5,10 @@
  * Host/CI: software dot-buffer fallback when Skia is unavailable in Node.
  */
 
+import { needsComplexTextShaping } from '@/lib/fonts/text-font-family';
+
 import { fillEllipse, fillRect, makeDotSurface, strokeRect, type DotSurface } from './dot-surface';
+import { drawShapedTextLine, measureShapedTextWidth } from './skia-shaped-text';
 
 export type RasterSurfaceBackend = 'skia' | 'dot-buffer';
 
@@ -234,6 +237,10 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
         italic: style.italic,
         backend: 'skia',
       });
+      if (needsComplexTextShaping(text)) {
+        const painted = drawShapedTextLine(skiaMod, canvas, text, x, y, style);
+        if (painted) return;
+      }
       const font = fontFor(style);
       fillPaint.setColor(grayToColor(skiaMod, style.ink));
       fillPaint.setStyle(PaintStyle.Fill);
@@ -242,6 +249,10 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
       fillPaint.setAntiAlias(false);
     },
     measureTextWidth(text, style) {
+      if (needsComplexTextShaping(text)) {
+        const shaped = measureShapedTextWidth(skiaMod, text, style);
+        if (shaped != null) return shaped;
+      }
       return fontFor(style).measureText(text).width;
     },
     withRotation(cx, cy, degrees, draw) {

@@ -79,6 +79,11 @@ export function isIndicScriptFamily(familyKey?: string): boolean {
   return familyKey != null && INDIC_FAMILY_KEYS.has(familyKey);
 }
 
+/** Indic and other scripts that need HarfBuzz-style shaping (not raw glyph codes). */
+export function needsComplexTextShaping(text: string): boolean {
+  return detectScriptFamily(text) != null;
+}
+
 /**
  * Family key the editor and headless raster should draw.
  * `Default` stays unset for Latin so the system sans-serif is used.
