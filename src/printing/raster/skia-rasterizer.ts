@@ -23,6 +23,7 @@ import { dotsPerMm, mmToDots, rectMmToDots } from '@/lib/printer/print-spec';
 import { sortLayers } from '@/lib/template-schema';
 import { printGridKnockoutsMm, printGridRectsDots, printGridSpacingMm } from '@/lib/print-grid';
 import { drawPrintRuler, printRulerEnabled } from '@/lib/print-ruler';
+import { resolvePrintFontFamily } from '@/lib/fonts/text-font-family';
 import { computeWrappedLines, layoutPrintText } from '@/lib/text-metrics';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { stretchThenRoundBars } from './barcode-stretch';
@@ -385,25 +386,6 @@ function inkValue(antiColor?: boolean): number {
   return antiColor ? 255 : 0;
 }
 
-function resolveFontFamily(name?: string): string | undefined {
-  try {
-    const { lookupFontFamily } = require('@/lib/fonts/lookup') as typeof import('@/lib/fonts/lookup');
-    const { FONT_LIBRARY } = require('@/constants/font-library') as {
-      FONT_LIBRARY: { name: string; id: string; family?: string; source?: string }[];
-    };
-    let installed: { id: string; name: string; familyKey: string }[] = [];
-    try {
-      const { useInstalledFontStore } = require('@/stores/installed-font-store') as typeof import('@/stores/installed-font-store');
-      installed = useInstalledFontStore.getState().items ?? [];
-    } catch {
-      installed = [];
-    }
-    return lookupFontFamily(name, FONT_LIBRARY, installed);
-  } catch {
-    return undefined;
-  }
-}
-
 function drawText(
   surface: RasterSurface,
   el: Extract<LabelElement, { type: 'text' }>,
@@ -434,18 +416,18 @@ function drawText(
   const lineH = Math.max(1, Math.round(layout.lineHeightMm * dpm));
   const ink = inkValue(el.antiColor);
   const blockH = Math.max(lineH, layout.lines.length * lineH);
-  const textStyle = {
-    fontSizeDots: fontH,
-    bold: el.bold,
-    italic: el.italic,
-    family: resolveFontFamily(el.fontFamily),
-    ink,
-  };
   let ty = y0 + Math.floor((boxH - blockH) / 2);
   for (let i = 0; i < layout.lines.length; i++) {
     const line = layout.lines[i];
     const next = ty + lineH;
     if (next > y0 && ty < y0 + boxH && line.length > 0) {
+      const textStyle = {
+        fontSizeDots: fontH,
+        bold: el.bold,
+        italic: el.italic,
+        family: resolvePrintFontFamily(line, el.fontFamily),
+        ink,
+      };
       const lineW = Math.round(surface.measureTextWidth(line, textStyle));
       let tx = x0;
       if (el.align === 'center') tx = x0 + Math.floor((boxW - lineW) / 2);
@@ -491,7 +473,7 @@ function drawBarcode(
       fontSizeDots: fontH,
       bold: el.bold,
       italic: el.italic,
-      family: resolveFontFamily(el.fontFamily),
+      family: resolvePrintFontFamily(hri, el.fontFamily),
       ink,
     };
     const lineW = Math.round(surface.measureTextWidth(hri, textStyle));

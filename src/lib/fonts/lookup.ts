@@ -18,7 +18,9 @@ type FontCarrier = {
 /**
  * Map a stored font name to the family key RN and Skia should draw.
  * Installed file-backed faces win. Catalog entries that were never downloaded do not resolve.
- * `Default` / `Barcode` / empty stay unset so print falls back to Inter.
+ * `Default` / `Barcode` / empty stay unset. Script-aware routing in
+ * `resolveTextFontFamily` picks a bundled Noto when the text needs one;
+ * otherwise print uses the system sans-serif, not Inter.
  */
 export function lookupFontFamily(
   name: string | undefined,

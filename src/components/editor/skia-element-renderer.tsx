@@ -46,6 +46,7 @@ import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { generateQrMatrix } from '@/printing/renderer/qrcode';
 import { applySerialOffset, lineSpacingMultiplier } from '@/lib/serial-content';
 import { resolveFontFamily } from '@/lib/fonts/resolve-font';
+import { resolveEditorFontFamily } from '@/lib/fonts/text-font-family';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
 import { getClipartById } from '@/constants/clipart-library';
 import { parseSvgDrawOps } from '@/lib/clipart/parse-svg';
@@ -91,7 +92,13 @@ export const SkiaText = memo(function SkiaText({
   const fontRevision = useInstalledFontStore((state) => state.revision);
   const size = fontSizePx(element.fontSize, scale);
   const color = element.antiColor ? '#FFFFFF' : inkColor(element.drawingColorIndex);
-  const family = resolveFontFamily(element.fontFamily) || 'sans-serif';
+  const rawText =
+    element.contentType === 'Data Source' && element.columnNameContent
+      ? `{${element.columnNameContent}}`
+      : element.contentType === 'Degrees'
+      ? applySerialOffset(element.text || 'TEXT', (element as any).degreesOffset ?? 1, 1)
+      : element.text || 'TEXT';
+  const family = resolveEditorFontFamily(rawText, element.fontFamily) || 'sans-serif';
 
   const font = useMemo(() => {
     try {
@@ -105,13 +112,6 @@ export const SkiaText = memo(function SkiaText({
       return null;
     }
   }, [family, size, element.italic, element.bold, fontRevision]);
-
-  const rawText =
-    element.contentType === 'Data Source' && element.columnNameContent
-      ? `{${element.columnNameContent}}`
-      : element.contentType === 'Degrees'
-      ? applySerialOffset(element.text || 'TEXT', (element as any).degreesOffset ?? 1, 1)
-      : element.text || 'TEXT';
 
   const lines = useMemo(() => (rawText || '').split('\n'), [rawText]);
   const lineMult = lineSpacingMultiplier(element.lineSpacing ?? '1.0');
@@ -205,7 +205,7 @@ export const SkiaBarcode = memo(function SkiaBarcode({
     if (!showLabel) return null;
     try {
       return matchFont({
-        fontFamily: resolveFontFamily(fontFamily) || 'sans-serif',
+        fontFamily: resolveEditorFontFamily(content, fontFamily) || 'sans-serif',
         fontSize: labelSize,
         fontStyle: 'normal',
         fontWeight: bold ? 'bold' : 'normal',
@@ -213,7 +213,7 @@ export const SkiaBarcode = memo(function SkiaBarcode({
     } catch {
       return null;
     }
-  }, [showLabel, fontFamily, labelSize, bold, fontRevision]);
+  }, [showLabel, content, fontFamily, labelSize, bold, fontRevision]);
 
   const rects = useMemo(() => {
     if (!bars) return [];

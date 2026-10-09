@@ -17,7 +17,9 @@ import { ExcelLabelPreview } from '@/components/excel-label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import {
+  attachBulkToLabelDocument,
   createBulkLabelDocument,
+  defaultBulkColumnMappings,
   guessBulkSlotKind,
   type BulkColumnMapping,
   type BulkSlotKind,
@@ -46,14 +48,6 @@ function paramMm(value: string | string[] | undefined, fallback: number): number
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function mappingsForColumns(columns: string[]): BulkColumnMapping[] {
-  return columns.map((name, columnIndex) => ({
-    columnIndex,
-    include: true,
-    kind: guessBulkSlotKind(name),
-  }));
-}
-
 export default function ExcelBulkSetupScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
@@ -61,11 +55,14 @@ export default function ExcelBulkSetupScreen() {
     widthMm?: string | string[];
     heightMm?: string | string[];
     sheetIndex?: string | string[];
+    targetLabelId?: string | string[];
   }>();
+  const targetLabelId = firstParam(params.targetLabelId);
   const excelFileId = firstParam(params.excelFileId);
   const excelFiles = useDataStore((s) => s.excelFiles);
   const setActiveSheetIndex = useDataStore((s) => s.setActiveSheetIndex);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
+  const getDocument = useLabelStore((s) => s.getDocument);
   const defaults = useSettingsStore((s) => s.defaults);
 
   const file = excelFiles.find((f) => f.id === excelFileId) ?? null;
@@ -81,23 +78,22 @@ export default function ExcelBulkSetupScreen() {
   );
 
   const [mappings, setMappings] = useState<BulkColumnMapping[]>(() =>
-    mappingsForColumns(sheet?.columns ?? []),
+    sheet ? defaultBulkColumnMappings(sheet) : [],
   );
   const [displayHead, setDisplayHead] = useState(false);
 
   const columnCount = sheet?.columns.length ?? 0;
   const syncedMappings = useMemo(() => {
     if (mappings.length === columnCount) return mappings;
-    return mappingsForColumns(sheet?.columns ?? []);
-  }, [columnCount, mappings, sheet?.columns]);
+    return sheet ? defaultBulkColumnMappings(sheet) : [];
+  }, [columnCount, mappings, sheet]);
 
   const includedCount = syncedMappings.filter((m) => m.include).length;
   const canConfirm = Boolean(file && sheet && includedCount > 0 && sheet.rows.length > 0);
 
   const patchMapping = (columnIndex: number, patch: Partial<BulkColumnMapping>) => {
     setMappings((prev) => {
-      const base =
-        prev.length === columnCount ? prev : mappingsForColumns(sheet?.columns ?? []);
+      const base = prev.length === columnCount ? prev : sheet ? defaultBulkColumnMappings(sheet) : [];
       return base.map((m) => (m.columnIndex === columnIndex ? { ...m, ...patch } : m));
     });
   };
@@ -112,6 +108,35 @@ export default function ExcelBulkSetupScreen() {
       Alert.alert('Empty sheet', 'This sheet has no data rows.');
       return;
     }
+    setActiveSheetIndex(file.id, sheetIndex);
+
+    if (targetLabelId) {
+      const existing = getDocument(targetLabelId);
+      if (!existing) {
+        Alert.alert('Label missing', 'Return to the editor and try importing again.');
+        return;
+      }
+      const attached = attachBulkToLabelDocument(existing, {
+        excelFileId: file.id,
+        sheetIndex,
+        sheet,
+        mappings: syncedMappings,
+        barcodeEncodeMode: defaults.barcodeEncodeMode,
+        qrErrorLevel: defaults.qrErrorLevel,
+        displayHead,
+      });
+      if (!attached) {
+        Alert.alert('Unable to create labels', 'Include at least one column.');
+        return;
+      }
+      upsertDocument(attached);
+      router.replace({
+        pathname: '/edit',
+        params: { labelId: targetLabelId, excelBulkRefresh: String(Date.now()) },
+      });
+      return;
+    }
+
     const doc = createBulkLabelDocument({
       name: `${file.name} · ${sheet.rows.length} labels`,
       widthMm: labelSize.widthMm,
@@ -130,7 +155,6 @@ export default function ExcelBulkSetupScreen() {
       Alert.alert('Unable to create labels', 'Include at least one column.');
       return;
     }
-    setActiveSheetIndex(file.id, sheetIndex);
     upsertDocument(doc);
     router.replace({ pathname: '/edit', params: { labelId: doc.id } });
   };
@@ -185,7 +209,7 @@ export default function ExcelBulkSetupScreen() {
                   key={`${item.name}-${index}`}
                   onPress={() => {
                     setSheetIndex(index);
-                    setMappings(mappingsForColumns(item.columns));
+                    setMappings(defaultBulkColumnMappings(item));
                   }}
                   style={[styles.chip, active && styles.chipOn]}>
                   <Text style={[styles.chipText, active && styles.chipTextOn]} numberOfLines={1}>

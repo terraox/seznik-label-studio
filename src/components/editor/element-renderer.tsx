@@ -31,7 +31,7 @@ import {
 import { getClipartById } from "@/constants/clipart-library";
 import { clipartImageUri, clipartSvgSource } from "@/lib/clipart/types";
 import { useUserClipartStore } from "@/stores/user-clipart-store";
-import { resolveFontFamily } from "@/lib/fonts/resolve-font";
+import { resolveEditorFontFamily } from "@/lib/fonts/text-font-family";
 import { useInstalledFontStore } from "@/stores/installed-font-store";
 import { barcodeModulesForMode } from "@/lib/barcode-code128";
 import {
@@ -132,6 +132,7 @@ function textStyleFor(
     | "antiColor"
   > & { lineSpacing?: EditorElementState["lineSpacing"] },
   scale: number,
+  resolvedFamily?: string,
 ) {
   const size = fontSizePx(state.fontSize, scale);
   const lineMult = lineSpacingMultiplier(state.lineSpacing ?? "1.0");
@@ -144,7 +145,7 @@ function textStyleFor(
     paddingVertical: size * TEXT_FRAME_PADDING_Y_RATIO,
     paddingHorizontal: size * TEXT_FRAME_PADDING_X_RATIO,
     includeFontPadding: false,
-    fontFamily: resolveFontFamily(state.fontFamily),
+    fontFamily: resolvedFamily,
     fontWeight: state.bold ? ("600" as const) : ("400" as const),
     fontStyle: state.italic ? ("italic" as const) : ("normal" as const),
     textDecorationLine: (decorations.join(" ") || "none") as
@@ -216,6 +217,7 @@ function formatTextForRender(
   element: TextLayoutFields,
   raw: string,
   layoutWidthMm?: number,
+  resolvedFamily?: string,
 ) {
   if (element.verticalDisplay) {
     return {
@@ -239,7 +241,7 @@ function formatTextForRender(
     charSpacing: element.charSpacing ?? 0,
     bold: element.bold ?? false,
     verticalDisplay: false,
-    fontFamily: element.fontFamily,
+    fontFamily: resolvedFamily ?? element.fontFamily,
   });
   return {
     text: lines.join("\n"),
@@ -275,9 +277,10 @@ function TextContent({
   const highlightColumnName = useSettingsStore(
     (s) => s.editor.highlightColumnName,
   );
-  const style = textStyleFor(element, scale);
   const raw = resolveTextRaw(element, element.text, showColumnName);
-  const formatted = formatTextForRender(element, raw, layoutWidthMm);
+  const resolvedFamily = resolveEditorFontFamily(raw, element.fontFamily);
+  const style = textStyleFor(element, scale, resolvedFamily);
+  const formatted = formatTextForRender(element, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
@@ -330,9 +333,10 @@ function DegreesContent({
   const highlightColumnName = useSettingsStore(
     (s) => s.editor.highlightColumnName,
   );
-  const style = textStyleFor(element, scale);
   const raw = resolveTextRaw(element, element.content, showColumnName);
-  const formatted = formatTextForRender(element, raw, layoutWidthMm);
+  const resolvedFamily = resolveEditorFontFamily(raw, element.fontFamily);
+  const style = textStyleFor(element, scale, resolvedFamily);
+  const formatted = formatTextForRender(element, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
@@ -381,7 +385,12 @@ function TimeContent({
 }) {
   const now = useClock(true);
   const adjusted = applyTimeOffsets(now, element);
-  const style = textStyleFor(element, scale);
+  const liveText = formatLiveDateTime(adjusted);
+  const style = textStyleFor(
+    element,
+    scale,
+    resolveEditorFontFamily(liveText, element.fontFamily),
+  );
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
@@ -404,7 +413,7 @@ function TimeContent({
         allowFontScaling={false}
         style={[style, styles.textFill, { textAlign: align }]}
       >
-        {formatLiveDateTime(adjusted)}
+        {liveText}
       </Text>
     </View>
   );
@@ -487,7 +496,11 @@ function BarcodeContent({
   const hri = formatBarcodeHri(element.encodeMode, content);
   const labelHeight = showLabel ? Math.max(8, Math.round(labelSize * 1.2)) : 0;
   const align = element.align === "spacing" ? "justify" : element.align;
-  const labelStyle = textStyleFor(element, scale);
+  const labelStyle = textStyleFor(
+    element,
+    scale,
+    resolveEditorFontFamily(hri, element.fontFamily),
+  );
 
   const useDotBars =
     forPrint &&
@@ -1073,7 +1086,9 @@ function TableContent({
           ? measureTextWidthMm(flat, cell.fontSize, 0, cell.bold) * scale * 1.12
           : 0;
         const scaleX = measuredPx > innerW ? innerW / measuredPx : 1;
-        const style = cell ? textStyleFor(cell, scale) : undefined;
+        const style = cell
+          ? textStyleFor(cell, scale, resolveEditorFontFamily(flat, cell.fontFamily))
+          : undefined;
         const align =
           cell?.align === "spacing" ? "justify" : (cell?.align ?? "left");
         return (
@@ -1184,7 +1199,7 @@ function ArcTextContent({
     ],
   );
 
-  const fontFamily = resolveFontFamily(element.fontFamily);
+  const fontFamily = resolveEditorFontFamily(displayText, element.fontFamily);
   const textColor = isPlaceholder
     ? element.antiColor
       ? "rgba(255, 255, 255, 0.65)"

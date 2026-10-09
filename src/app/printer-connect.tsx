@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   BluetoothBlockers,
+  BluetoothOffDialog,
   ConnectedActions,
   DeviceList,
   PrinterFamilyCards,
@@ -19,7 +20,7 @@ import {
 } from '@/constants/printer-models';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
-import { BLUETOOTH_OFF_MESSAGE, isBluetoothOffError } from '@/lib/printer/bluetooth-guard';
+import { isBluetoothOffError } from '@/lib/printer/bluetooth-guard';
 import { getAmbiguousModelCandidates } from '@/lib/printer/printer-heuristics';
 import {
   getPrinterManager,
@@ -127,6 +128,7 @@ export default function PrinterConnectScreen() {
   const [scanErrors, setScanErrors] = useState<string[]>([]);
   const [caps, setCaps] = useState<BluetoothCapabilities>(() => getPrinterManager().getCapabilities());
   const [bluetoothOn, setBluetoothOn] = useState(() => getPrinterManager().isBluetoothEnabled());
+  const [bluetoothOffDialog, setBluetoothOffDialog] = useState(false);
   const mountedRef = useRef(true);
 
   const refreshCaps = useCallback(() => {
@@ -150,7 +152,7 @@ export default function PrinterConnectScreen() {
       setDevices([]);
       setScanning(false);
       setScanErrors([]);
-      setNativeHint(BLUETOOTH_OFF_MESSAGE);
+      setNativeHint(null);
       return;
     }
     setDevices([]);
@@ -259,7 +261,7 @@ export default function PrinterConnectScreen() {
         return;
       }
       if (on && nextCaps.canScan) setNativeHint(null);
-      else if (!on && nextCaps.canScan) setNativeHint(BLUETOOTH_OFF_MESSAGE);
+      else if (!on && nextCaps.canScan) setNativeHint(null);
     });
     return () => appSub.remove();
   }, [refreshCaps]);
@@ -288,8 +290,8 @@ export default function PrinterConnectScreen() {
   const handleConnect = async (device: DiscoveredPrinter) => {
     if (!getPrinterManager().isBluetoothEnabled()) {
       setBluetoothOn(false);
-      setNativeHint(BLUETOOTH_OFF_MESSAGE);
-      Alert.alert('Bluetooth is off', BLUETOOTH_OFF_MESSAGE);
+      setNativeHint(null);
+      setBluetoothOffDialog(true);
       return;
     }
 
@@ -399,26 +401,43 @@ export default function PrinterConnectScreen() {
             settingsLabel={bluetoothSettingsLabel}
             onOpenSettings={() => void openPhoneBluetoothSettings()}
           />
-          {nativeHint ? <Text style={styles.warn}>{nativeHint}</Text> : null}
-          {scanErrors.length > 0 ? <Text style={styles.warn}>{scanErrors.join(' · ')}</Text> : null}
+          {nativeHint && !isBluetoothOffError(nativeHint) ? (
+            <Text style={styles.warn}>{nativeHint}</Text>
+          ) : null}
+          {scanErrors.filter((entry) => !isBluetoothOffError(entry)).length > 0 ? (
+            <Text style={styles.warn}>
+              {scanErrors.filter((entry) => !isBluetoothOffError(entry)).join(' · ')}
+            </Text>
+          ) : null}
           {showBluetoothSettings && caps.canScan && bluetoothOn ? (
             <Text onPress={() => void openPhoneBluetoothSettings()} style={styles.settingsLink}>
               {bluetoothSettingsLabel}
             </Text>
           ) : null}
-          <DeviceList
-            devices={listedDevices}
-            scanning={scanning}
-            canScan={caps.canScan}
-            bluetoothOn={bluetoothOn}
-            connectingId={connectingId}
-            accent={printer.accent}
-            onConnect={(device) => void handleConnect(device)}
-            onRescan={() => void startScan(printer.id).catch(() => {})}
-            badgeFor={badgeFor}
-          />
+          {caps.canScan && bluetoothOn ? (
+            <DeviceList
+              devices={listedDevices}
+              scanning={scanning}
+              canScan={caps.canScan}
+              bluetoothOn={bluetoothOn}
+              connectingId={connectingId}
+              accent={printer.accent}
+              onConnect={(device) => void handleConnect(device)}
+              onRescan={() => void startScan(printer.id).catch(() => {})}
+              badgeFor={badgeFor}
+            />
+          ) : null}
             </>
           )}
+          <BluetoothOffDialog
+            visible={bluetoothOffDialog}
+            settingsLabel={bluetoothSettingsLabel}
+            onOpenSettings={() => {
+              setBluetoothOffDialog(false);
+              void openPhoneBluetoothSettings();
+            }}
+            onClose={() => setBluetoothOffDialog(false)}
+          />
         </View>
       </ScrollView>
     </View>

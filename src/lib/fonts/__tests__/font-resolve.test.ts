@@ -8,6 +8,7 @@ import {
   clearPrintTypefacesForTests,
   getPrintTypeface,
   registerFileBackedTypeface,
+  setPrintTypeface,
 } from '@/printing/raster/print-typeface-map';
 
 const bundled: LookupFont[] = [
@@ -121,5 +122,20 @@ test('registerFileBackedTypeface keeps the decoded face for print lookup', async
   const missing = await registerFileBackedTypeface('Gone', 'file:///missing.ttf', async () => null);
   assert.equal(missing, false);
   assert.equal(getPrintTypeface('Gone'), null);
+  clearPrintTypefacesForTests();
+});
+
+test('unset and non-Inter faces do not fall back to Inter', () => {
+  clearPrintTypefacesForTests();
+  const inter = { dispose() {} };
+  const semi = { dispose() {} };
+  const noto = { dispose() {} };
+  setPrintTypeface('Inter_400Regular', inter);
+  assert.equal(getPrintTypeface(undefined), null);
+  assert.equal(getPrintTypeface('Inter_400Regular', true), inter);
+  setPrintTypeface('Inter_600SemiBold', semi);
+  assert.equal(getPrintTypeface('Inter_400Regular', true), semi);
+  setPrintTypeface('NotoSansDevanagari_400Regular', noto);
+  assert.equal(getPrintTypeface('NotoSansDevanagari_400Regular', true), noto);
   clearPrintTypefacesForTests();
 });

@@ -19,6 +19,7 @@ export default function ExcelDataPreviewScreen() {
     excelFileId?: string | string[];
     widthMm?: string | string[];
     heightMm?: string | string[];
+    targetLabelId?: string | string[];
   }>();
   const excelFileId = firstParam(params.excelFileId);
   const excelFiles = useDataStore((s) => s.excelFiles);
@@ -45,6 +46,9 @@ export default function ExcelDataPreviewScreen() {
         sheetIndex: String(sheetIndex),
         ...(firstParam(params.widthMm) ? { widthMm: firstParam(params.widthMm) } : {}),
         ...(firstParam(params.heightMm) ? { heightMm: firstParam(params.heightMm) } : {}),
+        ...(firstParam(params.targetLabelId)
+          ? { targetLabelId: firstParam(params.targetLabelId) }
+          : {}),
       },
     });
   };

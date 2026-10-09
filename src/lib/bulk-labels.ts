@@ -20,6 +20,7 @@ import {
   scaleDocumentToSize,
   textBlockHeightMm,
 } from '@/lib/element-sizing';
+import { isExcelColumnEmpty } from '@/lib/excel-rows';
 import type { ExcelSheet } from '@/stores/data-store';
 
 export type BulkSlotKind = 'text' | 'barcode' | 'qrcode';
@@ -29,6 +30,14 @@ export function guessBulkSlotKind(columnName: string): BulkSlotKind {
   if (/(^|[^a-z])qr([^a-z]|$)|qrcode|qr code/.test(name)) return 'qrcode';
   if (/barcode|bar code|sku|ean|upc|gtin|isbn/.test(name)) return 'barcode';
   return 'text';
+}
+
+export function defaultBulkColumnMappings(sheet: ExcelSheet): BulkColumnMapping[] {
+  return sheet.columns.map((name, columnIndex) => ({
+    columnIndex,
+    include: !isExcelColumnEmpty(sheet, columnIndex),
+    kind: guessBulkSlotKind(name),
+  }));
 }
 
 export type BulkColumnMapping = {
@@ -483,6 +492,42 @@ export function createBulkLabelDocument(params: {
   });
   doc.bulk = bulk;
   return doc;
+}
+
+/** Attach Excel bulk printing to an existing label (editor import) instead of creating a new document. */
+export function attachBulkToLabelDocument(
+  doc: LabelDocument,
+  params: {
+    excelFileId: string;
+    sheetIndex: number;
+    sheet: ExcelSheet;
+    mappings: BulkColumnMapping[];
+    barcodeEncodeMode?: string;
+    qrErrorLevel?: QrErrorLevel;
+    displayHead?: boolean;
+  },
+): LabelDocument | null {
+  const bulkDoc = createBulkLabelDocument({
+    name: doc.name,
+    widthMm: doc.widthMm,
+    heightMm: doc.heightMm,
+    orientation: doc.orientation,
+    paperType: doc.paperType,
+    excelFileId: params.excelFileId,
+    sheetIndex: params.sheetIndex,
+    sheet: params.sheet,
+    mappings: params.mappings,
+    barcodeEncodeMode: params.barcodeEncodeMode,
+    qrErrorLevel: params.qrErrorLevel,
+    displayHead: params.displayHead,
+  });
+  if (!bulkDoc?.bulk) return null;
+  return {
+    ...doc,
+    elements: bulkDoc.elements,
+    bulk: bulkDoc.bulk,
+    updatedAt: Date.now(),
+  };
 }
 
 export function applyGeometryToAllLabels(

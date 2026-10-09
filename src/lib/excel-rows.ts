@@ -1,3 +1,5 @@
+import type { ExcelSheet } from '@/stores/data-store';
+
 export type ExcelParseOptions = {
   hasHeaderRow: boolean;
   /** 1-based sheet row where label data begins. */
@@ -59,4 +61,26 @@ export function splitSheetRows(
     .filter((row) => row.some((cell) => cell.trim() !== ''));
 
   return { columns, rows };
+}
+
+/** True when the column has no header text and no non-empty data cells. */
+export function isExcelColumnEmpty(sheet: ExcelSheet, columnIndex: number): boolean {
+  const header = (sheet.columns[columnIndex] ?? '').trim();
+  if (header && !/^column\s+\d+$/i.test(header)) {
+    return !sheet.rows.some((row) => (row[columnIndex] ?? '').trim() !== '');
+  }
+  return !sheet.rows.some((row) => (row[columnIndex] ?? '').trim() !== '');
+}
+
+/** Drop columns that are entirely unused (typical trailing Excel range padding). */
+export function compactExcelSheet(sheet: ExcelSheet): ExcelSheet {
+  const keep = sheet.columns
+    .map((_, index) => index)
+    .filter((index) => !isExcelColumnEmpty(sheet, index));
+  if (keep.length === sheet.columns.length) return sheet;
+  return {
+    name: sheet.name,
+    columns: keep.map((index) => sheet.columns[index] ?? ''),
+    rows: sheet.rows.map((row) => keep.map((index) => row[index] ?? '')),
+  };
 }

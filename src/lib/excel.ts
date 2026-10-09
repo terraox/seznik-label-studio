@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as XLSX from 'xlsx';
 
 import { worksheetToStringGrid } from '@/lib/excel-cells';
-import { splitSheetRows, type ExcelParseOptions } from '@/lib/excel-rows';
+import { compactExcelSheet, splitSheetRows, type ExcelParseOptions } from '@/lib/excel-rows';
 import type { ExcelSheet } from '@/stores/data-store';
 
 export { excelCellToString, worksheetToStringGrid } from '@/lib/excel-cells';
@@ -36,7 +36,7 @@ export async function parseExcelFile(
     try {
       const split = splitSheetRows(allRows, options);
       if (split.columns.length === 0) continue;
-      sheets.push({ name, columns: split.columns, rows: split.rows });
+      sheets.push(compactExcelSheet({ name, columns: split.columns, rows: split.rows }));
     } catch (err) {
       firstError ??= err instanceof Error ? err : new Error('Could not read this sheet.');
     }

@@ -566,6 +566,7 @@ export default function EditScreen() {
     cloneFromId?: string;
     selectedElementId?: string;
     autoOpenPanel?: string;
+    excelBulkRefresh?: string;
   }>();
 
   const defaults = useSettingsStore((s) => s.defaults);
@@ -3325,14 +3326,17 @@ export default function EditScreen() {
   );
 
   // Reload when navigated to an existing label while the screen is mounted.
-  const lastLoadedId = useRef<string | undefined>(params.labelId);
+  const lastLoadedKey = useRef<string | undefined>(
+    params.labelId ? `${params.labelId}:${params.excelBulkRefresh ?? ''}` : undefined,
+  );
   useEffect(() => {
     if (!params.labelId) return;
-    if (params.labelId === lastLoadedId.current) return;
-    lastLoadedId.current = params.labelId;
+    const loadKey = `${params.labelId}:${params.excelBulkRefresh ?? ''}`;
+    if (loadKey === lastLoadedKey.current) return;
+    lastLoadedKey.current = loadKey;
     const existing = useLabelStore.getState().getDocument(params.labelId);
     if (existing) openDocument(existing);
-  }, [params.labelId, openDocument]);
+  }, [params.labelId, params.excelBulkRefresh, openDocument]);
 
   const handleColumnNamePress = useCallback(() => {
     const tableCell = selectedTableCellRef.current;
@@ -3518,15 +3522,25 @@ export default function EditScreen() {
         hasHeaderRow: picked.hasHeaderRow,
         dataStartRow: picked.dataStartRow,
       });
-      const size = clampLabelMm(docRef.current.widthMm, docRef.current.heightMm);
-      router.push({
-        pathname: '/excel-data-preview',
-        params: {
-          excelFileId: entry.id,
-          widthMm: String(size.widthMm),
-          heightMm: String(size.heightMm),
-        },
-      });
+      const current = docRef.current;
+      upsertDocument(current);
+      const size = clampLabelMm(current.widthMm, current.heightMm);
+      const navigateToPreview = () => {
+        router.push({
+          pathname: '/excel-data-preview',
+          params: {
+            excelFileId: entry.id,
+            widthMm: String(size.widthMm),
+            heightMm: String(size.heightMm),
+            targetLabelId: current.id,
+          },
+        });
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => navigateToPreview());
+      } else {
+        navigateToPreview();
+      }
     } catch (error) {
       Alert.alert(
         'Error',

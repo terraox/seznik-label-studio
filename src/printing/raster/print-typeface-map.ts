@@ -17,10 +17,14 @@ export function hasPrintTypeface(family: string): boolean {
   return faces.has(family);
 }
 
+const INTER_REGULAR = 'Inter_400Regular';
+const INTER_SEMIBOLD = 'Inter_600SemiBold';
+
 export function getPrintTypeface(family?: string, bold?: boolean): PrintFace | null {
-  if (family && faces.has(family)) return faces.get(family) ?? null;
-  if (bold && faces.has('Inter_600SemiBold')) return faces.get('Inter_600SemiBold') ?? null;
-  return faces.get('Inter_400Regular') ?? null;
+  if (!family) return null;
+  const inter = family === INTER_REGULAR || family === INTER_SEMIBOLD;
+  if (bold && inter && faces.has(INTER_SEMIBOLD)) return faces.get(INTER_SEMIBOLD) ?? null;
+  return faces.get(family) ?? null;
 }
 
 export function dropPrintTypeface(family: string): void {

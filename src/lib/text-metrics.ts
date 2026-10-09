@@ -113,6 +113,10 @@ export function textVerticalPaddingMm(fontSizePt: number): number {
 export function charWidthEm(ch: string, bold = false, fontFamily?: string): number {
   'worklet';
   const code = ch.charCodeAt(0);
+  // Indic scripts (Devanagari through Malayalam, plus Devanagari Extended).
+  if ((code >= 0x0900 && code <= 0x0d7f) || (code >= 0xa8e0 && code <= 0xa8ff)) {
+    return 1.0;
+  }
   if (usesMonospaceMetrics(fontFamily)) {
     if (
       (code >= 0x2e80 && code <= 0x9fff) ||

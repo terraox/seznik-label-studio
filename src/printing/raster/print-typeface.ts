@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { FONT_LIBRARY } from '@/constants/font-library';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { collectDocumentFontNames, lookupFontFamily } from '@/lib/fonts/lookup';
+import { requiredPrintFamilyKeys } from '@/lib/fonts/text-font-family';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
 
 import {
@@ -63,7 +64,7 @@ export function ensurePrintTypefaces(): Promise<void> {
 
 /**
  * Decode a user TTF/OTF into the print face map.
- * A missing or corrupt file returns false; callers keep the Inter fallback.
+ * A missing or corrupt file returns false; callers keep the system face.
  */
 export async function registerPrintTypeface(familyKey: string, fileUri: string): Promise<boolean> {
   if (!familyKey || !fileUri) return false;
@@ -97,11 +98,11 @@ export async function ensurePrintTypefacesForDocument(doc: {
     try {
       const info = await FileSystem.getInfoAsync(record.fileUri);
       if (!info.exists) {
-        console.warn('[print-typeface] missing file, using Inter', family);
+        console.warn('[print-typeface] missing file, using system face', family);
         continue;
       }
       const ok = await registerPrintTypeface(family, record.fileUri);
-      if (!ok) console.warn('[print-typeface] could not decode, using Inter', family);
+      if (!ok) console.warn('[print-typeface] could not decode, using system face', family);
     } catch (err) {
       console.warn('[print-typeface] skip', family, err);
     }
@@ -109,22 +110,17 @@ export async function ensurePrintTypefacesForDocument(doc: {
 }
 
 /**
- * Families the label asked for that are not in the print map.
- * Default/Barcode resolve to nothing and stay on Inter. A named face that
- * failed to load must not be silently drawn as Inter.
+ * Families the label will actually draw that are not in the print map.
+ * Latin `Default` stays unset (system sans-serif). Indic text requires the
+ * matching bundled Noto even when the stored face is Default or a Latin font.
  */
 export function missingPrintTypefaces(doc: { elements: readonly object[] }): string[] {
   const installed = useInstalledFontStore.getState().items;
-  const missing: string[] = [];
-  for (const name of collectDocumentFontNames(doc)) {
-    const family = lookupFontFamily(name, FONT_LIBRARY, installed);
-    if (!family || hasPrintTypeface(family)) continue;
-    missing.push(family);
-  }
-  return missing;
+  const required = requiredPrintFamilyKeys(doc, FONT_LIBRARY, installed);
+  return required.filter((family) => !hasPrintTypeface(family));
 }
 
-/** Embedded face for a FONT_LIBRARY family. Default and barcode text use Inter. */
+/** Embedded face for a resolved family. Unset means the system sans-serif. */
 export function printTypeface(family?: string, bold?: boolean): SkTypeface | null {
   return getPrintTypeface(family, bold) as SkTypeface | null;
 }
