@@ -1125,8 +1125,12 @@ export default function PrintScreen() {
             Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
             Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
           const joshBakeOffset = orientationDeg === 0;
-          // Die-cut 0 is 1 mm inboard of the left backing. Origin is print-only.
+          // Die-cut 0 is inboard of LPAPI job 0. Origin is print-only.
           const joshHOffsetMm = offsetH + JOSH_MEDIA_ORIGIN_H_MM;
+          const joshOriginDots = mmToDots(JOSH_MEDIA_ORIGIN_H_MM, jobDpi);
+          console.info(
+            `[JOSH] originH=${JOSH_MEDIA_ORIGIN_H_MM}mm (${joshOriginDots} dots)`,
+          );
           timer.start('transmit');
           try {
             let joshFacesReady = false;
@@ -1145,11 +1149,12 @@ export default function PrintScreen() {
             }
             if (joshFacesReady && pageDoc) {
               console.info(
-                `[JOSH-MONO-P1] Headless dots print: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm originH=${JOSH_MEDIA_ORIGIN_H_MM}mm`,
+                `[JOSH-MONO-P1] Headless dots print: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm originH=${JOSH_MEDIA_ORIGIN_H_MM}mm (${joshOriginDots} dots)`,
               );
               const timed = rasterizeDocumentToBitmapTimed(pageDoc, jobDpi, {
                 threshold,
                 darknessSteps: inkSteps,
+                pageWidthPack: 'ceil',
                 shiftDots: joshBakeOffset
                   ? {
                       x: mmToDots(printOffsetMm.x + JOSH_MEDIA_ORIGIN_H_MM, jobDpi),

@@ -52,8 +52,12 @@ class JoshPrinterManager(private val context: Context) {
         private const val CONNECT_TIMEOUT_MS = 20_000L
         private const val CONNECT_RETRY_DELAY_MS = 1_500L
         private const val CONNECT_MAX_ATTEMPTS = 2
-        private const val PRINT_TIMEOUT_MS = 4_000L
+        private const val PRINT_TIMEOUT_MS = 15_000L
         private const val PRINT_SUBMIT_FALLBACK_MS = 800L
+        /** Small test strip — not a full 50×30 mm label. */
+        const val TEST_LABEL_WIDTH_MM = 30.0
+        const val TEST_LABEL_HEIGHT_MM = 12.0
+        const val TEST_LABEL_DEFAULT_TEXT = "test print sent by sez print"
         private const val MAX_RECONNECT_ATTEMPTS = 3
         private val RECONNECT_DELAYS_MS = longArrayOf(1000, 2000, 4000)
 
@@ -778,6 +782,147 @@ class JoshPrinterManager(private val context: Context) {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
+     * Headless path: packed 1-bit dots (logical black=1, MSB first) → ARGB Bitmap → LPAPI mm job.
+     * No PNG decode, contain-fit, or ViewShot round-trip.
+     */
+    fun printMonoLabel(
+        monoBytes: ByteArray,
+        widthDots: Int,
+        heightDots: Int,
+        bytesPerRow: Int,
+        widthMm: Double,
+        heightMm: Double,
+        dpi: Double = HARDWARE_DPI,
+        copies: Int = 1,
+        paramDensity: Int = -1,
+        paramSpeed: Int = -1,
+        direction: Int = 0,
+        paramGapType: Int = GAP_TYPE_LABEL,
+        paramGapLengthMm: Double = LABEL_GAP_MM,
+        hOffsetMm: Double = 0.0,
+        vOffsetMm: Double = 0.0,
+        alignment: String = "left",
+    ): Map<String, Any?>? {
+        val hardwareDpi = if (dpi == 300.0) 300.0 else HARDWARE_DPI
+        val dpm = if (hardwareDpi == 300.0) hardwareDpi / 25.4 else HARDWARE_DPM
+        val sizeDotsW = Math.max(1, Math.round(widthMm * dpm).toInt())
+        val sizeDotsH = Math.max(1, Math.round(heightMm * dpm).toInt())
+        // Pad up to a byte. The extra columns are white and are cropped before draw.
+        val packedW = Math.max(8, ((sizeDotsW + 7) / 8) * 8)
+        if (bytesPerRow * 8 != packedW) {
+            lastError = "JOSH_MONO_INVALID: bytesPerRow*8 ($bytesPerRow * 8) != packedW ($packedW)"
+            emitError("JOSH_MONO_INVALID", lastError!!)
+            return null
+        }
+        if (widthDots != packedW || heightDots != sizeDotsH) {
+            lastError = "JOSH_MONO_INVALID: buffer ${widthDots}x${heightDots} != packed ${packedW}x${sizeDotsH}"
+            emitError("JOSH_MONO_INVALID", lastError!!)
+            return null
+        }
+        val expectedLen = bytesPerRow * heightDots
+        if (monoBytes.size != expectedLen) {
+            lastError = "JOSH_MONO_INVALID: length ${monoBytes.size} != $expectedLen"
+            emitError("JOSH_MONO_INVALID", lastError!!)
+            return null
+        }
+        val currentApi = api ?: run {
+            lastError = "JOSH_SDK_ERROR: LPAPI not initialized"
+            emitError("JOSH_SDK_ERROR", "LPAPI not initialized")
+            return null
+        }
+        val currentState = state.get()
+        if (currentState != State.CONNECTED && currentState != State.PRINT_SUCCESS && currentState != State.PRINT_FAILED) {
+            lastError = "JOSH_NOT_CONNECTED: State is $currentState"
+            emitError("JOSH_NOT_CONNECTED", "Printer is not connected (state: $currentState)")
+            return null
+        }
+        val sdkState = currentApi.printerState
+        if (sdkState == null || sdkState == PrinterState.Disconnected) {
+            lastError = "JOSH_NOT_CONNECTED: SDK reports disconnected"
+            emitError("JOSH_NOT_CONNECTED", "LPAPI reports printer disconnected")
+            return null
+        }
+        if (isPrinting.get() || !printLock.tryLock()) {
+            lastError = "JOSH_PRINT_ALREADY_RUNNING"
+            emitError("JOSH_PRINT_ALREADY_RUNNING", "Another print job is active")
+            return null
+        }
+
+        isPrinting.set(true)
+        val jobId = "JOSH-MONO-${String.format("%03d", jobIdCounter.incrementAndGet())}"
+        setState(State.PRINTING)
+        Log.i(TAG, "[$jobId] [JOSH-MONO-P1] ${widthMm}x${heightMm}mm ${widthDots}x${heightDots}px copies=$copies")
+
+        try {
+            val t0 = System.currentTimeMillis()
+            val dotBitmap = mono1bppToBitmap(monoBytes, widthDots, heightDots, bytesPerRow)
+            val hOffsetPx = Math.round(hOffsetMm * dpm).toInt()
+            val vOffsetPx = Math.round(vOffsetMm * dpm).toInt()
+            val composited = compositeLabelPage(dotBitmap, widthDots, heightDots, hOffsetPx, vOffsetPx)
+            if (dotBitmap !== composited && !dotBitmap.isRecycled) dotBitmap.recycle()
+            // Drop the byte-align pad so drawBitmap(widthMm) stays at hardware dpm.
+            val bitmap = cropBitmapToWidth(composited, sizeDotsW)
+            val tPack = System.currentTimeMillis()
+
+            var finalWidthMm = widthMm
+            var finalHeightMm = heightMm
+            if (direction == 90 || direction == 270) {
+                finalWidthMm = heightMm
+                finalHeightMm = widthMm
+            }
+
+            val submitResult = submitLabelBitmapAndWait(
+                currentApi,
+                jobId,
+                bitmap,
+                finalWidthMm,
+                finalHeightMm,
+                copies,
+                paramDensity,
+                paramSpeed,
+                paramGapType,
+                paramGapLengthMm,
+                alignment,
+            )
+            if (submitResult == null) return null
+
+            if (!bitmap.isRecycled) bitmap.recycle()
+            val tDone = System.currentTimeMillis()
+            return mapOf<String, Any?>(
+                "jobId" to jobId,
+                "copies" to copies,
+                "widthMm" to finalWidthMm,
+                "heightMm" to finalHeightMm,
+                "targetW" to bitmap.width,
+                "targetH" to bitmap.height,
+                "decodeMs" to (tPack - t0),
+                "fitMs" to 0,
+                "submitMs" to submitResult.submitMs,
+                "waitMs" to submitResult.waitMs,
+                "totalMs" to (tDone - t0),
+                "confirmedByDevice" to lastPrintConfirmedByDevice,
+                "path" to "mono-dots",
+                "debugStrategyUsed" to submitResult.strategyUsed,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "[$jobId] JOSH_MONO_ERROR", e)
+            lastError = "JOSH_PRINT_FAILED: ${e.message}"
+            setState(State.PRINT_FAILED)
+            emitError("JOSH_PRINT_FAILED", e.message ?: "Print failed")
+            return null
+        } finally {
+            cancelPrintFallbacks()
+            isPrinting.set(false)
+            printLock.unlock()
+            if (isConnected()) {
+                setState(State.CONNECTED)
+            } else {
+                setState(State.DISCONNECTED)
+            }
+        }
+    }
+
+    /**
      * Print a PNG bitmap on the connected JOSH printer.
      *
      * @param pngBytes Raw PNG bytes (decoded from base64 by the caller).
@@ -854,6 +999,8 @@ class JoshPrinterManager(private val context: Context) {
                     emitError("JOSH_INVALID_BITMAP", "Failed to decode PNG bitmap")
                     return null
                 }
+            val decodedW = decoded.width
+            val decodedH = decoded.height
             val tDecode = System.currentTimeMillis()
 
             val hardwareDpi = if (dpi == 300.0) 300.0 else HARDWARE_DPI
@@ -888,7 +1035,8 @@ class JoshPrinterManager(private val context: Context) {
             // startJob drawBitmap offsets only run on fallback strategies.
             val hOffsetPx = Math.round(hOffsetMm * dpm).toInt()
             val vOffsetPx = Math.round(vOffsetMm * dpm).toInt()
-            val fitted = if (working.width == targetW && working.height == targetH) {
+            val usedContainFit = working.width != targetW || working.height != targetH
+            val fitted = if (!usedContainFit) {
                 working
             } else {
                 containFitToPage(working, targetW, targetH, alignment)
@@ -947,30 +1095,40 @@ class JoshPrinterManager(private val context: Context) {
             val xMm = 0.0
             val yMm = 0.0
 
-            // Strategy 1 (Primary - Official Demo MainActivity.java line 762 & f3daa91):
-            // Direct api.printBitmap(bitmap, printParams) allows LPAPI SDK hardware driver
-            // to automatically center the bitmap on the label paper roll with physical guide alignment.
-            var submitted = try {
-                currentApi.printBitmap(bitmap, finalParams)
+            // Clear any stale LPAPI job (test prints and failed jobs leave state behind).
+            try {
+                currentApi.abortJob()
             } catch (e: Exception) {
-                Log.w(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] currentApi.printBitmap threw", e)
-                false
-            }
-            Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 1 (direct printBitmap) submitted=$submitted")
-
-            // Strategy 2 (Fallback - startJob with centered alignment):
-            if (!submitted) {
-                Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 2 fallback to submitMmJob startJob(mm)")
-                submitted = submitMmJob(currentApi, bitmap, finalWidthMm, finalHeightMm, xMm, yMm, finalParams, alignment)
+                Log.w(TAG, "[$jobId] [JOSH-PRINT-P2:PREPARE] abortJob threw (non-fatal)", e)
             }
 
-            // Strategy 3 (Fallback - startJob without extra params):
+            // Strategy 1 (Primary — same mm-native path as the working test print):
+            // startJob(widthMm, heightMm) + drawBitmap(mm) + commitJob locks physical size.
+            var strategyUsed = 0
+            var submitted = submitMmJob(currentApi, bitmap, finalWidthMm, finalHeightMm, xMm, yMm, finalParams, alignment)
+            if (submitted) strategyUsed = 1
+            Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 1 (startJob+drawBitmap mm) submitted=$submitted")
+
+            // Strategy 2 (Fallback — startJob without extra params):
             if (!submitted) {
-                Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 3 fallback to submitMmJob no-params")
+                Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 2 fallback to submitMmJob no-params")
                 submitted = submitMmJob(currentApi, bitmap, finalWidthMm, finalHeightMm, xMm, yMm, null, alignment)
+                if (submitted) strategyUsed = 2
             }
 
-            // Strategy 4 (Fallback - printBitmap null params):
+            // Strategy 3 (Fallback — direct printBitmap with params):
+            if (!submitted) {
+                submitted = try {
+                    currentApi.printBitmap(bitmap, finalParams)
+                } catch (e: Exception) {
+                    Log.w(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] currentApi.printBitmap threw", e)
+                    false
+                }
+                if (submitted) strategyUsed = 3
+                Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 3 (direct printBitmap) submitted=$submitted")
+            }
+
+            // Strategy 4 (Fallback — printBitmap null params):
             if (!submitted) {
                 submitted = try {
                     currentApi.printBitmap(bitmap, null)
@@ -978,8 +1136,10 @@ class JoshPrinterManager(private val context: Context) {
                     Log.w(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] printBitmap(null) threw", e)
                     false
                 }
+                if (submitted) strategyUsed = 4
                 Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 4 printBitmap(null) submitted=$submitted")
             }
+            val usedOffsetComposite = hOffsetPx != 0 || vOffsetPx != 0 || fitted.width != targetW || fitted.height != targetH
 
             if (!submitted) {
                 Log.e(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] PRINT_REJECTED all print strategies were rejected")
@@ -1055,6 +1215,20 @@ class JoshPrinterManager(private val context: Context) {
                 "waitMs" to (tDone - tSubmit),
                 "totalMs" to (tDone - t0),
                 "confirmedByDevice" to lastPrintConfirmedByDevice,
+                "debugAlignment" to alignment,
+                "debugHOffsetMm" to hOffsetMm,
+                "debugVOffsetMm" to vOffsetMm,
+                "debugHOffsetPx" to hOffsetPx,
+                "debugVOffsetPx" to vOffsetPx,
+                "debugDecodedW" to decodedW,
+                "debugDecodedH" to decodedH,
+                "debugFittedW" to fitted.width,
+                "debugFittedH" to fitted.height,
+                "debugBitmapW" to bitmap.width,
+                "debugBitmapH" to bitmap.height,
+                "debugUsedContainFit" to usedContainFit,
+                "debugUsedOffsetComposite" to usedOffsetComposite,
+                "debugStrategyUsed" to strategyUsed,
             )
             Log.i(TAG, "[$jobId] [JOSH-PRINT-P5:FINALIZE] Print complete in ${tDone - t0}ms $result")
             return result
@@ -1137,15 +1311,21 @@ class JoshPrinterManager(private val context: Context) {
             printLatch = latch
 
             currentApi.abortJob()
-            Log.i(TAG, "[JOSH-PRINT-P2:TEST-DRAW] Starting test job (50.0x30.0mm), text=\"$text\"")
-            val started = currentApi.startJob(50.0, 30.0, 0)
+            Log.i(
+                TAG,
+                "[JOSH-PRINT-P2:TEST-DRAW] Starting test job (${TEST_LABEL_WIDTH_MM}x${TEST_LABEL_HEIGHT_MM}mm), text=\"$text\"",
+            )
+            val started = currentApi.startJob(TEST_LABEL_WIDTH_MM, TEST_LABEL_HEIGHT_MM, 0)
             if (!started) {
-                Log.w(TAG, "[JOSH-PRINT-P2:TEST-DRAW] startJob(50, 30, 0) returned false")
+                Log.w(TAG, "[JOSH-PRINT-P2:TEST-DRAW] startJob($TEST_LABEL_WIDTH_MM, $TEST_LABEL_HEIGHT_MM, 0) returned false")
                 return false
             }
             currentApi.setItemHorizontalAlignment(1) // Center
             currentApi.setItemVerticalAlignment(1)   // Center
-            currentApi.drawTextRegular(text, 2.0, 2.0, 46.0, 26.0, 4.5, 1)
+            val textPadMm = 1.0
+            val textW = TEST_LABEL_WIDTH_MM - textPadMm * 2
+            val textH = TEST_LABEL_HEIGHT_MM - textPadMm * 2
+            currentApi.drawTextRegular(text, textPadMm, textPadMm, textW, textH, 3.0, 1)
             val committed = currentApi.commitJob()
             Log.i(TAG, "[JOSH-PRINT-P3:TEST-SUBMIT] commitJob returned: $committed, awaiting physical hardware ACK")
             if (!committed) {
@@ -1174,6 +1354,167 @@ class JoshPrinterManager(private val context: Context) {
             }
             Log.i(TAG, "[JOSH-PRINT-P5:TEST-FINALIZE] State restored to ${state.get()}")
         }
+    }
+
+    private data class LabelSubmitTiming(val submitMs: Long, val waitMs: Long, val strategyUsed: Int)
+
+    /** Logical 1-bit buffer (black=1, MSB first) → ARGB bitmap, 1 px per printer dot. */
+    private fun mono1bppToBitmap(
+        monoBytes: ByteArray,
+        widthDots: Int,
+        heightDots: Int,
+        bytesPerRow: Int,
+    ): Bitmap {
+        val bitmap = Bitmap.createBitmap(widthDots, heightDots, Bitmap.Config.ARGB_8888)
+        val row = IntArray(widthDots)
+        for (y in 0 until heightDots) {
+            val srcRow = y * bytesPerRow
+            for (x in 0 until widthDots) {
+                val byteIndex = srcRow + (x shr 3)
+                val bitMask = 0x80 shr (x and 7)
+                val black = (monoBytes[byteIndex].toInt() and bitMask) != 0
+                row[x] = if (black) Color.BLACK else Color.WHITE
+            }
+            bitmap.setPixels(row, 0, widthDots, 0, y, widthDots, 1)
+        }
+        return bitmap
+    }
+
+    private fun compositeLabelPage(
+        source: Bitmap,
+        targetW: Int,
+        targetH: Int,
+        hOffsetPx: Int,
+        vOffsetPx: Int,
+    ): Bitmap {
+        if (hOffsetPx == 0 && vOffsetPx == 0 && source.width == targetW && source.height == targetH) {
+            return source
+        }
+        val page = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(page)
+        canvas.drawColor(Color.WHITE)
+        canvas.drawBitmap(source, hOffsetPx.toFloat(), vOffsetPx.toFloat(), null)
+        return page
+    }
+
+    /** Keep the left `width` columns. Columns to the right are the byte-align pad. */
+    private fun cropBitmapToWidth(source: Bitmap, width: Int): Bitmap {
+        if (width <= 0 || source.width <= width) return source
+        val cropped = Bitmap.createBitmap(width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(cropped)
+        canvas.drawColor(Color.WHITE)
+        canvas.drawBitmap(source, 0f, 0f, null)
+        if (!source.isRecycled) source.recycle()
+        return cropped
+    }
+
+    private fun submitLabelBitmapAndWait(
+        currentApi: LPAPI,
+        jobId: String,
+        bitmap: Bitmap,
+        widthMm: Double,
+        heightMm: Double,
+        copies: Int,
+        paramDensity: Int,
+        paramSpeed: Int,
+        paramGapType: Int,
+        paramGapLengthMm: Double,
+        alignment: String,
+    ): LabelSubmitTiming? {
+        lastPrintSuccess = false
+        lastPrintConfirmedByDevice = false
+        val latch = CountDownLatch(1)
+        printLatch = latch
+
+        val gapTypeValue = if (paramGapType >= 0) paramGapType else GAP_TYPE_LABEL
+        val gapLengthValue = gapMmTo01mm(if (paramGapLengthMm >= 0.0) paramGapLengthMm else LABEL_GAP_MM)
+        try {
+            currentApi.setPrintPageGapType(gapTypeValue)
+            currentApi.setPrintPageGapLength(gapLengthValue)
+        } catch (e: Exception) {
+            Log.w(TAG, "[$jobId] setPrintPageGap* threw (non-fatal)", e)
+        }
+
+        val printParams = Bundle().apply {
+            if (gapTypeValue >= 0) putInt(PrintParamName.GAP_TYPE, gapTypeValue)
+            if (gapLengthValue >= 0) putInt(PrintParamName.GAP_LENGTH, gapLengthValue)
+            if (paramDensity >= 0) putInt(PrintParamName.PRINT_DENSITY, paramDensity)
+            if (paramSpeed >= 0) putInt(PrintParamName.PRINT_SPEED, paramSpeed)
+            if (copies > 1) putInt(PrintParamName.PRINT_COPIES, copies)
+        }
+        val finalParams = if (printParams.isEmpty) null else printParams
+        val xMm = 0.0
+        val yMm = 0.0
+
+        try {
+            currentApi.abortJob()
+        } catch (e: Exception) {
+            Log.w(TAG, "[$jobId] abortJob threw (non-fatal)", e)
+        }
+
+        val tSubmitStart = System.currentTimeMillis()
+        var strategyUsed = 0
+        var submitted = submitMmJob(currentApi, bitmap, widthMm, heightMm, xMm, yMm, finalParams, alignment)
+        if (submitted) strategyUsed = 1
+        if (!submitted) {
+            submitted = submitMmJob(currentApi, bitmap, widthMm, heightMm, xMm, yMm, null, alignment)
+            if (submitted) strategyUsed = 2
+        }
+        if (!submitted) {
+            submitted = try {
+                currentApi.printBitmap(bitmap, finalParams)
+            } catch (e: Exception) {
+                false
+            }
+            if (submitted) strategyUsed = 3
+        }
+        if (!submitted) {
+            submitted = try {
+                currentApi.printBitmap(bitmap, null)
+            } catch (e: Exception) {
+                false
+            }
+            if (submitted) strategyUsed = 4
+        }
+        if (!submitted) {
+            printLatch = null
+            lastError = "JOSH_PRINT_FAILED: Print request rejected by LPAPI SDK"
+            handlePrintFailed("Print request rejected by LPAPI SDK")
+            return null
+        }
+        val tSubmitEnd = System.currentTimeMillis()
+
+        printSubmitFallback?.let { mainHandler.removeCallbacks(it) }
+        val submitFallback = Runnable {
+            if (printLatch != null && isPrinting.get() && !lastPrintSuccess) {
+                lastPrintSuccess = true
+                printLatch?.countDown()
+                mainHandler.post { handlePrintSuccess() }
+            }
+        }
+        printSubmitFallback = submitFallback
+        mainHandler.postDelayed(submitFallback, PRINT_SUBMIT_FALLBACK_MS)
+
+        val completed = try {
+            latch.await(PRINT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        printLatch = null
+        val tDone = System.currentTimeMillis()
+
+        if (!completed) {
+            lastError = "JOSH_PRINT_TIMEOUT"
+            setState(State.PRINT_FAILED)
+            emitError("JOSH_PRINT_TIMEOUT", "Print timed out — printer may be unresponsive")
+            emitPrintProgress(jobId, "TIMEOUT", mapOf("timeoutMs" to PRINT_TIMEOUT_MS))
+            return null
+        }
+        if (!lastPrintSuccess) {
+            return null
+        }
+        return LabelSubmitTiming(tSubmitEnd - tSubmitStart, tDone - tSubmitEnd, strategyUsed)
     }
 
     private fun containFitToPage(
@@ -1208,14 +1549,15 @@ class JoshPrinterManager(private val context: Context) {
         xMm: Double,
         yMm: Double,
         params: Bundle?,
-        alignment: String = "center",
+        alignment: String = "left",
     ): Boolean {
         return try {
             if (!api.startJob(widthMm, heightMm, 0)) {
                 false
             } else {
-                val hAlign = if (alignment.equals("left", ignoreCase = true)) 0 else 1
-                val vAlign = if (alignment.equals("left", ignoreCase = true)) 0 else 1
+                // Left/top pins ink to the label origin; center shifts the whole page on the head.
+                val hAlign = if (alignment.equals("center", ignoreCase = true)) 1 else 0
+                val vAlign = if (alignment.equals("center", ignoreCase = true)) 1 else 0
                 try {
                     api.setItemHorizontalAlignment(hAlign)
                     api.setItemVerticalAlignment(vAlign)

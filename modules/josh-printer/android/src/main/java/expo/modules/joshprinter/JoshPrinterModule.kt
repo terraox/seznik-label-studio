@@ -274,7 +274,7 @@ class JoshPrinterModule : Module() {
       }
       ioExecutor.execute {
         try {
-          val success = mgr.printTestText(text ?: "Sez Print JOSH OK")
+          val success = mgr.printTestText(text ?: JoshPrinterManager.TEST_LABEL_DEFAULT_TEXT)
           if (success) {
             Log.i("JoshPrinter", "[JOSH-NATIVE-BRIDGE] printTestText completed successfully")
             promise.resolve(true)
@@ -285,6 +285,77 @@ class JoshPrinterModule : Module() {
         } catch (e: Exception) {
           Log.e("JoshPrinter", "[JOSH-NATIVE-BRIDGE] printTestText exception", e)
           promise.reject("PRINT_FAILED", e.message ?: "Test print error", e)
+        }
+      }
+    }
+
+    AsyncFunction("printMonoLabel") { monoBytes: ByteArray, options: Map<String, Any?>, promise: Promise ->
+      val mgr = getOrInitManager()
+      if (mgr == null) {
+        promise.reject("NOT_INITIALIZED", "JOSH printer manager is not initialized", null)
+        return@AsyncFunction
+      }
+      if (!mgr.isConnected()) {
+        promise.reject("NOT_CONNECTED", "JOSH printer is not connected", null)
+        return@AsyncFunction
+      }
+      val widthDots = (options["widthDots"] as? Number)?.toInt()
+        ?: run {
+          promise.reject("INVALID_PARAMS", "Missing widthDots", null)
+          return@AsyncFunction
+        }
+      val heightDots = (options["heightDots"] as? Number)?.toInt()
+        ?: run {
+          promise.reject("INVALID_PARAMS", "Missing heightDots", null)
+          return@AsyncFunction
+        }
+      val bytesPerRow = (options["bytesPerRow"] as? Number)?.toInt()
+        ?: run {
+          promise.reject("INVALID_PARAMS", "Missing bytesPerRow", null)
+          return@AsyncFunction
+        }
+      val widthMm = (options["widthMm"] as? Number)?.toDouble() ?: 50.0
+      val heightMm = (options["heightMm"] as? Number)?.toDouble() ?: 30.0
+      val dpi = (options["dpi"] as? Number)?.toDouble() ?: 203.0
+      val copies = (options["copies"] as? Number)?.toInt() ?: 1
+      val density = (options["density"] as? Number)?.toInt() ?: -1
+      val speed = (options["speed"] as? Number)?.toInt() ?: -1
+      val direction = (options["direction"] as? Number)?.toInt()
+        ?: (options["orientation"] as? Number)?.toInt()
+        ?: 0
+      val gapType = (options["gapType"] as? Number)?.toInt() ?: 2
+      val gapLengthMm = (options["gapLength"] as? Number)?.toDouble() ?: JoshPrinterManager.LABEL_GAP_MM
+      val hOffsetMm = (options["hOffsetMm"] as? Number)?.toDouble() ?: 0.0
+      val vOffsetMm = (options["vOffsetMm"] as? Number)?.toDouble() ?: 0.0
+      val alignment = (options["alignment"] as? String) ?: "left"
+
+      ioExecutor.execute {
+        try {
+          val result = mgr.printMonoLabel(
+            monoBytes = monoBytes,
+            widthDots = widthDots,
+            heightDots = heightDots,
+            bytesPerRow = bytesPerRow,
+            widthMm = widthMm,
+            heightMm = heightMm,
+            dpi = dpi,
+            copies = copies,
+            paramDensity = density,
+            paramSpeed = speed,
+            direction = direction,
+            paramGapType = gapType,
+            paramGapLengthMm = gapLengthMm,
+            hOffsetMm = hOffsetMm,
+            vOffsetMm = vOffsetMm,
+            alignment = alignment,
+          )
+          if (result != null) {
+            promise.resolve(result)
+          } else {
+            promise.reject("PRINT_FAILED", mgr.lastError ?: "Print failed", null)
+          }
+        } catch (e: Exception) {
+          promise.reject("PRINT_ERROR", e.message ?: "Failed to print mono label", e)
         }
       }
     }
@@ -323,7 +394,7 @@ class JoshPrinterModule : Module() {
       val gapLengthMm = (options["gapLength"] as? Number)?.toDouble() ?: JoshPrinterManager.LABEL_GAP_MM
       val hOffsetMm = (options["hOffsetMm"] as? Number)?.toDouble() ?: 0.0
       val vOffsetMm = (options["vOffsetMm"] as? Number)?.toDouble() ?: 0.0
-      val alignment = (options["alignment"] as? String) ?: "center"
+      val alignment = (options["alignment"] as? String) ?: "left"
 
       ioExecutor.execute {
         try {

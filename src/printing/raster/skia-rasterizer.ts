@@ -55,6 +55,11 @@ export type RasterizeOptions = {
    */
   shiftDots?: { x: number; y: number };
   /**
+   * Byte-align the page width. `floor` (default, TD-404) drops a partial last byte.
+   * `ceil` (JOSH) keeps those dots and pads white on the right.
+   */
+  pageWidthPack?: 'floor' | 'ceil';
+  /**
    * Manual darkness minus the bridge default (TD-404: -10..+5). 0 or absent leaves the
    * bitmap untouched. Barcodes and QR codes are excluded.
    */
@@ -110,7 +115,12 @@ export function assertHeadlessRasterDocument(doc: LabelDocument): void {
   );
 }
 
-export function packedPageDots(widthMm: number, heightMm: number, dpi: number): {
+export function packedPageDots(
+  widthMm: number,
+  heightMm: number,
+  dpi: number,
+  pack: 'floor' | 'ceil' = 'floor',
+): {
   sizeDotsW: number;
   sizeDotsH: number;
   packedW: number;
@@ -119,7 +129,8 @@ export function packedPageDots(widthMm: number, heightMm: number, dpi: number): 
   const dpm = dotsPerMm(dpi);
   const sizeDotsW = Math.max(1, Math.round(widthMm * dpm));
   const sizeDotsH = Math.max(1, Math.round(heightMm * dpm));
-  const packedW = Math.max(8, Math.floor(sizeDotsW / 8) * 8);
+  const bytes = pack === 'ceil' ? Math.ceil(sizeDotsW / 8) : Math.floor(sizeDotsW / 8);
+  const packedW = Math.max(8, bytes * 8);
   return { sizeDotsW, sizeDotsH, packedW, packedH: sizeDotsH };
 }
 
@@ -270,7 +281,12 @@ export function rasterizeDocumentToBitmapTimed(
   dpi: number,
   options: RasterizeOptions = {},
 ): RasterizeTiming {
-  const { packedW, packedH } = packedPageDots(doc.widthMm, doc.heightMm, dpi);
+  const { packedW, packedH } = packedPageDots(
+    doc.widthMm,
+    doc.heightMm,
+    dpi,
+    options.pageWidthPack ?? 'floor',
+  );
   const threshold = options.threshold ?? 160;
   activeDotScale = Math.max(1, Math.round(options.dotScale ?? 1));
   activeBakeFeed = options.bakeTd404Feed === true;

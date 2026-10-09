@@ -17,6 +17,7 @@ import {
   BLUETOOTH_OFF_MESSAGE,
   bluetoothOffScanResult,
 } from '@/lib/printer/bluetooth-guard';
+import { assertJoshMonoBuffer } from '@/lib/printer/josh-mono-validate';
 import { joshEffectiveDpi, joshGapTypeFromMedia } from '@/lib/printer/josh-print';
 import {
   isLikelyTezName,
@@ -32,7 +33,7 @@ import { encodeTscTextSample } from '@/lib/printer/tsc';
 import { assertTd404MonoBuffer } from '@/printing/raster/td404-mono-validate';
 import { usePrinterStore, normalizePrinterMac } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { type SeznikPrinterModelId, SEZNIK_PRINTER_MODELS } from '@/constants/printer-models';
+import { type SeznikPrinterModelId, SEZNIK_PRINTER_MODELS, toDriverModel } from '@/constants/printer-models';
 
 export type DiscoveredPrinter = {
   id: string;
@@ -324,9 +325,18 @@ class PrinterManager {
     if (!connectedMac || connectedMac !== droppedMac) return;
 
     // SDK may still hold a live RFCOMM session after a spurious ACL drop.
+    // Josh LPAPI often stays connected after Android fires ACL_DISCONNECTED
+    // during profile setup — wait and re-check before tearing the session down.
     if (this.isConnectionHealthy()) {
       console.info(`[printer] ACL drop for ${droppedMac} was transient — SDK still connected`);
       return;
+    }
+    if (store.sdkId === 'josh' || this.activeTransport === 'josh-lpapi') {
+      await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+      if (this.isConnectionHealthy()) {
+        console.info(`[printer] ACL drop for ${droppedMac} recovered — JOSH still connected`);
+        return;
+      }
     }
 
     console.warn(`[printer] ACL_DISCONNECTED confirmed for active printer ${droppedMac}`);
@@ -398,12 +408,12 @@ class PrinterManager {
     if (this.activeTransport === 'td404-spp' || this.activeTransport === 'tez-spp' || this.activeTransport === 'dev-spp' || this.activeTransport === 'labelx-spp') return false;
     if (this.activeTransport === 'josh-lpapi') return true;
     const store = usePrinterStore.getState();
-    if (store.transport === 'bluetooth-spp' || store.sdkId === 'td404' || store.sdkId === 'tez' || store.sdkId === 'dev' || store.sdkId === 'labelx') return false;
-    const name = store.deviceName ?? store.lastDeviceName;
-    if (isLikelyTd404Name(name) || isLikelyTezName(name) || isLikelyShaktiName(name) || isLikelyDevName(name) || isLikelyLabelXName(name)) return false;
     if (store.sdkId === 'josh' || store.transport === 'josh-lpapi') {
       return true;
     }
+    if (store.transport === 'bluetooth-spp' || store.sdkId === 'td404' || store.sdkId === 'tez' || store.sdkId === 'dev' || store.sdkId === 'labelx') return false;
+    const name = store.deviceName ?? store.lastDeviceName;
+    if (isLikelyTd404Name(name) || isLikelyTezName(name) || isLikelyShaktiName(name) || isLikelyDevName(name) || isLikelyLabelXName(name)) return false;
     if (this.activeTransport === null && Boolean(this.getJosh()?.isJoshConnected?.())) {
       return true;
     }
@@ -429,7 +439,7 @@ class PrinterManager {
     if (this.activeTransport === 'td404-spp' || this.activeTransport === 'josh-lpapi' || this.activeTransport === 'tez-spp' || this.activeTransport === 'labelx-spp') return false;
     if (this.activeTransport === 'dev-spp') return true;
     const store = usePrinterStore.getState();
-    if (store.selectedPrinterModel === 'dev' && (store.status === 'connected' || Boolean(this.getDev()?.isDevConnected?.()))) {
+    if (store.sdkId === 'dev' && (store.status === 'connected' || Boolean(this.getDev()?.isDevConnected?.()))) {
       return true;
     }
     const name = store.deviceName ?? store.lastDeviceName;
@@ -687,7 +697,6 @@ class PrinterManager {
     // DEV OEM AutoReplyPrint printer
     if (
       this.isDev ||
-      store.selectedPrinterModel === 'dev' ||
       store.sdkId === 'dev' ||
       this.activeTransport === 'dev-spp'
     ) {
@@ -734,7 +743,8 @@ class PrinterManager {
     // JOSH / LPAPI printer
     if (store.sdkId === 'josh' || this.activeTransport === 'josh-lpapi') {
       const dpi = joshEffectiveDpi(settings.printerDpi);
-      const alignment = 'center';
+      // Full-bleed labels are guide-aligned to the die-cut edge, not centered on the head.
+      const alignment = 'left';
       const headWidthMm = settings.printheadWidthMm === 108 ? 50 : (settings.printheadWidthMm ?? 50);
       const headWidthDots = mmToDots(headWidthMm, dpi);
       return {
@@ -764,7 +774,7 @@ class PrinterManager {
     // on the connect screen is the only reliable source we have — the global
     // `printerDpi` setting leaks across printers and defaults to TD-404's 304.
     // It stays supported, but only as a deliberate per-model override.
-    const modelDpi = SEZNIK_PRINTER_MODELS[store.selectedPrinterModel]?.defaultDpi;
+    const modelDpi = SEZNIK_PRINTER_MODELS[toDriverModel(store.selectedPrinterModel)]?.defaultDpi;
     const dpi = settings.printerDpi ?? modelDpi ?? PRINT_DPI;
     const alignment = settings.printerAlignment ?? 'center';
     const headWidthMm = settings.printheadWidthMm ?? 108;
@@ -1099,6 +1109,10 @@ class PrinterManager {
       return bluetoothOffScanResult();
     }
     const store = usePrinterStore.getState();
+    if (this.isConnected) {
+      onFinished?.();
+      return { paired: 0, nearby: 0, errors: [] };
+    }
     store.setStatus('scanning');
     this.stopScan();
 
@@ -2990,7 +3004,8 @@ class PrinterManager {
     }
 
     if (this.activeTransport === 'josh-lpapi' || this.isJosh) {
-      console.info(`[JOSH-PRINT-P1:PREFLIGHT] Test print dispatching via JOSH LPAPI SDK: "${text}"`);
+      const joshTestText = text === 'Sez Print OK' ? 'test print sent by sez print' : text;
+      console.info(`[JOSH-PRINT-P1:PREFLIGHT] Test print dispatching via JOSH LPAPI SDK: "${joshTestText}"`);
       const josh = this.getJosh();
       if (!josh) throw new Error('JOSH module not available.');
       if (!josh.isJoshConnected()) {
@@ -2999,7 +3014,7 @@ class PrinterManager {
         await this.connect(store.deviceId ?? store.lastDeviceId!, store.deviceName ?? store.lastDeviceName, 'josh-lpapi');
       }
       console.info('[JOSH-PRINT-P3:SUBMIT] Submitting test text to LPAPI hardware...');
-      await josh.printJoshTestText(text);
+      await josh.printJoshTestText(joshTestText);
       console.info('[JOSH-PRINT-P5:FINALIZE] JOSH test print completed successfully');
       return;
     }
@@ -3481,6 +3496,113 @@ class PrinterManager {
   }
 
   /**
+   * JOSH headless mono: packed 1-bit dots → native LPAPI startJob+drawBitmap (no PNG).
+   */
+  async printJoshMonoLabelFast(options: {
+    monoBytes: Uint8Array;
+    widthDots: number;
+    heightDots: number;
+    bytesPerRow: number;
+    widthMm: number;
+    heightMm: number;
+    gapMm?: number;
+    copies?: number;
+    density?: number | null;
+    speed?: number | null;
+    orientation?: number;
+    dpi?: number;
+    hOffsetMm?: number;
+    vOffsetMm?: number;
+    media?: 'gap' | 'bline' | 'continuous';
+    alignment?: 'left' | 'center';
+  }): Promise<boolean> {
+    if (!this.isJosh) {
+      return false;
+    }
+    const josh = this.getJosh();
+    if (!josh || typeof josh.printJoshMonoLabel !== 'function') {
+      return false;
+    }
+    this.activeTransport = 'josh-lpapi';
+    this.printQueueDepth++;
+    const run = this.printChain.then(async () => {
+      const store = usePrinterStore.getState();
+      store.setStatus('printing');
+      this.connectionState = 'printing';
+      try {
+        const profile = this.getActivePrinterProfile();
+        const dpi = joshEffectiveDpi(options.dpi ?? profile.dpi);
+        const gapType = joshGapTypeFromMedia(options.media ?? 'gap');
+        const gapLength = options.gapMm != null ? Math.max(0, options.gapMm) : 3;
+        assertJoshMonoBuffer({
+          monoBytes: options.monoBytes,
+          widthDots: options.widthDots,
+          heightDots: options.heightDots,
+          bytesPerRow: options.bytesPerRow,
+          widthMm: options.widthMm,
+          heightMm: options.heightMm,
+          dpi,
+        });
+        await this.ensureConnected();
+        const t0 = Date.now();
+        const alignment = options.alignment ?? profile.alignment;
+        const result = await josh.printJoshMonoLabel({
+          monoBytes: options.monoBytes,
+          widthDots: options.widthDots,
+          heightDots: options.heightDots,
+          bytesPerRow: options.bytesPerRow,
+          widthMm: options.widthMm,
+          heightMm: options.heightMm,
+          copies: Math.max(1, Math.round(options.copies ?? 1)),
+          density: options.density != null ? options.density : -1,
+          speed: options.speed != null ? options.speed : -1,
+          orientation: options.orientation ?? 0,
+          gapType,
+          gapLength,
+          dpi,
+          hOffsetMm: options.hOffsetMm ?? 0,
+          vOffsetMm: options.vOffsetMm ?? 0,
+          alignment,
+        });
+        if (!result) {
+          const err = new Error('NATIVE_MONO_UNAVAILABLE');
+          (err as Error & { code?: string }).code = 'NATIVE_MONO_UNAVAILABLE';
+          throw err;
+        }
+        console.info(
+          `[JOSH-MONO] dots print done in ${Date.now() - t0} ms | ${options.widthDots}x${options.heightDots} @ ${dpi}dpi path=${(result as { path?: string }).path ?? 'mono'}`,
+          result,
+        );
+      } finally {
+        const currentStore = usePrinterStore.getState();
+        if (currentStore.status === 'printing') {
+          currentStore.setStatus(this.isConnected ? 'connected' : 'disconnected');
+        }
+        this.connectionState = this.isConnected ? 'connected' : 'disconnected';
+      }
+    });
+    this.printChain = run.then(
+      () => {
+        this.decrementPrintQueue();
+      },
+      () => {
+        this.decrementPrintQueue();
+      },
+    );
+    try {
+      await run;
+      return true;
+    } catch (error) {
+      const code = error instanceof Error ? (error as Error & { code?: string }).code : null;
+      const msg = error instanceof Error ? error.message : String(error);
+      if (code === 'NATIVE_MONO_UNAVAILABLE' || msg.includes('NATIVE_MONO_UNAVAILABLE')) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  /**
    * JOSH SDK fast print: PNG → LPAPI printBitmap (handled by native module).
    * Direct bitmap print, bypasses TSPL rasterization completely.
    */
@@ -3500,12 +3622,12 @@ class PrinterManager {
     alignment?: 'left' | 'center';
   }): Promise<boolean> {
     if (!this.isJosh) {
-      return false;
+      throw new Error('Connected printer is not a JOSH printer.');
     }
     this.activeTransport = 'josh-lpapi';
     const josh = this.getJosh();
     if (!josh || typeof josh.printJoshPngLabel !== 'function') {
-      return false;
+      throw new Error('JOSH printer module is not available in this build.');
     }
 
     this.printQueueDepth++;

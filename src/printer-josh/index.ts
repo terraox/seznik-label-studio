@@ -173,10 +173,10 @@ export class JoshDriver implements PrinterDriver {
       speed: job.speed,
       orientation: job.rotation,
       gapType,
-      gapLength: Math.round(job.gapMm),
+      gapLength: Math.max(0, job.gapMm),
       hOffsetMm: job.hOffsetMm ?? 0,
       vOffsetMm: job.vOffsetMm ?? 0,
-      alignment: 'center',
+      alignment: 'left',
     };
 
     const result = await printJoshPngLabel(options);

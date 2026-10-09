@@ -44,6 +44,26 @@ export type JoshPrintResult = {
   confirmedByDevice: boolean;
 };
 
+export type JoshMonoLabelOptions = {
+  monoBytes: Uint8Array;
+  widthDots: number;
+  heightDots: number;
+  bytesPerRow: number;
+  widthMm: number;
+  heightMm: number;
+  dpi?: number;
+  copies?: number;
+  density?: number;
+  speed?: number;
+  direction?: number;
+  orientation?: number;
+  gapType?: number;
+  gapLength?: number;
+  hOffsetMm?: number;
+  vOffsetMm?: number;
+  alignment?: 'left' | 'center';
+};
+
 export type JoshPngLabelOptions = {
   pngBase64: string;
   widthMm: number;
@@ -81,6 +101,7 @@ type NativeJoshPrinter = {
   }): Promise<void>;
   printTestText(text: string): Promise<boolean>;
   printPngLabel(options: Record<string, unknown>): Promise<JoshPrintResult>;
+  printMonoLabel?(monoBytes: Uint8Array, options: Record<string, unknown>): Promise<JoshPrintResult>;
   getBondedDevices?(): Promise<JoshDevice[]>;
   addListener(
     eventName: string,
@@ -270,6 +291,33 @@ export async function configureJoshParams(params: {
   await mod.configureParams(params);
 }
 
+export async function printJoshMonoLabel(
+  options: JoshMonoLabelOptions,
+): Promise<JoshPrintResult | null> {
+  const mod = getNative();
+  if (!mod || typeof mod.printMonoLabel !== 'function') return null;
+  if (!mod.isConnected()) {
+    throw new Error('No JOSH printer connected.');
+  }
+  return mod.printMonoLabel(options.monoBytes, {
+    widthDots: options.widthDots,
+    heightDots: options.heightDots,
+    bytesPerRow: options.bytesPerRow,
+    widthMm: options.widthMm,
+    heightMm: options.heightMm,
+    dpi: options.dpi ?? 203,
+    copies: options.copies ?? 1,
+    density: options.density ?? -1,
+    speed: options.speed ?? -1,
+    direction: options.direction ?? options.orientation ?? 0,
+    gapType: options.gapType ?? 2,
+    gapLength: options.gapLength ?? 3,
+    hOffsetMm: options.hOffsetMm ?? 0,
+    vOffsetMm: options.vOffsetMm ?? 0,
+    alignment: options.alignment ?? 'left',
+  });
+}
+
 export async function printJoshPngLabel(
   options: JoshPngLabelOptions,
 ): Promise<JoshPrintResult> {
@@ -294,7 +342,7 @@ export async function printJoshPngLabel(
     gapLength: options.gapLength ?? 3,
     hOffsetMm: options.hOffsetMm ?? 0,
     vOffsetMm: options.vOffsetMm ?? 0,
-    alignment: options.alignment ?? 'center',
+    alignment: options.alignment ?? 'left',
   });
 }
 
@@ -306,7 +354,7 @@ export async function printJoshTestText(text?: string): Promise<boolean> {
   if (!mod.isConnected()) {
     throw new Error('No JOSH printer connected.');
   }
-  return mod.printTestText(text ?? 'Sez Print JOSH OK');
+  return mod.printTestText(text ?? 'test print sent by sez print');
 }
 
 export function addJoshConnectionListener(
