@@ -304,6 +304,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
     surfaceColor,
     showGrid = false,
     gridSpacingMm = DEFAULT_GRID_SPACING_MM,
+    gridColor,
     liveBounds,
     activeSelectedIdSv,
     topBarSelectionVisibleSv,
@@ -671,8 +672,8 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
             pxPerMM={pxPerMM}
             spacingMm={resolvedGridSpacingMm}
             visible={showGrid}
-          />
             gridColor={gridColor}
+          />
           {showGrid
             ? sortedElements.map((el) => {
                 if (el.visible === false || el.id === gridLiveElementId) return null;
