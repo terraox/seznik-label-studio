@@ -291,7 +291,7 @@ const TOOL_ROWS: { icon: IconName; label: string }[][] = [
     { icon: 'tablecells.badge.ellipsis', label: 'Excel' },
     { icon: 'viewfinder', label: 'Scan' },
     { icon: 'eye', label: 'OCR' },
-    { icon: 'mic', label: 'ASR' },
+    { icon: 'face.smiling', label: 'Line Emoji' },
   ],
   [
     { icon: 'square.on.square', label: 'Label Clone' },
@@ -3617,8 +3617,7 @@ export default function EditScreen() {
       case 'OCR':
         router.push({ pathname: '/ocr', params: { from: 'edit' } });
         break;
-      case 'ASR':
-        router.push({ pathname: '/asr', params: { from: 'edit' } });
+      case 'Line Emoji':
         break;
       case 'Label Clone':
         saveDocument(false);

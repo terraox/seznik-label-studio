@@ -44,6 +44,7 @@ const ION: Record<string, IoniconsName> = {
   'clock.arrow.circlepath': 'time-outline',
   'doc.text': 'document-text-outline',
   eye: 'eye-outline',
+  'face.smiling': 'happy-outline',
   'eye.slash': 'eye-off-outline',
   ellipsis: 'ellipsis-horizontal',
   folder: 'folder-outline',

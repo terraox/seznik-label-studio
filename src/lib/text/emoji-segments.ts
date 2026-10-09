@@ -8,7 +8,14 @@ let emojiSplitRe: RegExp | null = null;
 
 function emojiSplitPattern(): RegExp {
   if (!emojiSplitRe) {
-    emojiSplitRe = createEmojiRegex();
+    try {
+      emojiSplitRe = new RegExp(
+        `(?:${createEmojiRegex().source}|\\p{Extended_Pictographic}\\uFE0F?)`,
+        'gu',
+      );
+    } catch {
+      emojiSplitRe = createEmojiRegex();
+    }
   }
   return emojiSplitRe;
 }

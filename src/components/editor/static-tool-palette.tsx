@@ -36,7 +36,7 @@ export const TOOL_ROWS: { icon: AppIconName; label: string }[][] = [
     { icon: 'tablecells.badge.ellipsis', label: 'Excel' },
     { icon: 'viewfinder', label: 'Scan' },
     { icon: 'eye', label: 'OCR' },
-    { icon: 'mic', label: 'ASR' },
+    { icon: 'face.smiling', label: 'Line Emoji' },
   ],
   [
     { icon: 'square.on.square', label: 'Label Clone' },

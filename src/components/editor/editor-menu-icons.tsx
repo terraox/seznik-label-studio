@@ -174,13 +174,19 @@ export function ToolMenuIcon({
         </Svg>
       );
 
-    case 'ASR':
+    case 'Line Emoji':
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32">
-          <Rect x="12" y="5.5" width="8" height="12.5" rx="4" stroke={color} strokeWidth="1.8" fill="none" />
-          <Path d="M 7.5 14 C 7.5 19 24.5 19 24.5 14" stroke={color} strokeWidth="1.8" strokeLinecap="round" fill="none" />
-          <Line x1="16" y1="19" x2="16" y2="25.5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-          <Line x1="11" y1="25.5" x2="21" y2="25.5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+          <Circle cx="16" cy="16" r="10.5" stroke={color} strokeWidth="1.8" fill={accentColor} fillOpacity={0.12} />
+          <Circle cx="12.5" cy="13.5" r="1.4" fill={accentColor} />
+          <Circle cx="19.5" cy="13.5" r="1.4" fill={accentColor} />
+          <Path
+            d="M 11.5 19 C 13.2 21.2 18.8 21.2 20.5 19"
+            stroke={accentColor}
+            strokeWidth="2"
+            strokeLinecap="round"
+            fill="none"
+          />
         </Svg>
       );
 

@@ -12,3 +12,8 @@ test('splitPrintTextSegments keeps text and emoji runs', () => {
   assert.equal(mixed[1].value, '🚢');
   assert.equal(mixed[2].value, ' now');
 });
+
+test('splitPrintTextSegments keeps smiling face with horns', () => {
+  const parts = splitPrintTextSegments('Hi 😈');
+  assert.equal(parts.some((part) => part.kind === 'emoji' && part.value.includes('😈')), true);
+});

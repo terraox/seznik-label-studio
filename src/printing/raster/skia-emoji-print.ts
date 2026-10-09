@@ -5,11 +5,15 @@
  * 3. Dark features (eyes, outlines) → ink; light fills (yellow, skin) → paper.
  */
 
+import { clusterToTwemojiLookupIds } from '@/lib/emoji/twemoji-id';
+
 import type { TextDrawStyle } from './skia-surface';
 
 const LAYOUT_WIDTH = 4096;
 /** WePrint mix: yellow ~196 and skin ~180 stay paper; black/red features print. */
 const EMOJI_INK_THRESHOLD = 160;
+/** Pull midtones toward ink without closing yellow/white cores. */
+const EMOJI_MIDTONE_DARKEN = 16;
 
 type SkColor = unknown;
 type SkTypeface = unknown;
@@ -57,13 +61,17 @@ export type EmojiSkiaModule = {
     Color: (c: string | number) => SkColor;
     Surface: { MakeOffscreen: (w: number, h: number) => SkSurface | null };
     XYWHRect: (x: number, y: number, w: number, h: number) => SkRect;
-    Data?: { fromBytes: (bytes: Uint8Array) => SkData };
+    Data?: {
+      fromBytes: (bytes: Uint8Array) => SkData;
+      fromURI?: (uri: string) => Promise<SkData>;
+    };
     Image?: {
       MakeImage: (
         info: { width: number; height: number; colorType: number; alphaType: number },
         data: SkData,
         bytesPerRow: number,
       ) => SkImage | null;
+      MakeImageFromEncoded?: (data: SkData) => SkImage | null;
     };
     ParagraphBuilder: {
       Make: (style?: Record<string, unknown>, provider?: unknown) => SkParagraphBuilder;
@@ -88,6 +96,63 @@ type EmojiTile = {
 };
 
 const tileCache = new Map<string, EmojiTile>();
+/** Decoded Twemoji color images, keyed by file id. Filled before rasterize. */
+const twemojiImages = new Map<string, SkImage>();
+
+function twemojiModules(): Record<string, number> {
+  try {
+    const mod = require('@/lib/emoji/twemoji-modules') as { TWEMOJI_MODULES?: Record<string, number> };
+    return mod.TWEMOJI_MODULES ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function twemojiFileId(cluster: string): string | undefined {
+  const modules = twemojiModules();
+  for (const id of clusterToTwemojiLookupIds(cluster)) {
+    if (modules[id] != null) return id;
+  }
+  return undefined;
+}
+
+export async function preloadTwemojiImages(clusters: readonly string[]): Promise<void> {
+  const modules = twemojiModules();
+  const pending = new Map<string, number>();
+  for (const cluster of clusters) {
+    for (const id of clusterToTwemojiLookupIds(cluster)) {
+      const assetId = modules[id];
+      if (assetId == null || twemojiImages.has(id)) continue;
+      pending.set(id, assetId);
+      break;
+    }
+  }
+  if (pending.size === 0) return;
+  const skia = require('@shopify/react-native-skia').Skia as EmojiSkiaModule['Skia'];
+  const { Asset } = require('expo-asset') as {
+    Asset: {
+      fromModule: (id: number) => {
+        localUri: string | null;
+        downloadAsync: () => Promise<unknown>;
+      };
+    };
+  };
+  await Promise.all(
+    [...pending.entries()].map(async ([id, assetId]) => {
+      try {
+        const asset = Asset.fromModule(assetId);
+        if (!asset.localUri) await asset.downloadAsync();
+        const uri = asset.localUri;
+        if (!uri || !skia.Data?.fromURI || !skia.Image?.MakeImageFromEncoded) return;
+        const data = await skia.Data.fromURI(uri);
+        const image = skia.Image.MakeImageFromEncoded(data);
+        if (image) twemojiImages.set(id, image);
+      } catch (err) {
+        console.warn('[twemoji] decode failed', id, err);
+      }
+    }),
+  );
+}
 
 export function emojiDestSizeDots(fontSizeDots: number): number {
   return Math.max(8, Math.round(fontSizeDots));
@@ -101,12 +166,11 @@ function buildEmojiParagraph(skia: EmojiSkiaModule, emoji: string, paintSize: nu
   const builderApi = skia.Skia.ParagraphBuilder;
   if (!builderApi?.Make) return null;
   try {
-    // No TypefaceFontProvider: a FreeType-decoded Noto Color Emoji is outline-only and
-    // paints a solid black blob. Android's default font mgr still has color emoji.
+    // Default font mgr (no provider) so Android can fall through to the color emoji font.
+    // Pinning "Noto Color Emoji" drops Samsung/device faces and misses glyphs like 😈.
     return builderApi
       .Make({ maxLines: 1 })
       .pushStyle({
-        fontFamilies: ['Noto Color Emoji', 'NotoColorEmoji', 'sans-serif'],
         fontSize: paintSize,
         heightMultiplier: 1,
       })
@@ -122,10 +186,21 @@ function luminance(r: number, g: number, b: number): number {
   return (r * 77 + g * 150 + b * 29) >> 8;
 }
 
+function darkenMidtones(lum: number): number {
+  if (lum >= 200) return lum;
+  return Math.max(0, lum - EMOJI_MIDTONE_DARKEN);
+}
+
 /** WePrint: yellow/skin paper, black/red features ink. */
 export function emojiSampleIsInk(r: number, g: number, b: number, a: number): boolean {
   if (a < 16) return false;
   return luminance(r, g, b) < EMOJI_INK_THRESHOLD;
+}
+
+/** Dark/purple glyphs (😈) need a higher cut so the body does not vanish into paper. */
+export function emojiInkThresholdForOpaqueMean(mean: number): number {
+  if (mean < 178) return Math.min(210, Math.round(mean + 50));
+  return EMOJI_INK_THRESHOLD;
 }
 
 function isInkPixel(r: number, g: number, b: number, a: number): boolean {
@@ -142,24 +217,52 @@ function cellLuminance(
 ): { lum: number; opaque: number } {
   let sum = 0;
   let opaque = 0;
-  let n = 0;
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
       const o = (Math.min(tile - 1, y) * tile + Math.min(tile - 1, x)) * 4;
-      n += 1;
       const a = pixels[o + 3];
-      if (a < 16) {
-        sum += 255;
-        continue;
-      }
+      if (a < 16) continue;
       opaque += 1;
       sum += luminance(pixels[o], pixels[o + 1], pixels[o + 2]);
     }
   }
-  return { lum: n > 0 ? sum / n : 255, opaque };
+  if (opaque === 0) return { lum: 255, opaque: 0 };
+  return { lum: sum / opaque, opaque };
+}
+
+function paintTwemojiSnapshot(skia: EmojiSkiaModule, emoji: string, tile: number): SkImage | null {
+  const fileId = twemojiFileId(emoji);
+  const src = fileId ? twemojiImages.get(fileId) : undefined;
+  if (!src) return null;
+  const surface = skia.Skia.Surface.MakeOffscreen(tile, tile);
+  if (!surface) return null;
+  const canvas = surface.getCanvas();
+  canvas.clear(skia.Skia.Color('#FFFFFF'));
+  const sw = Math.max(1, src.width());
+  const sh = Math.max(1, src.height());
+  const scale = Math.min(tile / sw, tile / sh);
+  const dw = Math.max(1, Math.round(sw * scale));
+  const dh = Math.max(1, Math.round(sh * scale));
+  const paint = skia.Skia.Paint();
+  paint.setAntiAlias(true);
+  if (typeof canvas.drawImageRect === 'function') {
+    canvas.drawImageRect(
+      src,
+      skia.Skia.XYWHRect(0, 0, sw, sh),
+      skia.Skia.XYWHRect(Math.round((tile - dw) / 2), Math.round((tile - dh) / 2), dw, dh),
+      paint,
+      false,
+    );
+  } else {
+    canvas.drawImage?.(src, Math.round((tile - sw) / 2), Math.round((tile - sh) / 2), paint);
+  }
+  surface.flush();
+  return surface.makeImageSnapshot();
 }
 
 function paintEmojiSnapshot(skia: EmojiSkiaModule, emoji: string, tile: number): SkImage | null {
+  const fromMap = paintTwemojiSnapshot(skia, emoji, tile);
+  if (fromMap) return fromMap;
   const paintSize = Math.max(12, Math.round(tile * 0.84));
   const para = buildEmojiParagraph(skia, emoji, paintSize);
   if (!para) return null;
@@ -238,6 +341,7 @@ function rasterEmojiTile(skia: EmojiSkiaModule, emoji: string, dest: number, ink
     const gray = new Float32Array(dest * dest);
     let opaque = 0;
     let darkOpaque = 0;
+    let lumSum = 0;
     for (let dy = 0; dy < dest; dy++) {
       const y0 = Math.floor((dy * tile) / dest);
       const y1 = Math.max(y0 + 1, Math.floor(((dy + 1) * tile) / dest));
@@ -248,22 +352,29 @@ function rasterEmojiTile(skia: EmojiSkiaModule, emoji: string, dest: number, ink
         gray[dy * dest + dx] = cell.lum;
         if (cell.opaque > 0) {
           opaque += 1;
+          lumSum += cell.lum;
           if (cell.lum < 40) darkOpaque += 1;
         }
       }
+    }
+    const opaqueMean = opaque > 0 ? lumSum / opaque : 255;
+    const cut = emojiInkThresholdForOpaqueMean(opaqueMean);
+    const lightGlyph = opaqueMean >= 178;
+    if (lightGlyph) {
+      for (let i = 0; i < gray.length; i++) gray[i] = darkenMidtones(gray[i]);
     }
     const bits = new Uint8Array(dest * dest);
     const outlineOnly = opaque > 8 && darkOpaque * 10 >= opaque * 8;
     if (outlineOnly) {
       // Color glyph did not paint — keep the sharp silhouette rather than invent holes.
-      for (let i = 0; i < gray.length; i++) bits[i] = gray[i] < EMOJI_INK_THRESHOLD ? 1 : 0;
+      for (let i = 0; i < gray.length; i++) bits[i] = gray[i] < cut ? 1 : 0;
     } else {
       // Floyd–Steinberg on the luminance mix so midtones (flame, crown) open up like WePrint.
       for (let y = 0; y < dest; y++) {
         for (let x = 0; x < dest; x++) {
           const i = y * dest + x;
           const old = gray[i];
-          const next = old < EMOJI_INK_THRESHOLD ? 0 : 255;
+          const next = old < cut ? 0 : 255;
           bits[i] = next === 0 ? 1 : 0;
           const err = old - next;
           if (x + 1 < dest) gray[i + 1] += (err * 7) / 16;

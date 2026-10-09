@@ -38,6 +38,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-ml-kit/text-recognition": "^2.0.0",
     "@shopify/react-native-skia": "2.2.12",
+    "@twemoji/svg": "^15.0.0",
     "@vardrz/react-native-bluetooth-escpos-printer": "^0.1.2",
     "@zxing/library": "^0.21.3",
     "dev-printer": "file:./modules/dev-printer",
@@ -95,6 +96,7 @@
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/qrcode": "^1.5.6",
     "@types/react": "~19.1.0",
     "eslint": "^9.0.0",
@@ -102,7 +104,7 @@
     "typescript": "~5.9.2"
   },
   "scripts": {
-    "postinstall": "patch-package",
+    "postinstall": "patch-package && node ./scripts/generate-twemoji-assets.mjs",
     "start": "node ./scripts/dev-start.js",
     "start:usb": "node ./scripts/dev-start.js --usb",
     "connect:usb": "adb reverse tcp:8081 tcp:8081 && adb reverse tcp:8083 tcp:8083",

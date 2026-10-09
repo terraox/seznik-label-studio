@@ -4,7 +4,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { FONT_LIBRARY } from '@/constants/font-library';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { collectDocumentFontNames, lookupFontFamily } from '@/lib/fonts/lookup';
-import { PRINT_EMOJI_FAMILY, requiredPrintFamilyKeys } from '@/lib/fonts/text-font-family';
+import { collectTextRuns, PRINT_EMOJI_FAMILY, requiredPrintFamilyKeys } from '@/lib/fonts/text-font-family';
+import { splitPrintTextSegments } from '@/lib/text/emoji-segments';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
 
 import {
@@ -13,6 +14,7 @@ import {
   registerFileBackedTypeface,
   setPrintTypeface,
 } from './print-typeface-map';
+import { preloadTwemojiImages } from './skia-emoji-print';
 
 let bundledReady = false;
 let loading: Promise<void> | null = null;
@@ -112,6 +114,19 @@ export async function ensurePrintTypefacesForDocument(doc: {
       if (!ok) console.warn('[print-typeface] could not decode, using system face', family);
     } catch (err) {
       console.warn('[print-typeface] skip', family, err);
+    }
+  }
+  const clusters: string[] = [];
+  for (const run of collectTextRuns(doc)) {
+    for (const segment of splitPrintTextSegments(run.text)) {
+      if (segment.kind === 'emoji') clusters.push(segment.value);
+    }
+  }
+  if (clusters.length > 0) {
+    try {
+      await preloadTwemojiImages(clusters);
+    } catch (err) {
+      console.warn('[print-typeface] emoji images failed', err);
     }
   }
 }
