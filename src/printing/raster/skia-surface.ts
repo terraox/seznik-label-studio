@@ -5,9 +5,16 @@
  * Host/CI: software dot-buffer fallback when Skia is unavailable in Node.
  */
 
-import { needsComplexTextShaping } from '@/lib/fonts/text-font-family';
+import { needsComplexTextShaping, textContainsEmoji } from '@/lib/fonts/text-font-family';
+import { splitPrintTextSegments } from '@/lib/text/emoji-segments';
 
 import { fillEllipse, fillRect, makeDotSurface, strokeRect, type DotSurface } from './dot-surface';
+import {
+  drawEmojiSegmentAsImage,
+  measureEmojiSegmentWidth,
+  stampEmojiDots,
+  type EmojiSkiaModule,
+} from './skia-emoji-print';
 import { drawShapedTextLine, measureShapedTextWidth } from './skia-shaped-text';
 
 export type RasterSurfaceBackend = 'skia' | 'dot-buffer';
@@ -82,7 +89,7 @@ type SkiaModule = {
   PaintStyle: { Fill: number; Stroke: number };
   ColorType: { RGBA_8888: number };
   AlphaType: { Unpremul: number };
-};
+} & EmojiSkiaModule;
 
 type SkiaSurface = {
   width: () => number;
@@ -97,6 +104,14 @@ type SkiaCanvas = {
   drawRect: (rect: unknown, paint: SkiaPaint) => void;
   drawOval: (rect: unknown, paint: SkiaPaint) => void;
   drawText: (text: string, x: number, y: number, paint: SkiaPaint, font: SkiaFont) => void;
+  drawImage?: (image: unknown, x: number, y: number, paint?: SkiaPaint) => void;
+  drawImageRect?: (
+    image: unknown,
+    src: unknown,
+    dest: unknown,
+    paint: SkiaPaint,
+    fastSample?: boolean,
+  ) => void;
   save?: () => void;
   restore?: () => void;
   translate?: (x: number, y: number) => void;
@@ -146,6 +161,45 @@ function rgbaToGray(pixels: Uint8Array | Float32Array, width: number, height: nu
   return gray;
 }
 
+type TextSegmentOps = {
+  measureSegment: (text: string, style: TextDrawStyle) => number;
+  drawSegment: (text: string, x: number, y: number, style: TextDrawStyle) => void;
+  measureEmoji: (emoji: string, style: TextDrawStyle) => number;
+  drawEmoji: (emoji: string, x: number, y: number, style: TextDrawStyle) => number;
+};
+
+function measureTextLineWidth(text: string, style: TextDrawStyle, ops: TextSegmentOps): number {
+  if (!textContainsEmoji(text)) return ops.measureSegment(text, style);
+  let width = 0;
+  for (const segment of splitPrintTextSegments(text)) {
+    if (segment.kind === 'text') width += ops.measureSegment(segment.value, style);
+    else width += ops.measureEmoji(segment.value, style);
+  }
+  return width;
+}
+
+function drawTextLineMixed(
+  text: string,
+  x: number,
+  y: number,
+  style: TextDrawStyle,
+  ops: TextSegmentOps,
+): void {
+  if (!textContainsEmoji(text)) {
+    ops.drawSegment(text, x, y, style);
+    return;
+  }
+  let cursor = x;
+  for (const segment of splitPrintTextSegments(text)) {
+    if (segment.kind === 'text') {
+      ops.drawSegment(segment.value, cursor, y, style);
+      cursor += ops.measureSegment(segment.value, style);
+    } else {
+      cursor += ops.drawEmoji(segment.value, cursor, y, style);
+    }
+  }
+}
+
 function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: SkiaModule): RasterSurface {
   const { Skia, matchFont, PaintStyle, ColorType, AlphaType } = skiaMod;
   const surface = Skia.Surface.MakeOffscreen(widthDots, heightDots);
@@ -187,6 +241,49 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
     }
     return font;
   }
+
+  const emojiSkia = skiaMod as EmojiSkiaModule;
+
+  function measurePlainSegment(text: string, style: TextDrawStyle): number {
+    if (!text) return 0;
+    if (needsComplexTextShaping(text)) {
+      const shaped = measureShapedTextWidth(skiaMod, text, style);
+      if (shaped != null) return shaped;
+    }
+    return fontFor(style).measureText(text).width;
+  }
+
+  function drawPlainSegment(text: string, x: number, y: number, style: TextDrawStyle): void {
+    if (!text) return;
+    if (needsComplexTextShaping(text)) {
+      const painted = drawShapedTextLine(skiaMod, canvas, text, x, y, style);
+      if (painted) return;
+    }
+    const font = fontFor(style);
+    fillPaint.setColor(grayToColor(skiaMod, style.ink));
+    fillPaint.setStyle(PaintStyle.Fill);
+    fillPaint.setAntiAlias(true);
+    canvas.drawText(text, x, y + style.fontSizeDots, fillPaint, font);
+    fillPaint.setAntiAlias(false);
+  }
+
+  const segmentOps: TextSegmentOps = {
+    measureSegment: measurePlainSegment,
+    drawSegment: drawPlainSegment,
+    measureEmoji: (emoji, style) => measureEmojiSegmentWidth(emojiSkia, emoji, style),
+    drawEmoji: (emoji, x, y, style) =>
+      canvas.drawImage || canvas.drawImageRect
+        ? drawEmojiSegmentAsImage(emojiSkia, canvas, emoji, x, y, style)
+        : stampEmojiDots(emojiSkia, ColorType.RGBA_8888, AlphaType.Unpremul, (px, py, w, h, gray) => {
+            fillPaint.setColor(grayToColor(skiaMod, gray));
+            fillPaint.setStyle(PaintStyle.Fill);
+            fillPaint.setAntiAlias(false);
+            canvas.drawRect(
+              Skia.XYWHRect(Math.round(px), Math.round(py), Math.max(1, Math.round(w)), Math.max(1, Math.round(h))),
+              fillPaint,
+            );
+          }, emoji, x, y, style),
+  };
 
   return {
     backend: 'skia',
@@ -237,23 +334,10 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
         italic: style.italic,
         backend: 'skia',
       });
-      if (needsComplexTextShaping(text)) {
-        const painted = drawShapedTextLine(skiaMod, canvas, text, x, y, style);
-        if (painted) return;
-      }
-      const font = fontFor(style);
-      fillPaint.setColor(grayToColor(skiaMod, style.ink));
-      fillPaint.setStyle(PaintStyle.Fill);
-      fillPaint.setAntiAlias(true);
-      canvas.drawText(text, x, y + style.fontSizeDots, fillPaint, font);
-      fillPaint.setAntiAlias(false);
+      drawTextLineMixed(text, x, y, style, segmentOps);
     },
     measureTextWidth(text, style) {
-      if (needsComplexTextShaping(text)) {
-        const shaped = measureShapedTextWidth(skiaMod, text, style);
-        if (shaped != null) return shaped;
-      }
-      return fontFor(style).measureText(text).width;
+      return measureTextLineWidth(text, style, segmentOps);
     },
     withRotation(cx, cy, degrees, draw) {
       const turns = ((degrees % 360) + 360) % 360;
@@ -347,6 +431,46 @@ function makeDotRasterSurface(dot: DotSurface): RasterSurface {
     }
   }
 
+  const skiaForEmoji = loadSkiaModule();
+  const emojiSkia = skiaForEmoji as EmojiSkiaModule | null;
+  const colorType = skiaForEmoji?.ColorType?.RGBA_8888 ?? 0;
+  const alphaType = skiaForEmoji?.AlphaType?.Unpremul ?? 0;
+
+  function measureBlockText(text: string, style: TextDrawStyle): number {
+    if (!text) return 0;
+    const cellW = Math.max(1, Math.round(style.fontSizeDots * 0.55));
+    return text.length * cellW;
+  }
+
+  function drawBlockText(text: string, x: number, y: number, style: TextDrawStyle): void {
+    const cellW = Math.max(1, Math.round(style.fontSizeDots * 0.55));
+    const cellH = Math.max(1, style.fontSizeDots);
+    let cursor = x;
+    for (const ch of text) {
+      if (ch !== ' ') {
+        paintRect(cursor, y, Math.max(1, cellW - 1), Math.max(1, cellH - 1), style.ink);
+      }
+      cursor += cellW;
+    }
+  }
+
+  const dotSegmentOps: TextSegmentOps = {
+    measureSegment: measureBlockText,
+    drawSegment: drawBlockText,
+    measureEmoji: (emoji, style) =>
+      emojiSkia
+        ? measureEmojiSegmentWidth(emojiSkia, emoji, style)
+        : Math.max(1, Math.round(style.fontSizeDots * 0.9)),
+    drawEmoji: (emoji, x, y, style) => {
+      if (emojiSkia) {
+        return stampEmojiDots(emojiSkia, colorType, alphaType, paintRect, emoji, x, y, style);
+      }
+      const w = Math.max(1, Math.round(style.fontSizeDots * 0.9));
+      paintRect(x, y, w, Math.max(1, style.fontSizeDots), style.ink);
+      return w;
+    },
+  };
+
   return {
     backend: 'dot-buffer',
     width: dot.width,
@@ -375,19 +499,10 @@ function makeDotRasterSurface(dot: DotSurface): RasterSurface {
         italic: style.italic,
         backend: 'dot-buffer',
       });
-      const cellW = Math.max(1, Math.round(style.fontSizeDots * 0.55));
-      const cellH = Math.max(1, style.fontSizeDots);
-      let cursor = x;
-      for (const ch of text) {
-        if (ch !== ' ') {
-          paintRect(cursor, y, Math.max(1, cellW - 1), Math.max(1, cellH - 1), style.ink);
-        }
-        cursor += cellW;
-      }
+      drawTextLineMixed(text, x, y, style, dotSegmentOps);
     },
     measureTextWidth(text, style) {
-      const cellW = Math.max(1, Math.round(style.fontSizeDots * 0.55));
-      return text.length * cellW;
+      return measureTextLineWidth(text, style, dotSegmentOps);
     },
     withRotation(cx, cy, degrees, draw) {
       const turns = ((degrees % 360) + 360) % 360;

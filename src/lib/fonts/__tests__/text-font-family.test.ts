@@ -6,8 +6,10 @@ import {
   detectScriptFamily,
   INDIC_SCRIPT_FAMILIES,
   needsComplexTextShaping,
+  PRINT_EMOJI_FAMILY,
   requiredPrintFamilyKeys,
   resolveTextFontFamily,
+  textContainsEmoji,
 } from '@/lib/fonts/text-font-family';
 import { measureTextWidthMm, ptToMm } from '@/lib/text-metrics';
 
@@ -39,6 +41,20 @@ test('Default and Latin-only text stay unset', () => {
 test('Indic strings need complex shaping', () => {
   assert.equal(needsComplexTextShaping('Hello'), false);
   assert.equal(needsComplexTextShaping('नमस्ते'), true);
+});
+
+test('emoji detection and print requirements', () => {
+  assert.equal(textContainsEmoji('Hello'), false);
+  assert.equal(textContainsEmoji('Ship 🚢'), true);
+  assert.equal(textContainsEmoji('🇮🇳'), true);
+  assert.equal(textContainsEmoji('★ ✓'), false);
+  assert.equal(needsComplexTextShaping('OK ✅'), false);
+  const keys = requiredPrintFamilyKeys(
+    { elements: [{ type: 'text', text: 'Hi 👋', fontFamily: 'Poppins' }] },
+    bundled,
+    [],
+  );
+  assert.ok(keys.includes(PRINT_EMOJI_FAMILY));
 });
 
 test('Default Hindi uses Noto Sans Devanagari', () => {

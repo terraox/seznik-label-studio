@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { FONT_LIBRARY } from '@/constants/font-library';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { collectDocumentFontNames, lookupFontFamily } from '@/lib/fonts/lookup';
-import { requiredPrintFamilyKeys } from '@/lib/fonts/text-font-family';
+import { PRINT_EMOJI_FAMILY, requiredPrintFamilyKeys } from '@/lib/fonts/text-font-family';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
 
 import {
@@ -35,7 +35,14 @@ async function loadBundledFace(name: string, moduleId: number): Promise<void> {
   if (!uri) throw new Error(`Print font ${name} has no local file.`);
   const data = await Skia.Data.fromURI(uri);
   const face = Skia.Typeface.MakeFreeTypeFaceFromData(data);
-  if (!face) throw new Error(`Print font ${name} could not be decoded.`);
+  if (!face) {
+    // Noto Color Emoji is CBDT; FreeType often cannot decode it. Other faces must still load.
+    if (name === PRINT_EMOJI_FAMILY) {
+      console.warn('[print-typeface] emoji face not decoded; Paragraph will use system emoji');
+      return;
+    }
+    throw new Error(`Print font ${name} could not be decoded.`);
+  }
   setPrintTypeface(name, face);
 }
 
@@ -117,7 +124,7 @@ export async function ensurePrintTypefacesForDocument(doc: {
 export function missingPrintTypefaces(doc: { elements: readonly object[] }): string[] {
   const installed = useInstalledFontStore.getState().items;
   const required = requiredPrintFamilyKeys(doc, FONT_LIBRARY, installed);
-  return required.filter((family) => !hasPrintTypeface(family));
+  return required.filter((family) => family !== PRINT_EMOJI_FAMILY && !hasPrintTypeface(family));
 }
 
 /** Embedded face for a resolved family. Unset means the system sans-serif. */

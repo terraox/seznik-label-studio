@@ -9,6 +9,7 @@ import { Lato_400Regular } from '@expo-google-fonts/lato';
 import { Manrope_400Regular } from '@expo-google-fonts/manrope';
 import { Merriweather_400Regular } from '@expo-google-fonts/merriweather';
 import { Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
+import { NotoColorEmoji_400Regular } from '@expo-google-fonts/noto-color-emoji';
 import { NotoSansBengali_400Regular } from '@expo-google-fonts/noto-sans-bengali';
 import { NotoSansDevanagari_400Regular } from '@expo-google-fonts/noto-sans-devanagari';
 import { NotoSansGujarati_400Regular } from '@expo-google-fonts/noto-sans-gujarati';
@@ -64,4 +65,5 @@ export const APP_FONT_MAP = {
   NotoSansMalayalam_400Regular,
   NotoSansGujarati_400Regular,
   NotoSansGurmukhi_400Regular,
+  NotoColorEmoji_400Regular,
 };

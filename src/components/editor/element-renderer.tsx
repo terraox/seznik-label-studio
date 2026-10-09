@@ -35,6 +35,7 @@ import {
   isIndicScriptFamily,
   needsComplexTextShaping,
   resolveEditorFontFamily,
+  textContainsEmoji,
 } from "@/lib/fonts/text-font-family";
 import { useInstalledFontStore } from "@/stores/installed-font-store";
 import { barcodeModulesForMode } from "@/lib/barcode-code128";
@@ -137,6 +138,7 @@ function textStyleFor(
   > & { lineSpacing?: EditorElementState["lineSpacing"] },
   scale: number,
   resolvedFamily?: string,
+  sampleText?: string,
 ) {
   const size = fontSizePx(state.fontSize, scale);
   const lineMult = lineSpacingMultiplier(state.lineSpacing ?? "1.0");
@@ -144,13 +146,15 @@ function textStyleFor(
   if (state.underline) decorations.push("underline");
   if (state.strikethrough) decorations.push("line-through");
   const indicFace = isIndicScriptFamily(resolvedFamily);
+  const fontFamily =
+    sampleText && textContainsEmoji(sampleText) ? undefined : resolvedFamily;
   return {
     fontSize: size,
     lineHeight: size * 1.25 * lineMult,
     paddingVertical: size * TEXT_FRAME_PADDING_Y_RATIO,
     paddingHorizontal: size * TEXT_FRAME_PADDING_X_RATIO,
     includeFontPadding: false,
-    fontFamily: resolvedFamily,
+    fontFamily,
     // Android may drop the bundled Indic face when fontWeight is set on a single-weight TTF.
     fontWeight: indicFace
       ? undefined
@@ -291,7 +295,7 @@ function TextContent({
   );
   const raw = resolveTextRaw(element, element.text, showColumnName);
   const resolvedFamily = resolveEditorFontFamily(raw, element.fontFamily);
-  const style = textStyleFor(element, scale, resolvedFamily);
+  const style = textStyleFor(element, scale, resolvedFamily, raw);
   const formatted = formatTextForRender(element, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
@@ -347,7 +351,7 @@ function DegreesContent({
   );
   const raw = resolveTextRaw(element, element.content, showColumnName);
   const resolvedFamily = resolveEditorFontFamily(raw, element.fontFamily);
-  const style = textStyleFor(element, scale, resolvedFamily);
+  const style = textStyleFor(element, scale, resolvedFamily, raw);
   const formatted = formatTextForRender(element, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
@@ -402,6 +406,7 @@ function TimeContent({
     element,
     scale,
     resolveEditorFontFamily(liveText, element.fontFamily),
+    liveText,
   );
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
@@ -512,6 +517,7 @@ function BarcodeContent({
     element,
     scale,
     resolveEditorFontFamily(hri, element.fontFamily),
+    hri,
   );
 
   const useDotBars =
@@ -1099,7 +1105,12 @@ function TableContent({
           : 0;
         const scaleX = measuredPx > innerW ? innerW / measuredPx : 1;
         const style = cell
-          ? textStyleFor(cell, scale, resolveEditorFontFamily(flat, cell.fontFamily))
+          ? textStyleFor(
+              cell,
+              scale,
+              resolveEditorFontFamily(flat, cell.fontFamily),
+              flat,
+            )
           : undefined;
         const align =
           cell?.align === "spacing" ? "justify" : (cell?.align ?? "left");

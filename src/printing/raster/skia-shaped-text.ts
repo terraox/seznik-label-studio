@@ -3,6 +3,7 @@
  * `canvas.drawText` + `SkFont` does not reorder combining marks.
  */
 
+
 import type { TextDrawStyle } from './skia-surface';
 
 const LAYOUT_WIDTH = 1_000_000;
@@ -91,7 +92,7 @@ function paragraphStyle(skia: ShapedSkia, style: TextDrawStyle): Record<string, 
 function buildParagraph(skia: ShapedSkia, text: string, style: TextDrawStyle): SkParagraph | null {
   const builderApi = skia.Skia.ParagraphBuilder;
   if (!builderApi?.Make) return null;
-  const provider = style.family ? ensureProvider(skia) : undefined;
+  const provider = style.family != null ? ensureProvider(skia) : undefined;
   try {
     return builderApi
       .Make({}, provider)

@@ -1,10 +1,14 @@
 import type { LookupFont, LookupInstalled } from '@/lib/fonts/lookup';
 import { lookupFontFamily } from '@/lib/fonts/lookup';
+import { splitPrintTextSegments } from '@/lib/text/emoji-segments';
 
 /**
  * Bundled Noto faces for the eight Indian scripts already in the app.
  * Keys match `APP_FONT_MAP` / `FONT_LIBRARY`.
  */
+/** Bundled COLR face for emoji in headless Skia print (Paragraph fallback chain). */
+export const PRINT_EMOJI_FAMILY = 'NotoColorEmoji_400Regular';
+
 export const INDIC_SCRIPT_FAMILIES = {
   devanagari: 'NotoSansDevanagari_400Regular',
   bengali: 'NotoSansBengali_400Regular',
@@ -79,7 +83,12 @@ export function isIndicScriptFamily(familyKey?: string): boolean {
   return familyKey != null && INDIC_FAMILY_KEYS.has(familyKey);
 }
 
-/** Indic and other scripts that need HarfBuzz-style shaping (not raw glyph codes). */
+export function textContainsEmoji(text: string): boolean {
+  if (!text) return false;
+  return splitPrintTextSegments(text).some((segment) => segment.kind === 'emoji');
+}
+
+/** Indic scripts need Skia Paragraph (not raw `drawText`). Emoji is rasterized as images separately. */
 export function needsComplexTextShaping(text: string): boolean {
   return detectScriptFamily(text) != null;
 }
@@ -179,6 +188,7 @@ export function requiredPrintFamilyKeys(
   for (const run of collectTextRuns(doc)) {
     const family = resolveTextFontFamily(run.text, run.fontFamily, bundled, installed);
     if (family) keys.add(family);
+    if (textContainsEmoji(run.text)) keys.add(PRINT_EMOJI_FAMILY);
   }
   return [...keys];
 }
