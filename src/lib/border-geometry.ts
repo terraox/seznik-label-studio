@@ -35,6 +35,27 @@ export function insetBorderBox(
   return { left: x.origin, top: y.origin, width: x.size, height: y.size };
 }
 
+/**
+ * Rectangle (outer edge, geometryVersion 1) whose stroke CENTER is `gapMm` from every
+ * label edge: the outer edge sits half a stroke closer to the edge than the center.
+ */
+export function borderBoxForCenterGap(
+  widthMm: number,
+  heightMm: number,
+  gapMm: number,
+  strokeMm: number,
+): { left: number; top: number; width: number; height: number } {
+  const maxInset = Math.max(0, (Math.min(widthMm, heightMm) - MIN_BORDER_MM) / 2);
+  const inset = Math.min(maxInset, Math.max(0, gapMm - strokeMm / 2));
+  const round = (v: number) => Math.round(v * 1000) / 1000;
+  return {
+    left: round(inset),
+    top: round(inset),
+    width: round(widthMm - inset * 2),
+    height: round(heightMm - inset * 2),
+  };
+}
+
 /** New locked border: the 2 mm margin is already inside the rectangle. */
 export function defaultBorderPlacement(widthMm: number, heightMm: number): {
   left: number;

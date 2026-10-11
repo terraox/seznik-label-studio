@@ -50,7 +50,7 @@ import {
   normalizeDocumentElements,
   scaleDocumentToSize,
 } from '@/lib/element-sizing';
-import { defaultBorderPlacement } from '@/lib/border-geometry';
+import { borderBoxForCenterGap, defaultBorderPlacement } from '@/lib/border-geometry';
 import { labelOverlapRegionsMm, overlapBannerPositionsPx } from '@/lib/editor/safe-mode';
 import { clampToLabelBounds, fitFontSizeToLabel } from '@/lib/editor/label-bounds';
 import { GridSpacingPopover } from '@/components/editor/grid-spacing-popover';
@@ -197,6 +197,11 @@ import {
   type TimePropertyTab,
 } from '@/components/editor/types';
 import { borderStyleStrokeMm } from '@/constants/border-library';
+import {
+  JOSH_BORDER_GAP_MAX_MM,
+  JOSH_BORDER_GAP_MIN_MM,
+  joshBorderGapMm,
+} from '@/lib/printer/josh-print';
 import { editorBridge, barcodeEncodeModeForScanType, isQrScanType } from '@/constants/editor-bridge';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -224,6 +229,7 @@ import {
   type ElementType,
   type LabelDocument,
   type LabelElement,
+  type LabelElementOfType,
 } from '@/lib/label-document';
 import { isFontNameReady } from '@/lib/fonts/font-ready';
 import { resolveLabelSettings } from '@/lib/label-settings';
@@ -4612,8 +4618,48 @@ export default function EditScreen() {
             doc.elements.find((el) => el.type === 'border')?.lineWidth ?? 0.55
           }
           onChangeWidth={(lineWidth) => {
-            const border = docRef.current.elements.find((el) => el.type === 'border');
-            if (border) patchElement(border.id, { lineWidth });
+            const border = docRef.current.elements.find(
+              (el): el is LabelElementOfType<'border'> => el.type === 'border',
+            );
+            if (!border) return;
+            // A set distance keeps the stroke center fixed when the stroke gets thicker.
+            patchElement(
+              border.id,
+              border.edgeGapMm != null
+                ? {
+                    lineWidth,
+                    geometryVersion: 1,
+                    ...borderBoxForCenterGap(
+                      docRef.current.widthMm,
+                      docRef.current.heightMm,
+                      border.edgeGapMm,
+                      lineWidth,
+                    ),
+                  }
+                : { lineWidth },
+            );
+          }}
+          edgeGapMm={
+            joshBorderGapMm(
+              doc.elements.find((el): el is LabelElementOfType<'border'> => el.type === 'border')?.edgeGapMm,
+            )
+          }
+          onChangeEdgeGap={(edgeGapMm) => {
+            const border = docRef.current.elements.find(
+              (el): el is LabelElementOfType<'border'> => el.type === 'border',
+            );
+            if (!border) return;
+            // The rectangle moves too, so the canvas and preview show the distance.
+            patchElement(border.id, {
+              edgeGapMm,
+              geometryVersion: 1,
+              ...borderBoxForCenterGap(
+                docRef.current.widthMm,
+                docRef.current.heightMm,
+                edgeGapMm,
+                border.lineWidth > 0 ? border.lineWidth : borderStyleStrokeMm(border.borderStyle),
+              ),
+            });
           }}
           onReplace={() => {
             setBorderOptionsOpen(false);
@@ -4811,17 +4857,22 @@ export default function EditScreen() {
 function BorderOptionsSheet({
   lineWidth,
   onChangeWidth,
+  edgeGapMm,
+  onChangeEdgeGap,
   onReplace,
   onRemove,
   onCancel,
 }: {
   lineWidth: number;
   onChangeWidth: (next: number) => void;
+  edgeGapMm: number;
+  onChangeEdgeGap: (next: number) => void;
   onReplace: () => void;
   onRemove: () => void;
   onCancel: () => void;
 }) {
   const trackWidth = useRef(1);
+  const [gapText, setGapText] = useState(String(edgeGapMm));
   const min = 0.1;
   const max = 1;
   const ratio = Math.min(1, Math.max(0, (lineWidth - min) / (max - min)));
@@ -4861,6 +4912,23 @@ function BorderOptionsSheet({
               <View style={[styles.borderSliderFill, { width: `${ratio * 100}%` }]} />
             </View>
             <View style={[styles.borderSliderThumb, { left: `${ratio * 100}%` }]} />
+          </View>
+          <View style={styles.borderGapRow}>
+            <Text style={styles.borderGapLabel}>
+              Distance from edge (mm, {JOSH_BORDER_GAP_MIN_MM}-{JOSH_BORDER_GAP_MAX_MM})
+            </Text>
+            <TextInput
+              style={styles.borderGapInput}
+              value={gapText}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+              onChangeText={(text) => {
+                setGapText(text);
+                const value = parseFloat(text.replace(',', '.'));
+                if (Number.isFinite(value)) onChangeEdgeGap(joshBorderGapMm(value));
+              }}
+              onBlur={() => setGapText(String(joshBorderGapMm(parseFloat(gapText.replace(',', '.')))))}
+            />
           </View>
         </View>
         <Pressable style={styles.borderCancelBtn} onPress={onCancel}>
@@ -5606,6 +5674,29 @@ const styles = StyleSheet.create({
     color: '#E25B5B',
     fontSize: 15,
     fontWeight: '600',
+  },
+  borderGapRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  borderGapLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#3C4043',
+  },
+  borderGapInput: {
+    width: 72,
+    borderWidth: 1,
+    borderColor: '#D7DDE3',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    textAlign: 'center',
+    fontSize: 15,
+    color: '#1F2328',
   },
   borderRangeLabels: {
     marginTop: 16,
