@@ -3,7 +3,9 @@ import test from 'node:test';
 
 import { DOCUMENT_PRESETS } from '@/lib/file-import/mime-presets';
 import {
+  GOOGLE_SHEETS_MIME,
   LOCAL_INITIAL_FOLDER,
+  androidSpreadsheetMimeTypes,
   buildDocumentPickerRequest,
 } from '@/lib/file-import/pick-document-options';
 import { shouldUseLocalFilePicker } from '@/lib/file-import/pick-document-routing';
@@ -38,6 +40,43 @@ test('local picker request for ios still includes downloads hint', () => {
   assert.equal(request.localOnly, true);
   assert.equal(request.initialFolder, 'downloads');
   assert.deepEqual(request.type, ['*/*']);
+});
+
+test('android drive excel requests Sheets without types that disable them', () => {
+  const request = buildDocumentPickerRequest({
+    preset: 'excel',
+    source: 'drive',
+    platform: 'android',
+  });
+  assert.deepEqual(request.type, androidSpreadsheetMimeTypes(DOCUMENT_PRESETS.excel.mimeTypes));
+  assert.equal(request.type[0], GOOGLE_SHEETS_MIME);
+  assert.equal(request.type.includes('application/octet-stream'), false);
+  assert.equal(request.type.includes('public.spreadsheet'), false);
+  assert.equal(request.type.includes('public.composite-content'), false);
+  assert.equal(
+    request.type.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+    true,
+  );
+});
+
+test('ios drive excel request stays the preset mime list', () => {
+  const request = buildDocumentPickerRequest({
+    preset: 'excel',
+    source: 'drive',
+    platform: 'ios',
+  });
+  assert.deepEqual(request.type, DOCUMENT_PRESETS.excel.mimeTypes);
+  assert.equal(request.type.includes(GOOGLE_SHEETS_MIME), false);
+});
+
+test('android local excel does not add the Google Sheets mime', () => {
+  const request = buildDocumentPickerRequest({
+    preset: 'excel',
+    source: 'local',
+    platform: 'android',
+  });
+  assert.equal(request.type.includes(GOOGLE_SHEETS_MIME), false);
+  assert.equal(request.localOnly, true);
 });
 
 test('drive image preset keeps image mime filter without local hints', () => {

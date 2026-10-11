@@ -41,7 +41,9 @@ export async function pickDocumentAsset(options: {
     }
   }
 
-  const result = await DocumentPicker.getDocumentAsync(buildDocumentPickerRequest(options));
+  const result = await DocumentPicker.getDocumentAsync(
+    buildDocumentPickerRequest({ ...options, platform: Platform.OS }),
+  );
 
   if (result.canceled || !result.assets?.length) {
     return { ok: false, reason: 'cancelled' };

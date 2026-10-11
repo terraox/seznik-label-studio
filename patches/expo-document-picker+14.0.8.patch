@@ -1,19 +1,58 @@
+diff --git a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerExceptions.kt b/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerExceptions.kt
+index d2aaf44..ae5800c 100644
+--- a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerExceptions.kt
++++ b/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerExceptions.kt
+@@ -7,3 +7,5 @@ class PickingInProgressException :
+ 
+ class FailedToReadDocumentException :
+   CodedException("Failed to read the selected document.")
++
++class GoogleSheetExportException(message: String) : CodedException(message)
 diff --git a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerModule.kt b/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerModule.kt
-index 472a5ab..e44fa04 100644
+index 472a5ab..81e3c0c 100644
 --- a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerModule.kt
 +++ b/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerModule.kt
-@@ -6,6 +6,7 @@ import android.content.Intent
+@@ -6,6 +6,8 @@ import android.content.Intent
  import android.net.Uri
  import android.os.Build
  import android.os.FileUtils
 +import android.provider.DocumentsContract
++import android.util.Log
  import expo.modules.core.utilities.FileUtilities
  import expo.modules.kotlin.Promise
  import expo.modules.kotlin.exception.Exceptions
-@@ -37,6 +38,14 @@ class DocumentPickerModule : Module() {
+@@ -16,8 +18,15 @@ import org.apache.commons.io.FilenameUtils
+ import java.io.File
+ import java.io.FileNotFoundException
+ import java.io.FileOutputStream
++import java.io.InputStream
++import java.io.OutputStream
++import java.util.LinkedHashSet
+ 
+ private const val OPEN_DOCUMENT_CODE = 4137
++private const val TAG = "DocumentPicker"
++private const val GOOGLE_SHEETS_MIME = "application/vnd.google-apps.spreadsheet"
++private const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
++private const val MAX_EXPORT_BYTES = 104_857_600L
+ 
+ class DocumentPickerModule : Module() {
+   private val context: Context
+@@ -34,16 +43,26 @@ class DocumentPickerModule : Module() {
+       }
+       pendingPromise = promise
+       copyToCacheDirectory = options.copyToCacheDirectory
++      val allowVirtualSheets = options.type.any { it == GOOGLE_SHEETS_MIME }
        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-         addCategory(Intent.CATEGORY_OPENABLE)
+-        addCategory(Intent.CATEGORY_OPENABLE)
++        if (!allowVirtualSheets) {
++          addCategory(Intent.CATEGORY_OPENABLE)
++        }
          putExtra(Intent.EXTRA_ALLOW_MULTIPLE, options.multiple)
+-        type = if (options.type.size > 1) {
+-          putExtra(Intent.EXTRA_MIME_TYPES, options.type.toTypedArray())
+-          "*/*"
+-        } else {
+-          options.type[0]
 +        if (options.localOnly) {
 +          putExtra(Intent.EXTRA_LOCAL_ONLY, true)
 +          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -21,14 +60,57 @@ index 472a5ab..e44fa04 100644
 +              putExtra(DocumentsContract.EXTRA_INITIAL_URI, uri)
 +            }
 +          }
-+        }
-         type = if (options.type.size > 1) {
-           putExtra(Intent.EXTRA_MIME_TYPES, options.type.toTypedArray())
-           "*/*"
-@@ -74,6 +83,14 @@ class DocumentPickerModule : Module() {
+         }
++        applyDocumentMimeTypes(this, options.type, allowVirtualSheets)
+       }
++      Log.i(
++        TAG,
++        "intent categoryOpenable=${!allowVirtualSheets} localOnly=${options.localOnly} type=${intent.type} extras=${intent.getStringArrayExtra(Intent.EXTRA_MIME_TYPES)?.joinToString(",")}",
++      )
+       appContext.throwingActivity.startActivityForResult(intent, OPEN_DOCUMENT_CODE)
+     }
+ 
+@@ -62,6 +81,7 @@ class DocumentPickerModule : Module() {
+             handleSingleSelection(intent)
+           }
+         } catch (e: Exception) {
++          Log.i(TAG, "pick failed ${e.javaClass.simpleName}: ${e.message}")
+           promise.reject(e.toCodedException())
+         }
+       } else {
+@@ -74,6 +94,43 @@ class DocumentPickerModule : Module() {
      }
    }
  
++  /**
++   * Drive disables a virtual Sheet when the primary type is a wildcard, when
++   * CATEGORY_OPENABLE is set, or when the filter contains octet-stream / non-MIME
++   * values. The primary type has to be the xlsx export Drive can produce.
++   * EXTRA_MIME_TYPES still lists the other spreadsheet types so .xls and .csv stay selectable.
++   */
++  private fun applyDocumentMimeTypes(intent: Intent, requested: List<String>, allowVirtualSheets: Boolean) {
++    if (!allowVirtualSheets) {
++      if (requested.size > 1) {
++        intent.type = "*/*"
++        intent.putExtra(Intent.EXTRA_MIME_TYPES, requested.toTypedArray())
++      } else {
++        intent.type = requested.firstOrNull() ?: "*/*"
++      }
++      return
++    }
++
++    val mimeTypes = LinkedHashSet<String>()
++    mimeTypes.add(GOOGLE_SHEETS_MIME)
++    mimeTypes.add(XLSX_MIME)
++    for (raw in requested) {
++      val mime = raw.substringBefore(';').trim()
++      if (!mime.contains('/') || mime == "*/*" || mime == "application/octet-stream") continue
++      mimeTypes.add(mime)
++    }
++    intent.type = XLSX_MIME
++    intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
++  }
++
 +  private fun resolveInitialFolderUri(folder: String?): Uri? {
 +    return when (folder) {
 +      "downloads" -> Uri.parse("content://com.android.externalstorage.documents/document/primary:Download")
@@ -40,6 +122,201 @@ index 472a5ab..e44fa04 100644
    private fun copyDocumentToCacheDirectory(documentUri: Uri, name: String): Uri {
      val outputFilePath = FileUtilities.generateOutputPath(
        context.cacheDir,
+@@ -81,16 +138,22 @@ class DocumentPickerModule : Module() {
+       FilenameUtils.getExtension(name)
+     )
+     val outputFile = File(outputFilePath)
+-    context.contentResolver.openInputStream(documentUri).use { inputStream ->
+-      inputStream ?: throw FileNotFoundException("Inputstream for $documentUri was null.")
+-      FileOutputStream(outputFile).use { outputStream ->
+-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+-          FileUtils.copy(inputStream, outputStream)
+-        } else {
+-          inputStream.copyTo(outputStream)
++    try {
++      context.contentResolver.openInputStream(documentUri).use { inputStream ->
++        inputStream ?: throw FileNotFoundException("Inputstream for $documentUri was null.")
++        FileOutputStream(outputFile).use { outputStream ->
++          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
++            FileUtils.copy(inputStream, outputStream)
++          } else {
++            inputStream.copyTo(outputStream)
++          }
+         }
+       }
++    } catch (error: Exception) {
++      if (outputFile.exists()) outputFile.delete()
++      throw error
+     }
++    Log.i(TAG, "copied openInputStream bytes=${outputFile.length()} uri=$documentUri")
+     return Uri.fromFile(outputFile)
+   }
+ 
+@@ -120,14 +183,158 @@ class DocumentPickerModule : Module() {
+ 
+   private fun readDocumentDetails(uri: Uri): DocumentInfo {
+     val originalDocumentDetails = DocumentDetailsReader(context).read(uri)
++    Log.i(TAG, "picked uri=$uri mime=${originalDocumentDetails.mimeType}")
++
++    if (!copyToCacheDirectory) {
++      return originalDocumentDetails
++    }
++
++    if (isGoogleSheet(uri, originalDocumentDetails.mimeType)) {
++      val exported = exportVirtualSpreadsheet(uri, originalDocumentDetails.name)
++      return originalDocumentDetails.copy(
++        uri = exported.uri,
++        name = exported.name,
++        mimeType = XLSX_MIME,
++        size = exported.size,
++      )
++    }
++
++    val copyPath = copyDocumentToCacheDirectory(uri, originalDocumentDetails.name)
++    return originalDocumentDetails.copy(uri = copyPath)
++  }
++
++  private fun isGoogleSheet(uri: Uri, mimeType: String?): Boolean {
++    val googleMime = mimeType == GOOGLE_SHEETS_MIME
++    val virtual = isVirtualDocument(uri)
++    return googleMime || virtual
++  }
+ 
+-    val details = if (!copyToCacheDirectory) {
+-      originalDocumentDetails
+-    } else {
+-      val copyPath = copyDocumentToCacheDirectory(uri, originalDocumentDetails.name)
+-      originalDocumentDetails.copy(uri = copyPath)
++  private fun isVirtualDocument(uri: Uri): Boolean {
++    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
++    if (!DocumentsContract.isDocumentUri(context, uri)) return false
++    return try {
++      context.contentResolver.query(
++        uri,
++        arrayOf(DocumentsContract.Document.COLUMN_FLAGS),
++        null,
++        null,
++        null,
++      )?.use { cursor ->
++        if (!cursor.moveToFirst() || cursor.isNull(0)) {
++          Log.i(TAG, "flags missing uri=$uri")
++          false
++        } else {
++          val flags = cursor.getInt(0)
++          val virtual = flags and DocumentsContract.Document.FLAG_VIRTUAL_DOCUMENT != 0
++          Log.i(TAG, "flags=$flags virtual=$virtual uri=$uri")
++          virtual
++        }
++      } ?: false
++    } catch (error: Exception) {
++      Log.i(TAG, "flags query failed uri=$uri ${error.javaClass.simpleName}")
++      false
++    }
++  }
++
++  private fun exportVirtualSpreadsheet(uri: Uri, displayName: String?): ExportedSheet {
++    val streamTypes = try {
++      context.contentResolver.getStreamTypes(uri, XLSX_MIME)
++    } catch (error: SecurityException) {
++      Log.i(TAG, "getStreamTypes denied uri=$uri")
++      throw GoogleSheetExportException("This app cannot read that Google Sheet.")
++    } catch (error: Exception) {
++      Log.i(TAG, "getStreamTypes failed uri=$uri ${error.javaClass.simpleName}")
++      throw GoogleSheetExportException(
++        "This Google Sheet could not be downloaded. Check your connection and try again.",
++      )
++    }
++    Log.i(TAG, "getStreamTypes count=${streamTypes?.size ?: 0} uri=$uri")
++    val exportType = streamTypes?.firstOrNull { it.substringBefore(';').trim() == XLSX_MIME }
++    if (exportType == null) {
++      throw GoogleSheetExportException("Google Drive did not return a spreadsheet for this file.")
++    }
++
++    val outputFile = createUniqueXlsxFile(displayName)
++    try {
++      val descriptor = context.contentResolver.openTypedAssetFileDescriptor(uri, exportType, null)
++        ?: throw GoogleSheetExportException("Google Drive did not return a spreadsheet for this file.")
++      descriptor.use { afd ->
++        val input = afd.createInputStream()
++          ?: throw GoogleSheetExportException("Google Drive did not return a spreadsheet for this file.")
++        FileOutputStream(outputFile).use { output ->
++          val written = copyCapped(input, output)
++          if (written <= 0L) {
++            throw GoogleSheetExportException("Google Drive did not return a spreadsheet for this file.")
++          }
++        }
++      }
++    } catch (error: GoogleSheetExportException) {
++      if (outputFile.exists()) outputFile.delete()
++      throw error
++    } catch (error: SecurityException) {
++      if (outputFile.exists()) outputFile.delete()
++      Log.i(TAG, "export denied uri=$uri")
++      throw GoogleSheetExportException("This app cannot read that Google Sheet.")
++    } catch (error: Exception) {
++      if (outputFile.exists()) outputFile.delete()
++      Log.i(TAG, "export failed uri=$uri ${error.javaClass.simpleName}")
++      throw GoogleSheetExportException(
++        "This Google Sheet could not be downloaded. Check your connection and try again.",
++      )
+     }
+ 
+-    return details
++    val size = outputFile.length()
++    if (size <= 0L) {
++      outputFile.delete()
++      throw GoogleSheetExportException("Google Drive did not return a spreadsheet for this file.")
++    }
++    Log.i(TAG, "exported bytes=$size uri=${Uri.fromFile(outputFile)}")
++    return ExportedSheet(
++      uri = Uri.fromFile(outputFile),
++      name = "${sanitizeSheetDisplayName(displayName)}.xlsx",
++      size = size,
++    )
++  }
++
++  private fun copyCapped(input: InputStream, output: OutputStream): Long {
++    val buffer = ByteArray(8192)
++    var total = 0L
++    while (true) {
++      val read = input.read(buffer)
++      if (read < 0) return total
++      if (total + read > MAX_EXPORT_BYTES) {
++        throw GoogleSheetExportException("This Google Sheet is too large to import.")
++      }
++      output.write(buffer, 0, read)
++      total += read
++    }
++  }
++
++  private fun sanitizeSheetDisplayName(raw: String?): String {
++    var name = raw?.trim().orEmpty()
++    name = name.substringAfterLast('/').substringAfterLast('\\')
++    if (name.endsWith(".gsheet", ignoreCase = true)) {
++      name = name.dropLast(".gsheet".length)
++    }
++    name = name.replace(Regex("""[\\/:*?"<>|\u0000-\u001F]"""), "").trim().trimEnd('.')
++    return name.ifEmpty { "Sheet" }
++  }
++
++  private fun createUniqueXlsxFile(displayName: String?): File {
++    val dir = File(context.cacheDir, "DocumentPicker").apply { mkdirs() }
++    val base = sanitizeSheetDisplayName(displayName)
++    var file = File(dir, "$base-${System.nanoTime()}.xlsx")
++    var attempt = 0
++    while (file.exists() && attempt < 100) {
++      attempt += 1
++      file = File(dir, "$base-${System.nanoTime()}-$attempt.xlsx")
++    }
++    return file
+   }
+ }
++
++private data class ExportedSheet(
++  val uri: Uri,
++  val name: String,
++  val size: Long,
++)
 diff --git a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerOptions.kt b/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerOptions.kt
 index 0e781b6..6c207f8 100644
 --- a/node_modules/expo-document-picker/android/src/main/java/expo/modules/documentpicker/DocumentPickerOptions.kt
