@@ -9,6 +9,7 @@ import {
   BluetoothOffDialog,
   ConnectedActions,
   DeviceList,
+  LastConnectedPrinter,
   PrinterFamilyCards,
   type DeviceBadge,
 } from '@/components/printers/connect';
@@ -21,6 +22,7 @@ import {
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import { isBluetoothOffError } from '@/lib/printer/bluetooth-guard';
+import { bridgeDisplayLabel, defaultBridgeForConsumer } from '@/lib/printer/printer-bridge';
 import { getAmbiguousModelCandidates } from '@/lib/printer/printer-heuristics';
 import {
   getPrinterManager,
@@ -115,6 +117,7 @@ export default function PrinterConnectScreen() {
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
+  const batteryPercent = usePrinterStore((s) => s.batteryPercent);
   const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
   const setSelectedPrinterModel = usePrinterStore((s) => s.setSelectedPrinterModel);
 
@@ -129,7 +132,14 @@ export default function PrinterConnectScreen() {
   const [caps, setCaps] = useState<BluetoothCapabilities>(() => getPrinterManager().getCapabilities());
   const [bluetoothOn, setBluetoothOn] = useState(() => getPrinterManager().isBluetoothEnabled());
   const [bluetoothOffDialog, setBluetoothOffDialog] = useState(false);
+  const [autoConnectPaused, setAutoConnectPaused] = useState(() =>
+    getPrinterManager().isAutoReconnectSuppressed(),
+  );
   const mountedRef = useRef(true);
+  const autoConnectKeyRef = useRef<string | null>(null);
+
+  const activeBridge = defaultBridgeForConsumer(selectedModel);
+  const lastForBridge = usePrinterStore((s) => s.lastDeviceForBridge[activeBridge] ?? null);
 
   const refreshCaps = useCallback(() => {
     const mgr = getPrinterManager();
@@ -140,8 +150,33 @@ export default function PrinterConnectScreen() {
     return { caps: nextCaps, bluetoothOn: on };
   }, []);
 
+  const attemptAutoConnectLast = useCallback(
+    async (device?: DiscoveredPrinter) => {
+      const mgr = getPrinterManager();
+      if (mgr.isConnectionHealthy()) return;
+      if (mgr.isAutoReconnectSuppressed()) return;
+      if (connectingId) return;
+      const store = usePrinterStore.getState();
+      if (store.status === 'connecting' || store.status === 'printing') return;
+      const last = store.lastDeviceForBridge[defaultBridgeForConsumer(selectedModel)];
+      if (!last?.id) return;
+      if (device && normalizePrinterMac(device.id) !== normalizePrinterMac(last.id)) return;
+      if (!mgr.isBluetoothEnabled()) return;
+      const sessionKey = `${selectedModel}:${last.id}`;
+      if (autoConnectKeyRef.current === sessionKey) return;
+      setConnectingId(last.id);
+      try {
+        const ok = await mgr.reconnectLastForConsumer(last.consumer);
+        if (ok) autoConnectKeyRef.current = sessionKey;
+      } finally {
+        if (mountedRef.current) setConnectingId(null);
+      }
+    },
+    [connectingId, selectedModel],
+  );
+
   const startScan = useCallback(async (target: ConsumerPrinterId = selectedModel) => {
-    if (getPrinterManager().isConnected) return;
+    if (getPrinterManager().isConnectionHealthy()) return;
     const { caps: nextCaps, bluetoothOn: on } = refreshCaps();
     const meta = CONSUMER_PRINTERS[target];
     if (!nextCaps.canScan) {
@@ -170,6 +205,7 @@ export default function PrinterConnectScreen() {
           next[idx] = mergeDevice(next[idx], device);
           return next;
         });
+        void attemptAutoConnectLast(device);
       });
       if (mountedRef.current) {
         setScanErrors(result.errors);
@@ -192,15 +228,16 @@ export default function PrinterConnectScreen() {
     } finally {
       if (mountedRef.current) setScanning(false);
     }
-  }, [refreshCaps, selectedModel]);
+  }, [attemptAutoConnectLast, refreshCaps, selectedModel]);
 
   const handleModelChange = (modelId: ConsumerPrinterId) => {
     if (modelId === selectedModel) return;
-    if (getPrinterManager().isConnected) return;
+    if (getPrinterManager().isConnectionHealthy()) return;
     setSelectedPrinterModel(modelId);
     setDevices([]);
     setNativeHint(null);
     setScanErrors([]);
+    autoConnectKeyRef.current = null;
     void startScan(modelId);
   };
 
@@ -209,62 +246,55 @@ export default function PrinterConnectScreen() {
       mountedRef.current = true;
       refreshCaps();
       let cancelled = false;
-      const mgr = getPrinterManager();
-      const live = usePrinterStore.getState();
-      const keepConnected = () => {
-        if (live.status !== 'connected' && live.status !== 'printing') {
-          live.setStatus('connected');
-        }
-      };
-      const beginScanIfIdle = () => {
-        if (cancelled || getPrinterManager().isConnected) return;
+
+      const syncConnection = (allowScan: boolean) => {
+        if (cancelled) return;
+        const mgr = getPrinterManager();
         const store = usePrinterStore.getState();
-        if (store.status === 'connected' || store.status === 'printing') {
-          store.clearConnection();
+        if (store.status === 'connecting') {
+          return;
+        }
+        if (store.status === 'connected' || store.status === 'printing' || mgr.isConnectionHealthy()) {
+          mgr.reconcileConnectionState();
+          void mgr.refreshBattery({ force: true });
+          mgr.stopScan();
+          return;
+        }
+        mgr.reconcileConnectionState();
+        if (!allowScan || store.status === 'scanning') {
+          return;
+        }
+        if (!mgr.isAutoReconnectSuppressed()) {
+          void attemptAutoConnectLast().catch(() => {});
         }
         void startScan(store.selectedPrinterModel).catch(() => {});
       };
 
-      if (mgr.isConnected || mgr.isConnectionHealthy()) {
-        keepConnected();
-      } else if (live.status === 'connected' || live.status === 'printing' || live.sdkId === 'josh') {
-        // Josh often reports ACL_DISCONNECTED while LPAPI is still coming up.
-        setTimeout(() => {
-          if (cancelled) return;
-          if (getPrinterManager().isConnected || getPrinterManager().isConnectionHealthy()) {
-            keepConnected();
-            return;
-          }
-          beginScanIfIdle();
-        }, 1600);
-      } else {
-        beginScanIfIdle();
-      }
+      syncConnection(true);
+
       return () => {
         cancelled = true;
         mountedRef.current = false;
-        if (!getPrinterManager().isConnected) {
+        const store = usePrinterStore.getState();
+        if (store.status !== 'connected' && store.status !== 'printing') {
           getPrinterManager().stopScan();
         }
       };
-    }, [refreshCaps, startScan]),
+    }, [attemptAutoConnectLast, refreshCaps, startScan]),
   );
 
   useEffect(() => {
     const appSub = AppState.addEventListener('change', (next) => {
       if (next !== 'active' || !mountedRef.current) return;
       const { caps: nextCaps, bluetoothOn: on } = refreshCaps();
-      const mgr = getPrinterManager();
-      if (mgr.isConnected) {
-        const live = usePrinterStore.getState();
-        if (live.status !== 'connected' && live.status !== 'printing') live.setStatus('connected');
-        return;
-      }
+      getPrinterManager().reconcileConnectionState();
       if (on && nextCaps.canScan) setNativeHint(null);
       else if (!on && nextCaps.canScan) setNativeHint(null);
     });
     return () => appSub.remove();
   }, [refreshCaps]);
+
+  const showConnected = status === 'connected' || status === 'printing';
 
   const listedDevices = useMemo(
     () =>
@@ -275,16 +305,21 @@ export default function PrinterConnectScreen() {
     [devices],
   );
 
+  const lastConsumer = lastForBridge?.consumer ?? selectedModel;
+  const lastPrinterMeta = CONSUMER_PRINTERS[lastConsumer] ?? printer;
+  const lastNearby = useMemo(() => {
+    if (!lastForBridge?.id) return false;
+    const key = normalizePrinterMac(lastForBridge.id);
+    return listedDevices.some((d) => normalizePrinterMac(d.id) === key);
+  }, [lastForBridge?.id, listedDevices]);
+
   const connectWith = async (target: ConsumerPrinterId, device: DiscoveredPrinter) => {
+    getPrinterManager().allowAutoReconnectAgain();
+    setAutoConnectPaused(false);
     if (target !== usePrinterStore.getState().selectedPrinterModel) {
       setSelectedPrinterModel(target);
     }
     await getPrinterManager().connectModel(toDriverModel(target), device.id, device.name);
-    if (!mountedRef.current) return;
-    Alert.alert('Connected', `${device.name ?? CONSUMER_PRINTERS[target].shortName} is ready.`, [
-      { text: 'Print test label', onPress: () => void handleTestPrint() },
-      { text: 'Done', style: 'cancel' },
-    ]);
   };
 
   const handleConnect = async (device: DiscoveredPrinter) => {
@@ -295,8 +330,12 @@ export default function PrinterConnectScreen() {
       return;
     }
 
+    getPrinterManager().allowAutoReconnectAgain();
+    setAutoConnectPaused(false);
+    getPrinterManager().stopScan();
     const pinned = usePrinterStore.getState().pinnedDriverByMac[normalizePrinterMac(device.id)];
     setConnectingId(device.id);
+    usePrinterStore.getState().setStatus('connecting');
     try {
       if (pinned === 'td404' || pinned === 'josh' || pinned === 'dev' || pinned === 'tez' || pinned === 'labelx') {
         const consumer =
@@ -344,8 +383,39 @@ export default function PrinterConnectScreen() {
     }
   };
 
+  const handleReconnectLast = async () => {
+    if (!getPrinterManager().isBluetoothEnabled()) {
+      setBluetoothOffDialog(true);
+      return;
+    }
+    getPrinterManager().stopScan();
+    getPrinterManager().allowAutoReconnectAgain();
+    setAutoConnectPaused(false);
+    autoConnectKeyRef.current = null;
+    usePrinterStore.getState().setStatus('connecting');
+    setConnectingId(lastForBridge?.id ?? 'reconnect');
+    try {
+      const ok = await getPrinterManager().reconnectLastForConsumer(selectedModel, { userRequested: true });
+      if (!ok) {
+        Alert.alert('Could not connect', 'Turn the printer on and stay on this screen — we will connect when it appears.');
+        void startScan(selectedModel);
+      }
+    } catch (error) {
+      Alert.alert(
+        'Connection failed',
+        error instanceof Error ? error.message : 'Could not connect to the last printer.',
+      );
+    } finally {
+      if (mountedRef.current) setConnectingId(null);
+    }
+  };
+
   const handleDisconnect = async () => {
     try {
+      autoConnectKeyRef.current = null;
+      getPrinterManager().stopScan();
+      getPrinterManager().suppressAutoReconnect();
+      setAutoConnectPaused(true);
       await getPrinterManager().disconnect();
       void startScan(usePrinterStore.getState().selectedPrinterModel);
     } catch (error) {
@@ -356,9 +426,8 @@ export default function PrinterConnectScreen() {
   const handleTestPrint = async () => {
     setTesting(true);
     try {
-      const testName = selectedModel === 'josh' ? 'test print sent by sez print' : `Sez Print ${printer.shortName}`;
-      await getPrinterManager().printTestLabel(testName);
-      Alert.alert('Test print sent', `Check ${printer.shortName} for a sample label.`);
+      await getPrinterManager().printDiagnosticTestLabel();
+      Alert.alert('Test print sent', `Check ${printer.shortName} for the diagnostic test label.`);
     } catch (error) {
       Alert.alert('Test print failed', error instanceof Error ? error.message : 'Could not send the test print.');
     } finally {
@@ -368,10 +437,9 @@ export default function PrinterConnectScreen() {
 
   const showBluetoothSettings =
     Platform.OS !== 'web' &&
-    status !== 'connected' &&
+    !showConnected &&
     (!bluetoothOn || listedDevices.length === 0 || scanErrors.length > 0 || Boolean(nativeHint) || !caps.canScan);
   const bluetoothSettingsLabel = Platform.OS === 'ios' ? 'Open Settings' : 'Open Bluetooth settings';
-  const connected = status === 'connected' || status === 'printing';
 
   return (
     <View style={styles.root}>
@@ -381,11 +449,12 @@ export default function PrinterConnectScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
-          {connected ? (
+          {showConnected ? (
             <ConnectedActions
               modelId={printer.id}
               modelName={printer.shortName}
               deviceName={deviceName}
+              batteryPercent={batteryPercent}
               testing={testing}
               onTest={() => void handleTestPrint()}
               onDisconnect={() => void handleDisconnect()}
@@ -394,6 +463,18 @@ export default function PrinterConnectScreen() {
           ) : (
             <>
           <PrinterFamilyCards selectedId={printer.id} onSelect={handleModelChange} />
+          <LastConnectedPrinter
+            modelName={lastPrinterMeta.shortName}
+            bridgeLabel={bridgeDisplayLabel(activeBridge)}
+            deviceName={lastForBridge?.name ?? ''}
+            deviceId={lastForBridge?.id ?? ''}
+            connecting={Boolean(lastForBridge && connectingId === lastForBridge.id)}
+            visible={Boolean(lastForBridge && caps.canScan && bluetoothOn)}
+            nearby={lastNearby}
+            scanning={scanning}
+            autoConnectPaused={autoConnectPaused}
+            onConnect={() => void handleReconnectLast()}
+          />
           <BluetoothBlockers
             canScan={caps.canScan}
             reason={caps.reason}

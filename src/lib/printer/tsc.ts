@@ -182,6 +182,45 @@ function readTsplHeader(bytes: Uint8Array): { text: string; payloadStart: number
   return { text, payloadStart: limit };
 }
 
+/**
+ * Left-aligned, small-type TSPL text for narrow strips (50×15 mm, 25×25 mm corner).
+ * Uses font "1" at 1×1 so content stays in the top-left of the job.
+ */
+export function encodeTscCompactTextSample(options: {
+  lines: readonly string[];
+  widthMm?: number;
+  heightMm?: number;
+  gapMm?: number;
+  density?: number;
+}): Uint8Array {
+  const widthMm = options.widthMm ?? 50;
+  const heightMm = options.heightMm ?? 15;
+  const gapMm = options.gapMm ?? 2;
+  const density = options.density ?? 8;
+  const x = 4;
+  let y = 6;
+  const lineStep = 14;
+  let textBlock = '';
+  for (const line of options.lines) {
+    const safe = String(line).replace(/"/g, '').slice(0, 32);
+    if (!safe) continue;
+    textBlock += `TEXT ${x},${y},"1",0,1,1,"${safe}"\r\n`;
+    y += lineStep;
+  }
+  const cmd =
+    '\r\n' +
+    `${formatTsplSizeCommand(widthMm, heightMm)}\r\n` +
+    `GAP ${formatTsplMm(gapMm)} mm,0 mm\r\n` +
+    'SPEED 5\r\n' +
+    `DENSITY ${density}\r\n` +
+    'DIRECTION 0,0\r\n' +
+    'REFERENCE 0,0\r\n' +
+    'CLS\r\n' +
+    textBlock +
+    'PRINT 1\r\n';
+  return ascii(cmd);
+}
+
 /** Simple text-only sample label (no bitmap) — good for connection smoke tests. */
 export function encodeTscTextSample(options: {
   widthMm?: number;

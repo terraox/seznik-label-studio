@@ -1,8 +1,8 @@
 /**
- * Printer diagnostics: connection snapshot, last print timing, and debug actions.
+ * Printer diagnostics: connection snapshot and debug actions.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,23 +10,28 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
+import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { accentStrong, cardShadow, Palette } from '@/constants/ui';
+import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
+import { GRID_SPACING_PRESETS_MM } from '@/lib/editor/canvas-grid';
 import {
-  getPrinterManager,
-  type DiagnosticInfo,
-  type PrintTimingEntry,
-} from '@/lib/printer/printer-manager';
-import { encodeTscTextSample } from '@/lib/printer/tsc';
+  DIAGNOSTIC_GRID_SIZE_PRESETS,
+  parseGridSpacingMm,
+  parseLabelSizeMm,
+  printDiagnosticGridTest,
+  printDiagnosticRulerTest,
+  suggestedDiagnosticGridSpacingMm,
+} from '@/lib/printer/diagnostic-grid-print';
 import { usePrinterStore } from '@/stores/printer-store';
-
-const RAW_TRANSPORTS = new Set(['td404-spp', 'wifi', 'ble', 'bluetooth-spp']);
 
 function statusLook(state: string): { label: string; color: string; bg: string } {
   if (state === 'connected') return { label: 'Connected', color: '#18794A', bg: '#E8F6EE' };
@@ -72,27 +77,36 @@ function DiagRow({ label, value, mono }: { label: string; value: string; mono?: 
   );
 }
 
-function TimingBar({ entry, maxMs }: { entry: PrintTimingEntry; maxMs: number }) {
-  const pct = maxMs > 0 ? Math.min(100, (entry.durationMs / maxMs) * 100) : 0;
-  return (
-    <View style={styles.timingRow}>
-      <Text style={styles.timingLabel} numberOfLines={1}>
-        {entry.stage}
-      </Text>
-      <View style={styles.timingBarBg}>
-        <View style={[styles.timingBarFill, { width: `${Math.max(pct, 2)}%` }]} />
-      </View>
-      <Text style={styles.timingMs}>{entry.durationMs} ms</Text>
-    </View>
-  );
-}
-
 export default function PrinterDiagnosticsScreen() {
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
+  const batteryPercent = usePrinterStore((s) => s.batteryPercent);
   const [diag, setDiag] = useState<DiagnosticInfo | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [gridPresetId, setGridPresetId] = useState(DIAGNOSTIC_GRID_SIZE_PRESETS[0].id);
+  const [labelWidthMm, setLabelWidthMm] = useState(String(DIAGNOSTIC_GRID_SIZE_PRESETS[0].widthMm));
+  const [labelHeightMm, setLabelHeightMm] = useState(String(DIAGNOSTIC_GRID_SIZE_PRESETS[0].heightMm));
+  const [gridSpacingMm, setGridSpacingMm] = useState(
+    String(suggestedDiagnosticGridSpacingMm(DIAGNOSTIC_GRID_SIZE_PRESETS[0].widthMm, DIAGNOSTIC_GRID_SIZE_PRESETS[0].heightMm)),
+  );
+  const [gridTestOpen, setGridTestOpen] = useState(false);
+
+  const gridPreset = useMemo(
+    () => DIAGNOSTIC_GRID_SIZE_PRESETS.find((p) => p.id === gridPresetId) ?? DIAGNOSTIC_GRID_SIZE_PRESETS[0],
+    [gridPresetId],
+  );
+
+  const selectGridPreset = (id: string) => {
+    const preset = DIAGNOSTIC_GRID_SIZE_PRESETS.find((p) => p.id === id);
+    if (!preset) return;
+    setGridPresetId(id);
+    if (id !== 'custom') {
+      setLabelWidthMm(String(preset.widthMm));
+      setLabelHeightMm(String(preset.heightMm));
+      setGridSpacingMm(String(suggestedDiagnosticGridSpacingMm(preset.widthMm, preset.heightMm)));
+    }
+  };
 
   const log = useCallback((msg: string) => {
     const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -101,7 +115,24 @@ export default function PrinterDiagnosticsScreen() {
 
   const refresh = useCallback(() => {
     setDiag(getPrinterManager().getDiagnostics());
+    const linked =
+      usePrinterStore.getState().status === 'connected' ||
+      usePrinterStore.getState().status === 'printing' ||
+      getPrinterManager().isConnectionHealthy();
+    if (linked) void getPrinterManager().refreshBattery();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+      if (
+        usePrinterStore.getState().status === 'connected' ||
+        usePrinterStore.getState().status === 'printing'
+      ) {
+        void getPrinterManager().refreshBattery({ force: true });
+      }
+    }, [refresh]),
+  );
 
   useEffect(() => {
     refresh();
@@ -140,7 +171,7 @@ export default function PrinterDiagnosticsScreen() {
     try {
       log('Sending a test label…');
       const t0 = Date.now();
-      await getPrinterManager().printTestLabel('Sez Print Diagnostics');
+      await getPrinterManager().printDiagnosticTestLabel();
       log(`Test label sent in ${Date.now() - t0} ms.`);
     } catch (error) {
       fail('Test print failed', error);
@@ -150,23 +181,39 @@ export default function PrinterDiagnosticsScreen() {
     }
   };
 
-  const handleSmallPayload = async () => {
-    setBusy('small');
-    try {
-      const transport = getPrinterManager().getDiagnostics().activeTransport;
-      const t0 = Date.now();
-      if (transport && RAW_TRANSPORTS.has(transport)) {
-        log('Sending a small TSPL label…');
-        const bytes = encodeTscTextSample({ text: 'DIAG', widthMm: 30, heightMm: 15 });
-        await getPrinterManager().print(bytes);
-        log(`Small label sent in ${Date.now() - t0} ms (${bytes.length} bytes).`);
-      } else {
-        log('This printer uses its own language. Sending a short test label instead.');
-        await getPrinterManager().printTestLabel('DIAG');
-        log(`Test label sent in ${Date.now() - t0} ms.`);
+  const runPatternPrint = async (kind: 'grid' | 'ruler', busyKey: 'grid' | 'ruler') => {
+    const parsed = parseLabelSizeMm(labelWidthMm, labelHeightMm);
+    if ('error' in parsed) {
+      Alert.alert('Label size', parsed.error);
+      return;
+    }
+    let gridSpacing = 5;
+    if (kind === 'grid') {
+      const spacingParsed = parseGridSpacingMm(gridSpacingMm);
+      if ('error' in spacingParsed) {
+        Alert.alert('Grid spacing', spacingParsed.error);
+        return;
       }
+      gridSpacing = spacingParsed.spacingMm;
+    }
+
+    setBusy(busyKey);
+    try {
+      const label = kind === 'grid' ? 'grid' : 'scale ruler';
+      log(
+        kind === 'grid'
+          ? `Printing ${label} at ${parsed.widthMm}×${parsed.heightMm} mm, ${gridSpacing} mm spacing…`
+          : `Printing ${label} at ${parsed.widthMm}×${parsed.heightMm} mm…`,
+      );
+      const t0 = Date.now();
+      if (kind === 'grid') {
+        await printDiagnosticGridTest(parsed.widthMm, parsed.heightMm, gridSpacing);
+      } else {
+        await printDiagnosticRulerTest(parsed.widthMm, parsed.heightMm);
+      }
+      log(`${label} sent in ${Date.now() - t0} ms.`);
     } catch (error) {
-      fail('Small label failed', error);
+      fail(kind === 'grid' ? 'Grid test failed' : 'Scale test failed', error);
     } finally {
       setBusy(null);
       refresh();
@@ -205,6 +252,7 @@ export default function PrinterDiagnosticsScreen() {
     setBusy('disconnect');
     try {
       log('Disconnecting…');
+      getPrinterManager().suppressAutoReconnect();
       await getPrinterManager().disconnect();
       log('Disconnected.');
     } catch (error) {
@@ -219,9 +267,6 @@ export default function PrinterDiagnosticsScreen() {
   const look = statusLook(connectionState);
   const linked = connectionState === 'connected' || connectionState === 'printing';
   const showBle = diag?.activeTransport === 'ble' || Boolean(diag?.bleServiceUuid);
-  const timingEntries = diag?.lastPrintTimingMs ?? [];
-  const maxTimingMs = timingEntries.reduce((m, e) => Math.max(m, e.durationMs), 1);
-  const totalTimingMs = timingEntries.reduce((s, e) => s + e.durationMs, 0);
 
   return (
     <View style={styles.root}>
@@ -239,6 +284,17 @@ export default function PrinterDiagnosticsScreen() {
             </View>
             <Text style={styles.deviceName}>{diag?.deviceName || diag?.deviceId || 'No printer selected'}</Text>
             <Text style={styles.deviceMeta}>{prettyTransport(diag?.activeTransport)}</Text>
+            {linked ? (
+              <View style={styles.heroBattery}>
+                <Text style={styles.heroBatteryLabel}>Battery</Text>
+                <PrinterBatteryLabel
+                  percent={batteryPercent}
+                  size={20}
+                  showWhenUnknown
+                  unknownText="Not reported"
+                />
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.card}>
@@ -248,6 +304,10 @@ export default function PrinterDiagnosticsScreen() {
             <DiagRow label="Device" value={diag?.deviceName ?? 'None'} />
             <DiagRow label="Address" value={diag?.deviceId ?? 'None'} mono />
             <DiagRow label="App status" value={status} />
+            <DiagRow
+              label="Battery"
+              value={batteryPercent != null ? `${batteryPercent}%` : linked ? 'Not reported' : 'N/A'}
+            />
           </View>
 
           {showBle ? (
@@ -277,14 +337,128 @@ export default function PrinterDiagnosticsScreen() {
             <DiagRow label="Last error" value={diag?.lastError?.trim() ? diag.lastError : 'None'} />
           </View>
 
-          {timingEntries.length > 0 ? (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Last print · {totalTimingMs} ms</Text>
-              {timingEntries.map((entry, i) => (
-                <TimingBar key={`${entry.stage}-${i}`} entry={entry} maxMs={maxTimingMs} />
-              ))}
-            </View>
-          ) : null}
+          <View style={styles.card}>
+            <Pressable
+              onPress={() => setGridTestOpen((open) => !open)}
+              style={({ pressed }) => [styles.expandHeader, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: gridTestOpen }}>
+              <Text style={styles.sectionTitle}>Grid test label</Text>
+              <AppIcon
+                name={gridTestOpen ? 'arrowtriangle.up.fill' : 'arrowtriangle.down.fill'}
+                tintColor={Palette.muted}
+                size={14}
+              />
+            </Pressable>
+            {gridTestOpen ? (
+              <>
+                <Text style={styles.help}>
+                  Choose label size, then print either a grid or an mm scale ruler — not both, and no label
+                  border.
+                </Text>
+                <Text style={styles.fieldLabel}>Label size</Text>
+                <View style={styles.presetWrap}>
+                  {DIAGNOSTIC_GRID_SIZE_PRESETS.map((preset) => {
+                    const selected = preset.id === gridPresetId;
+                    return (
+                      <Pressable
+                        key={preset.id}
+                        onPress={() => selectGridPreset(preset.id)}
+                        style={({ pressed }) => [
+                          styles.presetChip,
+                          selected && styles.presetChipOn,
+                          pressed && styles.pressed,
+                        ]}>
+                        <Text style={[styles.presetChipText, selected && styles.presetChipTextOn]}>
+                          {preset.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={styles.mmRow}>
+                  <View style={styles.mmField}>
+                    <Text style={styles.fieldLabel}>Width (mm)</Text>
+                    <TextInput
+                      value={labelWidthMm}
+                      onChangeText={(v) => {
+                        setGridPresetId('custom');
+                        setLabelWidthMm(v);
+                      }}
+                      keyboardType="decimal-pad"
+                      style={styles.mmInput}
+                      placeholder="50"
+                    />
+                  </View>
+                  <View style={styles.mmField}>
+                    <Text style={styles.fieldLabel}>Height (mm)</Text>
+                    <TextInput
+                      value={labelHeightMm}
+                      onChangeText={(v) => {
+                        setGridPresetId('custom');
+                        setLabelHeightMm(v);
+                      }}
+                      keyboardType="decimal-pad"
+                      style={styles.mmInput}
+                      placeholder="15"
+                    />
+                  </View>
+                </View>
+                <Text style={styles.sizeHint}>
+                  Active: {labelWidthMm || '—'} × {labelHeightMm || '—'} mm
+                  {gridPreset.id !== 'custom' ? ` (${gridPreset.label})` : ''}
+                </Text>
+                <Text style={styles.fieldLabel}>Grid spacing (mm)</Text>
+                <View style={styles.presetWrap}>
+                  {GRID_SPACING_PRESETS_MM.map((mm) => {
+                    const selected = gridSpacingMm === String(mm);
+                    return (
+                      <Pressable
+                        key={mm}
+                        onPress={() => setGridSpacingMm(String(mm))}
+                        style={({ pressed }) => [
+                          styles.presetChip,
+                          selected && styles.presetChipOn,
+                          pressed && styles.pressed,
+                        ]}>
+                        <Text style={[styles.presetChipText, selected && styles.presetChipTextOn]}>
+                          {mm} mm
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={styles.mmField}>
+                  <Text style={styles.fieldLabel}>Custom spacing (0.5–20 mm)</Text>
+                  <TextInput
+                    value={gridSpacingMm}
+                    onChangeText={setGridSpacingMm}
+                    keyboardType="decimal-pad"
+                    style={styles.mmInput}
+                    placeholder="5"
+                  />
+                </View>
+                <ActionButton
+                  label="Print grid test"
+                  icon="square.grid.3x3"
+                  busy={busy === 'grid'}
+                  disabled={busy !== null || !linked}
+                  onPress={() => void runPatternPrint('grid', 'grid')}
+                />
+                <ActionButton
+                  label="Print scale (mm ruler)"
+                  icon="list.number"
+                  busy={busy === 'ruler'}
+                  disabled={busy !== null || !linked}
+                  onPress={() => void runPatternPrint('ruler', 'ruler')}
+                />
+              </>
+            ) : (
+              <Text style={styles.collapsedHint}>
+                Tap to set label size, grid spacing, and print grid or scale tests.
+              </Text>
+            )}
+          </View>
 
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Actions</Text>
@@ -308,13 +482,6 @@ export default function PrinterDiagnosticsScreen() {
               busy={busy === 'test-print'}
               disabled={busy !== null || !linked}
               onPress={() => void handleTestPrint()}
-            />
-            <ActionButton
-              label="Send a small label"
-              icon="doc.text"
-              busy={busy === 'small'}
-              disabled={busy !== null || !linked}
-              onPress={() => void handleSmallPayload()}
             />
             <ActionButton
               label="Disconnect"
@@ -421,6 +588,18 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 13, fontWeight: '700' },
   deviceName: { fontSize: 20, fontWeight: '700', color: Palette.ink, textAlign: 'center' },
   deviceMeta: { fontSize: 14, color: Palette.muted, textAlign: 'center' },
+  heroBattery: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#EAECEF',
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  heroBatteryLabel: { fontSize: 14, fontWeight: '600', color: Palette.muted },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -435,6 +614,41 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
+  expandHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  collapsedHint: { fontSize: 13, lineHeight: 18, color: Palette.muted },
+  help: { fontSize: 13, lineHeight: 19, color: Palette.muted },
+  fieldLabel: { fontSize: 12, fontWeight: '600', color: Palette.muted, marginTop: 4 },
+  presetWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  presetChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  presetChipOn: { borderColor: accentStrong, backgroundColor: '#E6F6F8' },
+  presetChipText: { fontSize: 13, fontWeight: '600', color: Palette.ink },
+  presetChipTextOn: { color: accentStrong },
+  mmRow: { flexDirection: 'row', gap: 12 },
+  mmField: { flex: 1, gap: 4 },
+  mmInput: {
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: Palette.ink,
+  },
+  sizeHint: { fontSize: 12, color: Palette.muted },
   diagRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -453,17 +667,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   mono: { fontFamily: 'monospace', fontSize: 12 },
-  timingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  timingLabel: { fontSize: 13, color: Palette.muted, width: 108 },
-  timingBarBg: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  timingBarFill: { height: '100%', backgroundColor: accentStrong, borderRadius: 4 },
-  timingMs: { fontSize: 12, fontWeight: '700', color: Palette.ink, width: 58, textAlign: 'right' },
   actionBtn: {
     minHeight: 48,
     borderRadius: 12,

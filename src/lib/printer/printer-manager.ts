@@ -35,11 +35,28 @@ import {
   shouldUseTsplCommandSet,
   getAmbiguousModelCandidates,
 } from '@/lib/printer/printer-heuristics';
-import { encodeTscTextSample } from '@/lib/printer/tsc';
+import {
+  buildDiagnosticCompactLabelDocument,
+  buildDiagnosticTestLabelLines,
+  DIAGNOSTIC_COMPACT_LABEL_HEIGHT_MM,
+  DIAGNOSTIC_COMPACT_LABEL_WIDTH_MM,
+  DIAGNOSTIC_STANDARD_LABEL_HEIGHT_MM,
+  DIAGNOSTIC_STANDARD_LABEL_WIDTH_MM,
+} from '@/lib/printer/diagnostic-test-label';
+import {
+  JOSH_HEADLESS_EMPTY,
+  printLabelDocumentMainPipeline,
+} from '@/lib/printer/main-pipeline-print';
 import { assertTd404MonoBuffer } from '@/printing/raster/td404-mono-validate';
-import { usePrinterStore, normalizePrinterMac } from '@/stores/printer-store';
+import { usePrinterStore, normalizePrinterMac, type PrinterTransport } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { type SeznikPrinterModelId, SEZNIK_PRINTER_MODELS, toDriverModel } from '@/constants/printer-models';
+import {
+  type ConsumerPrinterId,
+  type SeznikPrinterModelId,
+  SEZNIK_PRINTER_MODELS,
+  toDriverModel,
+} from '@/constants/printer-models';
+import { defaultBridgeForConsumer } from '@/lib/printer/printer-bridge';
 
 export type DiscoveredPrinter = {
   id: string;
@@ -282,6 +299,30 @@ class PrinterManager {
   private aclListener: { remove: () => void } | undefined;
   private aclDisconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingAclDisconnectMac: string | null = null;
+  /** Skip app-wide auto-reconnect until the last printer's ACL link comes back (manual disconnect). */
+  private autoReconnectSuppressed = false;
+  /** Last successful auto-reconnect per bridge+MAC — cleared when the link drops. */
+  private autoReconnectSessionKey: string | null = null;
+  private autoReconnectInFlight = false;
+  private lastAutoReconnectAttemptAt = 0;
+  private static readonly AUTO_RECONNECT_MIN_INTERVAL_MS = 8_000;
+  /** While connectModel is in flight, native connected() may lag briefly. */
+  private static readonly CONNECTING_NATIVE_GRACE_MS = 1_500;
+  private connectAttemptStartedAtMs = 0;
+  private batteryPollTimer: ReturnType<typeof setInterval> | null = null;
+  private lastBatteryRefreshAt = 0;
+  private batteryRefreshInFlight = false;
+  private static readonly BATTERY_POLL_MS = 60_000;
+  private static readonly BATTERY_REFRESH_MIN_MS = 30_000;
+
+  private scheduleDebugBatteryLog(model: SeznikPrinterModelId, deviceId: string | null): void {
+    if (!__DEV__) return;
+    setTimeout(() => {
+      void import('@/lib/printer/printer-battery-debug')
+        .then((m) => m.debugLogPrinterBatteries(model, deviceId))
+        .catch(() => {});
+    }, 800);
+  }
 
   private decrementPrintQueue(): void {
     this.printQueueDepth = Math.max(0, this.printQueueDepth - 1);
@@ -350,6 +391,8 @@ class PrinterManager {
     this.connectionState = 'disconnected';
     this.connectedDevice = null;
     this.writableTarget = null;
+    this.autoReconnectSessionKey = null;
+    this.stopBatteryPolling();
     store.clearConnection();
   }
 
@@ -360,12 +403,23 @@ class PrinterManager {
       .then(({ addDevAclListener }) => {
         if (this.aclListener) return;
         this.aclListener = addDevAclListener((event) => {
-          if (event.connected) return;
+          const mac = event.mac ? normalizePrinterMac(event.mac) : null;
+          if (!mac) return;
+          if (event.connected) {
+            if (!this.autoReconnectSuppressed) {
+              const store = usePrinterStore.getState();
+              const bridge = defaultBridgeForConsumer(store.selectedPrinterModel);
+              const last = store.lastDeviceForBridge[bridge];
+              if (last?.id && normalizePrinterMac(last.id) === mac) {
+                this.maybeAutoReconnect({ force: true });
+              }
+            }
+            return;
+          }
           const store = usePrinterStore.getState();
           const connectedMac = store.deviceId ? normalizePrinterMac(store.deviceId) : null;
-          const droppedMac = event.mac ? normalizePrinterMac(event.mac) : null;
-          if (!connectedMac || !droppedMac || connectedMac !== droppedMac) return;
-          this.scheduleAclDisconnectVerify(droppedMac);
+          if (!connectedMac || connectedMac !== mac) return;
+          this.scheduleAclDisconnectVerify(mac);
         });
       })
       .catch(() => {});
@@ -1119,6 +1173,10 @@ class PrinterManager {
       onFinished?.();
       return { paired: 0, nearby: 0, errors: [] };
     }
+    if (store.status === 'connecting' || this.connectionState === 'connecting') {
+      onFinished?.();
+      return { paired: 0, nearby: 0, errors: [] };
+    }
     store.setStatus('scanning');
     this.stopScan();
 
@@ -1307,8 +1365,18 @@ class PrinterManager {
     deviceName?: string | null,
   ): Promise<void> {
     const store = usePrinterStore.getState();
+    if (this.isLiveSessionForModel(model, deviceId)) {
+      this.connectionState = 'connected';
+      const meta = this.connectionMetaFromActiveTransport();
+      store.setConnectedDevice(deviceId, deviceName ?? store.deviceName ?? deviceId, {
+        ...meta,
+        model,
+      });
+      return;
+    }
     store.setStatus('connecting');
     this.connectionState = 'connecting';
+    this.connectAttemptStartedAtMs = Date.now();
     await this.stopScanAsync();
 
     // 1. Cleanly disconnect all existing bridges first
@@ -1325,11 +1393,13 @@ class PrinterManager {
         const res = await td404.connectTd404(deviceId, deviceName ?? 'TEJAS/RUDRA');
         this.activeTransport = 'td404-spp';
         this.connectionState = 'connected';
+        this.connectAttemptStartedAtMs = 0;
         store.setConnectedDevice(res.id, res.name ?? deviceName ?? deviceId, {
           transport: 'bluetooth-spp',
           sdkId: 'td404',
           model: 'td404',
         });
+        this.scheduleDebugBatteryLog('td404', res.id);
       } else if (model === 'josh') {
         const josh = this.getJosh();
         if (!josh?.isJoshNativeAvailable()) {
@@ -1353,11 +1423,13 @@ class PrinterManager {
         console.info(`[JOSH-CONN] JOSH connected successfully:`, res);
         this.activeTransport = 'josh-lpapi';
         this.connectionState = 'connected';
+        this.connectAttemptStartedAtMs = 0;
         store.setConnectedDevice(res.id || deviceId, res.name ?? effectiveName, {
           transport: 'josh-lpapi',
           sdkId: 'josh',
           model: 'josh',
         });
+        this.scheduleDebugBatteryLog('josh', res.id || deviceId);
       } else if (model === 'dev') {
         const dev = this.getDev();
         if (!dev?.isDevNativeAvailable()) {
@@ -1366,11 +1438,13 @@ class PrinterManager {
         const res = await dev.connectDev(deviceId, deviceName ?? 'DEV');
         this.activeTransport = 'dev-spp';
         this.connectionState = 'connected';
+        this.connectAttemptStartedAtMs = 0;
         store.setConnectedDevice(res.id, res.name ?? deviceName ?? deviceId, {
           transport: 'dev-spp',
           sdkId: 'dev',
           model: 'dev',
         });
+        this.scheduleDebugBatteryLog('dev', res.id);
       } else if (model === 'tez') {
         const tez = this.getTez();
         if (!tez?.isTezNativeAvailable()) {
@@ -1379,11 +1453,13 @@ class PrinterManager {
         const res = await tez.connectTez(deviceId, deviceName ?? 'TEZ');
         this.activeTransport = 'tez-spp';
         this.connectionState = 'connected';
+        this.connectAttemptStartedAtMs = 0;
         store.setConnectedDevice(res.id, res.name ?? deviceName ?? deviceId, {
           transport: 'tez-spp',
           sdkId: 'tez',
           model: 'tez',
         });
+        this.scheduleDebugBatteryLog('tez', res.id);
       } else if (model === 'labelx') {
         const labelx = this.getLabelX();
         if (!labelx?.isLabelXNativeAvailable()) {
@@ -1407,14 +1483,17 @@ class PrinterManager {
         console.info(`[LABELX-CONN] Label X connected successfully:`, res);
         this.activeTransport = 'labelx-spp';
         this.connectionState = 'connected';
+        this.connectAttemptStartedAtMs = 0;
         store.setConnectedDevice(res.mac || deviceId, res.name ?? effectiveName, {
           transport: 'labelx-spp',
           sdkId: 'labelx',
           model: 'labelx',
         });
+        this.scheduleDebugBatteryLog('labelx', res.mac || deviceId);
       }
     } catch (err) {
       this.connectionState = 'disconnected';
+      this.connectAttemptStartedAtMs = 0;
       store.clearConnection();
       throw err;
     }
@@ -2637,8 +2716,116 @@ class PrinterManager {
     this.activeTransport = null;
     this.backendPrinterId = null;
     this.bleNegotiatedMtu = 0;
+    const store = usePrinterStore.getState();
+    const switchingToNewSession = store.status === 'connecting' || this.connectionState === 'connecting';
+    if (switchingToNewSession) {
+      this.connectionState = 'connecting';
+      return;
+    }
     this.connectionState = 'disconnected';
-    usePrinterStore.getState().clearConnection();
+    this.autoReconnectSessionKey = null;
+    this.connectAttemptStartedAtMs = 0;
+    this.stopBatteryPolling();
+    store.clearConnection();
+  }
+
+  private isLiveSessionForModel(model: SeznikPrinterModelId, deviceId: string): boolean {
+    if (!this.isConnectionHealthy()) return false;
+    const store = usePrinterStore.getState();
+    if (!store.deviceId) return false;
+    if (normalizePrinterMac(store.deviceId) !== normalizePrinterMac(deviceId)) return false;
+    switch (model) {
+      case 'td404':
+        return this.activeTransport === 'td404-spp';
+      case 'josh':
+        return this.activeTransport === 'josh-lpapi';
+      case 'dev':
+        return this.activeTransport === 'dev-spp';
+      case 'tez':
+        return this.activeTransport === 'tez-spp';
+      case 'labelx':
+        return this.activeTransport === 'labelx-spp';
+      default:
+        return false;
+    }
+  }
+
+  /** User tapped Disconnect — block every automatic reconnect until they connect again manually. */
+  suppressAutoReconnect(): void {
+    this.autoReconnectSuppressed = true;
+    this.autoReconnectSessionKey = null;
+  }
+
+  isAutoReconnectSuppressed(): boolean {
+    return this.autoReconnectSuppressed;
+  }
+
+  /** Cleared when the user picks a printer or taps Reconnect last. */
+  allowAutoReconnectAgain(): void {
+    this.autoReconnectSuppressed = false;
+    this.autoReconnectSessionKey = null;
+  }
+
+  /**
+   * Reconnect to the last device for the selected printer family when disconnected.
+   * Safe from any screen (home, print, edit); debounced and respects manual disconnect.
+   */
+  maybeAutoReconnect(options?: { force?: boolean; macHint?: string }): void {
+    void this.runMaybeAutoReconnect(options);
+  }
+
+  private async runMaybeAutoReconnect(options?: { force?: boolean; macHint?: string }): Promise<void> {
+    if (Platform.OS === 'web') return;
+    if (AppState.currentState !== 'active') return;
+    if (this.autoReconnectInFlight) return;
+    if (this.isConnectionHealthy()) return;
+    if (
+      this.connectionState === 'connecting' ||
+      this.connectionState === 'reconnecting' ||
+      this.connectionState === 'printing'
+    ) {
+      return;
+    }
+
+    const store = usePrinterStore.getState();
+    if (store.status === 'connecting' || store.status === 'printing' || store.status === 'scanning') {
+      return;
+    }
+    // Store still says linked but native disagrees — sync down; never disconnect+reconnect blindly.
+    if (store.status === 'connected' || store.status === 'printing') {
+      this.reconcileConnectionState();
+      return;
+    }
+
+    const consumer = store.selectedPrinterModel;
+    const bridge = defaultBridgeForConsumer(consumer);
+    const last = store.lastDeviceForBridge[bridge];
+    if (!last?.id) return;
+    if (this.autoReconnectSuppressed) return;
+
+    const sessionKey = `${bridge}:${last.id}`;
+    const now = Date.now();
+    if (!options?.force && this.autoReconnectSessionKey === sessionKey) return;
+    if (!options?.force && now - this.lastAutoReconnectAttemptAt < PrinterManager.AUTO_RECONNECT_MIN_INTERVAL_MS) {
+      return;
+    }
+    if (!this.isBluetoothEnabled()) return;
+
+    this.autoReconnectInFlight = true;
+    this.lastAutoReconnectAttemptAt = now;
+    try {
+      console.info('[printer] app-wide auto-reconnect attempt', sessionKey);
+      const ok = await this.reconnectLastForConsumer(last.consumer);
+      if (ok) {
+        this.autoReconnectSessionKey = sessionKey;
+        this.autoReconnectSuppressed = false;
+        this.reconcileConnectionState();
+      }
+    } catch (error) {
+      console.warn('[printer] app-wide auto-reconnect failed:', error);
+    } finally {
+      this.autoReconnectInFlight = false;
+    }
   }
 
   get isConnected(): boolean {
@@ -2696,8 +2883,11 @@ class PrinterManager {
     if (this.activeTransport === 'ble') {
       return this.connectedDevice !== null && this.writableTarget !== null;
     }
-    // activeTransport is null — probe native modules to auto-restore.
-    // This avoids a full reconnect cycle (150–1500ms) when the socket is actually alive.
+    const store = usePrinterStore.getState();
+    if (store.status !== 'connected' && store.status !== 'printing') {
+      return false;
+    }
+    // activeTransport is null — probe native modules to auto-restore when the app still expects a link.
     if (this.getLabelX()?.isLabelXConnected?.()) {
       console.info('[printer] isConnectionHealthy: auto-restoring labelx-spp');
       this.activeTransport = 'labelx-spp';
@@ -2796,11 +2986,151 @@ class PrinterManager {
     await this.connect(deviceId, deviceName, 'tez-spp');
   }
 
+  private connectionMetaFromActiveTransport(): {
+    transport?: PrinterTransport;
+    sdkId?: 'td404' | 'josh' | 'tez' | 'dev' | 'labelx' | 'generic';
+    model?: SeznikPrinterModelId;
+  } {
+    switch (this.activeTransport) {
+      case 'td404-spp':
+        return { transport: 'bluetooth-spp', sdkId: 'td404', model: 'td404' };
+      case 'josh-lpapi':
+        return { transport: 'josh-lpapi', sdkId: 'josh', model: 'josh' };
+      case 'tez-spp':
+        return { transport: 'tez-spp', sdkId: 'tez', model: 'tez' };
+      case 'dev-spp':
+        return { transport: 'dev-spp', sdkId: 'dev', model: 'dev' };
+      case 'labelx-spp':
+        return { transport: 'labelx-spp', sdkId: 'labelx', model: 'labelx' };
+      case 'wifi':
+        return { transport: 'wifi', sdkId: 'generic' };
+      case 'ble':
+        return { transport: 'bluetooth-ble', sdkId: 'generic' };
+      default:
+        return {};
+    }
+  }
+
+  /**
+   * Align manager state machine + Zustand store with native transport reality.
+   * Call on screen focus and periodically while connection UI is visible.
+   */
+  reconcileConnectionState(): ConnectionState {
+    const store = usePrinterStore.getState();
+
+    if (this.connectionState === 'connecting' || this.connectionState === 'reconnecting') {
+      return this.connectionState;
+    }
+
+    if (this.connectionState === 'printing' || this.printQueueDepth > 0) {
+      if (store.status !== 'printing') {
+        store.setStatus('printing');
+      }
+      return 'printing';
+    }
+
+    const healthy = this.isConnectionHealthy();
+    const storeLive = store.status === 'connected' || store.status === 'printing';
+
+    if (healthy) {
+      this.connectionState = 'connected';
+      this.connectAttemptStartedAtMs = 0;
+      if (!storeLive) {
+        const deviceId = store.deviceId ?? store.lastDeviceId;
+        const deviceName = store.deviceName ?? store.lastDeviceName ?? 'Printer';
+        if (deviceId) {
+          store.setConnectedDevice(deviceId, deviceName, this.connectionMetaFromActiveTransport());
+        } else {
+          store.setStatus('connected');
+        }
+      }
+      void this.refreshBattery();
+      return 'connected';
+    }
+
+    if (store.status === 'connecting' || this.connectionState === 'connecting') {
+      this.connectionState = 'connecting';
+      return 'connecting';
+    }
+
+    if (store.status === 'scanning') {
+      return this.connectionState;
+    }
+
+    if (storeLive || this.connectionState === 'connected' || this.connectionState === 'printing') {
+      this.activeTransport = null;
+      this.connectedDevice = null;
+      this.writableTarget = null;
+      this.connectionState = 'disconnected';
+      this.autoReconnectSessionKey = null;
+      this.connectAttemptStartedAtMs = 0;
+      this.stopBatteryPolling();
+      store.clearConnection();
+    } else if (this.connectionState !== 'error') {
+      this.connectionState = 'disconnected';
+    }
+
+    return this.connectionState;
+  }
+
+  private ensureBatteryPolling(): void {
+    if (this.batteryPollTimer) return;
+    this.batteryPollTimer = setInterval(() => {
+      void this.refreshBattery({ force: true });
+    }, PrinterManager.BATTERY_POLL_MS);
+  }
+
+  private stopBatteryPolling(): void {
+    if (!this.batteryPollTimer) return;
+    clearInterval(this.batteryPollTimer);
+    this.batteryPollTimer = null;
+  }
+
+  /**
+   * Query the connected printer's battery (not the phone) and store 0–100, or null when unknown.
+   * Debounced unless `force` (poll timer and explicit UI refresh).
+   */
+  async refreshBattery(opts?: { force?: boolean }): Promise<void> {
+    const store = usePrinterStore.getState();
+    const live =
+      store.status === 'connected' ||
+      store.status === 'printing' ||
+      (this.connectionState === 'connected' && this.isConnectionHealthy());
+    if (!live) {
+      this.stopBatteryPolling();
+      if (store.batteryPercent != null) store.setBatteryPercent(null);
+      return;
+    }
+    this.ensureBatteryPolling();
+    const now = Date.now();
+    if (!opts?.force && now - this.lastBatteryRefreshAt < PrinterManager.BATTERY_REFRESH_MIN_MS) return;
+    if (this.batteryRefreshInFlight) return;
+    this.batteryRefreshInFlight = true;
+    this.lastBatteryRefreshAt = now;
+    try {
+      const { fetchPrinterBatteryPercent } = await import('@/lib/printer/printer-battery');
+      const percent = await fetchPrinterBatteryPercent({
+        transport: this.activeTransport ?? store.transport,
+        sdkId: store.sdkId,
+        deviceId: store.deviceId,
+      });
+      const latest = usePrinterStore.getState();
+      if (latest.status === 'connected' || latest.status === 'printing') {
+        latest.setBatteryPercent(percent);
+      }
+    } catch (error) {
+      console.warn('[printer] battery refresh failed', error);
+    } finally {
+      this.batteryRefreshInFlight = false;
+    }
+  }
+
   /** Snapshot of internal state for the diagnostics screen. */
   getDiagnostics(): DiagnosticInfo {
+    const connectionState = this.reconcileConnectionState();
     const store = usePrinterStore.getState();
     return {
-      connectionState: this.connectionState,
+      connectionState,
       activeTransport: this.activeTransport,
       deviceId: store.deviceId,
       deviceName: store.deviceName,
@@ -2849,6 +3179,48 @@ class PrinterManager {
     jobBytes?: number;
   } | null {
     return this.lastTd404MonoLabelTiming;
+  }
+
+  /**
+   * Reconnect the printer last used on this family's native bridge (Josh LPAPI vs TD-404 SPP, …).
+   */
+  async reconnectLastForConsumer(
+    consumer: ConsumerPrinterId,
+    options?: { userRequested?: boolean },
+  ): Promise<boolean> {
+    if (options?.userRequested) {
+      this.allowAutoReconnectAgain();
+    } else if (this.autoReconnectSuppressed) {
+      return false;
+    }
+    if (this.isConnectionHealthy()) return true;
+    const liveStore = usePrinterStore.getState();
+    if (liveStore.status === 'connected' || liveStore.status === 'printing') {
+      this.reconcileConnectionState();
+      if (this.isConnectionHealthy()) return true;
+      const after = usePrinterStore.getState();
+      if (after.status === 'connected' || after.status === 'printing') {
+        return false;
+      }
+    }
+    const bridge = defaultBridgeForConsumer(consumer);
+    const entry = usePrinterStore.getState().lastDeviceForBridge[bridge];
+    if (!entry?.id) return false;
+    if (!this.isBluetoothEnabled()) {
+      this.lastErrorMessage = BLUETOOTH_OFF_MESSAGE;
+      return false;
+    }
+    try {
+      console.info(
+        `[printer] reconnect last for ${bridge}: ${entry.id} (${entry.name}) consumer=${entry.consumer}`,
+      );
+      await this.connectModel(toDriverModel(entry.consumer), entry.id, entry.name);
+      return true;
+    } catch (error) {
+      console.warn('[printer] reconnectLastForConsumer failed:', error);
+      this.lastErrorMessage = error instanceof Error ? error.message : String(error);
+      return false;
+    }
   }
 
   /**
@@ -2963,77 +3335,62 @@ class PrinterManager {
     await this.print(bytes);
   }
 
-  async printTestLabel(text = 'Sez Print OK'): Promise<void> {
+  async printDiagnosticTestLabel(): Promise<void> {
+    const lines = buildDiagnosticTestLabelLines(this.activeTransport);
+    await this.printTestLabel(lines.join('\n'), { compact: true, lines });
+  }
+
+  async printTestLabel(
+    text = 'Sez Print OK',
+    options?: { compact?: boolean; lines?: readonly string[] },
+  ): Promise<void> {
     if (!this.isConnected) throw new Error('No printer connected.');
+    const compact = Boolean(options?.compact);
+    const lines = options?.lines ?? (text.includes('\n') ? text.split('\n') : [text]);
 
-    if (this.activeTransport === 'labelx-spp' || this.isLabelX) {
-      console.info(`[LABELX-PRINT] Test print dispatching via Label X SDK: "${text}"`);
-      const labelx = this.getLabelX();
-      if (!labelx) throw new Error('Label X module not available.');
-      if (!labelx.isLabelXConnected()) {
-        console.info('[LABELX-CONN] Printer identified as Label X but session not active. Reconnecting...');
-        const store = usePrinterStore.getState();
-        await this.connect(store.deviceId ?? store.lastDeviceId!, store.deviceName ?? store.lastDeviceName, 'labelx-spp');
+    const usesMainPipeline =
+      this.isLabelX || this.isDev || this.isTez || this.isJosh || this.usesTd404CommandSet;
+
+    if (usesMainPipeline) {
+      const widthMm = compact ? DIAGNOSTIC_COMPACT_LABEL_WIDTH_MM : DIAGNOSTIC_STANDARD_LABEL_WIDTH_MM;
+      const heightMm = compact ? DIAGNOSTIC_COMPACT_LABEL_HEIGHT_MM : DIAGNOSTIC_STANDARD_LABEL_HEIGHT_MM;
+      const contentLines = compact
+        ? lines
+        : text === 'Sez Print OK'
+          ? ['test print sent by sez print']
+          : lines;
+      const doc = buildDiagnosticCompactLabelDocument(contentLines, widthMm, heightMm);
+      console.info(
+        `[print] Test label via main pipeline: ${widthMm}x${heightMm}mm, ${contentLines.length} line(s), bridge=${this.transport ?? 'unknown'}`,
+      );
+      try {
+        await printLabelDocumentMainPipeline(doc, {
+          gapMm: 3,
+          assertInk: this.isJosh,
+          offsetExtraMm: this.isJosh ? { x: JOSH_TEST_LABEL_EXTRA_H_MM, y: 0 } : undefined,
+        });
+      } catch (error) {
+        const code = error instanceof Error ? (error as Error & { code?: string }).code : null;
+        if (!this.isJosh || code !== JOSH_HEADLESS_EMPTY) {
+          throw error;
+        }
+        const body = compact
+          ? contentLines.map((line) => String(line).trim()).filter(Boolean).join('\n')
+          : text === 'Sez Print OK'
+            ? 'test print sent by sez print'
+            : text;
+        const { printJoshTestText } = await import('josh-printer');
+        console.warn('[print] Josh headless test empty — falling back to native drawTextRegular');
+        const ok = await printJoshTestText(body);
+        if (!ok) {
+          throw new Error('Josh test print failed. Check that the printer is on and connected.');
+        }
       }
-      console.info('[LABELX-PRINT] Submitting test print to Label X hardware...');
-      await labelx.printLabelXTestLabel(text);
-      console.info('[LABELX-PRINT] Label X test print completed successfully');
-      return;
-    }
-
-    if (this.activeTransport === 'dev-spp' || this.isDev) {
-      console.info(`[DEV-PRINT] Test print dispatching via Dev SDK: "${text}"`);
-      const dev = this.getDev();
-      if (!dev) throw new Error('Dev module not available.');
-      if (!dev.isDevConnected()) {
-        console.info('[DEV-CONN] Printer identified as DEV but session not active. Reconnecting...');
-        const store = usePrinterStore.getState();
-        await this.connect(store.deviceId ?? store.lastDeviceId!, store.deviceName ?? store.lastDeviceName, 'dev-spp');
-      }
-      const store = usePrinterStore.getState();
-      const devMode = store.devCommandSet ?? 'tspl';
-      console.info(`[DEV-PRINT] Submitting test print to Dev hardware (mode=${devMode})...`);
-      await dev.testDevPrint(devMode);
-      console.info('[DEV-PRINT] Dev test print completed successfully');
-      return;
-    }
-
-    if (this.activeTransport === 'tez-spp' || this.isTez) {
-      console.info(`[TEZ-PRINT] Test print dispatching via Tez SDK: "${text}"`);
-      await this.ensureTezTransport();
-      const tez = this.getTez();
-      if (!tez) throw new Error('Tez module not available.');
-      console.info('[TEZ-PRINT] Submitting test text to Tez hardware...');
-      await tez.printTezTestText(text);
-      console.info('[TEZ-PRINT] Tez test print completed successfully');
-      return;
-    }
-
-    if (this.activeTransport === 'josh-lpapi' || this.isJosh) {
-      const joshTestText = text === 'Sez Print OK' ? 'test print sent by sez print' : text;
-      console.info(`[JOSH-PRINT-P1:PREFLIGHT] Test print dispatching via JOSH LPAPI SDK: "${joshTestText}"`);
-      const josh = this.getJosh();
-      if (!josh) throw new Error('JOSH module not available.');
-      if (!josh.isJoshConnected()) {
-        console.info('[JOSH-CONN-P2:PREPARE] Printer identified as JOSH but LPAPI session not active. Reconnecting...');
-        const store = usePrinterStore.getState();
-        await this.connect(store.deviceId ?? store.lastDeviceId!, store.deviceName ?? store.lastDeviceName, 'josh-lpapi');
-      }
-      console.info('[JOSH-PRINT-P3:SUBMIT] Submitting test text to LPAPI hardware...');
-      await josh.printJoshTestText(joshTestText);
-      console.info('[JOSH-PRINT-P5:FINALIZE] JOSH test print completed successfully');
       return;
     }
 
     if (this.activeTransport === 'wifi' && this.backendPrinterId) {
       await wifiPrintSample(this.backendPrinterId, { text });
-      return;
-    }
-
-    if (this.usesTd404CommandSet) {
-      await this.print(
-        encodeTscTextSample({ text, widthMm: 50, heightMm: 30 }),
-      );
       return;
     }
 
@@ -3958,6 +4315,7 @@ class PrinterManager {
 
 let manager: PrinterManager | null = null;
 let appStateListenerSetup = false;
+let globalAutoReconnectTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Listen for app state changes to clean up stale BLE connections.
@@ -3974,15 +4332,30 @@ function setupAppStateListener() {
   AppState.addEventListener('change', (nextState: AppStateStatus) => {
     if (nextState === 'background' || nextState === 'inactive') {
       backgroundedAt = Date.now();
-    } else if (nextState === 'active' && backgroundedAt) {
-      const elapsed = Date.now() - backgroundedAt;
-      backgroundedAt = null;
-      if (elapsed > BG_DISCONNECT_MS && manager?.isConnected) {
-        console.info('[printer] app was backgrounded for', Math.round(elapsed / 1000), 's — disconnecting stale BLE/SPP');
-        void manager.disconnect().catch(() => {});
+    } else if (nextState === 'active') {
+      if (backgroundedAt) {
+        const elapsed = Date.now() - backgroundedAt;
+        backgroundedAt = null;
+        if (elapsed > BG_DISCONNECT_MS && manager?.isConnected) {
+          console.info(
+            '[printer] app was backgrounded for',
+            Math.round(elapsed / 1000),
+            's — disconnecting stale BLE/SPP',
+          );
+          void manager.disconnect().catch(() => {});
+        }
       }
+      manager?.reconcileConnectionState();
+      setTimeout(() => manager?.maybeAutoReconnect({ force: true }), 600);
     }
   });
+
+  if (!globalAutoReconnectTimer) {
+    globalAutoReconnectTimer = setInterval(() => {
+      if (AppState.currentState !== 'active') return;
+      manager?.maybeAutoReconnect();
+    }, PrinterManager.AUTO_RECONNECT_MIN_INTERVAL_MS);
+  }
 }
 
 export function getPrinterManager(): PrinterManager {

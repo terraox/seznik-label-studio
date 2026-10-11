@@ -90,9 +90,8 @@ import {
   TD404_BORDER_LEFT_MM,
   TD404_BORDER_RIGHT_MM,
   TD404_BORDER_TOP_MM,
-  JOSH_MEDIA_ORIGIN_H_MM,
 } from '@/lib/printer/print-spec';
-import { joshEffectiveDpi } from '@/lib/printer/josh-print';
+import { joshEffectiveDpi, joshHeadlessRasterOptions, joshInkOffsetMm } from '@/lib/printer/josh-print';
 import * as FileSystem from 'expo-file-system/legacy';
 import { logPrintTrace } from '@/printing';
 import { resolveBuildTime, resolveGitSha } from '@/lib/build-identity';
@@ -1125,11 +1124,10 @@ export default function PrintScreen() {
             Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
             Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
           const joshBakeOffset = orientationDeg === 0;
-          // Die-cut 0 is inboard of LPAPI job 0. Origin is print-only.
-          const joshHOffsetMm = offsetH + JOSH_MEDIA_ORIGIN_H_MM;
-          const joshOriginDots = mmToDots(JOSH_MEDIA_ORIGIN_H_MM, jobDpi);
+          const joshInkMm = joshInkOffsetMm(printOffsetMm.x, printOffsetMm.y);
+          const joshInkRotatedMm = joshInkOffsetMm(offsetH, offsetV);
           console.info(
-            `[JOSH] originH=${JOSH_MEDIA_ORIGIN_H_MM}mm (${joshOriginDots} dots)`,
+            `[JOSH] inkOffset=${joshInkMm.x}x${joshInkMm.y}mm (${joshBakeOffset ? 'bitmap/capture' : 'LPAPI'})`,
           );
           timer.start('transmit');
           try {
@@ -1149,19 +1147,18 @@ export default function PrintScreen() {
             }
             if (joshFacesReady && pageDoc) {
               console.info(
-                `[JOSH-MONO-P1] Headless dots print: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm originH=${JOSH_MEDIA_ORIGIN_H_MM}mm (${joshOriginDots} dots)`,
+                `[JOSH-MONO-P1] Headless dots print: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm ink=${joshInkMm.x}x${joshInkMm.y}mm`,
               );
-              const timed = rasterizeDocumentToBitmapTimed(pageDoc, jobDpi, {
-                threshold,
-                darknessSteps: inkSteps,
-                pageWidthPack: 'ceil',
-                shiftDots: joshBakeOffset
-                  ? {
-                      x: mmToDots(printOffsetMm.x + JOSH_MEDIA_ORIGIN_H_MM, jobDpi),
-                      y: mmToDots(printOffsetMm.y, jobDpi),
-                    }
-                  : undefined,
-              });
+              const timed = rasterizeDocumentToBitmapTimed(
+                pageDoc,
+                jobDpi,
+                joshBakeOffset
+                  ? joshHeadlessRasterOptions(jobDpi, printOffsetMm.x, printOffsetMm.y, {
+                      threshold,
+                      darknessSteps: inkSteps,
+                    })
+                  : { threshold, darknessSteps: inkSteps },
+              );
               const bitmap = timed.result;
               usedNative = await manager.printJoshMonoLabelFast({
                 monoBytes: bitmap.mono1bppBuffer,
@@ -1174,8 +1171,8 @@ export default function PrintScreen() {
                 copies,
                 density: printDensity,
                 speed: printSpeed,
-                hOffsetMm: joshBakeOffset ? 0 : joshHOffsetMm,
-                vOffsetMm: joshBakeOffset ? 0 : offsetV,
+                hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
+                vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
                 media: wantsBline ? 'bline' : media,
                 dpi: jobDpi,
               });
@@ -1201,8 +1198,8 @@ export default function PrintScreen() {
                 speed: printSpeed,
                 orientation: 0,
                 dpi: jobDpi,
-                hOffsetMm: joshHOffsetMm,
-                vOffsetMm: offsetV,
+                hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
+                vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
                 media: wantsBline ? 'bline' : media,
                 alignment: manager.getActivePrinterProfile().alignment,
               });
@@ -1234,8 +1231,8 @@ export default function PrintScreen() {
                 speed: printSpeed,
                 orientation: 0,
                 dpi: jobDpi,
-                hOffsetMm: joshHOffsetMm,
-                vOffsetMm: offsetV,
+                hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
+                vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
                 media: wantsBline ? 'bline' : media,
                 alignment: manager.getActivePrinterProfile().alignment,
               });
@@ -1551,8 +1548,14 @@ export default function PrintScreen() {
   ]);
 
   const unrotatedJob = !ratTail143Job && orientation === '0°';
-  const captureShiftMm =
-    getPrinterManager().usesTd404CommandSet && unrotatedJob ? printOffsetMm : undefined;
+  const captureShiftMm = useMemo(() => {
+    if (!unrotatedJob) return undefined;
+    if (printerSdkId === 'josh') {
+      return joshInkOffsetMm(printOffsetMm.x, printOffsetMm.y);
+    }
+    if (getPrinterManager().usesTd404CommandSet) return printOffsetMm;
+    return undefined;
+  }, [unrotatedJob, printerSdkId, printOffsetMm.x, printOffsetMm.y]);
 
   return (
     <View style={styles.root}>

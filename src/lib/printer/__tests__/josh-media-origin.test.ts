@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { joshPackedPageDots } from '@/lib/printer/josh-mono-validate';
+import { JOSH_LPAPI_DRAW_BIAS_H_MM, JOSH_LPAPI_DRAW_BIAS_V_MM, joshInkShiftDots } from '@/lib/printer/josh-print';
 import {
   JOSH_MEDIA_ORIGIN_H_MM,
   PRINTER_PROFILES,
@@ -28,9 +29,13 @@ assert.equal(mediaOriginXMm(PRINTER_PROFILES['td404-304']), TD404_MEDIA_ORIGIN_H
 assert.equal(mediaOriginXMm(PRINTER_PROFILES['generic-203-4in']), 0);
 assert.equal(mediaOriginXMm(PRINTER_PROFILES['receipt-58mm']), 0);
 
-const userOffsetMm = 0;
-const joshShiftDots = mmToDots(userOffsetMm + JOSH_MEDIA_ORIGIN_H_MM, 203);
-assert.equal(joshShiftDots, 24, '3 mm die-cut origin is 24 dots at 203 DPI');
+const baked = joshInkShiftDots(0, 0, 203);
+assert.equal(
+  baked.x,
+  mmToDots(JOSH_MEDIA_ORIGIN_H_MM + JOSH_LPAPI_DRAW_BIAS_H_MM, 203),
+  'LPAPI ink shift includes die-cut origin and draw bias',
+);
+assert.equal(baked.y, mmToDots(JOSH_LPAPI_DRAW_BIAS_V_MM, 203));
 
 const joshSpec = createPrintSpec({
   widthMm: 50,

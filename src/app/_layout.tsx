@@ -8,6 +8,7 @@ import { ScrollView, Text, View, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { APP_FONT_MAP } from '@/lib/app-fonts';
+import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { startInstalledFontHydration } from '@/lib/fonts/runtime';
 import { hydrateUserClipartSvgs } from '@/lib/clipart/user-storage';
 import { migrateLegacyUserFiles } from '@/lib/user-files/migrate';
@@ -49,6 +50,10 @@ function AppRoot() {
   useFonts(APP_FONT_MAP);
 
   useEffect(() => startInstalledFontHydration(), []);
+
+  useEffect(() => {
+    getPrinterManager().maybeAutoReconnect({ force: true });
+  }, []);
 
   useEffect(() => {
     void migrateLegacyUserFiles()
