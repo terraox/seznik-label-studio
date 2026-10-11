@@ -4,6 +4,9 @@ import { borderShapeForMedia } from '@/printing/raster/border-shapes';
 import { mmToDots, td404BorderOuterDots } from '@/lib/printer/print-spec';
 import {
   borderFrameInsetsForElement,
+  borderInsetDots,
+  borderStrokeDots,
+  borderStrokeFallbackMm,
   drawInwardFrameInBox,
   type FrameFillTarget,
 } from '@/printing/raster/border-frame';
@@ -83,5 +86,71 @@ export function drawPrintBorder(
     insets,
     borderShapeForMedia(opts?.mediaShape),
     s,
+  );
+}
+
+export type EdgeBorderPage = { widthDots: number; heightDots: number };
+
+/**
+ * JOSH only. Box (printer dots, already shifted) for a border drawn after the page
+ * shift. A side that sits at the default 2 mm inset is placed so the stroke CENTER is
+ * `centerGapMm` from the die-cut edge. Any other side keeps the
+ * element's own rectangle, so moved or resized borders match the canvas.
+ */
+export function joshEdgeBorderBox(
+  el: Extract<LabelElement, { type: 'border' }>,
+  dpi: number,
+  page: EdgeBorderPage,
+  shift: { x: number; y: number },
+  centerGapMm: number,
+): { x0: number; y0: number; w: number; h: number } {
+  const ins = borderFrameInsetsForElement(el, dpi);
+  let x0 = mmToDots(el.left, dpi) + ins.left;
+  let y0 = Math.max(0, mmToDots(el.top, dpi)) + ins.top;
+  let x1 = mmToDots(el.left + el.width, dpi) - ins.right;
+  let y1 = mmToDots(el.top + el.height, dpi) - ins.bottom;
+  const stroke = borderStrokeDots(
+    el.lineWidth,
+    dpi,
+    borderStrokeFallbackMm(resolveBorderStyle(el.borderStyle)),
+  );
+  const grow = Math.floor(stroke / 2);
+  const def = borderInsetDots(dpi);
+  const target = Math.max(0, mmToDots(centerGapMm, dpi)) - grow;
+  const near = (d: number) => Math.abs(d - def) <= 1;
+  if (near(x0)) x0 = target;
+  if (near(y0)) y0 = target;
+  if (near(page.widthDots - x1)) x1 = page.widthDots - target;
+  if (near(page.heightDots - y1)) y1 = page.heightDots - target;
+  return {
+    x0: x0 + shift.x,
+    y0: y0 + shift.y,
+    w: Math.max(1, x1 - x0),
+    h: Math.max(1, y1 - y0),
+  };
+}
+
+/** Draw a border into an already-shifted page. Stroke is inward from the box. */
+export function drawJoshEdgeBorder(
+  target: FrameFillTarget,
+  el: Extract<LabelElement, { type: 'border' }>,
+  dpi: number,
+  page: EdgeBorderPage,
+  shift: { x: number; y: number },
+  centerGapMm: number,
+): void {
+  const box = joshEdgeBorderBox(el, dpi, page, shift, centerGapMm);
+  drawInwardFrameInBox(
+    target,
+    box.w,
+    box.h,
+    dpi,
+    el.lineWidth,
+    resolveBorderStyle(el.borderStyle),
+    box.x0,
+    box.y0,
+    { left: 0, right: 0, top: 0, bottom: 0 },
+    'rect',
+    1,
   );
 }

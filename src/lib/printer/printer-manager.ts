@@ -10,6 +10,7 @@ import {
 import {
   createPrintSpec,
   DEFAULT_PRINTER_PROFILE,
+  dotsPerMm,
   PRINTER_PROFILES,
   type PrinterProfile,
 } from '@/lib/printer/print-spec';
@@ -17,8 +18,13 @@ import {
   BLUETOOTH_OFF_MESSAGE,
   bluetoothOffScanResult,
 } from '@/lib/printer/bluetooth-guard';
-import { assertJoshMonoBuffer } from '@/lib/printer/josh-mono-validate';
-import { joshEffectiveDpi, joshGapTypeFromMedia } from '@/lib/printer/josh-print';
+import { assertJoshMonoBuffer, joshPackedPageDots } from '@/lib/printer/josh-mono-validate';
+import {
+  JOSH_TEST_LABEL_EXTRA_H_MM,
+  JOSH_BORDER_PAD_DOTS,
+  joshEffectiveDpi,
+  joshGapTypeFromMedia,
+} from '@/lib/printer/josh-print';
 import {
   isLikelyTezName,
   isLikelyShaktiName,
@@ -3534,12 +3540,20 @@ class PrinterManager {
         const dpi = joshEffectiveDpi(options.dpi ?? profile.dpi);
         const gapType = joshGapTypeFromMedia(options.media ?? 'gap');
         const gapLength = options.gapMm != null ? Math.max(0, options.gapMm) : 3;
+        // A page with border padding is JOSH_BORDER_PAD_DOTS wider than the label.
+        // The job is widened by the same amount; the left edge and scale are unchanged.
+        const basePage = joshPackedPageDots(options.widthMm, options.heightMm, dpi);
+        const padMm = JOSH_BORDER_PAD_DOTS / dotsPerMm(dpi);
+        const padded =
+          options.widthDots !== basePage.packedW &&
+          options.widthDots === joshPackedPageDots(options.widthMm + padMm, options.heightMm, dpi).packedW;
+        const jobWidthMm = padded ? options.widthMm + padMm : options.widthMm;
         assertJoshMonoBuffer({
           monoBytes: options.monoBytes,
           widthDots: options.widthDots,
           heightDots: options.heightDots,
           bytesPerRow: options.bytesPerRow,
-          widthMm: options.widthMm,
+          widthMm: jobWidthMm,
           heightMm: options.heightMm,
           dpi,
         });
@@ -3551,7 +3565,7 @@ class PrinterManager {
           widthDots: options.widthDots,
           heightDots: options.heightDots,
           bytesPerRow: options.bytesPerRow,
-          widthMm: options.widthMm,
+          widthMm: jobWidthMm,
           heightMm: options.heightMm,
           copies: Math.max(1, Math.round(options.copies ?? 1)),
           density: options.density != null ? options.density : -1,

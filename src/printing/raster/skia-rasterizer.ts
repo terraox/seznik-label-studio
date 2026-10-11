@@ -19,6 +19,7 @@ import {
   type LabelDocument,
   type LabelElement,
 } from '@/lib/label-document';
+import { joshBorderGapMm } from '@/lib/printer/josh-print';
 import { dotsPerMm, mmToDots, rectMmToDots } from '@/lib/printer/print-spec';
 import { sortLayers } from '@/lib/template-schema';
 import { printGridKnockoutsMm, printGridRectsDots, printGridSpacingMm } from '@/lib/print-grid';
@@ -28,7 +29,8 @@ import { computeWrappedLines, layoutPrintText } from '@/lib/text-metrics';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { stretchThenRoundBars } from './barcode-stretch';
 import { packGrayToMono1bpp } from './bit-packer';
-import { drawPrintBorder } from './print-border';
+import { drawJoshEdgeBorder, drawPrintBorder } from './print-border';
+import { borderShapeForMedia } from './border-shapes';
 import { applyInkDarkness, rectsToPx, scanCodeRectsMm } from './ink-darkness';
 import { drawQrMeet } from './qr-meet';
 import {
@@ -60,6 +62,12 @@ export type RasterizeOptions = {
    * `ceil` (JOSH) keeps those dots and pads white on the right.
    */
   pageWidthPack?: 'floor' | 'ceil';
+  /**
+   * JOSH. Unrotated rectangular borders are drawn after the page shift into
+   * `padRightDots` of extra white page on the right, so the stroke is never on the
+   * last bitmap column. Every other layer is cropped exactly as without this option.
+   */
+  edgeBorders?: { padRightDots: number; centerGapMm: number };
   /**
    * Manual darkness minus the bridge default (TD-404: -10..+5). 0 or absent leaves the
    * bitmap untouched. Barcodes and QR codes are excluded.
@@ -171,6 +179,23 @@ export type RasterizeTiming = {
 let encodeAccumMs = 0;
 let activeDotScale = 1;
 let activeBakeFeed = false;
+let activeEdgeBorders = false;
+
+/** Borders drawn in the post-shift pass (JOSH): visible, unrotated, rectangular die-cut. */
+function isEdgeBorder(el: LabelElement, doc: LabelDocument): el is Extract<LabelElement, { type: 'border' }> {
+  return (
+    el.type === 'border' &&
+    el.needPrinting !== false &&
+    el.visible !== false &&
+    (el.rotation ?? 0) % 360 === 0 &&
+    borderShapeForMedia(doc.mediaShape) === 'rect'
+  );
+}
+
+function whitenColumns(gray: Uint8Array, width: number, height: number, fromCol: number): void {
+  if (fromCol >= width) return;
+  for (let y = 0; y < height; y++) gray.fill(255, y * width + Math.max(0, fromCol), (y + 1) * width);
+}
 
 function dots(mm: number, dpi: number): number {
   return mmToDots(mm, dpi) * activeDotScale;
@@ -214,7 +239,10 @@ function drawDocumentToSurface(
   if (gridSpacing != null) {
     const s = activeDotScale;
     const knockouts = printGridKnockoutsMm(doc);
-    for (const r of printGridRectsDots(doc.widthMm, doc.heightMm, gridSpacing, dpi, knockouts)) {
+    for (const r of printGridRectsDots(doc.widthMm, doc.heightMm, gridSpacing, dpi, knockouts, {
+      width: bitmapWidthDots,
+      height: bitmapHeightDots,
+    })) {
       surface.fillRect(r.left * s, r.top * s, r.width * s, r.height * s, 0);
     }
   }
@@ -224,6 +252,7 @@ function drawDocumentToSurface(
   }
   for (const el of sortLayers(doc.elements)) {
     if (el.needPrinting === false || el.visible === false) continue;
+    if (activeEdgeBorders && isEdgeBorder(el, doc)) continue;
     if (UNSUPPORTED.has(el.type)) {
       throw new Error(`Unsupported print element type: ${el.type}`);
     }
@@ -282,17 +311,17 @@ export function rasterizeDocumentToBitmapTimed(
   dpi: number,
   options: RasterizeOptions = {},
 ): RasterizeTiming {
-  const { packedW, packedH } = packedPageDots(
-    doc.widthMm,
-    doc.heightMm,
-    dpi,
-    options.pageWidthPack ?? 'floor',
-  );
+  const page = packedPageDots(doc.widthMm, doc.heightMm, dpi, options.pageWidthPack ?? 'floor');
+  const { packedW, packedH } = page;
   const threshold = options.threshold ?? 160;
   activeDotScale = Math.max(1, Math.round(options.dotScale ?? 1));
   activeBakeFeed = options.bakeTd404Feed === true;
+  const padRight = Math.max(0, Math.round(options.edgeBorders?.padRightDots ?? 0));
+  activeEdgeBorders = options.edgeBorders != null && activeDotScale === 1 && !activeBakeFeed;
+  const borderGapMm = options.edgeBorders?.centerGapMm ?? 2;
+  const outW = activeEdgeBorders && padRight > 0 ? Math.max(8, Math.ceil((page.sizeDotsW + padRight) / 8) * 8) : packedW;
   resetTextDrawLog();
-  const surfW = packedW * activeDotScale;
+  const surfW = outW * activeDotScale;
   const surfH = packedH * activeDotScale;
 
   encodeAccumMs = 0;
@@ -309,7 +338,9 @@ export function rasterizeDocumentToBitmapTimed(
   const tRead0 = performance.now();
   const steps = Math.round(options.darknessSteps ?? 0);
   const drawn = surface.readGray();
-  const gray = shiftGray(
+  // Layers keep the exact page they always had: nothing past the old packed width.
+  if (activeEdgeBorders) whitenColumns(drawn, surfW, surfH, packedW);
+  let gray = shiftGray(
     steps === 0
       ? drawn
       : applyInkDarkness(
@@ -325,6 +356,21 @@ export function rasterizeDocumentToBitmapTimed(
     Math.round(options.shiftDots?.x ?? 0) * activeDotScale,
     Math.round(options.shiftDots?.y ?? 0) * activeDotScale,
   );
+  if (activeEdgeBorders) {
+    // Same crop the native side applied before (sizeDotsW), then the border layer.
+    whitenColumns(gray, surfW, surfH, page.sizeDotsW);
+    gray = mergeEdgeBorders(
+      gray,
+      doc,
+      dpi,
+      surfW,
+      surfH,
+      { x: Math.round(options.shiftDots?.x ?? 0), y: Math.round(options.shiftDots?.y ?? 0) },
+      threshold,
+      steps,
+      borderGapMm,
+    );
+  }
   const readbackMs = performance.now() - tRead0;
 
   const tPack0 = performance.now();
@@ -346,7 +392,7 @@ export function rasterizeDocumentToBitmapTimed(
         return options.target!;
       })()
     : {
-        widthDots: packedW * activeDotScale,
+        widthDots: surfW,
         heightDots: packedH * activeDotScale,
         bytesPerRow: packed.bytesPerRow,
         mono1bppBuffer: packed.mono1bppBuffer,
@@ -364,6 +410,39 @@ export function rasterizeDocumentToBitmapTimed(
     result,
     gray,
   };
+}
+
+/** Draw deferred borders onto a white layer (page-shifted coordinates) and darken-merge it into gray. */
+function mergeEdgeBorders(
+  gray: Uint8Array,
+  doc: LabelDocument,
+  dpi: number,
+  width: number,
+  height: number,
+  shift: { x: number; y: number },
+  threshold: number,
+  steps: number,
+  centerGapMm: number,
+): Uint8Array {
+  const borders = doc.elements.filter((el) => isEdgeBorder(el, doc));
+  if (borders.length === 0) return gray;
+  let layer: Uint8Array = new Uint8Array(width * height);
+  layer.fill(255);
+  const fillRect = (x: number, y: number, w: number, h: number, value: number) => {
+    const xa = Math.max(0, Math.round(x));
+    const ya = Math.max(0, Math.round(y));
+    const xb = Math.min(width, Math.round(x + w));
+    const yb = Math.min(height, Math.round(y + h));
+    for (let yy = ya; yy < yb; yy++) layer.fill(value, yy * width + xa, yy * width + xb);
+  };
+  const pageDots = { widthDots: mmToDots(doc.widthMm, dpi), heightDots: mmToDots(doc.heightMm, dpi) };
+  for (const el of sortLayers(doc.elements)) {
+    if (isEdgeBorder(el, doc)) drawJoshEdgeBorder({ fillRect }, el, dpi, pageDots, shift, el.edgeGapMm != null ? joshBorderGapMm(el.edgeGapMm) : centerGapMm);
+  }
+  if (steps !== 0) layer = applyInkDarkness(layer, width, height, threshold, steps, []);
+  const out = new Uint8Array(gray);
+  for (let i = 0; i < out.length; i++) if (layer[i] < out[i]) out[i] = layer[i];
+  return out;
 }
 
 /** Move the whole page by (dx, dy) dots. Uncovered area is white. */
