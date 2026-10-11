@@ -29,6 +29,7 @@ type NativeTezPrinter = {
   calibrate(paperType: number): Promise<TezCalibrationResult>;
   getStatus(): Promise<TezStatusResult>;
   getBatteryLevel(): Promise<number>;
+  debugLogBattery?(): void;
   printImage(options: Record<string, unknown>): Promise<TezPrintResult>;
   printTestText(text: string): Promise<TezPrintResult>;
   addListener(
@@ -282,6 +283,11 @@ export async function getTezStatus(): Promise<TezStatusResult> {
   const mod = getNative();
   if (!mod) throw new Error('Tez printer module not available');
   return mod.getStatus();
+}
+
+export function debugLogTezBattery(): void {
+  if (!__DEV__) return;
+  getNative()?.debugLogBattery?.();
 }
 
 export async function getTezBatteryLevel(): Promise<number> {

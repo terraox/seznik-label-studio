@@ -2,6 +2,7 @@ package expo.modules.joshprinter
 
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -21,6 +22,7 @@ import com.dothantech.printer.IDzPrinter.PrintProgress
 import com.dothantech.printer.IDzPrinter.PrinterAddress
 import com.dothantech.printer.IDzPrinter.PrinterState
 import com.dothantech.printer.IDzPrinter.ProgressInfo
+import com.dothantech.printer.IDzPrinter2
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
@@ -30,6 +32,10 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.ReentrantLock
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.round
 
 /**
  * JOSH / DothanTech LPAPI printer lifecycle manager.
@@ -48,16 +54,25 @@ class JoshPrinterManager(private val context: Context) {
 
     companion object {
         private const val TAG = "JoshPrinter"
+        private const val BATTERY_DEBUG_TAG = "JoshBattery"
+        private const val BATTERY_POLL_MS = 300L
+        private const val BATTERY_POLL_TIMEOUT_MS = 3_000L
         private const val DISCOVERY_TIMEOUT_MS = 15_000L
         private const val CONNECT_TIMEOUT_MS = 20_000L
         private const val CONNECT_RETRY_DELAY_MS = 1_500L
         private const val CONNECT_MAX_ATTEMPTS = 2
         private const val PRINT_TIMEOUT_MS = 15_000L
         private const val PRINT_SUBMIT_FALLBACK_MS = 800L
-        /** Small test strip — not a full 50×30 mm label. */
-        const val TEST_LABEL_WIDTH_MM = 30.0
-        const val TEST_LABEL_HEIGHT_MM = 12.0
+        /** Narrow strip — fits 50×15 mm and top band of 25×25 mm. */
+        const val TEST_LABEL_WIDTH_MM = 50.0
+        const val TEST_LABEL_HEIGHT_MM = 15.0
         const val TEST_LABEL_DEFAULT_TEXT = "test print sent by sez print"
+        /** Match JS `JOSH_MEDIA_ORIGIN_H_MM` + `JOSH_LPAPI_DRAW_BIAS_H_MM` (print-spec / josh-print). */
+        private const val JOSH_MEDIA_ORIGIN_H_MM = 3.0
+        private const val JOSH_LPAPI_DRAW_BIAS_H_MM = -1.0
+        private const val JOSH_LPAPI_DRAW_BIAS_V_MM = -1.0
+        /** Match JS `JOSH_TEST_LABEL_EXTRA_H_MM` — test strip only. */
+        private const val TEST_LABEL_EXTRA_H_MM = 2.0
         private const val MAX_RECONNECT_ATTEMPTS = 3
         private val RECONNECT_DELAYS_MS = longArrayOf(1000, 2000, 4000)
 
@@ -112,6 +127,7 @@ class JoshPrinterManager(private val context: Context) {
     private var lastConnectedAddress: PrinterAddress? = null
     private val lastConnectedAt = AtomicLong(0)
     private var connectLatch: CountDownLatch? = null
+    private val batteryDebugScheduled = AtomicBoolean(false)
 
     // ─── Discovery ─────────────────────────────────────────────────────
 
@@ -676,6 +692,7 @@ class JoshPrinterManager(private val context: Context) {
                     "macAddress" to macAddress,
                     "timestamp" to System.currentTimeMillis(),
                 ))
+                scheduleDebugBatteryLogAfterConnect()
                 return true
             }
 
@@ -1320,12 +1337,29 @@ class JoshPrinterManager(private val context: Context) {
                 Log.w(TAG, "[JOSH-PRINT-P2:TEST-DRAW] startJob($TEST_LABEL_WIDTH_MM, $TEST_LABEL_HEIGHT_MM, 0) returned false")
                 return false
             }
-            currentApi.setItemHorizontalAlignment(1) // Center
-            currentApi.setItemVerticalAlignment(1)   // Center
-            val textPadMm = 1.0
-            val textW = TEST_LABEL_WIDTH_MM - textPadMm * 2
-            val textH = TEST_LABEL_HEIGHT_MM - textPadMm * 2
-            currentApi.drawTextRegular(text, textPadMm, textPadMm, textW, textH, 3.0, 1)
+            try {
+                currentApi.setPrintPageGapType(GAP_TYPE_LABEL)
+                currentApi.setPrintPageGapLength(gapMmTo01mm(LABEL_GAP_MM))
+            } catch (e: Exception) {
+                Log.w(TAG, "[JOSH-PRINT-P2:TEST-DRAW] setPrintPageGap* threw (non-fatal)", e)
+            }
+            currentApi.setItemHorizontalAlignment(0) // Left
+            currentApi.setItemVerticalAlignment(0)   // Top
+            val xPadMm = JOSH_MEDIA_ORIGIN_H_MM + JOSH_LPAPI_DRAW_BIAS_H_MM + TEST_LABEL_EXTRA_H_MM
+            val yPadMm = max(0.5, 1.0 + JOSH_LPAPI_DRAW_BIAS_V_MM)
+            val rightPadMm = 1.5
+            val textW = TEST_LABEL_WIDTH_MM - xPadMm - rightPadMm
+            val lines = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.take(4)
+            val drawLines = if (lines.isEmpty()) listOf(TEST_LABEL_DEFAULT_TEXT) else lines
+            val lineStepMm = (TEST_LABEL_HEIGHT_MM - yPadMm - 1.0) / drawLines.size.coerceAtLeast(1)
+            val fontMm = min(1.85, lineStepMm * 0.72)
+            var yMm = yPadMm
+            for (line in drawLines) {
+                val lineH = max(2.0, min(lineStepMm, TEST_LABEL_HEIGHT_MM - yMm - 1.0))
+                if (yMm + lineH > TEST_LABEL_HEIGHT_MM - 0.5) break
+                currentApi.drawTextRegular(line, xPadMm, yMm, textW, lineH, fontMm, 1)
+                yMm += lineStepMm
+            }
             val committed = currentApi.commitJob()
             Log.i(TAG, "[JOSH-PRINT-P3:TEST-SUBMIT] commitJob returned: $committed, awaiting physical hardware ACK")
             if (!committed) {
@@ -1627,6 +1661,135 @@ class JoshPrinterManager(private val context: Context) {
         )
     }
 
+    /**
+     * Printer battery 0–100 from LPAPI [IDzPrinter2.PrinterParam], or -1 when unknown.
+     * Blocks briefly while [refreshPrinterParam] settles (same path as debug probe).
+     */
+    fun getBatteryLevel(): Int {
+        if (!isConnected()) return -1
+        val dz2 = IDzPrinter.Factory.getInstance() as? IDzPrinter2 ?: return -1
+        return try {
+            dz2.refreshPrinterParam()
+            var param = dz2.getPrinterParam()
+            var percent = mapJoshBatteryToPercent(param)
+            val refreshStart = System.currentTimeMillis()
+            while (percent < 0 && System.currentTimeMillis() - refreshStart < BATTERY_POLL_TIMEOUT_MS) {
+                Thread.sleep(BATTERY_POLL_MS)
+                param = dz2.getPrinterParam()
+                percent = mapJoshBatteryToPercent(param)
+            }
+            percent
+        } catch (e: Exception) {
+            Log.w(TAG, "getBatteryLevel failed", e)
+            -1
+        }
+    }
+
+    private fun mapJoshBatteryToPercent(param: IDzPrinter2.PrinterParam?): Int {
+        if (param == null) return -1
+        val countStr = param.batteryVoltageCount?.trim()
+        if (!countStr.isNullOrEmpty()) {
+            countStr.toIntOrNull()?.let { if (it in 0..100) return it }
+            Regex("""(\d{1,3})""").find(countStr)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let {
+                if (it in 0..100) return it
+            }
+        }
+        val v = param.batteryVoltage
+        if (!v.isFinite() || v <= 0) return -1
+        if (v in 1.0..100.0 && abs(v - round(v)) < 0.01) {
+            val p = round(v).toInt()
+            if (p in 0..100) return p
+        }
+        if (v in 280.0..435.0) return liIonSinglePercent(v / 100.0)
+        if (v in 2.8..4.35) return liIonSinglePercent(v)
+        if (v in 600.0..850.0) return liIon2sPercent(v / 100.0)
+        if (v in 6.0..8.5) return liIon2sPercent(v)
+        return -1
+    }
+
+    private fun liIonSinglePercent(volts: Double): Int {
+        return ((volts - 3.0) / (4.2 - 3.0) * 100.0).toInt().coerceIn(0, 100)
+    }
+
+    private fun liIon2sPercent(volts: Double): Int {
+        return ((volts - 6.0) / (8.4 - 6.0) * 100.0).toInt().coerceIn(0, 100)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Debug-only battery probe (no UI, no percent mapping)
+    // ═══════════════════════════════════════════════════════════════════
+
+    private fun isDebuggable(): Boolean {
+        return (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
+
+    /**
+     * LPAPI is created via [LPAPI.Factory.createInstance] with no custom [IDzPrinter] — shared DzPrinter singleton.
+     */
+    fun scheduleDebugBatteryLogAfterConnect() {
+        if (!isDebuggable()) return
+        if (!batteryDebugScheduled.compareAndSet(false, true)) return
+        mainHandler.postDelayed({
+            Thread({ debugLogBattery() }, "josh-battery-debug").start()
+        }, 500)
+    }
+
+    fun debugLogBattery() {
+        if (!isDebuggable()) return
+        if (!isConnected()) {
+            Log.i(BATTERY_DEBUG_TAG, "not connected")
+            return
+        }
+        val dz2 = IDzPrinter.Factory.getInstance() as? IDzPrinter2
+        if (dz2 == null) {
+            Log.i(BATTERY_DEBUG_TAG, "IDzPrinter.Factory.getInstance() is not IDzPrinter2")
+            return
+        }
+        logPrinterParamSnapshot("BEFORE", dz2.getPrinterParam())
+        val refreshOk = dz2.refreshPrinterParam()
+        Log.i(BATTERY_DEBUG_TAG, "refreshPrinterParam() returned $refreshOk")
+        val beforeVoltage = dz2.getPrinterParam()?.batteryVoltage
+        val refreshStart = System.currentTimeMillis()
+        var changedAtMs: Long? = null
+        var polls = 0
+        while (System.currentTimeMillis() - refreshStart < BATTERY_POLL_TIMEOUT_MS) {
+            Thread.sleep(BATTERY_POLL_MS)
+            polls++
+            val nowParam = dz2.getPrinterParam()
+            val nowVoltage = nowParam?.batteryVoltage
+            if (beforeVoltage != null && nowVoltage != null && nowVoltage != beforeVoltage) {
+                changedAtMs = System.currentTimeMillis() - refreshStart
+                Log.i(
+                    BATTERY_DEBUG_TAG,
+                    "batteryVoltage changed after ${changedAtMs}ms (poll #$polls): $beforeVoltage -> $nowVoltage",
+                )
+                break
+            }
+        }
+        if (changedAtMs == null) {
+            val elapsed = System.currentTimeMillis() - refreshStart
+            Log.i(
+                BATTERY_DEBUG_TAG,
+                "no batteryVoltage change within ${elapsed}ms ($polls polls); last=${dz2.getPrinterParam()?.batteryVoltage}",
+            )
+        }
+        logPrinterParamSnapshot("AFTER", dz2.getPrinterParam())
+        Log.i(BATTERY_DEBUG_TAG, "final PrinterParam=${dz2.getPrinterParam()?.toString()}")
+    }
+
+    private fun logPrinterParamSnapshot(label: String, param: IDzPrinter2.PrinterParam?) {
+        if (param == null) {
+            Log.i(BATTERY_DEBUG_TAG, "$label param=null")
+            return
+        }
+        Log.i(
+            BATTERY_DEBUG_TAG,
+            "$label batteryVoltage=${param.batteryVoltage} chargeStatus=${param.chargeStatus} " +
+                "batteryCount=${param.batteryCount} batteryVoltageCount=${param.batteryVoltageCount} " +
+                "printerStatus=${param.printerStatus}",
+        )
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     //  LPAPI Callback Handlers (always called on main thread)
     // ═══════════════════════════════════════════════════════════════════
@@ -1648,6 +1811,7 @@ class JoshPrinterManager(private val context: Context) {
             "macAddress" to connectedMacAddress,
             "timestamp" to lastConnectedAt.get(),
         ))
+        scheduleDebugBatteryLogAfterConnect()
     }
 
     private fun handleDisconnected() {
@@ -1660,6 +1824,7 @@ class JoshPrinterManager(private val context: Context) {
         connectedPrinterAddress = null
         connectedPrinterName = null
         connectedMacAddress = null
+        batteryDebugScheduled.set(false)
         if (!isConnecting.get()) {
             connectingMacAddress = null
         }

@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -24,6 +25,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.luckprinter.sdk_new.PrinterStatus
 import com.luckprinter.sdk_new.callback.OnClientConnectionListener
+import com.luckprinter.sdk_new.callback.ResultCallback
 import com.luckprinter.sdk_new.callback.OnPrintCallback
 import com.luckprinter.sdk_new.callback.OnReceiveDeviceStatusListener
 import com.luckprinter.sdk_new.device.BaseDevice
@@ -483,6 +485,48 @@ class LabelXPrinterModule : Module() {
       )
     }
 
+    AsyncFunction("debugLogBattery") { promise: Promise ->
+      val context = appContext.reactContext
+      if (context == null || (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      val helper = PrinterHelper.getInstance()
+      if (!helper.isConnectedLuck) {
+        android.util.Log.i("LabelXBattery", "not connected")
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      helper.getBatteryLuck(object : ResultCallback<Int> {
+        override fun onSuccess(data: Int?) {
+          android.util.Log.i("LabelXBattery", "getBatteryLuck result=${data ?: -1}")
+          promise.resolve(null)
+        }
+
+        override fun onFail() {
+          android.util.Log.i("LabelXBattery", "getBatteryLuck failed")
+          promise.resolve(null)
+        }
+      })
+    }
+
+    AsyncFunction("getBatteryLevel") { promise: Promise ->
+      val helper = PrinterHelper.getInstance()
+      if (!helper.isConnectedLuck) {
+        promise.reject("NOT_CONNECTED", "Printer is not connected", null)
+        return@AsyncFunction
+      }
+      helper.getBatteryLuck(object : ResultCallback<Int> {
+        override fun onSuccess(data: Int?) {
+          promise.resolve(data ?: -1)
+        }
+
+        override fun onFail() {
+          promise.reject("BATTERY_FAILED", "Failed to get printer battery", null)
+        }
+      })
+    }
+
     AsyncFunction("printPngLabel") { options: Map<String, Any?>, promise: Promise ->
       ensureSdkInitialized()
       val helper = PrinterHelper.getInstance()
@@ -666,43 +710,30 @@ class LabelXPrinterModule : Module() {
         return@AsyncFunction
       }
 
-      val displayText = if (text.isNullOrBlank()) "SEZNIK PRINT TEST" else text
+      val displayText = if (text.isNullOrBlank()) "Test by Sez Print" else text
 
       ioExecutor.execute {
         try {
           val width = if (helper.isSheetLabelPrinter()) 400 else 384
-          val height = 240
+          val height = 120
           val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
           val canvas = Canvas(bmp)
           canvas.drawColor(Color.WHITE)
 
           val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
-            style = Paint.Style.STROKE
-            strokeWidth = 3f
+            style = Paint.Style.FILL
+            textSize = 16f
+            textAlign = Paint.Align.LEFT
           }
-          // Border
-          canvas.drawRect(Rect(10, 10, width - 10, height - 10), paint)
-
-          // Inner title
-          paint.style = Paint.Style.FILL
-          paint.textSize = 28f
-          paint.isFakeBoldText = true
-          val titleText = "SEZNIK - LABEL X"
-          val titleW = paint.measureText(titleText)
-          canvas.drawText(titleText, (width - titleW) / 2f, 60f, paint)
-
-          // Subtitle / message
-          paint.textSize = 22f
-          paint.isFakeBoldText = false
-          val msgW = paint.measureText(displayText)
-          canvas.drawText(displayText, (width - msgW) / 2f, 110f, paint)
-
-          // Status & date/info
-          paint.textSize = 16f
-          val infoText = "203 DPI · LuckPrinter SDK OEM"
-          val infoW = paint.measureText(infoText)
-          canvas.drawText(infoText, (width - infoW) / 2f, 165f, paint)
+          val lines = displayText.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+          var y = 20f
+          val lineStep = 18f
+          val x = 8f
+          for (line in lines.take(4)) {
+            canvas.drawText(line, x, y, paint)
+            y += lineStep
+          }
 
           val finalBmp = applyThresholdBinarization(bmp, 145)
           bmp.recycle()

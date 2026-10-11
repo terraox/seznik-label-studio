@@ -384,6 +384,17 @@ class TezPrinterManager private constructor() {
             }
     }
 
+    fun debugLogBatteryLine() {
+        getBatteryLevel().whenComplete { raw, error ->
+            if (error != null) {
+                android.util.Log.i("TezBattery", "get_battervol failed: ${error.message}")
+            } else {
+                val displayed = if (raw in 0..100) raw else "n/a"
+                android.util.Log.i("TezBattery", "get_battervol rawByte=$raw displayedPercent=$displayed")
+            }
+        }
+    }
+
     companion object {
         private const val TAG = "TezPrinterManager"
         const val DEFAULT_MODEL_KEY = "Y50"

@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Base64
@@ -156,6 +157,42 @@ class JoshPrinterModule : Module() {
           promise.resolve(null)
         } catch (e: Exception) {
           promise.reject("STOP_FAILED", e.message ?: "Failed to stop discovery", e)
+        }
+      }
+    }
+
+    AsyncFunction("getBatteryLevel") { promise: Promise ->
+      val mgr = getOrInitManager()
+      if (mgr == null) {
+        promise.resolve(-1)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        try {
+          promise.resolve(mgr.getBatteryLevel())
+        } catch (e: Exception) {
+          promise.reject("ERR_JOSH_BATTERY", e.message ?: "Failed to read battery", e)
+        }
+      }
+    }
+
+    AsyncFunction("debugLogBattery") { promise: Promise ->
+      val context = getContext()
+      if (context == null || (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      val mgr = getOrInitManager()
+      if (mgr == null) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        try {
+          mgr.debugLogBattery()
+          promise.resolve(null)
+        } catch (e: Exception) {
+          promise.reject("DEBUG_BATTERY", e.message, e)
         }
       }
     }

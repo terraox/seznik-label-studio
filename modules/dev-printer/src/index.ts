@@ -20,6 +20,7 @@ type NativeDevPrinter = {
   connect(macAddress: string, deviceName?: string | null): Promise<DevDiscoveredDevice>;
   disconnect(): Promise<boolean>;
   getStatus(): Promise<DevStatusResult>;
+  debugLogBattery?(): Promise<void>;
   calibrate(paperType?: number): Promise<DevCalibrationResult>;
   printPngLabel(options: Record<string, unknown>): Promise<DevPrintResult>;
   printReceiptText(text: string, options?: Record<string, unknown>): Promise<{ success: boolean }>;
@@ -246,16 +247,31 @@ export async function calibrateDev(paperType?: number): Promise<DevCalibrationRe
   return mod.calibrate(paperType);
 }
 
+export async function debugLogDevBattery(): Promise<void> {
+  if (!__DEV__) return;
+  const mod = getNative();
+  if (!mod?.debugLogBattery) return;
+  await mod.debugLogBattery();
+}
+
 export async function getDevStatus(): Promise<DevStatusResult> {
   const mod = getNative();
   if (!mod) throw new Error('Dev printer module not available');
   return mod.getStatus();
 }
 
-export async function testDevPrint(mode?: 'tspl' | 'escpos'): Promise<{ success: boolean }> {
+export type DevTestPrintOptions = {
+  mode?: 'tspl' | 'escpos';
+  message?: string;
+};
+
+export async function testDevPrint(options?: DevTestPrintOptions | 'tspl' | 'escpos'): Promise<{ success: boolean }> {
   const mod = getNative();
   if (!mod) throw new Error('Dev printer module not available');
-  return mod.testPrint(mode ? { mode } : undefined);
+  if (options === 'tspl' || options === 'escpos') {
+    return mod.testPrint({ mode: options });
+  }
+  return mod.testPrint(options ?? undefined);
 }
 
 export type DevConnectionEvent = {

@@ -380,6 +380,47 @@ class DevPrinterModule : Module() {
       }
     }
 
+    AsyncFunction("debugLogBattery") { promise: Promise ->
+      val context = appContext.reactContext
+      if (context == null || (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      if (!isHandleAlive()) {
+        android.util.Log.i("DevBattery", "not connected")
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        try {
+          val h = printerHandle
+          if (h != null && Pointer.nativeValue(h) != 0L) {
+            val errRef = LongByReference()
+            val infoRef = LongByReference()
+            val tsRef = LongByReference()
+            val ok = AutoReplyPrint.INSTANCE.CP_Printer_GetPrinterStatusInfo(h, errRef, infoRef, tsRef)
+            if (ok) {
+              val statusHelper = AutoReplyPrint.CP_PrinterStatus(errRef.value, infoRef.value)
+              android.util.Log.i(
+                "DevBattery",
+                "status err=0x${String.format("%04X", errRef.value and 0xFFFF)} " +
+                  "info=0x${String.format("%04X", infoRef.value and 0xFFFF)} " +
+                  "ERROR_VOLTAGE=${statusHelper.ERROR_VOLTAGE()}",
+              )
+            } else {
+              android.util.Log.i("DevBattery", "CP_Printer_GetPrinterStatusInfo returned false")
+            }
+          } else {
+            android.util.Log.i("DevBattery", "no printer handle")
+          }
+          promise.resolve(null)
+        } catch (e: Exception) {
+          android.util.Log.i("DevBattery", "debug failed: ${e.message}")
+          promise.resolve(null)
+        }
+      }
+    }
+
     AsyncFunction("getStatus") { promise: Promise ->
       if (!isHandleAlive()) {
         promise.reject("NOT_CONNECTED", "DEV printer not connected.", null)
@@ -592,8 +633,13 @@ class DevPrinterModule : Module() {
       }
       ioExecutor.execute {
         try {
-          val w = 384
-          val h = 240
+          val options = optionsParam as? Map<*, *>
+          val mode = (options?.get("mode") as? String) ?: "escpos"
+          val message = (options?.get("message") as? String)?.trim()
+
+          val compact = !message.isNullOrBlank()
+          val w = if (compact) 400 else 384
+          val h = if (compact) 120 else 240
           val testBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
           val canvas = Canvas(testBitmap)
           canvas.drawColor(Color.WHITE)
@@ -601,52 +647,65 @@ class DevPrinterModule : Module() {
           val paint = Paint().apply {
             color = Color.BLACK
             isAntiAlias = true
+            textAlign = Paint.Align.LEFT
           }
 
-          // Border box
-          val boxPaint = Paint().apply {
-            color = Color.BLACK
-            style = Paint.Style.STROKE
-            strokeWidth = 3f
-          }
-          canvas.drawRect(4f, 4f, (w - 5).toFloat(), (h - 5).toFloat(), boxPaint)
-
-          // Title
-          paint.textSize = 28f
-          paint.isFakeBoldText = true
-          canvas.drawText("SEZNIK DEV 2-in-1", 20f, 45f, paint)
-
-          // Status & Details
-          val options = optionsParam as? Map<*, *>
-          val mode = (options?.get("mode") as? String) ?: "escpos"
-
-          paint.textSize = 20f
-          paint.isFakeBoldText = false
-          canvas.drawText("STATUS: TEST OK", 20f, 85f, paint)
-          canvas.drawText("MODE: ${if (mode == "tspl") "TSPL" else "ESC/POS GRAPHIC"}", 20f, 115f, paint)
-          canvas.drawText("RESOLUTION: 203 DPI", 20f, 145f, paint)
-
-          // Barcode representation
-          paint.style = Paint.Style.FILL
-          var barX = 20f
-          val barY = 165f
-          val barHeight = 45f
-          val pattern = intArrayOf(2, 1, 3, 2, 1, 2, 3, 1, 2, 2, 1, 3, 2, 1, 3, 2, 1, 2, 2, 3, 1, 2, 1, 3, 2, 1, 2, 3)
-          var isBar = true
-          for (width in pattern) {
-            if (isBar) {
-              canvas.drawRect(barX, barY, barX + width * 4, barY + barHeight, paint)
+          if (compact) {
+            paint.textSize = 16f
+            var y = 18f
+            val lineStep = 18f
+            val x = 8f
+            for (line in message.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.take(4)) {
+              canvas.drawText(line, x, y, paint)
+              y += lineStep
             }
-            barX += width * 4
-            isBar = !isBar
+          } else {
+            val boxPaint = Paint().apply {
+              color = Color.BLACK
+              style = Paint.Style.STROKE
+              strokeWidth = 3f
+            }
+            canvas.drawRect(4f, 4f, (w - 5).toFloat(), (h - 5).toFloat(), boxPaint)
+
+            paint.textSize = 28f
+            paint.isFakeBoldText = true
+            canvas.drawText("SEZNIK DEV 2-in-1", 20f, 45f, paint)
+
+            paint.textSize = 20f
+            paint.isFakeBoldText = false
+            canvas.drawText("STATUS: TEST OK", 20f, 85f, paint)
+            canvas.drawText("MODE: ${if (mode == "tspl") "TSPL" else "ESC/POS GRAPHIC"}", 20f, 115f, paint)
+            canvas.drawText("RESOLUTION: 203 DPI", 20f, 145f, paint)
+
+            paint.style = Paint.Style.FILL
+            var barX = 20f
+            val barY = 165f
+            val barHeight = 45f
+            val pattern = intArrayOf(2, 1, 3, 2, 1, 2, 3, 1, 2, 2, 1, 3, 2, 1, 3, 2, 1, 2, 2, 3, 1, 2, 1, 3, 2, 1, 2, 3)
+            var isBar = true
+            for (width in pattern) {
+              if (isBar) {
+                canvas.drawRect(barX, barY, barX + width * 4, barY + barHeight, paint)
+              }
+              barX += width * 4
+              isBar = !isBar
+            }
+            paint.textSize = 16f
+            canvas.drawText("* DEV-7299 *", 20f, 225f, paint)
           }
-          paint.textSize = 16f
-          canvas.drawText("* DEV-7299 *", 20f, 225f, paint)
 
           val (jobBytes, _, _) = if (mode == "tspl") {
-            buildTsplPrintJob(testBitmap, 48.0, 30.0, 48.0, 2.0, 1, 14, 3, 0.0, 0.0, false, 160)
+            if (compact) {
+              buildTsplPrintJob(testBitmap, 50.0, 15.0, 50.0, 2.0, 1, 14, 3, 0.0, 0.0, false, 160)
+            } else {
+              buildTsplPrintJob(testBitmap, 48.0, 30.0, 48.0, 2.0, 1, 14, 3, 0.0, 0.0, false, 160)
+            }
           } else {
-            buildEscPosRasterJob(testBitmap, 48.0, 48.0, 0.0, 0.0, 30, false, 160)
+            if (compact) {
+              buildEscPosRasterJob(testBitmap, 50.0, 15.0, 0.0, 0.0, 30, false, 160)
+            } else {
+              buildEscPosRasterJob(testBitmap, 48.0, 48.0, 0.0, 0.0, 30, false, 160)
+            }
           }
           testBitmap.recycle()
 

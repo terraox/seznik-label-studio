@@ -103,6 +103,8 @@ type NativeJoshPrinter = {
   printPngLabel(options: Record<string, unknown>): Promise<JoshPrintResult>;
   printMonoLabel?(monoBytes: Uint8Array, options: Record<string, unknown>): Promise<JoshPrintResult>;
   getBondedDevices?(): Promise<JoshDevice[]>;
+  getBatteryLevel(): Promise<number>;
+  debugLogBattery?(): Promise<void>;
   addListener(
     eventName: string,
     listener: (event: any) => void,
@@ -241,6 +243,24 @@ export function startJoshDiscovery(
       await mod.stopDiscovery().catch(() => {});
     },
   };
+}
+
+export async function getJoshBatteryLevel(): Promise<number> {
+  const mod = getNative();
+  if (!mod || typeof mod.getBatteryLevel !== 'function') return -1;
+  try {
+    return await mod.getBatteryLevel();
+  } catch {
+    return -1;
+  }
+}
+
+/** Debug builds: full JoshBattery logcat probe (also runs automatically after connect). */
+export async function debugLogJoshBattery(): Promise<void> {
+  if (!__DEV__) return;
+  const mod = getNative();
+  if (!mod?.debugLogBattery) return;
+  await mod.debugLogBattery();
 }
 
 export async function connectJosh(

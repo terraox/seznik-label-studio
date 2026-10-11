@@ -21,6 +21,8 @@ type NativeLabelXPrinter = {
   connect(macAddress: string, deviceName?: string | null, btType?: number): Promise<LabelXDiscoveredDevice>;
   disconnect(): Promise<boolean>;
   getStatus(): Promise<LabelXStatusResult>;
+  getBatteryLevel?(): Promise<number>;
+  debugLogBattery?(): Promise<void>;
   printPngLabel(options: Record<string, unknown>): Promise<LabelXPrintResult>;
   printTestLabel(text?: string): Promise<{ success: boolean }>;
   addListener(
@@ -223,6 +225,22 @@ export async function getLabelXStatus(): Promise<LabelXStatusResult> {
   const mod = getNative();
   if (!mod) throw new Error('Label X printer module not available');
   return mod.getStatus();
+}
+
+export async function debugLogLabelXBattery(): Promise<void> {
+  if (!__DEV__) return;
+  const mod = getNative();
+  if (!mod?.debugLogBattery) return;
+  await mod.debugLogBattery();
+}
+
+/** Luck SDK battery percent (0–100) for the connected Label X printer. */
+export async function getLabelXBatteryLevel(): Promise<number> {
+  const mod = getNative();
+  if (!mod || typeof mod.getBatteryLevel !== 'function') {
+    throw new Error('Label X battery query is not available');
+  }
+  return mod.getBatteryLevel();
 }
 
 export async function printLabelXTestLabel(text?: string): Promise<{ success: boolean }> {

@@ -98,6 +98,39 @@ class Td404PrinterModule : Module() {
       adapter != null && adapter.isEnabled
     }
 
+    /**
+     * Android 13+ system battery for a remote Bluetooth device (the printer MAC).
+     * Returns -1 when unknown, unsupported, or permission is missing. Not the phone battery.
+     */
+    AsyncFunction("debugLogRemoteBattery") { mac: String, promise: Promise ->
+      val context = appContext.reactContext
+      if (context == null || (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        val level = if (mac.isBlank()) -1 else readRemoteBatteryLevelForMac(mac)
+        android.util.Log.i("TdBattery", "readSystemBluetoothBatteryPercent raw=$level mac=$mac")
+        promise.resolve(null)
+      }
+    }
+
+    AsyncFunction("getBluetoothDeviceBatteryLevel") { mac: String, promise: Promise ->
+      val context = appContext.reactContext
+      if (context == null || !hasConnectPermission(context) || Build.VERSION.SDK_INT < 33) {
+        promise.resolve(-1)
+        return@AsyncFunction
+      }
+      val adapter = getAdapter()
+      if (adapter == null || mac.isBlank()) {
+        promise.resolve(-1)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        promise.resolve(readRemoteBatteryLevelForMac(mac))
+      }
+    }
+
     /** Baseline perf logs — tag PIPELINE for `adb logcat -s PIPELINE`. */
     Function("logPipelineTrace") { message: String ->
       android.util.Log.i("PIPELINE", message)
@@ -1145,6 +1178,35 @@ class Td404PrinterModule : Module() {
     } catch (_: Exception) {
     }
     receiverRegistered = false
+  }
+
+  /**
+   * API 33+ BluetoothDevice.getBatteryLevel() for the remote printer.
+   * Called by reflection because some compile stubs omit the method. -1 means unknown.
+   */
+  @SuppressLint("MissingPermission")
+  private fun readRemoteBatteryLevelForMac(mac: String): Int {
+    val context = appContext.reactContext
+    if (context == null || !hasConnectPermission(context) || Build.VERSION.SDK_INT < 33) {
+      return -1
+    }
+    val adapter = getAdapter() ?: return -1
+    return try {
+      readRemoteBatteryLevel(adapter.getRemoteDevice(mac))
+    } catch (_: Exception) {
+      -1
+    }
+  }
+
+  @SuppressLint("MissingPermission")
+  private fun readRemoteBatteryLevel(device: BluetoothDevice): Int {
+    if (Build.VERSION.SDK_INT < 33) return -1
+    return try {
+      val level = BluetoothDevice::class.java.getMethod("getBatteryLevel").invoke(device) as? Int ?: -1
+      if (level in 0..100) level else -1
+    } catch (_: Throwable) {
+      -1
+    }
   }
 
   private fun getAdapter(): BluetoothAdapter? {

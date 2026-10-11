@@ -1,5 +1,6 @@
 package expo.modules.tezprinter
 
+import android.content.pm.ApplicationInfo
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -128,6 +129,14 @@ class TezPrinterModule : Module() {
             }
         }
 
+        Function("debugLogBattery") {
+            val ctx = resolveApplication()
+            if (ctx != null && (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+                manager.debugLogBatteryLine()
+            }
+            null
+        }
+
         AsyncFunction("printImage") { options: Map<String, Any?>, promise: Promise ->
             val base64 = options["pngBase64"] as? String
                 ?: return@AsyncFunction promise.reject("ERR_TEZ_INVALID_ARG", "pngBase64 is required", null)
@@ -181,22 +190,25 @@ class TezPrinterModule : Module() {
 
         AsyncFunction("printTestText") { text: String, promise: Promise ->
             try {
-                val widthPx = 384
-                val heightPx = 200
+                val widthPx = 400
+                val heightPx = 120
                 val bitmap = android.graphics.Bitmap.createBitmap(widthPx, heightPx, android.graphics.Bitmap.Config.ARGB_8888)
                 val canvas = android.graphics.Canvas(bitmap)
                 canvas.drawColor(android.graphics.Color.WHITE)
                 val paint = android.graphics.Paint().apply {
                     color = android.graphics.Color.BLACK
-                    textSize = 30f
-                    isFakeBoldText = true
+                    textSize = 16f
                     isAntiAlias = true
-                    textAlign = android.graphics.Paint.Align.CENTER
+                    textAlign = android.graphics.Paint.Align.LEFT
                 }
-                canvas.drawText("TEZ / SHAKTI PRINT", (widthPx / 2).toFloat(), 70f, paint)
-                paint.textSize = 24f
-                paint.isFakeBoldText = false
-                canvas.drawText(text, (widthPx / 2).toFloat(), 130f, paint)
+                val lines = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+                var y = 18f
+                val lineStep = 18f
+                val x = 8f
+                for (line in lines.take(4)) {
+                    canvas.drawText(line, x, y, paint)
+                    y += lineStep
+                }
                 val stream = java.io.ByteArrayOutputStream()
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
                 val base64 = android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
@@ -205,7 +217,7 @@ class TezPrinterModule : Module() {
                 val printOptions = PrintPipeline.Options(
                     pngBase64 = base64,
                     widthMm = 50,
-                    heightMm = 30,
+                    heightMm = 15,
                     copies = 1,
                     paperType = 0,
                     density = 8,

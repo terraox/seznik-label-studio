@@ -68,6 +68,8 @@ export type Td404MonoLabelResult = {
 type NativeTd404 = {
   isAvailable(): boolean;
   isBluetoothEnabled?(): boolean;
+  getBluetoothDeviceBatteryLevel?(mac: string): Promise<number>;
+  debugLogRemoteBattery?(mac: string): Promise<void>;
   getBondedDevices(): Promise<Td404Device[]>;
   startScan(): Promise<{ discoveryStarted?: boolean; bondedCount?: number; reason?: string } | void>;
   stopScan(): Promise<void>;
@@ -127,6 +129,27 @@ export function isTd404BluetoothEnabled(): boolean | null {
     return Boolean(mod.isBluetoothEnabled());
   } catch {
     return null;
+  }
+}
+
+/**
+ * OS-reported battery (0–100) for a remote Bluetooth printer MAC.
+ * Returns -1 when the device does not report battery (typical for classic SPP).
+ */
+export async function debugLogTd404RemoteBattery(mac: string): Promise<void> {
+  if (!__DEV__) return;
+  const mod = getNative();
+  if (!mod?.debugLogRemoteBattery) return;
+  await mod.debugLogRemoteBattery(mac);
+}
+
+export async function readSystemBluetoothBatteryPercent(mac: string): Promise<number> {
+  const mod = getNative();
+  if (!mod || typeof mod.getBluetoothDeviceBatteryLevel !== 'function') return -1;
+  try {
+    return await mod.getBluetoothDeviceBatteryLevel(mac);
+  } catch {
+    return -1;
   }
 }
 
