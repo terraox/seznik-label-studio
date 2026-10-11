@@ -2,8 +2,12 @@ import { clampGridSpacingMm } from '@/lib/editor/canvas-grid';
 import { elementSizeMm, type LabelDocument } from '@/lib/label-document';
 import { dotsPerMm, mmToDots, rectMmToDots } from '@/lib/printer/print-spec';
 
-/** Printed grid line thickness. 2 dots at 304 DPI, 1 dot at 203 DPI. */
-export const PRINT_GRID_LINE_MM = 0.15;
+/** Printed grid line thickness — at least 2 dots so horizontals read solid on 203 DPI heads. */
+export const PRINT_GRID_LINE_MM = 0.4;
+
+export function printGridLineDots(dpi: number): number {
+  return Math.max(2, mmToDots(PRINT_GRID_LINE_MM, dpi));
+}
 
 export type GridRect = { left: number; top: number; width: number; height: number };
 
@@ -30,10 +34,12 @@ export function printGridKnockoutsMm(doc: Pick<LabelDocument, 'elements'>): Grid
 /** Line positions in mm, every `spacingMm` from the label's top-left, edges excluded. */
 export function printGridLinesMm(widthMm: number, heightMm: number, spacingMm: number) {
   const step = clampGridSpacingMm(spacingMm);
+  const countX = Math.floor((widthMm - 1e-6) / step);
+  const countY = Math.floor((heightMm - 1e-6) / step);
   const xs: number[] = [];
   const ys: number[] = [];
-  for (let mm = step; mm < widthMm - 1e-6; mm += step) xs.push(mm);
-  for (let mm = step; mm < heightMm - 1e-6; mm += step) ys.push(mm);
+  for (let i = 1; i <= countX; i++) xs.push(i * step);
+  for (let i = 1; i <= countY; i++) ys.push(i * step);
   return { xs, ys };
 }
 
@@ -64,6 +70,8 @@ function cutLine(line: GridRect, vertical: boolean, holes: GridRect[]): GridRect
   return out;
 }
 
+export type GridPageUnits = { width: number; height: number };
+
 /** Grid line rectangles in any whole-unit space, with `holes` (same units) cut out. */
 export function gridRects(
   widthMm: number,
@@ -72,19 +80,22 @@ export function gridRects(
   unitsPerMm: number,
   lineUnits: number,
   holes: GridRect[] = [],
+  pageUnits?: GridPageUnits,
 ): GridRect[] {
-  const pageW = Math.max(1, Math.round(widthMm * unitsPerMm));
-  const pageH = Math.max(1, Math.round(heightMm * unitsPerMm));
+  const pageW = Math.max(1, pageUnits?.width ?? Math.round(widthMm * unitsPerMm));
+  const pageH = Math.max(1, pageUnits?.height ?? Math.round(heightMm * unitsPerMm));
   const t = Math.max(1, lineUnits);
   const half = Math.floor(t / 2);
   const { xs, ys } = printGridLinesMm(widthMm, heightMm, spacingMm);
   return [
-    ...xs.flatMap((mm) =>
-      cutLine({ left: Math.round(mm * unitsPerMm) - half, top: 0, width: t, height: pageH }, true, holes),
-    ),
-    ...ys.flatMap((mm) =>
-      cutLine({ left: 0, top: Math.round(mm * unitsPerMm) - half, width: pageW, height: t }, false, holes),
-    ),
+    ...xs.flatMap((mm) => {
+      const left = Math.round(mm * unitsPerMm) - half;
+      return cutLine({ left, top: 0, width: t, height: pageH }, true, holes);
+    }),
+    ...ys.flatMap((mm) => {
+      const top = Math.min(Math.max(0, Math.round(mm * unitsPerMm) - half), pageH - t);
+      return cutLine({ left: 0, top, width: pageW, height: t }, false, holes);
+    }),
   ];
 }
 
@@ -95,12 +106,21 @@ export function printGridRectsDots(
   spacingMm: number,
   dpi: number,
   knockoutsMm: GridRect[] = [],
+  pageDots?: GridPageUnits,
 ): GridRect[] {
   const holes = knockoutsMm.map((k) => {
     const r = rectMmToDots(k.left, k.top, k.width, k.height, dpi);
     return { left: r.x0, top: r.y0, width: r.widthDots, height: r.heightDots };
   });
-  return gridRects(widthMm, heightMm, spacingMm, dotsPerMm(dpi), mmToDots(PRINT_GRID_LINE_MM, dpi), holes);
+  return gridRects(
+    widthMm,
+    heightMm,
+    spacingMm,
+    dotsPerMm(dpi),
+    printGridLineDots(dpi),
+    holes,
+    pageDots,
+  );
 }
 
 export function gridRectsToPath(rects: GridRect[], dx = 0, dy = 0): string {

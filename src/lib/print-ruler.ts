@@ -3,7 +3,11 @@ import { dotsPerMm, mmToDots } from '@/lib/printer/print-spec';
 import type { GridRect } from '@/lib/print-grid';
 import { gridRectsToPath } from '@/lib/print-grid';
 
-export const PRINT_RULER_LINE_MM = 0.3;
+export const PRINT_RULER_LINE_MM = 0.4;
+
+export function printRulerLineDots(dpi: number): number {
+  return Math.max(2, mmToDots(PRINT_RULER_LINE_MM, dpi));
+}
 
 export type RulerLabel = {
   text: string;
@@ -278,7 +282,7 @@ export function printRulerRects(
 }
 
 export function printRulerRectsDots(widthMm: number, heightMm: number, dpi: number): GridRect[] {
-  return printRulerRects(widthMm, heightMm, dotsPerMm(dpi), mmToDots(PRINT_RULER_LINE_MM, dpi));
+  return printRulerRects(widthMm, heightMm, dotsPerMm(dpi), printRulerLineDots(dpi));
 }
 
 export function printRulerPathDots(
@@ -299,7 +303,7 @@ export function drawPrintRuler(
   scale = 1,
 ): void {
   const s = scale;
-  const lineUnits = mmToDots(PRINT_RULER_LINE_MM, dpi);
+  const lineUnits = printRulerLineDots(dpi);
   const dpm = dotsPerMm(dpi);
   for (const r of mmRectsToUnits(buildPrintRulerGeometry(widthMm, heightMm).inkRects, dpm, lineUnits)) {
     target.fillRect(r.left * s, r.top * s, r.width * s, r.height * s, 0);

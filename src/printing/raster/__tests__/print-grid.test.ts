@@ -3,13 +3,14 @@ import type { LabelDocument } from '@/lib/label-document';
 import {
   gridRects,
   printGridKnockoutsMm,
+  printGridLineDots,
   printGridLinesMm,
   printGridRectsDots,
   printGridSpacingMm,
 } from '@/lib/print-grid';
 import { fullBleedBorderElement } from '@/lib/printer/border-calibration';
 import { mmToDots } from '@/lib/printer/print-spec';
-import { rasterizeDocumentToBitmapTimed } from '@/printing/raster/skia-rasterizer';
+import { packedPageDots, rasterizeDocumentToBitmapTimed } from '@/printing/raster/skia-rasterizer';
 
 const dpi = 304;
 
@@ -39,9 +40,20 @@ assert.deepEqual(lines.ys, [5, 10, 15, 20, 25]);
 
 const rects = printGridRectsDots(40, 30, 5, dpi);
 assert.equal(rects.length, 12);
+const packed304 = packedPageDots(25, 25, 304);
+const horiz304 = printGridRectsDots(25, 25, 5, 304, [], {
+  width: packed304.packedW,
+  height: packed304.packedH,
+}).filter((r) => r.width > r.height);
+assert.ok(horiz304.length > 0);
+assert.equal(
+  horiz304[0].width,
+  packed304.packedW,
+  'horizontal grid spans the packed page width (byte-aligned bitmap)',
+);
 assert.ok(rects.every((r) => r.width >= 1 && r.height >= 1));
-assert.equal(printGridRectsDots(40, 30, 5, 203)[0].width, 1, '1 dot at 203 DPI');
-assert.equal(rects[0].width, 2, '2 dots at 304 DPI');
+assert.equal(printGridRectsDots(40, 30, 5, 203)[0].width, printGridLineDots(203), 'bold grid at 203 DPI');
+assert.equal(rects[0].width, printGridLineDots(dpi), 'bold grid at 304 DPI');
 
 function render(d: LabelDocument, shiftMm?: { x: number; y: number }) {
   const t = rasterizeDocumentToBitmapTimed(d, dpi, {

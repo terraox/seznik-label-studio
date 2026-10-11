@@ -2028,9 +2028,15 @@ export default function EditScreen() {
   const togglePrintGrid = useCallback(() => {
     setDoc((prev) => {
       const settings = resolveLabelSettings(prev);
+      const nextOn = !settings.printGrid;
       return {
         ...prev,
-        settings: { ...settings, printGrid: !settings.printGrid, printGridSpacingMm: gridSpacingMm },
+        settings: {
+          ...settings,
+          printGrid: nextOn,
+          printGridSpacingMm: gridSpacingMm,
+          printRuler: nextOn ? false : settings.printRuler,
+        },
       };
     });
     setDirty(true);
@@ -2039,9 +2045,14 @@ export default function EditScreen() {
   const togglePrintRuler = useCallback(() => {
     setDoc((prev) => {
       const settings = resolveLabelSettings(prev);
+      const nextOn = !settings.printRuler;
       return {
         ...prev,
-        settings: { ...settings, printRuler: !settings.printRuler },
+        settings: {
+          ...settings,
+          printRuler: nextOn,
+          printGrid: nextOn ? false : settings.printGrid,
+        },
       };
     });
     setDirty(true);
@@ -4283,6 +4294,7 @@ export default function EditScreen() {
                 accessibilityRole="switch"
                 accessibilityState={{ checked: printGridOn }}
                 accessibilityLabel="Print grid"
+                accessibilityHint="Prints a mm grid on the label. Cannot be on with Print scale."
                 accessibilityHint="Prints the grid on the label and shows it in the preview."
                 style={({ pressed }) => [
                   styles.printGridBtn,
@@ -4306,8 +4318,8 @@ export default function EditScreen() {
                 hitSlop={10}
                 accessibilityRole="switch"
                 accessibilityState={{ checked: printRulerOn }}
-                accessibilityLabel="Print ruler"
-                accessibilityHint="Prints an mm edge ruler on the top and left for alignment checks."
+                accessibilityLabel="Print scale"
+                accessibilityHint="Prints an mm edge scale on the top and left for alignment checks. Cannot be on with Print grid."
                 style={({ pressed }) => [
                   styles.printGridBtn,
                   printRulerOn && styles.canvasChromeBtnActive,
@@ -4321,7 +4333,7 @@ export default function EditScreen() {
                 <Text
                   numberOfLines={1}
                   style={[styles.printGridBtnText, printRulerOn && styles.printGridBtnTextOn]}>
-                  Print ruler
+                  Print scale
                 </Text>
               </Pressable>
 

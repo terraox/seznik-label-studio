@@ -3,10 +3,11 @@ import { PixelRatio, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { dotsPerMm } from '@/lib/printer/print-spec';
+import { packedPageDots } from '@/printing/raster/skia-rasterizer';
 import {
-  PRINT_GRID_LINE_MM,
   gridRects,
   gridRectsToPath,
+  printGridLineDots,
   printGridRectsDots,
   type GridRect,
 } from '@/lib/print-grid';
@@ -37,10 +38,14 @@ export const PrintGridLayer = memo(function PrintGridLayer({
   const art = useMemo(() => {
     if (printDpi != null) {
       const dpm = dotsPerMm(printDpi);
-      const rects = printGridRectsDots(widthMm, heightMm, spacingMm, printDpi, knockoutsMm);
+      const page = packedPageDots(widthMm, heightMm, printDpi);
+      const rects = printGridRectsDots(widthMm, heightMm, spacingMm, printDpi, knockoutsMm, {
+        width: page.packedW,
+        height: page.packedH,
+      });
       return {
-        viewW: Math.max(1, Math.round(widthMm * dpm)),
-        viewH: Math.max(1, Math.round(heightMm * dpm)),
+        viewW: page.packedW,
+        viewH: page.packedH,
         d: gridRectsToPath(rects, Math.round((shiftMm?.x ?? 0) * dpm), Math.round((shiftMm?.y ?? 0) * dpm)),
       };
     }
@@ -58,7 +63,11 @@ export const PrintGridLayer = memo(function PrintGridLayer({
         height: Math.round((k.top + k.height) * upm) - top,
       };
     });
-    const rects = gridRects(widthMm, heightMm, spacingMm, upm, Math.round(PRINT_GRID_LINE_MM * upm), holes);
+    const lineUnits = Math.max(2, Math.round(printGridLineDots(203) * (upm / dotsPerMm(203))));
+    const rects = gridRects(widthMm, heightMm, spacingMm, upm, lineUnits, holes, {
+      width: viewW,
+      height: viewH,
+    });
     return { viewW, viewH, d: gridRectsToPath(rects) };
   }, [widthMm, heightMm, spacingMm, widthPx, heightPx, knockoutsMm, printDpi, shiftMm?.x, shiftMm?.y]);
 
