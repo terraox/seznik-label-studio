@@ -9,6 +9,8 @@ import {
   type ConsumerPrinterId,
   type SeznikPrinterModelId,
 } from '@/constants/printer-models';
+import type { LastBridgeDevice } from '@/lib/printer/printer-bridge';
+import { migrateLastDeviceForBridge } from '@/lib/printer/printer-bridge';
 import type { PrintHistoryEntry } from '@/lib/print-history/types';
 import { usePrintHistoryStore } from '@/stores/print-history-store';
 
@@ -43,6 +45,8 @@ type PrinterStoreState = {
   lastDeviceId: string | null;
   lastDeviceName: string | null;
   lastDeviceForModel: Partial<Record<ConsumerPrinterId, { id: string; name: string }>>;
+  /** Last successful connection per native bridge (Josh LPAPI, TD-404 SPP, Tez, …). */
+  lastDeviceForBridge: Partial<Record<PrinterTransport, LastBridgeDevice>>;
   /** MAC → model pin. Overrides name heuristics on reconnect (addendum §5). */
   pinnedDriverByMac: Partial<Record<string, SeznikPrinterModelId>>;
   /** @deprecated Legacy field — migrated to print-history store. Kept for rehydrate migration only. */
@@ -58,7 +62,10 @@ type PrinterStoreState = {
    * looks like a random unfixed shift instead of a one-time calibration.
    */
   printCalibration: Record<string, PrintCalibrationEntry>;
+  /** Printer battery 0–100 while connected. Null when the printer does not report it. Not persisted. */
+  batteryPercent: number | null;
   setStatus: (status: PrinterConnectionStatus) => void;
+  setBatteryPercent: (batteryPercent: number | null) => void;
   setSelectedPrinterModel: (model: ConsumerPrinterId) => void;
   setDevCommandSet: (cmd: 'tspl' | 'escpos') => void;
   setPrintCalibration: (key: string, entry: PrintCalibrationEntry) => void;
@@ -115,12 +122,15 @@ export const usePrinterStore = create<PrinterStoreState>()(
       lastDeviceId: null,
       lastDeviceName: null,
       lastDeviceForModel: {},
+      lastDeviceForBridge: {},
       pinnedDriverByMac: {},
       history: [],
       devCommandSet: 'tspl',
       printCalibration: {},
+      batteryPercent: null,
 
       setStatus: (status) => set({ status }),
+      setBatteryPercent: (batteryPercent) => set({ batteryPercent }),
       setSelectedPrinterModel: (selectedPrinterModel) => set({ selectedPrinterModel }),
       setDevCommandSet: (devCommandSet) => set({ devCommandSet }),
       setPrintCalibration: (key, entry) =>
@@ -137,11 +147,17 @@ export const usePrinterStore = create<PrinterStoreState>()(
               ? state.selectedPrinterModel
               : consumerIdFromLegacy(driver, meta?.sdkId));
           const macKey = normalizePrinterMac(deviceId);
+          const transport = meta?.transport ?? null;
+          const bridgeEntry: LastBridgeDevice = {
+            id: deviceId,
+            name: deviceName,
+            consumer,
+          };
           return {
             status: 'connected',
             deviceId,
             deviceName,
-            transport: meta?.transport ?? null,
+            transport,
             sdkId: meta?.sdkId ?? null,
             backendPrinterId: meta?.backendPrinterId ?? null,
             lastDeviceId: deviceId,
@@ -151,6 +167,12 @@ export const usePrinterStore = create<PrinterStoreState>()(
               ...state.lastDeviceForModel,
               [consumer]: { id: deviceId, name: deviceName },
             },
+            lastDeviceForBridge: transport
+              ? {
+                  ...state.lastDeviceForBridge,
+                  [transport]: bridgeEntry,
+                }
+              : state.lastDeviceForBridge,
             pinnedDriverByMac: {
               ...state.pinnedDriverByMac,
               [macKey]: driver,
@@ -174,6 +196,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
           transport: null,
           sdkId: null,
           backendPrinterId: null,
+          batteryPercent: null,
         }),
 
       addHistoryEntry: (entry) => {
@@ -192,6 +215,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
         lastDeviceId: state.lastDeviceId,
         lastDeviceName: state.lastDeviceName,
         lastDeviceForModel: state.lastDeviceForModel,
+        lastDeviceForBridge: state.lastDeviceForBridge,
         pinnedDriverByMac: state.pinnedDriverByMac,
         printCalibration: state.printCalibration,
       }),
@@ -205,6 +229,16 @@ export const usePrinterStore = create<PrinterStoreState>()(
           ...saved,
           selectedPrinterModel: consumerIdFromLegacy(saved.selectedPrinterModel, saved.sdkId),
           lastDeviceForModel: migrateLastDeviceForModel(saved.lastDeviceForModel),
+          lastDeviceForBridge: migrateLastDeviceForBridge(
+            (saved as Partial<PrinterStoreState>).lastDeviceForBridge,
+            {
+              lastDeviceForModel: migrateLastDeviceForModel(saved.lastDeviceForModel),
+              lastDeviceId: saved.lastDeviceId,
+              lastDeviceName: saved.lastDeviceName,
+              transport: saved.transport ?? null,
+              sdkId: saved.sdkId ?? null,
+            },
+          ),
         };
       },
     },
