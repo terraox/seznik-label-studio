@@ -21,6 +21,7 @@ export type TranslationKey =
   | 'setting.printingHistory'
   | 'setting.advancedSettings'
   | 'setting.appPermissions'
+  | 'setting.walkthrough'
   | 'setting.feedback'
   | 'setting.aboutUs'
   | 'print.print'
@@ -57,6 +58,7 @@ const en: Record<TranslationKey, string> = {
   'setting.printingHistory': 'Printing History',
   'setting.advancedSettings': 'Advanced Settings',
   'setting.appPermissions': 'App Permissions',
+  'setting.walkthrough': 'App Walkthrough',
   'setting.feedback': 'Evaluation & Feedback',
   'setting.aboutUs': 'About Us',
   'print.print': 'Print',
@@ -92,6 +94,7 @@ const hi: StringsTable = {
   'setting.printingHistory': 'प्रिंट इतिहास',
   'setting.advancedSettings': 'उन्नत सेटिंग्स',
   'setting.appPermissions': 'ऐप अनुमतियाँ',
+  'setting.walkthrough': 'ऐप वॉकथ्रू',
   'setting.feedback': 'मूल्यांकन और प्रतिक्रिया',
   'setting.aboutUs': 'हमारे बारे में',
   'print.print': 'प्रिंट करें',

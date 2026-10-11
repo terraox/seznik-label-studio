@@ -19,6 +19,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple, cardShadow, Palette } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTranslation } from '@/lib/i18n';
+import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
 type IconName = AppIconName;
 
@@ -72,6 +73,7 @@ export default function SettingScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { t } = useTranslation();
+  const startWalkthrough = useWalkthroughStore((s) => s.start);
 
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
 
@@ -173,6 +175,15 @@ export default function SettingScreen() {
           </SettingGroup>
 
           <SettingGroup>
+            <SettingRow
+              label={t('setting.walkthrough')}
+              icon="questionmark.circle.fill"
+              onPress={() => {
+                router.navigate('/');
+                startWalkthrough();
+              }}
+              showDivider
+            />
             <SettingRow
               label={t('setting.feedback')}
               icon="square.and.pencil"

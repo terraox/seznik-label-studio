@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import { BuyFromUsStrip } from '@/components/home/buy-from-us-strip';
@@ -15,7 +15,14 @@ import { ToolGrid } from '@/components/home/tool-grid';
 import { MaxContentWidth } from '@/constants/theme';
 import { HomeLayout, Palette } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
+import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
+import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
+import { SampleContinueCard } from '@/components/home/sample-continue-card';
+import { getHomeWalkthrough } from '@/lib/walkthrough/home-steps';
+import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
 import { useLabelStore } from '@/stores/label-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
 export default function HomeScreen() {
   // Tab bar inset only — no extra bottom padding so content can fit one screen.
@@ -38,11 +45,52 @@ export default function HomeScreen() {
 
   const hasLabels = documents.length > 0;
 
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
+  const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const stopWalkthrough = useWalkthroughStore((s) => s.stop);
+  const setTutorialSeen = useSettingsStore((s) => s.setTutorialSeen);
+
+  useEffect(() => {
+    setWalkthroughScroller((dy) =>
+      scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + dy), animated: true }),
+    );
+    return () => setWalkthroughScroller(null);
+  }, []);
+
+  // First launch: auto-start once persisted settings have loaded.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const maybeStart = () => {
+      if (useSettingsStore.getState().tutorialSeen) return;
+      timer = setTimeout(startWalkthrough, 700);
+    };
+    if (useSettingsStore.persist.hasHydrated()) maybeStart();
+    const unsub = useSettingsStore.persist.onFinishHydration(maybeStart);
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
+  }, [startWalkthrough]);
+
+  const steps = useMemo(() => getHomeWalkthrough(hasLabels), [hasLabels]);
+  const tourActive = useWalkthroughStore((s) => s.active);
+
+  const finishWalkthrough = () => {
+    setTutorialSeen(true);
+    stopWalkthrough();
+  };
+
   return (
     <View style={styles.root}>
       <HomeHeader />
 
       <ScrollView
+        ref={scrollRef}
+        onScroll={(e) => {
+          scrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: tabPad }]}
         showsVerticalScrollIndicator={false}
@@ -52,11 +100,14 @@ export default function HomeScreen() {
         onLayout={(e) => setViewportH(e.nativeEvent.layout.height)}
         onContentSizeChange={(_w, h) => setContentH(h)}>
         <View style={styles.inner}>
-          <HeroCard compact={hasLabels} />
+          <WalkthroughTarget id="home.newLabel">
+            <HeroCard compact={hasLabels} />
+          </WalkthroughTarget>
 
           {recentLabel ? (
             <View style={styles.section}>
               <SectionHeading>Last edited label</SectionHeading>
+              <WalkthroughTarget id="home.lastEdited">
               <ContinueCard
                 document={recentLabel}
                 onDelete={() => deleteDocument(recentLabel.id)}
@@ -68,27 +119,47 @@ export default function HomeScreen() {
                   );
                 }}
               />
+              </WalkthroughTarget>
+            </View>
+          ) : null}
+
+          {!recentLabel && tourActive ? (
+            <View style={styles.section}>
+              <SectionHeading>Last edited label</SectionHeading>
+              <WalkthroughTarget id="home.lastEdited">
+                <SampleContinueCard />
+              </WalkthroughTarget>
             </View>
           ) : null}
 
           <View style={styles.section}>
             <SectionHeading>Print from file</SectionHeading>
-            <ToolGrid ids={FILE_TOOLS} columns={3} />
+            <WalkthroughTarget id="home.fromFile">
+              <ToolGrid ids={FILE_TOOLS} columns={3} />
+            </WalkthroughTarget>
           </View>
 
           <View style={styles.section}>
             <SectionHeading>More ways to create</SectionHeading>
-            <ToolGrid ids={CREATE_GRID_TOOLS} columns={3} />
+            <WalkthroughTarget id="home.create">
+              <ToolGrid ids={CREATE_GRID_TOOLS} columns={3} />
+            </WalkthroughTarget>
           </View>
 
           <View style={styles.section}>
             <SectionHeading>Label types</SectionHeading>
-            <ToolGrid ids={LABEL_TYPE_TOOLS} columns={4} />
+            <WalkthroughTarget id="home.labelTypes">
+              <ToolGrid ids={LABEL_TYPE_TOOLS} columns={4} />
+            </WalkthroughTarget>
           </View>
 
-          <BuyFromUsStrip />
+          <WalkthroughTarget id="home.shop">
+            <BuyFromUsStrip />
+          </WalkthroughTarget>
         </View>
       </ScrollView>
+
+      <WalkthroughOverlay steps={steps} onFinish={finishWalkthrough} />
     </View>
   );
 }
