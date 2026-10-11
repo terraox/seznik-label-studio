@@ -1,8 +1,9 @@
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import type { ConsumerPrinterId } from '@/constants/printer-models';
 import { Spacing } from '@/constants/theme';
-import { cardShadow, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow, Palette } from '@/constants/ui';
 
 import { PRINTER_PHOTOS } from './printer-family-cards';
 
@@ -10,6 +11,7 @@ type ConnectedActionsProps = {
   modelId: ConsumerPrinterId;
   modelName: string;
   deviceName: string | null;
+  batteryPercent?: number | null;
   testing: boolean;
   onTest: () => void;
   onDisconnect: () => void;
@@ -20,6 +22,7 @@ export function ConnectedActions({
   modelId,
   modelName,
   deviceName,
+  batteryPercent = null,
   testing,
   onTest,
   onDisconnect,
@@ -33,6 +36,10 @@ export function ConnectedActions({
       <Text style={styles.kicker}>Connected</Text>
       <Text style={styles.name}>{deviceName || modelName}</Text>
       <Text style={styles.detail}>{modelName} is ready to print.</Text>
+      <View style={styles.batteryRow}>
+        <Text style={styles.batteryPrefix}>Battery</Text>
+        <PrinterBatteryLabel percent={batteryPercent} size={18} showWhenUnknown unknownText="Not reported" />
+      </View>
       <Pressable
         onPress={onTest}
         disabled={testing}
@@ -40,10 +47,16 @@ export function ConnectedActions({
         {testing ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Print a test label</Text>}
       </Pressable>
       <View style={styles.row}>
-        <Pressable onPress={onDisconnect} style={({ pressed }) => [styles.ghost, pressed && styles.pressed]}>
+        <Pressable
+          onPress={onDisconnect}
+          android_ripple={androidRipple}
+          style={({ pressed }) => [styles.secondaryBtn, styles.disconnectBtn, pressed && styles.pressed]}>
           <Text style={styles.disconnect}>Disconnect</Text>
         </Pressable>
-        <Pressable onPress={onDiagnostics} style={({ pressed }) => [styles.ghost, pressed && styles.pressed]}>
+        <Pressable
+          onPress={onDiagnostics}
+          android_ripple={androidRipple}
+          style={({ pressed }) => [styles.secondaryBtn, styles.diagnosticsBtn, pressed && styles.pressed]}>
           <Text style={styles.link}>Diagnostics</Text>
         </Pressable>
       </View>
@@ -74,6 +87,13 @@ const styles = StyleSheet.create({
   kicker: { fontSize: 13, fontWeight: '700', color: '#18794A', letterSpacing: 0.3 },
   name: { fontSize: 20, fontWeight: '700', color: Palette.ink, textAlign: 'center' },
   detail: { fontSize: 14, lineHeight: 20, color: Palette.muted, textAlign: 'center', marginBottom: 4 },
+  batteryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  batteryPrefix: { fontSize: 14, fontWeight: '600', color: Palette.muted },
   primary: {
     alignSelf: 'stretch',
     minHeight: 48,
@@ -84,13 +104,21 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   row: { alignSelf: 'stretch', flexDirection: 'row', gap: 8 },
-  ghost: {
+  secondaryBtn: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 44,
     borderRadius: 12,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+  },
+  disconnectBtn: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  diagnosticsBtn: {
+    backgroundColor: '#E8F6F8',
+    borderColor: '#B8E4EA',
   },
   disconnect: { color: '#DC2626', fontSize: 14, fontWeight: '700' },
   link: { color: Palette.accent, fontSize: 14, fontWeight: '700' },

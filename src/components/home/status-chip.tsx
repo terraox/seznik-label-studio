@@ -1,9 +1,12 @@
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
+import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import { CONSUMER_PRINTERS } from '@/constants/printer-models';
 import { androidRipple, HomeLayout, HomeStatusColors } from '@/constants/ui';
+import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-store';
 
 const CHIP_FILL: Record<PrinterConnectionStatus, string> = {
@@ -17,6 +20,22 @@ const CHIP_FILL: Record<PrinterConnectionStatus, string> = {
 export function StatusChip() {
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
+  const batteryPercent = usePrinterStore((s) => s.batteryPercent);
+
+  useEffect(() => {
+    const sync = () => {
+      const mgr = getPrinterManager();
+      mgr.reconcileConnectionState();
+      mgr.maybeAutoReconnect();
+      const liveNow =
+        usePrinterStore.getState().status === 'connected' ||
+        usePrinterStore.getState().status === 'printing';
+      if (liveNow) void mgr.refreshBattery();
+    };
+    sync();
+    const id = setInterval(sync, 2500);
+    return () => clearInterval(id);
+  }, []);
   const deviceName = usePrinterStore((s) => s.deviceName);
   const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
   const modelName = (CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas).shortName;
@@ -24,6 +43,8 @@ export function StatusChip() {
   const live = status === 'connected' || status === 'printing';
   const busy = status === 'scanning' || status === 'connecting';
   const text = live ? deviceName || modelName : busy ? 'Connecting…' : 'Not connected';
+  const batteryLabel =
+    batteryPercent != null ? `${batteryPercent}%` : live ? 'battery not reported' : '';
 
   return (
     <Pressable
@@ -31,7 +52,11 @@ export function StatusChip() {
       android_ripple={androidRipple}
       hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel={`Printer ${modelName}: ${text}`}
+      accessibilityLabel={
+        live && batteryLabel
+          ? `Printer ${modelName}: ${text}. Battery ${batteryLabel}`
+          : `Printer ${modelName}: ${text}`
+      }
       accessibilityHint="Opens printer connection"
       style={({ pressed }) => [
         styles.chip,
@@ -40,6 +65,14 @@ export function StatusChip() {
       ]}>
       {status === 'disconnected' ? (
         <AppIcon name="link" tintColor="#FFFFFF" size={15} pointerEvents="none" />
+      ) : live ? (
+        <PrinterBatteryLabel
+          percent={batteryPercent}
+          size={15}
+          onDark
+          showWhenUnknown
+          unknownText="—"
+        />
       ) : (
         <View style={styles.dot} />
       )}
@@ -60,7 +93,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     minHeight: HomeLayout.chipHeight,
-    maxWidth: 240,
+    maxWidth: 280,
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10,
