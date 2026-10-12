@@ -127,6 +127,10 @@ class JoshPrinterManager(private val context: Context) {
     private var lastConnectedAddress: PrinterAddress? = null
     private val lastConnectedAt = AtomicLong(0)
     private var connectLatch: CountDownLatch? = null
+    /** Bumped on every new connect or explicit disconnect so a stale attempt cannot reclaim the bridge. */
+    private val connectToken = AtomicInteger(0)
+    /** While set, an unexpected LPAPI disconnect must not reconnect the previous printer. */
+    private val suppressNativeReconnect = AtomicBoolean(false)
     private val batteryDebugScheduled = AtomicBoolean(false)
 
     // ─── Discovery ─────────────────────────────────────────────────────
@@ -461,18 +465,18 @@ class JoshPrinterManager(private val context: Context) {
             return false
         }
 
-        // Prevent duplicate connections to same target; abort and reset if target changed
-        if (isConnecting.get()) {
-            if (macAddress.equals(connectingMacAddress, ignoreCase = true)) {
-                Log.w(TAG, "[CONNECT] Already connecting to $macAddress — ignoring duplicate")
-                return false
-            } else {
-                Log.i(TAG, "[CONNECT] Connecting to new target $macAddress while previous $connectingMacAddress in flight — resetting")
-                connectLatch?.countDown()
-                try { currentApi.closePrinter() } catch (_: Exception) {}
-                isConnecting.set(false)
-            }
+        // A second connect to the printer we are already opening is a duplicate.
+        // A different printer must take the bridge instead of waiting for this one.
+        if (isConnecting.get() && macAddress.equals(connectingMacAddress, ignoreCase = true)) {
+            Log.w(TAG, "[CONNECT] Already connecting to $macAddress — ignoring duplicate")
+            return false
         }
+
+        val token = connectToken.incrementAndGet()
+        suppressNativeReconnect.set(true)
+        connectLatch?.countDown()
+        fun stillMine(): Boolean = connectToken.get() == token
+
         connectingMacAddress = macAddress
 
         // Pre-flight: Check Bluetooth adapter is enabled
@@ -480,6 +484,10 @@ class JoshPrinterManager(private val context: Context) {
         if (btAdapter == null || !btAdapter.isEnabled) {
             lastError = "JOSH_BT_DISABLED: Bluetooth is not enabled"
             emitError("JOSH_BT_DISABLED", "Bluetooth adapter is not enabled")
+            if (stillMine()) {
+                suppressNativeReconnect.set(false)
+                isConnecting.set(false)
+            }
             return false
         }
 
@@ -496,6 +504,7 @@ class JoshPrinterManager(private val context: Context) {
             connectedMacAddress.equals(macAddress, ignoreCase = true)
         ) {
             Log.i(TAG, "[CONNECT] Already connected to $macAddress — no-op")
+            suppressNativeReconnect.set(false)
             return true
         }
 
@@ -503,6 +512,7 @@ class JoshPrinterManager(private val context: Context) {
         if (currentState == State.PRINTING) {
             Log.w(TAG, "[CONNECT] Cannot connect during PRINTING")
             emitError("JOSH_INVALID_STATE", "Cannot connect while printing")
+            if (stillMine()) suppressNativeReconnect.set(false)
             return false
         }
 
@@ -510,34 +520,50 @@ class JoshPrinterManager(private val context: Context) {
         stopDiscovery()
 
         isConnecting.set(true)
+        if (!stillMine()) return false
         setState(State.CONNECTING)
         lastError = null
         Log.i(TAG, "[JOSH-CONN-P1:IDENTIFY] Initiating JOSH connection: mac=$macAddress, name=$printerName")
 
-        // ── PHASE 2: PREPARE — clean up any active SDK session ──
-        // Only close if currently opened/connected. Closing when already idle queues a
-        // spurious Disconnected callback that would interfere with the new connection attempt.
-        if (currentApi.isPrinterOpened || currentState == State.CONNECTED) {
+        // Release the previous printer on this bridge before opening a different one.
+        // LPAPI can still hold that session after our state machine says disconnected,
+        // and a later connect+disconnect was the only way to clear it.
+        val previousMac = connectedMacAddress ?: lastConnectedAddress?.macAddress
+        val switchingPrinter = previousMac != null && !previousMac.equals(macAddress, ignoreCase = true)
+        val sdkOpen = try {
+            currentApi.isPrinterOpened
+        } catch (_: Exception) {
+            false
+        }
+        if (switchingPrinter || sdkOpen || currentState == State.CONNECTED || connectedMacAddress != null) {
+            Log.i(TAG, "[JOSH-CONN-P2:PREPARE] Releasing previous printer ${previousMac ?: "unknown"} before $macAddress")
             try {
                 currentApi.closePrinter()
-                Log.i(TAG, "[JOSH-CONN-P2:PREPARE] closePrinter() called to clear previous session")
-                try { Thread.sleep(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
             } catch (e: Exception) {
                 Log.w(TAG, "[JOSH-CONN-P2:PREPARE] closePrinter() threw (non-fatal)", e)
             }
-        }
-
-        // Check if printer is already connected via SDK
-        val sdkState = currentApi.printerState
-        if (currentApi.isPrinterOpened || sdkState?.group() == 2) {
-            val currentName = currentApi.printerName
-            Log.d(TAG, "[JOSH-CONN-P1:IDENTIFY] SDK reports already connected to: $currentName")
-            if (connectedMacAddress != null && connectedMacAddress.equals(macAddress, ignoreCase = true)) {
-                isConnecting.set(false)
-                setState(State.CONNECTED)
-                return true
+            val releaseStarted = System.currentTimeMillis()
+            while (stillMine() && System.currentTimeMillis() - releaseStarted < 1200) {
+                val stillOpen = try {
+                    currentApi.isPrinterOpened
+                } catch (_: Exception) {
+                    false
+                }
+                if (!stillOpen) break
+                try {
+                    Thread.sleep(50)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
+            }
+            if (switchingPrinter) {
+                connectedPrinterAddress = null
+                connectedPrinterName = null
+                connectedMacAddress = null
             }
         }
+        if (!stillMine()) return false
 
         // Resolve PrinterAddress with validated friendly name (NEVER pass a MAC as shownName!)
         var printerAddress = discoveredPrinters[macAddress.uppercase()]
@@ -589,12 +615,14 @@ class JoshPrinterManager(private val context: Context) {
 
         // ── PHASE 3: OPEN — attempt connection with retry ──
         for (attempt in 1..CONNECT_MAX_ATTEMPTS) {
+            if (!stillMine()) return false
             if (attempt > 1) {
                 Log.i(TAG, "[JOSH-CONN-P3:RETRY] Attempt $attempt/$CONNECT_MAX_ATTEMPTS after ${CONNECT_RETRY_DELAY_MS}ms delay")
                 try { Thread.sleep(CONNECT_RETRY_DELAY_MS) } catch (_: InterruptedException) {
                     Thread.currentThread().interrupt()
                     break
                 }
+                if (!stillMine()) return false
                 // Clean up before retry
                 try { currentApi.closePrinter() } catch (_: Exception) {}
                 try { Thread.sleep(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
@@ -650,12 +678,14 @@ class JoshPrinterManager(private val context: Context) {
 
             if (!requestAccepted) {
                 Log.w(TAG, "[JOSH-CONN-P3:OPEN] Attempt $attempt — all openPrinter methods returned false")
-                connectLatch = null
+                if (connectLatch === latch) connectLatch = null
+                if (!stillMine()) return false
                 if (attempt < CONNECT_MAX_ATTEMPTS) continue
                 // Final attempt failed
                 isConnecting.set(false)
                 lastError = "JOSH_CONNECTION_FAILED: Connection request rejected"
                 setState(State.DISCONNECTED)
+                suppressNativeReconnect.set(false)
                 emitError("JOSH_CONNECTION_FAILED", "Printer rejected connection request")
                 return false
             }
@@ -668,24 +698,19 @@ class JoshPrinterManager(private val context: Context) {
                 false
             }
 
-            connectLatch = null
+            if (connectLatch === latch) connectLatch = null
+            if (!stillMine()) return false
 
-            val isNowConnected = state.get() == State.CONNECTED ||
-                                 currentApi.isPrinterOpened ||
-                                 currentApi.printerState?.group() == 2 ||
-                                 currentApi.printerState == PrinterState.Connected ||
-                                 currentApi.printerState == PrinterState.Connected2
-            if (isNowConnected) {
-                // Success!
+            val confirmedThisTarget = connectedMacAddress?.equals(macAddress, ignoreCase = true) == true
+            if (confirmedThisTarget) {
                 isConnecting.set(false)
                 setState(State.CONNECTED)
-                if (connectedPrinterAddress == null) {
-                    connectedPrinterAddress = targetAddress
-                    connectedPrinterName = targetAddress.shownName ?: currentApi.printerName ?: resolvedName
-                    connectedMacAddress = macAddress
-                    lastConnectedAt.set(System.currentTimeMillis())
-                }
+                connectedPrinterAddress = targetAddress
+                connectedPrinterName = targetAddress.shownName ?: currentApi.printerName ?: resolvedName
+                connectedMacAddress = macAddress
+                lastConnectedAt.set(System.currentTimeMillis())
                 lastConnectedAddress = targetAddress
+                suppressNativeReconnect.set(false)
                 Log.i(TAG, "[JOSH-CONN-P4:CONFIRMED] Connected to ${connectedPrinterName ?: macAddress} on attempt $attempt")
                 listener?.onStateChanged(State.CONNECTED, mapOf(
                     "printerName" to (connectedPrinterName ?: targetAddress.shownName ?: resolvedName),
@@ -695,6 +720,14 @@ class JoshPrinterManager(private val context: Context) {
                 scheduleDebugBatteryLogAfterConnect()
                 return true
             }
+            val liveMac = connectedMacAddress
+            if (liveMac != null && !liveMac.equals(macAddress, ignoreCase = true)) {
+                Log.w(TAG, "[JOSH-CONN-P3:WRONG-PRINTER] SDK is still on $liveMac, wanted $macAddress")
+                try { currentApi.closePrinter() } catch (_: Exception) {}
+                connectedPrinterAddress = null
+                connectedPrinterName = null
+                connectedMacAddress = null
+            }
 
             Log.w(TAG, "[JOSH-CONN-P3:TIMEOUT] Attempt $attempt — no Connected callback within ${CONNECT_TIMEOUT_MS}ms (state=${currentApi.printerState})")
             if (attempt < CONNECT_MAX_ATTEMPTS) {
@@ -703,11 +736,13 @@ class JoshPrinterManager(private val context: Context) {
             }
         }
 
+        if (!stillMine()) return false
         // All attempts exhausted
         isConnecting.set(false)
         Log.e(TAG, "[JOSH-CONN-P4:FAILED] All $CONNECT_MAX_ATTEMPTS connect attempts exhausted")
         lastError = "JOSH_CONNECTION_TIMEOUT: Printer did not respond after $CONNECT_MAX_ATTEMPTS attempts"
         setState(State.DISCONNECTED)
+        suppressNativeReconnect.set(false)
         emitError("JOSH_CONNECTION_TIMEOUT", "Printer did not respond after $CONNECT_MAX_ATTEMPTS attempts")
         return false
     }
@@ -718,9 +753,26 @@ class JoshPrinterManager(private val context: Context) {
      * for future connections. quit() is only called in destroy().
      */
     fun disconnect() {
+        connectToken.incrementAndGet()
+        suppressNativeReconnect.set(true)
+        connectLatch?.countDown()
+
+        val opened = try {
+            api?.isPrinterOpened == true
+        } catch (_: Exception) {
+            false
+        }
         val currentState = state.get()
-        if (currentState == State.DISCONNECTED || currentState == State.IDLE) {
+        val holdsSession = opened ||
+            connectedMacAddress != null ||
+            currentState == State.CONNECTED ||
+            currentState == State.CONNECTING ||
+            currentState == State.PRINTING ||
+            currentState == State.DISCONNECTING ||
+            currentState == State.RECONNECTING
+        if (!holdsSession && (currentState == State.DISCONNECTED || currentState == State.IDLE)) {
             Log.d(TAG, "[DISCONNECT] Already disconnected")
+            suppressNativeReconnect.set(false)
             return
         }
 
@@ -745,9 +797,11 @@ class JoshPrinterManager(private val context: Context) {
         connectedPrinterAddress = null
         connectedPrinterName = null
         connectedMacAddress = null
+        connectingMacAddress = null
         isPrinting.set(false)
         isConnecting.set(false)
         setState(State.DISCONNECTED)
+        suppressNativeReconnect.set(false)
         Log.i(TAG, "[DISCONNECT_DONE] Disconnected")
     }
 
@@ -1795,6 +1849,17 @@ class JoshPrinterManager(private val context: Context) {
     // ═══════════════════════════════════════════════════════════════════
 
     private fun handleConnected(address: PrinterAddress?) {
+        val callbackMac = address?.macAddress
+        val expectedMac = connectingMacAddress
+        if (
+            isConnecting.get() &&
+            expectedMac != null &&
+            callbackMac != null &&
+            !callbackMac.equals(expectedMac, ignoreCase = true)
+        ) {
+            Log.w(TAG, "[CONNECTED] Ignoring $callbackMac while a connect to $expectedMac is in progress")
+            return
+        }
         Log.i(TAG, "[CONNECTED] ${address?.shownName ?: address?.macAddress}")
         connectedPrinterAddress = address
         connectedPrinterName = address?.shownName ?: api?.printerName ?: connectingMacAddress
@@ -1847,19 +1912,29 @@ class JoshPrinterManager(private val context: Context) {
             printLatch?.countDown()
         }
 
-        // Attempt auto-reconnect if unexpected disconnect while previously connected.
-        if (wasConnected && lastConnectedAddress != null && !isConnecting.get()) {
+        // Do not reconnect the previous printer when the user is switching, or when
+        // disconnect() / a newer connect() already took the bridge.
+        if (suppressNativeReconnect.get() || isConnecting.get()) {
+            Log.d(TAG, "[AUTO_RECONNECT] Suppressed — switching printers or connect in progress")
+        } else if (wasConnected && lastConnectedAddress != null) {
+            val scheduledToken = connectToken.get()
             Log.i(TAG, "[AUTO_RECONNECT] Unexpected disconnect — scheduling reconnect")
             Thread({
                 try {
-                    Thread.sleep(500) // brief pause before reconnect
+                    Thread.sleep(500)
+                    if (
+                        connectToken.get() != scheduledToken ||
+                        suppressNativeReconnect.get() ||
+                        isConnecting.get()
+                    ) {
+                        Log.d(TAG, "[AUTO_RECONNECT] Cancelled — a newer printer took this bridge")
+                        return@Thread
+                    }
                     reconnect()
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
                 }
             }, "josh-reconnect").start()
-        } else if (wasConnected && isConnecting.get()) {
-            Log.d(TAG, "[AUTO_RECONNECT] Suppressed — manual connect in progress")
         }
     }
 

@@ -308,6 +308,13 @@ class PrinterManager {
   private autoReconnectSessionKey: string | null = null;
   private autoReconnectInFlight = false;
   private reconnectEpoch = 0;
+  /** Latest connectModel call. Older calls must not clear or overwrite a newer printer. */
+  private connectGeneration = 0;
+  /**
+   * MAC the user just picked. Auto-reconnect must not put the previous printer
+   * on this bridge back in front of it.
+   */
+  private manualConnectMac: string | null = null;
   private lastAutoReconnectAttemptAt = 0;
   private static readonly AUTO_RECONNECT_MIN_INTERVAL_MS = 8_000;
   /** While connectModel is in flight, native connected() may lag briefly. */
@@ -415,6 +422,7 @@ class PrinterManager {
               const bridge = defaultBridgeForConsumer(store.selectedPrinterModel);
               const last = store.lastDeviceForBridge[bridge];
               if (last?.id && normalizePrinterMac(last.id) === mac) {
+                if (this.manualConnectMac && this.manualConnectMac !== mac) return;
                 this.maybeAutoReconnect({ force: true });
               }
             }
@@ -1368,14 +1376,21 @@ class PrinterManager {
     deviceId: string,
     deviceName?: string | null,
   ): Promise<void> {
+    const generation = ++this.connectGeneration;
+    const targetMac = normalizePrinterMac(deviceId);
+    this.manualConnectMac = targetMac;
+    const stillCurrent = () => generation === this.connectGeneration;
     const store = usePrinterStore.getState();
     if (!consumerMatchesDriver(store.selectedPrinterModel, model)) {
+      if (stillCurrent()) this.manualConnectMac = null;
       throw new Error(
         `Connect cancelled: ${CONSUMER_PRINTERS[store.selectedPrinterModel]?.shortName ?? 'selected'} printer is not ${model}.`,
       );
     }
     const connectEpoch = this.reconnectEpoch;
     if (this.isLiveSessionForModel(model, deviceId)) {
+      if (!stillCurrent()) return;
+      this.manualConnectMac = null;
       this.connectionState = 'connected';
       const meta = this.connectionMetaFromActiveTransport();
       store.setConnectedDevice(deviceId, deviceName ?? store.deviceName ?? deviceId, {
@@ -1388,22 +1403,27 @@ class PrinterManager {
     this.connectionState = 'connecting';
     this.connectAttemptStartedAtMs = Date.now();
     await this.stopScanAsync();
+    if (!stillCurrent()) return;
 
-    // 1. Cleanly disconnect all existing bridges first
-    await this.disconnect().catch(() => {});
+    // Drop whatever this bridge still holds (the previous printer) before opening the new one.
+    await this.disconnect({ forSwitch: true }).catch(() => {});
 
+    if (!stillCurrent()) return;
     if (connectEpoch !== this.reconnectEpoch) {
+      this.manualConnectMac = null;
       store.setStatus('disconnected');
       this.connectionState = 'disconnected';
       throw new Error('Connect cancelled: printer family changed.');
     }
     if (!consumerMatchesDriver(usePrinterStore.getState().selectedPrinterModel, model)) {
+      this.manualConnectMac = null;
       store.setStatus('disconnected');
       this.connectionState = 'disconnected';
       throw new Error('Connect cancelled: printer family changed.');
     }
 
     await this.ensurePermissions('connect-only');
+    if (!stillCurrent()) return;
 
     try {
       if (model === 'td404') {
@@ -1412,6 +1432,8 @@ class PrinterManager {
           throw new Error('TD-404 module not available in this build.');
         }
         const res = await td404.connectTd404(deviceId, deviceName ?? 'TEJAS/RUDRA');
+        if (!stillCurrent()) return;
+        this.manualConnectMac = null;
         this.activeTransport = 'td404-spp';
         this.connectionState = 'connected';
         this.connectAttemptStartedAtMs = 0;
@@ -1445,6 +1467,8 @@ class PrinterManager {
           ),
         );
         const res = await Promise.race([connectPromise, timeoutPromise]);
+        if (!stillCurrent()) return;
+        this.manualConnectMac = null;
         console.info(`[JOSH-CONN] JOSH connected successfully:`, res);
         this.activeTransport = 'josh-lpapi';
         this.connectionState = 'connected';
@@ -1462,6 +1486,8 @@ class PrinterManager {
           throw new Error('DEV module not available in this build.');
         }
         const res = await dev.connectDev(deviceId, deviceName ?? 'DEV');
+        if (!stillCurrent()) return;
+        this.manualConnectMac = null;
         this.activeTransport = 'dev-spp';
         this.connectionState = 'connected';
         this.connectAttemptStartedAtMs = 0;
@@ -1477,6 +1503,8 @@ class PrinterManager {
           throw new Error('TEZ module not available in this build.');
         }
         const res = await tez.connectTez(deviceId, deviceName ?? 'TEZ');
+        if (!stillCurrent()) return;
+        this.manualConnectMac = null;
         this.activeTransport = 'tez-spp';
         this.connectionState = 'connected';
         this.connectAttemptStartedAtMs = 0;
@@ -1506,6 +1534,8 @@ class PrinterManager {
           ),
         );
         const res = await Promise.race([connectPromise, timeoutPromise]);
+        if (!stillCurrent()) return;
+        this.manualConnectMac = null;
         console.info(`[LABELX-CONN] Label X connected successfully:`, res);
         this.activeTransport = 'labelx-spp';
         this.connectionState = 'connected';
@@ -1518,6 +1548,8 @@ class PrinterManager {
         this.scheduleDebugBatteryLog('labelx', res.mac || deviceId);
       }
     } catch (err) {
+      if (!stillCurrent()) return;
+      this.manualConnectMac = null;
       this.connectionState = 'disconnected';
       this.connectAttemptStartedAtMs = 0;
       store.clearConnection();
@@ -2718,13 +2750,22 @@ class PrinterManager {
     return fallback;
   }
 
-  async disconnect(): Promise<void> {
+  async disconnect(options?: { forSwitch?: boolean }): Promise<void> {
+    const forSwitch = options?.forSwitch === true;
+    // A user disconnect must win even if status is stuck on "connecting" from the
+    // previous printer. A switch passes forSwitch so that teardown does not clear
+    // the connect that is about to open the new printer.
+    if (!forSwitch) {
+      this.connectGeneration += 1;
+      this.manualConnectMac = null;
+      this.invalidatePendingReconnects();
+    }
     // Prevent disconnect during active transmission.
     if (this.connectionState === 'printing') {
       console.warn('[printer] disconnect blocked — print in progress');
       return;
     }
-    console.info('[printer] disconnect requested, transport:', this.activeTransport);
+    console.info('[printer] disconnect requested, transport:', this.activeTransport, forSwitch ? '(switch)' : '');
 
     if (this.activeTransport === 'wifi' && this.backendPrinterId) {
       try {
@@ -2743,8 +2784,7 @@ class PrinterManager {
     this.backendPrinterId = null;
     this.bleNegotiatedMtu = 0;
     const store = usePrinterStore.getState();
-    const switchingToNewSession = store.status === 'connecting' || this.connectionState === 'connecting';
-    if (switchingToNewSession) {
+    if (forSwitch) {
       this.connectionState = 'connecting';
       return;
     }
@@ -2834,6 +2874,7 @@ class PrinterManager {
     const bridge = defaultBridgeForConsumer(consumer);
     const last = store.lastDeviceForBridge[bridge];
     if (!last?.id) return;
+    if (this.manualConnectMac && normalizePrinterMac(last.id) !== this.manualConnectMac) return;
     if (last.consumer !== consumer) return;
     if (this.autoReconnectSuppressed) return;
 
@@ -3227,6 +3268,18 @@ class PrinterManager {
     } else if (this.autoReconnectSuppressed) {
       return false;
     }
+    const bridge = defaultBridgeForConsumer(consumer);
+    const pending = usePrinterStore.getState().lastDeviceForBridge[bridge];
+    if (
+      this.manualConnectMac &&
+      pending?.id &&
+      normalizePrinterMac(pending.id) !== this.manualConnectMac
+    ) {
+      console.info(
+        `[printer] skip reconnect for ${bridge}: a different printer (${this.manualConnectMac}) was selected`,
+      );
+      return false;
+    }
     if (this.isConnectionHealthy()) return true;
     const liveStore = usePrinterStore.getState();
     if (liveStore.status === 'connected' || liveStore.status === 'printing') {
@@ -3237,7 +3290,6 @@ class PrinterManager {
         return false;
       }
     }
-    const bridge = defaultBridgeForConsumer(consumer);
     const entry = usePrinterStore.getState().lastDeviceForBridge[bridge];
     if (!entry?.id) return false;
     if (entry.consumer !== consumer) {
@@ -3272,6 +3324,11 @@ class PrinterManager {
    * No-op if already connected or no last device is stored.
    */
   async reconnectLastDevice(): Promise<boolean> {
+    const picked = this.manualConnectMac;
+    const liveId = usePrinterStore.getState().deviceId;
+    if (picked && (!liveId || normalizePrinterMac(liveId) !== picked)) {
+      return false;
+    }
     if (this.isTez) {
       try {
         await this.ensureTezTransport();
@@ -3285,6 +3342,7 @@ class PrinterManager {
     if (this.isConnected) return true;
     const store = usePrinterStore.getState();
     if (!store.lastDeviceId) return false;
+    if (picked && normalizePrinterMac(store.lastDeviceId) !== picked) return false;
     if (!this.isBluetoothEnabled()) {
       this.lastErrorMessage = BLUETOOTH_OFF_MESSAGE;
       return false;

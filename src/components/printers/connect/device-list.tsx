@@ -88,7 +88,6 @@ function Section({
               <Pressable
                 key={device.id}
                 onPress={() => onConnect(device)}
-                disabled={connectingId !== null}
                 style={({ pressed }) => [
                   styles.row,
                   index < devices.length - 1 && styles.rowBorder,

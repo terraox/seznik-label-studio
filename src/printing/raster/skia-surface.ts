@@ -244,13 +244,23 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
 
   const emojiSkia = skiaMod as EmojiSkiaModule;
 
+  /**
+   * The unset (default) family draws with the system face. If that face cannot measure
+   * the text on this device it would print nothing, so fall back to the bundled Inter.
+   */
+  function fontForText(text: string, style: TextDrawStyle): SkiaFont {
+    const font = fontFor(style);
+    if (style.family || !text || font.measureText(text).width > 0) return font;
+    return fontFor({ ...style, family: 'Inter_400Regular' });
+  }
+
   function measurePlainSegment(text: string, style: TextDrawStyle): number {
     if (!text) return 0;
     if (needsComplexTextShaping(text)) {
       const shaped = measureShapedTextWidth(skiaMod, text, style);
       if (shaped != null) return shaped;
     }
-    return fontFor(style).measureText(text).width;
+    return fontForText(text, style).measureText(text).width;
   }
 
   function drawPlainSegment(text: string, x: number, y: number, style: TextDrawStyle): void {
@@ -259,7 +269,7 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
       const painted = drawShapedTextLine(skiaMod, canvas, text, x, y, style);
       if (painted) return;
     }
-    const font = fontFor(style);
+    const font = fontForText(text, style);
     fillPaint.setColor(grayToColor(skiaMod, style.ink));
     fillPaint.setStyle(PaintStyle.Fill);
     fillPaint.setAntiAlias(true);

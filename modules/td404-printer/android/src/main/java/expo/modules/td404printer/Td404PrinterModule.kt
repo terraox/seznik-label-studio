@@ -34,6 +34,7 @@ import java.util.Vector
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * TD-404 / Ninestar classic Bluetooth (SPP) bridge.
@@ -47,7 +48,9 @@ class Td404PrinterModule : Module() {
   private val ioExecutor = Executors.newCachedThreadPool()
   private val connectTimeoutMs = 8_000L
   private val printChunk = 32 * 1024
+  private val connectGeneration = AtomicInteger(0)
   private var socket: BluetoothSocket? = null
+  private var pendingSocket: BluetoothSocket? = null
   private var connectedMac: String? = null
   private var connectedName: String? = null
   private var receiverRegistered = false
@@ -256,18 +259,33 @@ class Td404PrinterModule : Module() {
         promise.reject("BT_OFF", "Bluetooth is turned off. Enable Bluetooth and try again.", null)
         return@AsyncFunction
       }
+      val generation = connectGeneration.incrementAndGet()
       ioExecutor.execute {
         try {
+          if (generation != connectGeneration.get()) {
+            promise.reject("CONNECT_SUPERSEDED", "Connection replaced by a newer printer.", null)
+            return@execute
+          }
           @SuppressLint("MissingPermission")
           if (adapter.isDiscovering) {
             adapter.cancelDiscovery()
             try { Thread.sleep(150) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
           }
+          closePendingSocket()
           closeSocket()
           try { Thread.sleep(100) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+          if (generation != connectGeneration.get()) {
+            promise.reject("CONNECT_SUPERSEDED", "Connection replaced by a newer printer.", null)
+            return@execute
+          }
 
           val device = adapter.getRemoteDevice(macAddress.uppercase())
-          val sock = openSppSocket(device)
+          val sock = openSppSocket(device, generation)
+          if (generation != connectGeneration.get()) {
+            try { sock.close() } catch (_: Exception) {}
+            promise.reject("CONNECT_SUPERSEDED", "Connection replaced by a newer printer.", null)
+            return@execute
+          }
           socket = sock
           connectedMac = device.address
           @SuppressLint("MissingPermission")
@@ -292,13 +310,18 @@ class Td404PrinterModule : Module() {
             ),
           )
         } catch (e: Exception) {
-          closeSocket()
-          promise.reject("CONNECT_FAILED", e.message ?: "Failed to connect to TD-404 printer.", e)
+          if (generation == connectGeneration.get()) {
+            closeSocket()
+            promise.reject("CONNECT_FAILED", e.message ?: "Failed to connect to TD-404 printer.", e)
+          } else {
+            promise.reject("CONNECT_SUPERSEDED", "Connection replaced by a newer printer.", null)
+          }
         }
       }
     }
 
     AsyncFunction("disconnect") { promise: Promise ->
+      connectGeneration.incrementAndGet()
       ioExecutor.execute {
         closeSocket()
         sendEvent(
@@ -1078,7 +1101,7 @@ class Td404PrinterModule : Module() {
 
 
   @SuppressLint("MissingPermission")
-  private fun openSppSocket(device: BluetoothDevice): BluetoothSocket {
+  private fun openSppSocket(device: BluetoothDevice, generation: Int): BluetoothSocket {
     val isBonded = try {
       device.bondState == BluetoothDevice.BOND_BONDED
     } catch (_: SecurityException) {
@@ -1111,16 +1134,33 @@ class Td404PrinterModule : Module() {
       try {
         android.util.Log.i("Td404Printer", "Opening SPP socket via $name...")
         sock = makeSocket()
-        connectWithTimeout(sock, connectTimeoutMs)
+        if (generation != connectGeneration.get()) {
+          try { sock?.close() } catch (_: Exception) {}
+          throw IOException("Connection replaced by a newer printer.")
+        }
+        pendingSocket = sock
+        connectWithTimeout(sock!!, connectTimeoutMs)
+        if (generation != connectGeneration.get()) {
+          try { sock?.close() } catch (_: Exception) {}
+          if (pendingSocket === sock) pendingSocket = null
+          throw IOException("Connection replaced by a newer printer.")
+        }
+        if (pendingSocket === sock) pendingSocket = null
         android.util.Log.i("Td404Printer", "SPP socket connected successfully via $name")
-        return sock
+        return sock!!
       } catch (e: Exception) {
+        if (generation != connectGeneration.get()) {
+          try { sock?.close() } catch (_: Exception) {}
+          if (pendingSocket === sock) pendingSocket = null
+          throw IOException("Connection replaced by a newer printer.")
+        }
         android.util.Log.w("Td404Printer", "SPP attempt via $name failed: ${e.message}")
         lastError = e
         try {
           sock?.close()
         } catch (_: Exception) {
         }
+        if (pendingSocket === sock) pendingSocket = null
         try {
           Thread.sleep(200)
         } catch (_: InterruptedException) {
@@ -1292,7 +1332,17 @@ class Td404PrinterModule : Module() {
     }
   }
 
+  private fun closePendingSocket() {
+    val pending = pendingSocket
+    pendingSocket = null
+    try {
+      pending?.close()
+    } catch (_: Exception) {
+    }
+  }
+
   private fun closeSocket() {
+    closePendingSocket()
     try {
       socket?.close()
     } catch (_: Exception) {

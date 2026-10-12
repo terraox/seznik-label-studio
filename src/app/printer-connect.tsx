@@ -137,6 +137,9 @@ export default function PrinterConnectScreen() {
   );
   const mountedRef = useRef(true);
   const autoConnectKeyRef = useRef<string | null>(null);
+  const connectRequestRef = useRef(0);
+  /** Printer the user tapped. Stops auto-reconnect from putting the previous one back. */
+  const userTargetRef = useRef<string | null>(null);
 
   const activeBridge = defaultBridgeForConsumer(selectedModel);
   const lastForBridge = usePrinterStore((s) => s.lastDeviceForBridge[activeBridge] ?? null);
@@ -161,16 +164,19 @@ export default function PrinterConnectScreen() {
       const last = store.lastDeviceForBridge[defaultBridgeForConsumer(selectedModel)];
       if (!last?.id) return;
       if (last.consumer !== selectedModel) return;
+      const picked = userTargetRef.current;
+      if (picked && normalizePrinterMac(picked) !== normalizePrinterMac(last.id)) return;
       if (device && normalizePrinterMac(device.id) !== normalizePrinterMac(last.id)) return;
       if (!mgr.isBluetoothEnabled()) return;
       const sessionKey = `${selectedModel}:${last.id}`;
       if (autoConnectKeyRef.current === sessionKey) return;
+      const request = ++connectRequestRef.current;
       setConnectingId(last.id);
       try {
         const ok = await mgr.reconnectLastForConsumer(selectedModel);
-        if (ok) autoConnectKeyRef.current = sessionKey;
+        if (ok && userTargetRef.current == null) autoConnectKeyRef.current = sessionKey;
       } finally {
-        if (mountedRef.current) setConnectingId(null);
+        if (mountedRef.current && connectRequestRef.current === request) setConnectingId(null);
       }
     },
     [connectingId, selectedModel],
@@ -317,12 +323,16 @@ export default function PrinterConnectScreen() {
   }, [lastForBridge?.id, listedDevices]);
 
   const connectWith = async (target: ConsumerPrinterId, device: DiscoveredPrinter) => {
-    getPrinterManager().allowAutoReconnectAgain();
-    setAutoConnectPaused(false);
     if (target !== usePrinterStore.getState().selectedPrinterModel) {
       setSelectedPrinterModel(target);
     }
     await getPrinterManager().connectModel(toDriverModel(target), device.id, device.name);
+    const live = usePrinterStore.getState().deviceId;
+    if (live && normalizePrinterMac(live) === normalizePrinterMac(device.id)) {
+      userTargetRef.current = null;
+      getPrinterManager().allowAutoReconnectAgain();
+      setAutoConnectPaused(false);
+    }
   };
 
   const handleConnect = async (device: DiscoveredPrinter) => {
@@ -333,10 +343,21 @@ export default function PrinterConnectScreen() {
       return;
     }
 
-    getPrinterManager().allowAutoReconnectAgain();
-    setAutoConnectPaused(false);
-    getPrinterManager().stopScan();
+    const mgr = getPrinterManager();
+    const lastId = usePrinterStore.getState().lastDeviceForBridge[defaultBridgeForConsumer(selectedModel)]?.id;
+    const switching = lastId != null && normalizePrinterMac(lastId) !== normalizePrinterMac(device.id);
+    userTargetRef.current = device.id;
+    mgr.invalidatePendingReconnects();
+    mgr.stopScan();
+    if (switching) {
+      mgr.suppressAutoReconnect();
+      setAutoConnectPaused(true);
+    } else {
+      mgr.allowAutoReconnectAgain();
+      setAutoConnectPaused(false);
+    }
     const pinned = usePrinterStore.getState().pinnedDriverByMac[normalizePrinterMac(device.id)];
+    const request = ++connectRequestRef.current;
     setConnectingId(device.id);
     usePrinterStore.getState().setStatus('connecting');
     try {
@@ -347,29 +368,50 @@ export default function PrinterConnectScreen() {
           await connectWith(consumer, device);
         } else {
           await getPrinterManager().connectModel(pinned, device.id, device.name);
+          const live = usePrinterStore.getState().deviceId;
+          if (live && normalizePrinterMac(live) === normalizePrinterMac(device.id)) {
+            userTargetRef.current = null;
+            getPrinterManager().allowAutoReconnectAgain();
+            setAutoConnectPaused(false);
+          }
         }
         return;
       }
 
       const options = choicesFor(device, selectedModel);
       if (options.length > 1) {
+        if (usePrinterStore.getState().status === 'connecting') {
+          usePrinterStore.getState().setStatus('disconnected');
+        }
         setConnectingId(null);
         Alert.alert('Which printer is this?', `${device.name ?? device.id} could be more than one model.`, [
           ...options.map((modelId) => ({
             text: CONSUMER_PRINTERS[modelId].shortName,
             onPress: () => {
               usePrinterStore.getState().pinDriverForMac(device.id, toDriverModel(modelId), true);
+              const choiceRequest = ++connectRequestRef.current;
               setConnectingId(device.id);
+              usePrinterStore.getState().setStatus('connecting');
               void connectWith(modelId, device)
                 .catch((error) => {
                   Alert.alert('Connection failed', error instanceof Error ? error.message : 'Could not connect.');
                 })
                 .finally(() => {
-                  if (mountedRef.current) setConnectingId(null);
+                  if (mountedRef.current && connectRequestRef.current === choiceRequest) setConnectingId(null);
                 });
             },
           })),
-          { text: 'Cancel', style: 'cancel' as const },
+          {
+            text: 'Cancel',
+            style: 'cancel' as const,
+            onPress: () => {
+              userTargetRef.current = null;
+              if (switching) {
+                mgr.allowAutoReconnectAgain();
+                setAutoConnectPaused(false);
+              }
+            },
+          },
         ]);
         return;
       }
@@ -382,7 +424,7 @@ export default function PrinterConnectScreen() {
         );
       }
     } finally {
-      if (mountedRef.current) setConnectingId(null);
+      if (mountedRef.current && connectRequestRef.current === request) setConnectingId(null);
     }
   };
 
@@ -395,6 +437,8 @@ export default function PrinterConnectScreen() {
     getPrinterManager().allowAutoReconnectAgain();
     setAutoConnectPaused(false);
     autoConnectKeyRef.current = null;
+    userTargetRef.current = null;
+    const request = ++connectRequestRef.current;
     usePrinterStore.getState().setStatus('connecting');
     setConnectingId(lastForBridge?.id ?? 'reconnect');
     try {
@@ -409,13 +453,15 @@ export default function PrinterConnectScreen() {
         error instanceof Error ? error.message : 'Could not connect to the last printer.',
       );
     } finally {
-      if (mountedRef.current) setConnectingId(null);
+      if (mountedRef.current && connectRequestRef.current === request) setConnectingId(null);
     }
   };
 
   const handleDisconnect = async () => {
     try {
       autoConnectKeyRef.current = null;
+      userTargetRef.current = null;
+      connectRequestRef.current += 1;
       getPrinterManager().stopScan();
       getPrinterManager().suppressAutoReconnect();
       setAutoConnectPaused(true);
