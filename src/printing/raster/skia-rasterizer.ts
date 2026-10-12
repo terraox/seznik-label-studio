@@ -67,7 +67,7 @@ export type RasterizeOptions = {
    * `padRightDots` of extra white page on the right, so the stroke is never on the
    * last bitmap column. Every other layer is cropped exactly as without this option.
    */
-  edgeBorders?: { padRightDots: number; centerGapMm: number; xOffsetDots?: number };
+  edgeBorders?: { padRightDots: number; centerGapMm: number; shiftDots?: { x: number; y: number } };
   /**
    * Manual darkness minus the bridge default (TD-404: -10..+5). 0 or absent leaves the
    * bitmap untouched. Barcodes and QR codes are excluded.
@@ -319,7 +319,6 @@ export function rasterizeDocumentToBitmapTimed(
   const padRight = Math.max(0, Math.round(options.edgeBorders?.padRightDots ?? 0));
   activeEdgeBorders = options.edgeBorders != null && activeDotScale === 1 && !activeBakeFeed;
   const borderGapMm = options.edgeBorders?.centerGapMm ?? 2;
-  const borderXOffset = Math.round(options.edgeBorders?.xOffsetDots ?? 0);
   const outW = activeEdgeBorders && padRight > 0 ? Math.max(8, Math.ceil((page.sizeDotsW + padRight) / 8) * 8) : packedW;
   resetTextDrawLog();
   const surfW = outW * activeDotScale;
@@ -366,7 +365,11 @@ export function rasterizeDocumentToBitmapTimed(
       dpi,
       surfW,
       surfH,
-      { x: Math.round(options.shiftDots?.x ?? 0) + borderXOffset, y: Math.round(options.shiftDots?.y ?? 0) },
+      // Borders use their own shift when given; otherwise the page shift.
+      {
+        x: Math.round(options.edgeBorders?.shiftDots?.x ?? options.shiftDots?.x ?? 0),
+        y: Math.round(options.edgeBorders?.shiftDots?.y ?? options.shiftDots?.y ?? 0),
+      },
       threshold,
       steps,
       borderGapMm,

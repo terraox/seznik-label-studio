@@ -101,12 +101,18 @@ export const JOSH_BORDER_PAD_DOTS = 0;
 export const JOSH_PAD_CENTER_COMP_DOTS = JOSH_BORDER_PAD_DOTS / 2;
 
 /**
- * Border only. Extra rightward move so the stroke center is measured from the die-cut.
- * The die-cut sits further right than the element origin. Measured on a 50 mm label at
- * a 3 mm gap: left 0 mm, right 5.25 mm (5 mm gap: 2 / 7). 2.6 mm splits that error so
- * left and right match. Elements are not moved.
+ * Border only. Where the border layer sits: its own fixed shift in mm, applied to label
+ * coordinates. It does not use the ink shift, the user H/V offsets or the element offset
+ * below, so moving elements never moves borders. Tuned on printed labels; a shift of 0
+ * left the border off the die-cut, so do not zero it.
  */
-export const JOSH_BORDER_X_OFFSET_MM = 2.6;
+export const JOSH_BORDER_SHIFT_MM = { x: 2.6, y: -1 };
+
+/**
+ * Elements only (text, barcodes, shapes, images). Extra rightward move on top of the
+ * ink shift. Borders do not use it.
+ */
+export const JOSH_ELEMENT_X_OFFSET_MM = 3;
 
 /**
  * Stroke CENTER distance from the die-cut edge on all four sides. The print head is
@@ -131,16 +137,20 @@ export function joshHeadlessRasterOptions(
   extra: Omit<RasterizeOptions, 'pageWidthPack' | 'shiftDots' | 'edgeBorders'> = {},
 ): RasterizeOptions {
   const ink = joshInkShiftDots(horizontalOffsetMm, verticalOffsetMm, dpi);
+  const elementX = mmToDots(JOSH_ELEMENT_X_OFFSET_MM, dpi);
   return {
     ...extra,
     pageWidthPack: 'ceil',
     edgeBorders: {
       padRightDots: JOSH_BORDER_PAD_DOTS,
       centerGapMm: JOSH_BORDER_CENTER_GAP_MM,
-      xOffsetDots: mmToDots(JOSH_BORDER_X_OFFSET_MM, dpi),
+      shiftDots: {
+        x: mmToDots(JOSH_BORDER_SHIFT_MM.x, dpi),
+        y: mmToDots(JOSH_BORDER_SHIFT_MM.y, dpi),
+      },
     },
     shiftDots: {
-      x: ink.x + (JOSH_BORDER_PAD_DOTS > 0 ? JOSH_PAD_CENTER_COMP_DOTS : 0),
+      x: ink.x + elementX + (JOSH_BORDER_PAD_DOTS > 0 ? JOSH_PAD_CENTER_COMP_DOTS : 0),
       y: ink.y,
     },
   };

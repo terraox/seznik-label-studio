@@ -5,7 +5,8 @@ import {
   joshHeadlessRasterOptions,
   joshInkShiftDots,
   JOSH_BORDER_PAD_DOTS,
-  JOSH_BORDER_X_OFFSET_MM,
+  JOSH_BORDER_SHIFT_MM,
+  JOSH_ELEMENT_X_OFFSET_MM,
 } from '@/lib/printer/josh-print';
 import { unpackMono1bppToGray } from '@/printing/raster/bit-packer';
 import { rasterizeDocumentToBitmapTimed } from '@/printing/raster/skia-rasterizer';
@@ -56,6 +57,8 @@ function doc(widthMm: number, withBorder: boolean): LabelDocument {
 
 const joshShift = joshInkShiftDots(0, 0, dpi);
 const legacyOpts = { pageWidthPack: 'ceil' as const, shiftDots: joshShift };
+const elemX = Math.round(JOSH_ELEMENT_X_OFFSET_MM * 8);
+const prodLegacyOpts = { pageWidthPack: 'ceil' as const, shiftDots: { x: joshShift.x + elemX, y: joshShift.y } };
 const padOpts = { ...legacyOpts, edgeBorders: { padRightDots: 8, centerGapMm: 2 } };
 const gapOpts = { ...legacyOpts, edgeBorders: { padRightDots: 0, centerGapMm: 3 } };
 
@@ -118,7 +121,7 @@ for (const widthMm of [50, 25.4, 30]) {
 assert.equal(JOSH_BORDER_PAD_DOTS, 0);
 for (const widthMm of [50, 25.4, 30]) {
   const prod = rasterizeDocumentToBitmapTimed(doc(widthMm, false), dpi, joshHeadlessRasterOptions(dpi, 0, 0)).result;
-  const old = rasterizeDocumentToBitmapTimed(doc(widthMm, false), dpi, legacyOpts).result;
+  const old = rasterizeDocumentToBitmapTimed(doc(widthMm, false), dpi, prodLegacyOpts).result;
   assert.equal(prod.widthDots, old.widthDots);
   // The native side crops to the label width, so only those columns reach the paper.
   const cropW = Math.round(widthMm * 8);
@@ -147,7 +150,7 @@ for (const widthMm of [50, 25.4, 30]) {
   assert.equal((bottom[0] + bottom[bottom.length - 1] + 1) / 2 - joshShift.y, 240 - 24, 'bottom center 3 mm');
 }
 
-// Production options: border is moved right by JOSH_BORDER_X_OFFSET_MM, elements are not,
+// Production options: border uses its own shift, independent of the element shift,
 // and both sides keep the same relative gap (right = width - left, inside the bitmap).
 {
   const prod = joshHeadlessRasterOptions(dpi, 0, 0);
@@ -157,15 +160,24 @@ for (const widthMm of [50, 25.4, 30]) {
   const w = r.widthDots;
   const g = unpackMono1bppToGray(r.mono1bppBuffer, w, r.heightDots, r.bytesPerRow);
   const bg = unpackMono1bppToGray(bare.mono1bppBuffer, bare.widthDots, bare.heightDots, bare.bytesPerRow);
-  const off = Math.round(JOSH_BORDER_X_OFFSET_MM * 8);
+  const bx = Math.round(JOSH_BORDER_SHIFT_MM.x * 8);
   const mid = inkCols(g, w, 100).filter((x) => inkCols(bg, w, 100).indexOf(x) < 0);
   const left = mid.filter((x) => x < 100);
   const right = mid.filter((x) => x > 300);
   assert.ok(right.length >= 4, 'right border inside the bitmap');
   const cL = (left[0] + left[left.length - 1] + 1) / 2;
   const cR = (right[0] + right[right.length - 1] + 1) / 2;
-  assert.equal(cL, 24 + joshShift.x + off, 'left center');
-  assert.equal(cR, 400 - 24 + joshShift.x + off, 'right center');
+  assert.equal(cL, 24 + bx, 'left center');
+  assert.equal(cR, 400 - 24 + bx, 'right center');
+  const by = Math.round(JOSH_BORDER_SHIFT_MM.y * 8);
+  const ys: number[] = [];
+  for (let y = 0; y < r.heightDots; y++) if (g[y * w + 200] < 160) ys.push(y);
+  const top = ys.filter((y) => y < 60);
+  const bottom = ys.filter((y) => y > 150);
+  const cT = (top[0] + top[top.length - 1] + 1) / 2;
+  const cB = (bottom[0] + bottom[bottom.length - 1] + 1) / 2;
+  assert.equal(cT, 24 + by, 'top center 3 mm');
+  assert.equal(cB, 240 - 24 + by, 'bottom center 3 mm');
   assert.ok(cR + 2 <= w, 'right stroke not on the last column');
 }
 console.log('josh-edge-border ok');
