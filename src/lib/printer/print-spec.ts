@@ -110,11 +110,11 @@ export const DEFAULT_PRINTER_PROFILE = PRINTER_PROFILES['td404-304'];
 export const TD404_MEDIA_ORIGIN_H_MM = 1;
 
 /**
- * JOSH / LPAPI job 0 is left of the knife line.
- * Canvas 0 is the die-cut. +3 mm (on top of user H offset) puts canvas 0 on
- * the knife line. Label width stays the die-cut size.
+ * JOSH / LPAPI: startJob(widthMm, heightMm) + drawBitmap(mm) use the die-cut size;
+ * job (0,0) aligns with the sticker edge. Canvas 0 is the die-cut — no extra H
+ * origin (a +3 mm bake shifted all ink right). User calibration only.
  */
-export const JOSH_MEDIA_ORIGIN_H_MM = 3;
+export const JOSH_MEDIA_ORIGIN_H_MM = 0;
 
 export function mediaOriginXMm(profile: PrinterProfile): number {
   if (profile.id.startsWith('td404')) return TD404_MEDIA_ORIGIN_H_MM;

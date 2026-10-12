@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import type { LabelDocument } from '@/lib/label-document';
 import { fullBleedBorderElement } from '@/lib/printer/border-calibration';
-import { joshHeadlessRasterOptions, JOSH_BORDER_PAD_DOTS } from '@/lib/printer/josh-print';
+import {
+  joshHeadlessRasterOptions,
+  joshInkShiftDots,
+  JOSH_BORDER_PAD_DOTS,
+  JOSH_BORDER_X_OFFSET_MM,
+} from '@/lib/printer/josh-print';
 import { unpackMono1bppToGray } from '@/printing/raster/bit-packer';
 import { rasterizeDocumentToBitmapTimed } from '@/printing/raster/skia-rasterizer';
 
@@ -49,7 +54,8 @@ function doc(widthMm: number, withBorder: boolean): LabelDocument {
   } as unknown as LabelDocument;
 }
 
-const legacyOpts = { pageWidthPack: 'ceil' as const, shiftDots: { x: 16, y: -8 } };
+const joshShift = joshInkShiftDots(0, 0, dpi);
+const legacyOpts = { pageWidthPack: 'ceil' as const, shiftDots: joshShift };
 const padOpts = { ...legacyOpts, edgeBorders: { padRightDots: 8, centerGapMm: 2 } };
 const gapOpts = { ...legacyOpts, edgeBorders: { padRightDots: 0, centerGapMm: 3 } };
 
@@ -82,7 +88,7 @@ for (const widthMm of [50, 25.4, 30]) {
   assert.ok(after.r.widthDots >= cropW + 8);
 }
 
-// Border: stroke center is 2 mm from every edge. Label x/y = bitmap x - 16 / y + 8.
+// Border: stroke center is 2 mm from every edge. Label coords = bitmap − josh ink shift.
 {
   const { r, g } = gray(doc(50, true), false);
   const w = r.widthDots;
@@ -92,8 +98,8 @@ for (const widthMm of [50, 25.4, 30]) {
   const left = mid.filter((x) => x < 100);
   const right = mid.filter((x) => x > 300);
   assert.ok(right.length >= stroke, 'right border present');
-  const centerL = (left[0] + left[left.length - 1] + 1) / 2 - 16;
-  const centerR = (right[0] + right[right.length - 1] + 1) / 2 - 16;
+  const centerL = (left[0] + left[left.length - 1] + 1) / 2 - joshShift.x;
+  const centerR = (right[0] + right[right.length - 1] + 1) / 2 - joshShift.x;
   assert.equal(centerL, 16, 'left center 2 mm');
   assert.equal(centerR, 400 - 16, 'right center 2 mm from 50 mm edge (label dots 384)');
   const col = (x: number) => {
@@ -104,8 +110,8 @@ for (const widthMm of [50, 25.4, 30]) {
   const v = col(200);
   const top = v.filter((y) => y < 60);
   const bottom = v.filter((y) => y > 150);
-  assert.equal((top[0] + top[top.length - 1] + 1) / 2 + 8, 16, 'top center 2 mm');
-  assert.equal((bottom[0] + bottom[bottom.length - 1] + 1) / 2 + 8, 240 - 16, 'bottom center 2 mm');
+  assert.equal((top[0] + top[top.length - 1] + 1) / 2 - joshShift.y, 16, 'top center 2 mm');
+  assert.equal((bottom[0] + bottom[bottom.length - 1] + 1) / 2 - joshShift.y, 240 - 16, 'bottom center 2 mm');
 }
 
 // Production Josh options: no pad (page = label), border center 3 mm on all sides, elements unchanged.
@@ -131,13 +137,35 @@ for (const widthMm of [50, 25.4, 30]) {
   const left = mid.filter((x) => x < 100);
   const right = mid.filter((x) => x > 300);
   assert.ok(right.length >= 4, 'right border present inside the bitmap');
-  assert.equal((left[0] + left[left.length - 1] + 1) / 2 - 16, 24, 'left center 3 mm');
-  assert.equal((right[0] + right[right.length - 1] + 1) / 2 - 16, 400 - 24, 'right center 3 mm');
+  assert.equal((left[0] + left[left.length - 1] + 1) / 2 - joshShift.x, 24, 'left center 3 mm');
+  assert.equal((right[0] + right[right.length - 1] + 1) / 2 - joshShift.x, 400 - 24, 'right center 3 mm');
   const ys: number[] = [];
   for (let y = 0; y < r.heightDots; y++) if (g[y * w + 200] < 160) ys.push(y);
   const top = ys.filter((y) => y < 60);
   const bottom = ys.filter((y) => y > 150);
-  assert.equal((top[0] + top[top.length - 1] + 1) / 2 + 8, 24, 'top center 3 mm');
-  assert.equal((bottom[0] + bottom[bottom.length - 1] + 1) / 2 + 8, 240 - 24, 'bottom center 3 mm');
+  assert.equal((top[0] + top[top.length - 1] + 1) / 2 - joshShift.y, 24, 'top center 3 mm');
+  assert.equal((bottom[0] + bottom[bottom.length - 1] + 1) / 2 - joshShift.y, 240 - 24, 'bottom center 3 mm');
+}
+
+// Production options: border is moved right by JOSH_BORDER_X_OFFSET_MM, elements are not,
+// and both sides keep the same relative gap (right = width - left, inside the bitmap).
+{
+  const prod = joshHeadlessRasterOptions(dpi, 0, 0);
+  const bare = rasterizeDocumentToBitmapTimed(doc(50, false), dpi, prod).result;
+  const r = rasterizeDocumentToBitmapTimed(doc(50, true), dpi, prod).result;
+  assert.equal(r.widthDots, bare.widthDots);
+  const w = r.widthDots;
+  const g = unpackMono1bppToGray(r.mono1bppBuffer, w, r.heightDots, r.bytesPerRow);
+  const bg = unpackMono1bppToGray(bare.mono1bppBuffer, bare.widthDots, bare.heightDots, bare.bytesPerRow);
+  const off = Math.round(JOSH_BORDER_X_OFFSET_MM * 8);
+  const mid = inkCols(g, w, 100).filter((x) => inkCols(bg, w, 100).indexOf(x) < 0);
+  const left = mid.filter((x) => x < 100);
+  const right = mid.filter((x) => x > 300);
+  assert.ok(right.length >= 4, 'right border inside the bitmap');
+  const cL = (left[0] + left[left.length - 1] + 1) / 2;
+  const cR = (right[0] + right[right.length - 1] + 1) / 2;
+  assert.equal(cL, 24 + joshShift.x + off, 'left center');
+  assert.equal(cR, 400 - 24 + joshShift.x + off, 'right center');
+  assert.ok(cR + 2 <= w, 'right stroke not on the last column');
 }
 console.log('josh-edge-border ok');

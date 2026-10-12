@@ -87,13 +87,26 @@ export function joshInkShiftDots(
 }
 
 /**
- * Opt-in: white dots added to the right of the Josh page (and 1 mm to the LPAPI job
- * width) so a border can be drawn after the shift with its stroke center 2 mm from the
- * die-cut edge. 0 = off, page and job are exactly the label size. A 51 mm job on a
- * 50 mm label shifted the other border sides on a 50x50 print, so it stays off until
- * the printer is shown to accept a wider job.
+ * Opt-in: white dots added to the right of the Josh page (and the same width to the LPAPI
+ * job). 0 = off, page and job are exactly the label size, which keeps the job width the
+ * printer already accepts. The border offset below keeps the right stroke inside the
+ * 400 dot bitmap at a 3 mm gap, so the pad is not needed.
  */
 export const JOSH_BORDER_PAD_DOTS = 0;
+
+/**
+ * Only used when the pad is on: LPAPI is assumed to center a wider job on the head, so
+ * every layer would move left by half the pad. Added to the ink shift to cancel that.
+ */
+export const JOSH_PAD_CENTER_COMP_DOTS = JOSH_BORDER_PAD_DOTS / 2;
+
+/**
+ * Border only. Extra rightward move so the stroke center is measured from the die-cut.
+ * The die-cut sits further right than the element origin. Measured on a 50 mm label at
+ * a 3 mm gap: left 0 mm, right 5.25 mm (5 mm gap: 2 / 7). 2.6 mm splits that error so
+ * left and right match. Elements are not moved.
+ */
+export const JOSH_BORDER_X_OFFSET_MM = 2.6;
 
 /**
  * Stroke CENTER distance from the die-cut edge on all four sides. The print head is
@@ -117,11 +130,19 @@ export function joshHeadlessRasterOptions(
   verticalOffsetMm: number,
   extra: Omit<RasterizeOptions, 'pageWidthPack' | 'shiftDots' | 'edgeBorders'> = {},
 ): RasterizeOptions {
+  const ink = joshInkShiftDots(horizontalOffsetMm, verticalOffsetMm, dpi);
   return {
     ...extra,
     pageWidthPack: 'ceil',
-    edgeBorders: { padRightDots: JOSH_BORDER_PAD_DOTS, centerGapMm: JOSH_BORDER_CENTER_GAP_MM },
-    shiftDots: joshInkShiftDots(horizontalOffsetMm, verticalOffsetMm, dpi),
+    edgeBorders: {
+      padRightDots: JOSH_BORDER_PAD_DOTS,
+      centerGapMm: JOSH_BORDER_CENTER_GAP_MM,
+      xOffsetDots: mmToDots(JOSH_BORDER_X_OFFSET_MM, dpi),
+    },
+    shiftDots: {
+      x: ink.x + (JOSH_BORDER_PAD_DOTS > 0 ? JOSH_PAD_CENTER_COMP_DOTS : 0),
+      y: ink.y,
+    },
   };
 }
 

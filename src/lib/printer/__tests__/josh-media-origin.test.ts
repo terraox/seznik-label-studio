@@ -23,8 +23,8 @@ const josh = {
   commandLanguage: 'tspl' as const,
 };
 
-assert.equal(JOSH_MEDIA_ORIGIN_H_MM, 3);
-assert.equal(mediaOriginXMm(josh), 3);
+assert.equal(JOSH_MEDIA_ORIGIN_H_MM, 0);
+assert.equal(mediaOriginXMm(josh), 0);
 assert.equal(mediaOriginXMm(PRINTER_PROFILES['td404-304']), TD404_MEDIA_ORIGIN_H_MM);
 assert.equal(mediaOriginXMm(PRINTER_PROFILES['generic-203-4in']), 0);
 assert.equal(mediaOriginXMm(PRINTER_PROFILES['receipt-58mm']), 0);

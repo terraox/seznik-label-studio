@@ -68,7 +68,7 @@ class JoshPrinterManager(private val context: Context) {
         const val TEST_LABEL_HEIGHT_MM = 15.0
         const val TEST_LABEL_DEFAULT_TEXT = "test print sent by sez print"
         /** Match JS `JOSH_MEDIA_ORIGIN_H_MM` + `JOSH_LPAPI_DRAW_BIAS_H_MM` (print-spec / josh-print). */
-        private const val JOSH_MEDIA_ORIGIN_H_MM = 3.0
+        private const val JOSH_MEDIA_ORIGIN_H_MM = 0.0
         private const val JOSH_LPAPI_DRAW_BIAS_H_MM = -1.0
         private const val JOSH_LPAPI_DRAW_BIAS_V_MM = -1.0
         /** Match JS `JOSH_TEST_LABEL_EXTRA_H_MM` — test strip only. */
