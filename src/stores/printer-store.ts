@@ -162,7 +162,8 @@ export const usePrinterStore = create<PrinterStoreState>()(
             backendPrinterId: meta?.backendPrinterId ?? null,
             lastDeviceId: deviceId,
             lastDeviceName: deviceName,
-            selectedPrinterModel: consumer,
+            selectedPrinterModel:
+              consumer === state.selectedPrinterModel ? consumer : state.selectedPrinterModel,
             lastDeviceForModel: {
               ...state.lastDeviceForModel,
               [consumer]: { id: deviceId, name: deviceName },

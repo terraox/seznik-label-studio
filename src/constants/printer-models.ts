@@ -173,6 +173,16 @@ export function toDriverModel(id: ConsumerPrinterId): 'td404' | 'josh' {
   return id === 'josh' ? 'josh' : 'td404';
 }
 
+/** Connect-screen family must match the native driver being opened. */
+export function consumerMatchesDriver(
+  consumer: ConsumerPrinterId,
+  driver: 'td404' | 'josh' | 'dev' | 'tez' | 'labelx' | 'generic',
+): boolean {
+  if (driver === 'josh') return consumer === 'josh';
+  if (driver === 'td404') return consumer === 'tejas' || consumer === 'rudra';
+  return true;
+}
+
 /**
  * Map a persisted driver id (or already-migrated consumer id) to the connect-screen choice.
  * Unknown legacy drivers land on Tejas unless the live SDK is Josh.

@@ -47,10 +47,13 @@ import {
   JOSH_HEADLESS_EMPTY,
   printLabelDocumentMainPipeline,
 } from '@/lib/printer/main-pipeline-print';
+import { encodeTscCompactTextSample } from '@/lib/printer/tsc';
 import { assertTd404MonoBuffer } from '@/printing/raster/td404-mono-validate';
 import { usePrinterStore, normalizePrinterMac, type PrinterTransport } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import {
+  CONSUMER_PRINTERS,
+  consumerMatchesDriver,
   type ConsumerPrinterId,
   type SeznikPrinterModelId,
   SEZNIK_PRINTER_MODELS,
@@ -304,6 +307,7 @@ class PrinterManager {
   /** Last successful auto-reconnect per bridge+MAC — cleared when the link drops. */
   private autoReconnectSessionKey: string | null = null;
   private autoReconnectInFlight = false;
+  private reconnectEpoch = 0;
   private lastAutoReconnectAttemptAt = 0;
   private static readonly AUTO_RECONNECT_MIN_INTERVAL_MS = 8_000;
   /** While connectModel is in flight, native connected() may lag briefly. */
@@ -1365,6 +1369,12 @@ class PrinterManager {
     deviceName?: string | null,
   ): Promise<void> {
     const store = usePrinterStore.getState();
+    if (!consumerMatchesDriver(store.selectedPrinterModel, model)) {
+      throw new Error(
+        `Connect cancelled: ${CONSUMER_PRINTERS[store.selectedPrinterModel]?.shortName ?? 'selected'} printer is not ${model}.`,
+      );
+    }
+    const connectEpoch = this.reconnectEpoch;
     if (this.isLiveSessionForModel(model, deviceId)) {
       this.connectionState = 'connected';
       const meta = this.connectionMetaFromActiveTransport();
@@ -1382,6 +1392,17 @@ class PrinterManager {
     // 1. Cleanly disconnect all existing bridges first
     await this.disconnect().catch(() => {});
 
+    if (connectEpoch !== this.reconnectEpoch) {
+      store.setStatus('disconnected');
+      this.connectionState = 'disconnected';
+      throw new Error('Connect cancelled: printer family changed.');
+    }
+    if (!consumerMatchesDriver(usePrinterStore.getState().selectedPrinterModel, model)) {
+      store.setStatus('disconnected');
+      this.connectionState = 'disconnected';
+      throw new Error('Connect cancelled: printer family changed.');
+    }
+
     await this.ensurePermissions('connect-only');
 
     try {
@@ -1398,6 +1419,10 @@ class PrinterManager {
           transport: 'bluetooth-spp',
           sdkId: 'td404',
           model: 'td404',
+          consumer:
+            store.selectedPrinterModel === 'rudra' || store.selectedPrinterModel === 'tejas'
+              ? store.selectedPrinterModel
+              : 'tejas',
         });
         this.scheduleDebugBatteryLog('td404', res.id);
       } else if (model === 'josh') {
@@ -1428,6 +1453,7 @@ class PrinterManager {
           transport: 'josh-lpapi',
           sdkId: 'josh',
           model: 'josh',
+          consumer: 'josh',
         });
         this.scheduleDebugBatteryLog('josh', res.id || deviceId);
       } else if (model === 'dev') {
@@ -2766,6 +2792,13 @@ class PrinterManager {
     this.autoReconnectSessionKey = null;
   }
 
+  /** Cancel in-flight auto-reconnect when the user picks a different printer family. */
+  invalidatePendingReconnects(): void {
+    this.reconnectEpoch++;
+    this.autoReconnectInFlight = false;
+    this.autoReconnectSessionKey = null;
+  }
+
   /**
    * Reconnect to the last device for the selected printer family when disconnected.
    * Safe from any screen (home, print, edit); debounced and respects manual disconnect.
@@ -2801,6 +2834,7 @@ class PrinterManager {
     const bridge = defaultBridgeForConsumer(consumer);
     const last = store.lastDeviceForBridge[bridge];
     if (!last?.id) return;
+    if (last.consumer !== consumer) return;
     if (this.autoReconnectSuppressed) return;
 
     const sessionKey = `${bridge}:${last.id}`;
@@ -2815,7 +2849,7 @@ class PrinterManager {
     this.lastAutoReconnectAttemptAt = now;
     try {
       console.info('[printer] app-wide auto-reconnect attempt', sessionKey);
-      const ok = await this.reconnectLastForConsumer(last.consumer);
+      const ok = await this.reconnectLastForConsumer(consumer);
       if (ok) {
         this.autoReconnectSessionKey = sessionKey;
         this.autoReconnectSuppressed = false;
@@ -3206,6 +3240,15 @@ class PrinterManager {
     const bridge = defaultBridgeForConsumer(consumer);
     const entry = usePrinterStore.getState().lastDeviceForBridge[bridge];
     if (!entry?.id) return false;
+    if (entry.consumer !== consumer) {
+      console.info(
+        `[printer] skip reconnect: saved consumer ${entry.consumer} does not match requested ${consumer}`,
+      );
+      return false;
+    }
+    if (!options?.userRequested && liveStore.selectedPrinterModel !== consumer) {
+      return false;
+    }
     if (!this.isBluetoothEnabled()) {
       this.lastErrorMessage = BLUETOOTH_OFF_MESSAGE;
       return false;
@@ -3347,6 +3390,23 @@ class PrinterManager {
     if (!this.isConnected) throw new Error('No printer connected.');
     const compact = Boolean(options?.compact);
     const lines = options?.lines ?? (text.includes('\n') ? text.split('\n') : [text]);
+
+    if (compact && this.usesTd404CommandSet) {
+      const widthMm = DIAGNOSTIC_COMPACT_LABEL_WIDTH_MM;
+      const heightMm = DIAGNOSTIC_COMPACT_LABEL_HEIGHT_MM;
+      const contentLines = lines.map((line) => String(line).trim()).filter(Boolean);
+      console.info(
+        `[print] TD-404 compact test label via TSPL TEXT: ${widthMm}x${heightMm}mm, ${contentLines.length} line(s)`,
+      );
+      const bytes = encodeTscCompactTextSample({
+        lines: contentLines,
+        widthMm,
+        heightMm,
+        gapMm: 3,
+      });
+      await this.print(bytes);
+      return;
+    }
 
     const usesMainPipeline =
       this.isLabelX || this.isDev || this.isTez || this.isJosh || this.usesTd404CommandSet;

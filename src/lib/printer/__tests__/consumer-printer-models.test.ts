@@ -3,9 +3,18 @@ import test from 'node:test';
 
 import {
   consumerIdFromLegacy,
+  consumerMatchesDriver,
   migrateLastDeviceForModel,
   toDriverModel,
 } from '@/constants/printer-models';
+
+test('consumer family must match the native driver', () => {
+  assert.equal(consumerMatchesDriver('josh', 'josh'), true);
+  assert.equal(consumerMatchesDriver('tejas', 'josh'), false);
+  assert.equal(consumerMatchesDriver('tejas', 'td404'), true);
+  assert.equal(consumerMatchesDriver('rudra', 'td404'), true);
+  assert.equal(consumerMatchesDriver('josh', 'td404'), false);
+});
 
 test('Tejas and Rudra share the TD-404 driver; Josh uses its own', () => {
   assert.equal(toDriverModel('tejas'), 'td404');

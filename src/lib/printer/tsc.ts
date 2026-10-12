@@ -4,7 +4,13 @@
  */
 
 import type { BitRaster } from '@/lib/printer/escpos';
-import { formatTsplMm, formatTsplSizeCommand } from '@/lib/printer/print-spec';
+import {
+  DEFAULT_PRINTER_PROFILE,
+  dotsPerMm,
+  formatTsplMm,
+  formatTsplSizeCommand,
+  mediaOriginXMm,
+} from '@/lib/printer/print-spec';
 
 export type TscJobOptions = {
   widthMm: number;
@@ -182,9 +188,38 @@ function readTsplHeader(bytes: Uint8Array): { text: string; payloadStart: number
   return { text, payloadStart: limit };
 }
 
+/** TSC built-in font "1" at 1×1 is ~12 dots tall; step must exceed that to avoid overlap. */
+const TSC_FONT1_HEIGHT_DOTS = 12;
+const COMPACT_TEXT_MARGIN_TOP_MM = 1;
+const COMPACT_TEXT_MARGIN_BOTTOM_MM = 0.5;
+const COMPACT_TEXT_MIN_LINE_STEP_MM = 2.8;
+
+export function layoutTscCompactTextLines(options: {
+  lineCount: number;
+  heightMm: number;
+  dpi?: number;
+}): { startY: number; lineStep: number } {
+  const dpi = options.dpi ?? DEFAULT_PRINTER_PROFILE.dpi;
+  const dpm = dotsPerMm(dpi);
+  const count = Math.max(1, options.lineCount);
+  const innerMm = Math.max(
+    COMPACT_TEXT_MIN_LINE_STEP_MM,
+    options.heightMm - COMPACT_TEXT_MARGIN_TOP_MM - COMPACT_TEXT_MARGIN_BOTTOM_MM,
+  );
+  const distributedStep = Math.round((innerMm / count) * dpm);
+  const minStep = Math.max(
+    TSC_FONT1_HEIGHT_DOTS + 2,
+    Math.round(COMPACT_TEXT_MIN_LINE_STEP_MM * dpm),
+  );
+  return {
+    startY: Math.round(COMPACT_TEXT_MARGIN_TOP_MM * dpm),
+    lineStep: Math.max(minStep, distributedStep),
+  };
+}
+
 /**
  * Left-aligned, small-type TSPL text for narrow strips (50×15 mm, 25×25 mm corner).
- * Uses font "1" at 1×1 so content stays in the top-left of the job.
+ * Uses font "1" at 1×1; line spacing is derived from label height (304 DPI / 12 dpm).
  */
 export function encodeTscCompactTextSample(options: {
   lines: readonly string[];
@@ -192,29 +227,44 @@ export function encodeTscCompactTextSample(options: {
   heightMm?: number;
   gapMm?: number;
   density?: number;
+  dpi?: number;
+  profile?: typeof DEFAULT_PRINTER_PROFILE;
 }): Uint8Array {
   const widthMm = options.widthMm ?? 50;
   const heightMm = options.heightMm ?? 15;
   const gapMm = options.gapMm ?? 2;
   const density = options.density ?? 8;
-  const x = 4;
-  let y = 6;
-  const lineStep = 14;
+  const profile = options.profile ?? DEFAULT_PRINTER_PROFILE;
+  const dpi = options.dpi ?? profile.dpi;
+  const dpm = dotsPerMm(dpi);
+  const refX = Math.round(mediaOriginXMm(profile) * dpm);
+  const safeLines = options.lines
+    .map((line) => String(line).replace(/"/g, '').trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 4);
+  const { startY, lineStep } = layoutTscCompactTextLines({
+    lineCount: safeLines.length,
+    heightMm,
+    dpi,
+  });
+  const x = Math.round(1 * dpm);
+  let y = startY;
   let textBlock = '';
-  for (const line of options.lines) {
-    const safe = String(line).replace(/"/g, '').slice(0, 32);
-    if (!safe) continue;
+  for (const line of safeLines) {
+    const safe = line.slice(0, 32);
     textBlock += `TEXT ${x},${y},"1",0,1,1,"${safe}"\r\n`;
     y += lineStep;
   }
+  const mediaCmd = mediaCommand('gap', gapMm);
   const cmd =
     '\r\n' +
     `${formatTsplSizeCommand(widthMm, heightMm)}\r\n` +
-    `GAP ${formatTsplMm(gapMm)} mm,0 mm\r\n` +
+    mediaCmd +
     'SPEED 5\r\n' +
     `DENSITY ${density}\r\n` +
     'DIRECTION 0,0\r\n' +
-    'REFERENCE 0,0\r\n' +
+    'OFFSET 0 mm\r\n' +
+    `REFERENCE ${refX},0\r\n` +
     'CLS\r\n' +
     textBlock +
     'PRINT 1\r\n';

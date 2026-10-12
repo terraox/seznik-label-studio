@@ -160,13 +160,14 @@ export default function PrinterConnectScreen() {
       if (store.status === 'connecting' || store.status === 'printing') return;
       const last = store.lastDeviceForBridge[defaultBridgeForConsumer(selectedModel)];
       if (!last?.id) return;
+      if (last.consumer !== selectedModel) return;
       if (device && normalizePrinterMac(device.id) !== normalizePrinterMac(last.id)) return;
       if (!mgr.isBluetoothEnabled()) return;
       const sessionKey = `${selectedModel}:${last.id}`;
       if (autoConnectKeyRef.current === sessionKey) return;
       setConnectingId(last.id);
       try {
-        const ok = await mgr.reconnectLastForConsumer(last.consumer);
+        const ok = await mgr.reconnectLastForConsumer(selectedModel);
         if (ok) autoConnectKeyRef.current = sessionKey;
       } finally {
         if (mountedRef.current) setConnectingId(null);
@@ -233,6 +234,8 @@ export default function PrinterConnectScreen() {
   const handleModelChange = (modelId: ConsumerPrinterId) => {
     if (modelId === selectedModel) return;
     if (getPrinterManager().isConnectionHealthy()) return;
+    getPrinterManager().invalidatePendingReconnects();
+    getPrinterManager().stopScan();
     setSelectedPrinterModel(modelId);
     setDevices([]);
     setNativeHint(null);
