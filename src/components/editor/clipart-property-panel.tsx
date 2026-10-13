@@ -4,6 +4,14 @@ import { AppIcon } from '@/components/app-icon';
 import { PositionControls } from '@/components/editor/position-controls';
 import { DRAWING_COLORS, formatMm, normalizeRotation } from '@/components/editor/types';
 import { GrayThresholdSlider } from '@/components/editor/gray-threshold-slider';
+import { getClipartById } from '@/constants/clipart-library';
+import { clipartSvgSource } from '@/lib/clipart/types';
+import {
+  clampStrokeScale,
+  STROKE_SCALE_MAX,
+  STROKE_SCALE_MIN,
+  STROKE_SCALE_STEP,
+} from '@/lib/clipart/stroke-scale';
 import type { ClipartElementState } from '@/lib/label-document';
 
 const ACCENT = '#48C3C7';
@@ -316,7 +324,8 @@ export function ClipartPropertyPanel({
   onChooseClipart,
 }: ClipartPropertyPanelProps) {
   const colorMode = useColorMode(state);
-
+  const isLineArt = Boolean(clipartSvgSource(getClipartById(state.clipartId)));
+  const thickness = clampStrokeScale(state.strokeScale);
   return (
     <View style={styles.panel}>
       <ScrollView
@@ -345,6 +354,23 @@ export function ClipartPropertyPanel({
               value={Boolean(state.tile)}
               onValueChange={(tile) => applyTilePatch(tile, patch, labelWidthMm, labelHeightMm)}
             />
+            {isLineArt ? (
+              <>
+                <Divider />
+                <View style={styles.thresholdBlock}>
+                  <View style={styles.thresholdHeader}>
+                    <Text style={styles.rowLabel}>Line Thickness</Text>
+                  </View>
+                  <GrayThresholdSlider
+                    value={thickness}
+                    min={STROKE_SCALE_MIN}
+                    max={STROKE_SCALE_MAX}
+                    step={STROKE_SCALE_STEP}
+                    onChange={(strokeScale) => patch({ strokeScale })}
+                  />
+                </View>
+              </>
+            ) : null}
             <Divider />
             <SegmentRow
               label="Color Mode"

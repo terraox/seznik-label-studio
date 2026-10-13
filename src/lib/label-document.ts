@@ -69,6 +69,8 @@ export type ClipartElementState = {
   tile?: boolean;
   colorMode?: 'Original' | 'B & W' | 'Halftone';
   grayThreshold?: number;
+  /** Line-art thickness multiplier for vector stickers (0.5-3, default 1). */
+  strokeScale?: number;
 };
 
 export type BorderElementState = {

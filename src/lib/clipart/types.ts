@@ -5,7 +5,9 @@ export type UserClipartKind = 'svg' | 'image';
 export type BuiltinClipartItem = {
   id: string;
   label: string;
-  category: ClipartCategoryId;
+  category: ClipartCategoryId | 'emoji';
+  /** Line-emoji sub-group (only for category 'emoji'). */
+  group?: string;
   source: 'builtin';
   svg: string;
 };

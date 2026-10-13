@@ -24,6 +24,9 @@ import { dotsPerMm, mmToDots, rectMmToDots } from '@/lib/printer/print-spec';
 import { sortLayers } from '@/lib/template-schema';
 import { printGridKnockoutsMm, printGridRectsDots, printGridSpacingMm } from '@/lib/print-grid';
 import { drawPrintRuler, printRulerEnabled } from '@/lib/print-ruler';
+import { parseSvgDrawOps, type ClipartDrawOp } from '@/lib/clipart/parse-svg';
+import { clampStrokeScale } from '@/lib/clipart/stroke-scale';
+import { clipartSvgSource } from '@/lib/clipart/types';
 import { resolvePrintFontFamily } from '@/lib/fonts/text-font-family';
 import { computeWrappedLines, layoutPrintText } from '@/lib/text-metrics';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
@@ -87,19 +90,31 @@ const UNSUPPORTED: ReadonlySet<LabelElement['type']> = new Set([
   'time',
   'arctext',
   'degrees',
-  'clipart',
   'signature',
 ]);
 
-function isUnsupportedPrintType(type: LabelElement['type']): boolean {
-  return type === 'image' || UNSUPPORTED.has(type);
+/** SVG stickers draw natively; tiled stickers and imported bitmaps still need the capture path. */
+function vectorClipartOps(el: LabelElement): ClipartDrawOp[] | null {
+  if (el.type !== 'clipart' || el.tile) return null;
+  // Lazy: the clipart library pulls in app stores that host-side raster tests don't need.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getClipartById } = require('@/constants/clipart-library') as typeof import('@/constants/clipart-library');
+  const svg = clipartSvgSource(getClipartById(el.clipartId));
+  if (!svg) return null;
+  const ops = parseSvgDrawOps(svg);
+  return ops.length > 0 ? ops : null;
+}
+
+function isUnsupportedPrintType(el: LabelElement): boolean {
+  if (el.type === 'clipart') return vectorClipartOps(el) == null;
+  return el.type === 'image' || UNSUPPORTED.has(el.type);
 }
 
 function collectUnsupportedHeadlessElements(doc: LabelDocument): { types: Set<string>; ids: string[] } {
   const types = new Set<string>();
   const ids: string[] = [];
   for (const el of doc.elements) {
-    if (!isUnsupportedPrintType(el.type)) continue;
+    if (!isUnsupportedPrintType(el)) continue;
     types.add(el.type);
     ids.push(`${el.type}:${el.id}`);
   }
@@ -282,6 +297,24 @@ function drawDocumentToSurface(
         case 'shape':
           drawShape(surface, el, dpm, box);
           break;
+        case 'clipart': {
+          const ops = vectorClipartOps(el);
+          if (!ops || !surface.drawVectorGlyph) {
+            throw new Error(`Unsupported print element type: clipart (${el.id})`);
+          }
+          // Same placement as the canvas: a square of min(w, h), centred in the box.
+          const side = Math.min(box.w, box.h);
+          const thickness = clampStrokeScale(el.strokeScale);
+          const scaled = thickness === 1 ? ops : ops.map((op) => ({ ...op, sw: op.sw * thickness }));
+          const gx = box.x0 + (box.w - side) / 2;
+          const gy = box.y0 + (box.h - side) / 2;
+          if (el.clipartId.startsWith('le-') && surface.drawLineEmojiGlyph) {
+            surface.drawLineEmojiGlyph(scaled, gx, gy, side, 0);
+          } else {
+            surface.drawVectorGlyph(scaled, gx, gy, side, 0);
+          }
+          break;
+        }
         case 'image':
           throw new Error('Unsupported print element type: image (decode not wired in Stage A host path)');
         default:
@@ -290,7 +323,12 @@ function drawDocumentToSurface(
     };
     const rotation = el.rotation ?? 0;
     if (rotation % 360 !== 0) {
-      surface.withRotation(box.x0 + box.w / 2, box.y0 + box.h / 2, rotation, draw);
+      // Line-art emoji rotates around the box corner on the canvas (the live
+      // content transform origin). Every other element stays on the box center.
+      const lineEmoji = el.type === 'clipart' && el.clipartId.startsWith('le-');
+      const px = lineEmoji ? box.x0 : box.x0 + box.w / 2;
+      const py = lineEmoji ? box.y0 : box.y0 + box.h / 2;
+      surface.withRotation(px, py, rotation, draw);
     } else {
       draw();
     }

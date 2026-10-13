@@ -6,6 +6,128 @@ export type ClipartDrawOp =
   | { t: 'line'; a: number; b: number; c: number; d: number; sw: number }
   | { t: 'polygon'; pts: string; fill: boolean; sw: number };
 
+/** Any draw op as one SVG path string (so a renderer only needs a path API). */
+export function clipartOpToSvgPath(op: ClipartDrawOp): string | null {
+  switch (op.t) {
+    case 'path':
+      return op.d;
+    case 'circle':
+      return `M${op.x - op.r} ${op.y}a${op.r} ${op.r} 0 1 0 ${op.r * 2} 0a${op.r} ${op.r} 0 1 0 ${-op.r * 2} 0Z`;
+    case 'ellipse':
+      return `M${op.x - op.rx} ${op.y}a${op.rx} ${op.ry} 0 1 0 ${op.rx * 2} 0a${op.rx} ${op.ry} 0 1 0 ${-op.rx * 2} 0Z`;
+    case 'line':
+      return `M${op.a} ${op.b}L${op.c} ${op.d}`;
+    case 'polygon':
+      return `M${op.pts.trim().replace(/\s+/g, ' L')}Z`;
+    case 'rect': {
+      const rx = Math.max(0, Math.min(op.rx, op.w / 2, op.h / 2));
+      if (rx <= 0) return `M${op.x} ${op.y}h${op.w}v${op.h}h${-op.w}Z`;
+      const { x, y, w, h } = op;
+      return `M${x + rx} ${y}H${x + w - rx}A${rx} ${rx} 0 0 1 ${x + w} ${y + rx}V${y + h - rx}A${rx} ${rx} 0 0 1 ${x + w - rx} ${y + h}H${x + rx}A${rx} ${rx} 0 0 1 ${x} ${y + h - rx}V${y + rx}A${rx} ${rx} 0 0 1 ${x + rx} ${y}Z`;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Skia's SVG path parser misreads arc flags that are glued to the next number
+ * (`a4.5 4.5 0 018-2.8` is flags 0,1 and dx 8, not x=18). The canvas SVG
+ * renderer follows the SVG spec. Re-emit arcs with the flags separated so the
+ * printed curve lands on the same point as the canvas.
+ */
+export function separateSvgArcFlags(d: string): string {
+  let i = 0;
+  let out = '';
+  const len = d.length;
+
+  const isCmd = (c: string) => /[a-zA-Z]/.test(c);
+
+  function skipSep() {
+    while (i < len && (d[i] === ' ' || d[i] === ',' || d[i] === '\n' || d[i] === '\t' || d[i] === '\r')) i++;
+  }
+
+  function readNumber(): string | null {
+    skipSep();
+    if (i >= len) return null;
+    const start = i;
+    if (d[i] === '+' || d[i] === '-') i++;
+    let saw = false;
+    while (i < len && d[i]! >= '0' && d[i]! <= '9') {
+      saw = true;
+      i++;
+    }
+    if (i < len && d[i] === '.') {
+      i++;
+      while (i < len && d[i]! >= '0' && d[i]! <= '9') {
+        saw = true;
+        i++;
+      }
+    }
+    if (!saw) {
+      i = start;
+      return null;
+    }
+    if (i < len && (d[i] === 'e' || d[i] === 'E')) {
+      const mark = i;
+      i++;
+      if (i < len && (d[i] === '+' || d[i] === '-')) i++;
+      const exp = i;
+      while (i < len && d[i]! >= '0' && d[i]! <= '9') i++;
+      if (i === exp) i = mark;
+    }
+    return d.slice(start, i);
+  }
+
+  function readFlag(): string | null {
+    skipSep();
+    if (i < len && (d[i] === '0' || d[i] === '1')) {
+      const flag = d[i]!;
+      i++;
+      return flag;
+    }
+    return null;
+  }
+
+  while (i < len) {
+    skipSep();
+    if (i >= len) break;
+    const cmd = d[i]!;
+    if (!isCmd(cmd)) {
+      const n = readNumber();
+      if (n == null) break;
+      out += ` ${n}`;
+      continue;
+    }
+    i++;
+    out += `${out ? ' ' : ''}${cmd}`;
+    if (cmd === 'z' || cmd === 'Z') continue;
+    const arc = cmd === 'a' || cmd === 'A';
+    while (i < len) {
+      skipSep();
+      if (i >= len || isCmd(d[i]!)) break;
+      if (!arc) {
+        const n = readNumber();
+        if (n == null) break;
+        out += ` ${n}`;
+        continue;
+      }
+      const rx = readNumber();
+      const ry = readNumber();
+      const rot = readNumber();
+      const large = readFlag();
+      const sweep = readFlag();
+      const px = readNumber();
+      const py = readNumber();
+      if (rx == null || ry == null || rot == null || large == null || sweep == null || px == null || py == null) {
+        break;
+      }
+      out += ` ${rx} ${ry} ${rot} ${large} ${sweep} ${px} ${py}`;
+    }
+  }
+  return out;
+}
+
 function attr(tag: string, name: string): string | undefined {
   const match = tag.match(new RegExp(`${name}="([^"]*)"`));
   return match?.[1];

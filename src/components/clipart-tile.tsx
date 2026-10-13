@@ -13,7 +13,7 @@ export function ClipartTile({ item, size = 76 }: { item: ClipartItem; size?: num
       {imageUri ? (
         <Image source={{ uri: imageUri }} style={{ width: iconSize, height: iconSize }} contentFit="contain" />
       ) : svg ? (
-        <ClipartIcon svg={svg} size={iconSize} color="#111111" />
+        <ClipartIcon svg={svg} size={iconSize} color="#111111" fitInk={item.id.startsWith('le-')} />
       ) : (
         <View style={{ width: iconSize, height: iconSize }} />
       )}

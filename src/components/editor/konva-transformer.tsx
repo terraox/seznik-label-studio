@@ -1553,13 +1553,30 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
   // Match pre-cb5cf2e QR/barcode: fill the live box. Transform-scaling the
   // inner SVG is what made modules flicker while dragging.
+  // Line emoji fills its box from the SVG viewBox. Scaling a snapshot of it
+  // keeps the stroke at the start size, so the margin inside the frame grows
+  // as the box grows. The frame's own width/height is the size instead.
+  const lineEmojiFrame =
+    element.type === 'clipart' && element.clipartId.startsWith('le-') && element.tile !== true;
   const liveScaleContent =
+    !lineEmojiFrame &&
     element.type !== 'border' &&
     element.type !== 'barcode' &&
     element.type !== 'qrcode' &&
     element.type !== 'text' &&
     element.type !== 'degrees' &&
     element.type !== 'time';
+
+  // The glyph is laid out at this size. The scale must use the same number in
+  // the same frame: startW stays at the gesture-start size until the commit
+  // effect, so a line-art emoji already redrawn at the final size was scaled
+  // again and flickered before it settled.
+  const layoutW = Math.max(1, baseWidthPx);
+  const layoutH = Math.max(1, baseHeightPx);
+  const layoutWSv = useSharedValue(layoutW);
+  const layoutHSv = useSharedValue(layoutH);
+  layoutWSv.value = layoutW;
+  layoutHSv.value = layoutH;
 
   const contentRotateStyle = useAnimatedStyle(() => {
     const rotate = { rotate: `${animRot.value}deg` };
@@ -1570,10 +1587,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         transform: [rotate],
       };
     }
-    const baseW = Math.max(1, startW.value);
-    const baseH = Math.max(1, startH.value);
     const liveW = Math.max(1, animW.value);
     const liveH = Math.max(1, animH.value);
+    const baseW = Math.max(1, layoutWSv.value);
+    const baseH = Math.max(1, layoutHSv.value);
     // Transform only — never animate layout width/height. Resizing layout
     // forces barcode/QR SVG to re-rasterize every frame (flicker).
     return {
@@ -1686,6 +1703,8 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 selectedTableCell={element.type === 'table' ? selectedTableCell : null}
                 tableSelectionColor={tableSelectionColor}
                 layoutWidthMm={isTextElement && !textResizing ? sizeMm.width : undefined}
+                frameWidth={lineEmojiFrame ? animW : undefined}
+                frameHeight={lineEmojiFrame ? animH : undefined}
               />
             )}
           </Animated.View>

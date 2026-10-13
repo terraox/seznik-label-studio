@@ -49,7 +49,9 @@ import { resolveFontFamily } from '@/lib/fonts/resolve-font';
 import { resolveEditorFontFamily } from '@/lib/fonts/text-font-family';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
 import { getClipartById } from '@/constants/clipart-library';
-import { parseSvgDrawOps } from '@/lib/clipart/parse-svg';
+import { inkSquare } from '@/lib/clipart/ink-bounds';
+import { clampStrokeScale } from '@/lib/clipart/stroke-scale';
+import { clipartOpToSvgPath, parseSvgDrawOps } from '@/lib/clipart/parse-svg';
 import { clipartImageUri, clipartSvgSource } from '@/lib/clipart/types';
 import { useUserClipartStore } from '@/stores/user-clipart-store';
 import { applyMonoToRgba, resolveEditorColorMode } from '@/lib/editor/image-mono';
@@ -629,10 +631,15 @@ export const SkiaClipart = memo(function SkiaClipart({
   element,
   widthPx,
   heightPx,
+  curWidth,
+  curHeight,
 }: {
   element: ClipartElementState;
   widthPx: number;
   heightPx: number;
+  /** Live box size (shared values). When given, vector stickers size themselves from these every frame. */
+  curWidth?: SharedValue<number>;
+  curHeight?: SharedValue<number>;
 }) {
   useUserClipartStore((state) => state.revision);
   const color = inkColor(element.drawingColorIndex);
@@ -641,7 +648,10 @@ export const SkiaClipart = memo(function SkiaClipart({
   const imageUri = clipartImageUri(sticker);
   const svg = clipartSvgSource(sticker);
 
+  // Only the glyph fallback needs a font; building one per resize frame made SVG stickers flicker.
+  const needsGlyphFont = !svg && !imageUri;
   const font = useMemo(() => {
+    if (!needsGlyphFont) return null;
     try {
       return matchFont({
         fontFamily: 'sans-serif',
@@ -651,8 +661,65 @@ export const SkiaClipart = memo(function SkiaClipart({
     } catch {
       return null;
     }
-  }, [size]);
-  const ops = useMemo(() => (svg ? parseSvgDrawOps(svg) : []), [svg]);
+  }, [needsGlyphFont, size]);
+  // Skia paths depend only on the SVG, never on size (scaling happens on the Group), so build once.
+  const prepared = useMemo(() => {
+    const out: {
+      key: string;
+      kind: 'circle' | 'rect' | 'line' | 'path';
+      style: 'stroke' | 'fill';
+      sw: number;
+      op: ReturnType<typeof parseSvgDrawOps>[number];
+      path?: ReturnType<typeof Skia.Path.Make>;
+    }[] = [];
+    (svg ? parseSvgDrawOps(svg) : []).forEach((op, idx) => {
+      const style = op.t === 'line' || !op.fill ? 'stroke' : 'fill';
+      const base = { key: `clip-${idx}`, style, sw: op.sw, op } as const;
+      if (op.t === 'circle') out.push({ ...base, kind: 'circle' });
+      else if (op.t === 'rect' && !(op.rx > 0)) out.push({ ...base, kind: 'rect' });
+      else if (op.t === 'rect') {
+        // Rounded corners: same path the print raster draws, so canvas and label match.
+        const rounded = Skia.Path.MakeFromSVGString(clipartOpToSvgPath(op) ?? '');
+        if (rounded) out.push({ ...base, kind: 'path', path: rounded });
+      }
+      else if (op.t === 'line') out.push({ ...base, kind: 'line' });
+      else if (op.t === 'ellipse') {
+        const path = Skia.Path.Make();
+        path.addOval(rect(op.x - op.rx, op.y - op.ry, op.rx * 2, op.ry * 2));
+        out.push({ ...base, kind: 'path', path });
+      } else if (op.t === 'polygon') {
+        const path = Skia.Path.MakeFromSVGString(`M${op.pts.replaceAll(' ', ' L')} Z`);
+        if (path) out.push({ ...base, kind: 'path', path });
+      } else {
+        const path = Skia.Path.MakeFromSVGString(op.d);
+        if (path) out.push({ ...base, kind: 'path', path });
+      }
+    });
+    return out;
+  }, [svg]);
+
+  // Sticker placement is derived from the live box on the UI thread. Resizing therefore never depends on a
+  // React re-render landing in step with a separate GPU scale, which is what made it flicker on release.
+  const thickness = clampStrokeScale(element.strokeScale);
+  const lineEmoji = element.clipartId.startsWith('le-');
+  const fit = useMemo(
+    () => (lineEmoji && svg ? inkSquare(parseSvgDrawOps(svg), thickness) : { x: 0, y: 0, side: 24 }),
+    [lineEmoji, svg, thickness],
+  );
+  const fitX = fit.x;
+  const fitY = fit.y;
+  const fitSide = fit.side;
+  const stickerTransform = useDerivedValue(() => {
+    const w = curWidth ? curWidth.value : widthPx;
+    const h = curHeight ? curHeight.value : heightPx;
+    const side = Math.min(w, h);
+    const k = side / fitSide;
+    return [
+      { translateX: (w - side) / 2 - fitX * k },
+      { translateY: (h - side) / 2 - fitY * k },
+      { scale: k },
+    ];
+  });
 
   if (imageUri) {
     return (
@@ -671,91 +738,23 @@ export const SkiaClipart = memo(function SkiaClipart({
     return <Text x={(widthPx - size * 0.7) / 2} y={size * 0.75} text={glyph} font={font} color={color} />;
   }
 
-  const stickerScale = size / 24;
-  const ox = (widthPx - size) / 2;
-  const oy = (heightPx - size) / 2;
-
   return (
-    <Group transform={[{ translateX: ox }, { translateY: oy }, { scale: stickerScale }]}>
-      {ops.map((s, idx) => {
-        const style = s.t === 'line' || !s.fill ? 'stroke' : 'fill';
-        const sw = s.sw;
-        if (s.t === 'circle') {
+    <Group transform={stickerTransform}>
+      {prepared.map((s) => {
+        const strokeWidth = s.style === 'stroke' ? s.sw * thickness : undefined;
+        if (s.kind === 'circle' && s.op.t === 'circle') {
+          return <Circle key={s.key} cx={s.op.x} cy={s.op.y} r={s.op.r} color={color} style={s.style} strokeWidth={strokeWidth} />;
+        }
+        if (s.kind === 'rect' && s.op.t === 'rect') {
           return (
-            <Circle
-              key={`clip-${idx}`}
-              cx={s.x}
-              cy={s.y}
-              r={s.r}
-              color={color}
-              style={style}
-              strokeWidth={style === 'stroke' ? sw : undefined}
-            />
+            <Rect key={s.key} x={s.op.x} y={s.op.y} width={s.op.w} height={s.op.h} color={color} style={s.style} strokeWidth={strokeWidth} />
           );
         }
-        if (s.t === 'rect') {
-          return (
-            <Rect
-              key={`clip-${idx}`}
-              x={s.x}
-              y={s.y}
-              width={s.w}
-              height={s.h}
-              color={color}
-              style={style}
-              strokeWidth={style === 'stroke' ? sw : undefined}
-            />
-          );
+        if (s.kind === 'line' && s.op.t === 'line') {
+          return <Line key={s.key} p1={vec(s.op.a, s.op.b)} p2={vec(s.op.c, s.op.d)} color={color} strokeWidth={s.sw * thickness} />;
         }
-        if (s.t === 'ellipse') {
-          const path = Skia.Path.Make();
-          path.addOval(rect(s.x - s.rx, s.y - s.ry, s.rx * 2, s.ry * 2));
-          return (
-            <Path
-              key={`clip-${idx}`}
-              path={path}
-              color={color}
-              style={style}
-              strokeWidth={style === 'stroke' ? sw : undefined}
-            />
-          );
-        }
-        if (s.t === 'line') {
-          return (
-            <Line
-              key={`clip-${idx}`}
-              p1={vec(s.a, s.b)}
-              p2={vec(s.c, s.d)}
-              color={color}
-              strokeWidth={sw}
-            />
-          );
-        }
-        if (s.t === 'polygon') {
-          const path = Skia.Path.MakeFromSVGString(`M${s.pts.replaceAll(' ', ' L')} Z`);
-          if (!path) return null;
-          return (
-            <Path
-              key={`clip-${idx}`}
-              path={path}
-              color={color}
-              style={style}
-              strokeWidth={style === 'stroke' ? sw : undefined}
-            />
-          );
-        }
-        if (s.t === 'path') {
-          const path = Skia.Path.MakeFromSVGString(s.d);
-          if (!path) return null;
-          return (
-            <Path
-              key={`clip-${idx}`}
-              path={path}
-              color={color}
-              style={style}
-              strokeWidth={style === 'stroke' ? sw : undefined}
-            />
-          );
+        if (s.kind === 'path' && s.path) {
+          return <Path key={s.key} path={s.path} color={color} style={s.style} strokeWidth={strokeWidth} />;
         }
         return null;
       })}

@@ -20,9 +20,12 @@ import ViewShot from 'react-native-view-shot';
 
 import type { LabelDocument, LabelElement } from '@/lib/label-document';
 import { elementSizeMm } from '@/lib/label-document';
+import { getClipartById } from '@/constants/clipart-library';
+import { clipartSvgSource } from '@/lib/clipart/types';
 import { mmToPx, pxToMm } from '@/lib/label-coordinate-system';
 import { finiteMm, roundMm, type SnapGuide } from '@/lib/editor/engine';
 import {
+  SkiaClipart,
   SkiaElementView,
   SkiaSelectionOverlay,
 } from '@/components/editor/skia-element-renderer';
@@ -162,20 +165,37 @@ const SkiaElementNode = memo(function SkiaElementNode({
   });
 
   // Content group handles GPU live scaling during resize gestures (Option A)
-  const contentTransform = useDerivedValue(() => [
-    { scaleX: widthPx > 0 ? curWidth.value / widthPx : 1 },
-    { scaleY: heightPx > 0 ? curHeight.value / heightPx : 1 },
-  ]);
+  // Vector clipart/emoji sizes itself from curWidth/curHeight (see SkiaClipart), so it skips this scale.
+  const isVectorClipart =
+    element.type === 'clipart' && Boolean(clipartSvgSource(getClipartById(element.clipartId)));
+  const contentTransform = useDerivedValue(() =>
+    isVectorClipart
+      ? []
+      : [
+          { scaleX: widthPx > 0 ? curWidth.value / widthPx : 1 },
+          { scaleY: heightPx > 0 ? curHeight.value / heightPx : 1 },
+        ],
+  );
 
   return (
     <Group transform={outerTransform}>
       <Group transform={contentTransform}>
-        <SkiaElementView
-          element={element}
-          widthPx={widthPx}
-          heightPx={heightPx}
-          scale={pxPerMM}
-        />
+        {isVectorClipart && element.type === 'clipart' ? (
+          <SkiaClipart
+            element={element}
+            widthPx={widthPx}
+            heightPx={heightPx}
+            curWidth={curWidth}
+            curHeight={curHeight}
+          />
+        ) : (
+          <SkiaElementView
+            element={element}
+            widthPx={widthPx}
+            heightPx={heightPx}
+            scale={pxPerMM}
+          />
+        )}
       </Group>
       {selected && (
         <SkiaSelectionOverlay
@@ -350,22 +370,25 @@ const ElementGestureNode = memo(function ElementGestureNode({
       .onUpdate((e) => {
         'worklet';
         const isSquare = element.type === 'qrcode';
+        // Clipart is a uniformly-scaled sticker: keep its aspect so the live GPU scale matches the committed render.
+        const lockAspect = element.type === 'clipart';
+        const aspect = startWidth.value > 0 && startHeight.value > 0 ? startHeight.value / startWidth.value : 1;
         const maxW = mmToPx(canvasWidthMm - element.left, pxPerMM);
         const maxH = mmToPx(canvasHeightMm - element.top, pxPerMM);
-        const maxAllowed = isSquare ? Math.min(maxW, maxH) : maxW;
-        const minAllowed = mmToPx(MIN_ELEMENT_MM, pxPerMM);
+        const maxAllowed = isSquare ? Math.min(maxW, maxH) : lockAspect ? Math.min(maxW, maxH / aspect) : maxW;
+        const minPx = mmToPx(MIN_ELEMENT_MM, pxPerMM);
+        const minAllowed = lockAspect ? Math.max(minPx, minPx / aspect) : minPx;
 
         const newW = Math.max(minAllowed, Math.min(maxAllowed, startWidth.value + e.translationX / zoomSv.value));
+        const newHeightPx = isSquare ? newW : lockAspect ? newW * aspect : curHeight.value;
         curWidth.value = newW;
-        if (isSquare) {
-          curHeight.value = newW;
-        }
+        curHeight.value = newHeightPx;
 
         if (liveBounds) {
           liveBounds.leftMm.value = element.left;
           liveBounds.topMm.value = element.top;
           liveBounds.widthMm.value = pxToMm(newW, pxPerMM);
-          liveBounds.heightMm.value = isSquare ? pxToMm(newW, pxPerMM) : sizeMm.height;
+          liveBounds.heightMm.value = isSquare || lockAspect ? pxToMm(newHeightPx, pxPerMM) : sizeMm.height;
           liveBounds.visible.value = true;
         }
       })
@@ -373,7 +396,11 @@ const ElementGestureNode = memo(function ElementGestureNode({
         'worklet';
         const isSquare = element.type === 'qrcode';
         const finalWidthMm = pxToMm(curWidth.value, pxPerMM);
-        const finalHeightMm = isSquare ? finalWidthMm : sizeMm.height;
+        const finalHeightMm = isSquare
+          ? finalWidthMm
+          : element.type === 'clipart'
+            ? pxToMm(curHeight.value, pxPerMM)
+            : sizeMm.height;
         isInteracting.value = false;
 
         runOnJS(onTransformEnd)({
@@ -423,21 +450,24 @@ const ElementGestureNode = memo(function ElementGestureNode({
       .onUpdate((e) => {
         'worklet';
         const isSquare = element.type === 'qrcode';
+        const lockAspect = element.type === 'clipart';
+        // width / height of the box at gesture start (clipart keeps this ratio).
+        const invAspect = startWidth.value > 0 && startHeight.value > 0 ? startWidth.value / startHeight.value : 1;
         const maxW = mmToPx(canvasWidthMm - element.left, pxPerMM);
         const maxH = mmToPx(canvasHeightMm - element.top, pxPerMM);
-        const maxAllowed = isSquare ? Math.min(maxW, maxH) : maxH;
-        const minAllowed = mmToPx(MIN_ELEMENT_MM, pxPerMM);
+        const maxAllowed = isSquare ? Math.min(maxW, maxH) : lockAspect ? Math.min(maxH, maxW / invAspect) : maxH;
+        const minPx = mmToPx(MIN_ELEMENT_MM, pxPerMM);
+        const minAllowed = lockAspect ? Math.max(minPx, minPx / invAspect) : minPx;
 
         const newH = Math.max(minAllowed, Math.min(maxAllowed, startHeight.value + e.translationY / zoomSv.value));
+        const newWidthPx = isSquare ? newH : lockAspect ? newH * invAspect : curWidth.value;
         curHeight.value = newH;
-        if (isSquare) {
-          curWidth.value = newH;
-        }
+        curWidth.value = newWidthPx;
 
         if (liveBounds) {
           liveBounds.leftMm.value = element.left;
           liveBounds.topMm.value = element.top;
-          liveBounds.widthMm.value = isSquare ? pxToMm(newH, pxPerMM) : sizeMm.width;
+          liveBounds.widthMm.value = isSquare || lockAspect ? pxToMm(newWidthPx, pxPerMM) : sizeMm.width;
           liveBounds.heightMm.value = pxToMm(newH, pxPerMM);
           liveBounds.visible.value = true;
         }
@@ -446,7 +476,11 @@ const ElementGestureNode = memo(function ElementGestureNode({
         'worklet';
         const isSquare = element.type === 'qrcode';
         const finalHeightMm = pxToMm(curHeight.value, pxPerMM);
-        const finalWidthMm = isSquare ? finalHeightMm : sizeMm.width;
+        const finalWidthMm = isSquare
+          ? finalHeightMm
+          : element.type === 'clipart'
+            ? pxToMm(curWidth.value, pxPerMM)
+            : sizeMm.width;
         isInteracting.value = false;
 
         runOnJS(onTransformEnd)({

@@ -7,6 +7,8 @@
 
 import { needsComplexTextShaping, textContainsEmoji } from '@/lib/fonts/text-font-family';
 import { splitPrintTextSegments } from '@/lib/text/emoji-segments';
+import { inkSquare } from '@/lib/clipart/ink-bounds';
+import { clipartOpToSvgPath, separateSvgArcFlags, type ClipartDrawOp } from '@/lib/clipart/parse-svg';
 
 import { fillEllipse, fillRect, makeDotSurface, strokeRect, type DotSurface } from './dot-surface';
 import {
@@ -59,6 +61,17 @@ export type RasterSurface = {
   measureTextWidth: (text: string, style: TextDrawStyle) => number;
   /** Clockwise about (cx, cy), matching a React Native view rotate. No-op at multiples of 360. */
   withRotation: (cx: number, cy: number, degrees: number, draw: () => void) => void;
+  /**
+   * Draws a 24x24-grid vector sticker into the square at (x, y) with side `size` dots.
+   * Skia only; the dot-buffer host fallback has no path rasterizer.
+   */
+  drawVectorGlyph?: (ops: ClipartDrawOp[], x: number, y: number, size: number, gray: number) => void;
+  /**
+   * Line-art emoji only. Same square as the canvas SvgXml (viewBox 0 0 24 24,
+   * round caps, viewport clip). Circles and ellipses are the SVG primitives,
+   * not the arc-path stand-in.
+   */
+  drawLineEmojiGlyph?: (ops: ClipartDrawOp[], x: number, y: number, size: number, gray: number) => void;
   readGray: () => Uint8Array;
 };
 
@@ -79,6 +92,7 @@ type SkiaModule = {
     Color: (c: string | number) => unknown;
     XYWHRect: (x: number, y: number, w: number, h: number) => unknown;
     Font: (typeface: unknown, size?: number) => SkiaFont;
+    Path: { MakeFromSVGString: (svg: string) => unknown | null };
   };
   matchFont: (style: {
     fontFamily?: string;
@@ -87,6 +101,9 @@ type SkiaModule = {
     fontStyle?: string;
   }) => SkiaFont;
   PaintStyle: { Fill: number; Stroke: number };
+  StrokeCap?: { Round: number };
+  StrokeJoin?: { Round: number };
+  ClipOp?: { Intersect: number };
   ColorType: { RGBA_8888: number };
   AlphaType: { Unpremul: number };
 } & EmojiSkiaModule;
@@ -116,6 +133,10 @@ type SkiaCanvas = {
   restore?: () => void;
   translate?: (x: number, y: number) => void;
   rotate?: (degrees: number, px?: number, py?: number) => void;
+  scale?: (sx: number, sy: number) => void;
+  drawPath?: (path: unknown, paint: SkiaPaint) => void;
+  drawCircle?: (cx: number, cy: number, radius: number, paint: SkiaPaint) => void;
+  clipRect?: (rect: unknown, op: number, doAntiAlias: boolean) => void;
 };
 
 type SkiaPaint = {
@@ -123,6 +144,8 @@ type SkiaPaint = {
   setStyle: (style: number) => void;
   setStrokeWidth: (width: number) => void;
   setAntiAlias: (aa: boolean) => void;
+  setStrokeCap?: (cap: number) => void;
+  setStrokeJoin?: (join: number) => void;
 };
 
 type SkiaFont = {
@@ -365,6 +388,91 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
       canvas.translate?.(-cx, -cy);
       try {
         draw();
+      } finally {
+        canvas.restore?.();
+      }
+    },
+    drawVectorGlyph(ops, x, y, size, gray) {
+      if (
+        typeof canvas.save !== 'function' ||
+        typeof canvas.translate !== 'function' ||
+        typeof canvas.scale !== 'function' ||
+        typeof canvas.drawPath !== 'function'
+      ) {
+        return;
+      }
+      const k = size / 24;
+      if (!(k > 0)) return;
+      const color = grayToColor(skiaMod, gray);
+      const paint = Skia.Paint();
+      paint.setAntiAlias(true);
+      paint.setColor(color);
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.scale(k, k);
+      try {
+        for (const op of ops) {
+          const d = clipartOpToSvgPath(op);
+          const path = d ? Skia.Path.MakeFromSVGString(d) : null;
+          if (!path) continue;
+          const filled = op.t !== 'line' && op.fill;
+          paint.setStyle(filled ? PaintStyle.Fill : PaintStyle.Stroke);
+          // Never thinner than one printer dot, whatever the sticker size.
+          if (!filled) paint.setStrokeWidth(Math.max(op.sw, 1 / k));
+          canvas.drawPath(path, paint);
+        }
+      } finally {
+        canvas.restore?.();
+      }
+    },
+    drawLineEmojiGlyph(ops, x, y, size, gray) {
+      if (
+        typeof canvas.save !== 'function' ||
+        typeof canvas.translate !== 'function' ||
+        typeof canvas.scale !== 'function' ||
+        typeof canvas.drawPath !== 'function'
+      ) {
+        return;
+      }
+      // Same square the editor viewBox uses, so the print fills the frame
+      // instead of the empty 24×24 artboard around the glyph.
+      const fit = inkSquare(ops);
+      const k = size / fit.side;
+      if (!(k > 0)) return;
+      const color = grayToColor(skiaMod, gray);
+      const paint = Skia.Paint();
+      paint.setAntiAlias(false);
+      paint.setColor(color);
+      if (skiaMod.StrokeCap && paint.setStrokeCap) paint.setStrokeCap(skiaMod.StrokeCap.Round);
+      if (skiaMod.StrokeJoin && paint.setStrokeJoin) paint.setStrokeJoin(skiaMod.StrokeJoin.Round);
+      canvas.save();
+      canvas.translate(x - fit.x * k, y - fit.y * k);
+      canvas.scale(k, k);
+      if (typeof canvas.clipRect === 'function' && skiaMod.ClipOp) {
+        canvas.clipRect(Skia.XYWHRect(fit.x, fit.y, fit.side, fit.side), skiaMod.ClipOp.Intersect, false);
+      }
+      try {
+        for (const op of ops) {
+          const filled = op.t !== 'line' && op.fill;
+          paint.setStyle(filled ? PaintStyle.Fill : PaintStyle.Stroke);
+          // Stroke width stays in viewBox units, same ratio as the canvas SVG.
+          if (!filled) paint.setStrokeWidth(op.sw);
+          if (op.t === 'circle' && typeof canvas.drawCircle === 'function') {
+            canvas.drawCircle(op.x, op.y, op.r, paint);
+            continue;
+          }
+          if (op.t === 'ellipse') {
+            canvas.drawOval(
+              Skia.XYWHRect(op.x - op.rx, op.y - op.ry, op.rx * 2, op.ry * 2),
+              paint,
+            );
+            continue;
+          }
+          const d = op.t === 'path' ? separateSvgArcFlags(op.d) : clipartOpToSvgPath(op);
+          const path = d ? Skia.Path.MakeFromSVGString(d) : null;
+          if (!path) continue;
+          canvas.drawPath(path, paint);
+        }
       } finally {
         canvas.restore?.();
       }

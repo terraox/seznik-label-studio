@@ -3683,6 +3683,9 @@ export default function EditScreen() {
         router.push({ pathname: '/ocr', params: { from: 'edit' } });
         break;
       case 'Line Emoji':
+        clipartReplaceIdRef.current = null;
+        clipartPendingPlacementRef.current = null;
+        router.push({ pathname: '/clipart', params: { from: 'edit', mode: 'emoji' } });
         break;
       case 'Label Clone':
         saveDocument(false);
@@ -4187,7 +4190,12 @@ export default function EditScreen() {
                 clipartReplaceIdRef.current = targetEl.id;
               }
               clipartPendingPlacementRef.current = null;
-              router.push({ pathname: '/clipart', params: { from: 'edit' } });
+              router.push({
+                pathname: '/clipart',
+                params: targetEl.clipartId?.startsWith('le-')
+                  ? { from: 'edit', mode: 'emoji' }
+                  : { from: 'edit' },
+              });
             }}
           />
         );

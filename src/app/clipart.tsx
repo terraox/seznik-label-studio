@@ -18,8 +18,10 @@ import { SettingsStackHeader } from '@/components/settings-stack-header';
 import {
   CLIPART_CATEGORIES,
   getClipartForCategory,
+  getLineEmoji,
   type ClipartCategoryId,
 } from '@/constants/clipart-library';
+import { LINE_EMOJI_GROUPS } from '@/constants/line-emoji-catalog';
 import { editorBridge } from '@/constants/editor-bridge';
 import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
@@ -28,7 +30,7 @@ import type { ClipartItem } from '@/lib/clipart/types';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import { useUserClipartStore } from '@/stores/user-clipart-store';
 
-type GalleryCategory = ClipartCategoryId | 'local';
+type GalleryCategory = ClipartCategoryId | 'local' | (typeof LINE_EMOJI_GROUPS)[number]['id'];
 
 const RAIL_WIDTH = 84;
 const GRID_COLUMNS = 3;
@@ -49,11 +51,12 @@ const RAILS: { id: GalleryCategory; label: string }[] = [
 export default function ClipartScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const params = useLocalSearchParams<{ from?: string }>();
+  const params = useLocalSearchParams<{ from?: string; mode?: string }>();
+  const emojiMode = params.mode === 'emoji';
   const fromEdit = params.from === 'edit';
   const userItems = useUserClipartStore((s) => s.items);
   const revision = useUserClipartStore((s) => s.revision);
-  const [category, setCategory] = useState<GalleryCategory>('retail');
+  const [category, setCategory] = useState<GalleryCategory>(emojiMode ? 'smileys' : 'retail');
   const [query, setQuery] = useState('');
   const [importing, setImporting] = useState(false);
   const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
@@ -116,32 +119,38 @@ export default function ClipartScreen() {
   );
 
   const icons = useMemo(() => {
-    const list = getClipartForCategory(category);
+    const list = emojiMode
+      ? getLineEmoji(category)
+      : getClipartForCategory(category as ClipartCategoryId | 'local');
     const q = query.trim().toLowerCase();
     if (!q) return list;
     return list.filter((item) => item.label.toLowerCase().includes(q) || item.id.includes(q));
-  }, [category, query, userItems, revision]);
+  }, [category, query, userItems, revision, emojiMode]);
 
   const sectionTitle =
-    category === 'local'
-      ? 'Local clipart'
-      : CLIPART_CATEGORIES.find((item) => item.id === category)?.label ?? 'Clipart';
+    emojiMode
+      ? LINE_EMOJI_GROUPS.find((item) => item.id === category)?.label ?? 'Line Emoji'
+      : category === 'local'
+        ? 'Local clipart'
+        : CLIPART_CATEGORIES.find((item) => item.id === category)?.label ?? 'Clipart';
 
   return (
     <View style={styles.root}>
-      <SettingsStackHeader title="Clipart" />
+      <SettingsStackHeader title={emojiMode ? 'Line Emoji' : 'Clipart'} />
       <View style={styles.body}>
         <View style={styles.topBar}>
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search clipart"
+            placeholder={emojiMode ? 'Search emoji' : 'Search clipart'}
             placeholderTextColor="#94A3B8"
             style={styles.search}
           />
-          <Pressable onPress={() => void handleUpload()} disabled={importing} style={styles.uploadBtn}>
-            <Text style={styles.uploadText}>{importing ? '…' : 'Import'}</Text>
-          </Pressable>
+          {emojiMode ? null : (
+            <Pressable onPress={() => void handleUpload()} disabled={importing} style={styles.uploadBtn}>
+              <Text style={styles.uploadText}>{importing ? '…' : 'Import'}</Text>
+            </Pressable>
+          )}
         </View>
 
         <Text style={styles.sectionTitle} numberOfLines={1}>
@@ -153,7 +162,7 @@ export default function ClipartScreen() {
             style={styles.rail}
             contentContainerStyle={{ paddingBottom: insets.bottom + 12 }}
             showsVerticalScrollIndicator={false}>
-            {RAILS.map((item) => {
+            {(emojiMode ? LINE_EMOJI_GROUPS : RAILS).map((item) => {
               const active = category === item.id;
               return (
                 <Pressable

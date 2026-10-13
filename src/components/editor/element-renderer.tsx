@@ -1,6 +1,7 @@
 import { computeArcTextLayout } from "@/lib/editor/arctext-layout";
 import { useEffect, useMemo, useState } from "react";
 import { Image, Platform, StyleSheet, Text, View } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 import Svg, {
   Circle,
   Ellipse,
@@ -121,6 +122,9 @@ type ContentProps = {
   tableSelectionColor?: string;
   /** When set, text wraps to this width instead of `element.width`. */
   layoutWidthMm?: number;
+  /** Live resize box. Line emoji sizes its SVG from these so the stroke tracks the frame. */
+  frameWidth?: SharedValue<number>;
+  frameHeight?: SharedValue<number>;
 };
 
 function textStyleFor(
@@ -1340,6 +1344,8 @@ export function ElementContentView({
   selectedTableCell,
   tableSelectionColor,
   layoutWidthMm,
+  frameWidth,
+  frameHeight,
 }: ContentProps) {
   useInstalledFontStore((state) => state.revision);
   useUserClipartStore((state) => state.revision);
@@ -1444,17 +1450,26 @@ export function ElementContentView({
 
       const svg = clipartSvgSource(sticker);
       const imageUri = clipartImageUri(sticker);
-      const renderGlyph = (size: number) =>
+      const lineEmoji = element.clipartId.startsWith("le-");
+      const renderGlyph = (size: number | "100%") =>
         imageUri ? (
           <Image
             source={{ uri: imageUri }}
-            style={{ width: size, height: size }}
+            style={size === "100%" ? styles.fill : { width: size, height: size }}
             resizeMode="contain"
           />
         ) : svg ? (
-          <ClipartIcon svg={svg} size={size} color={previewColor} />
+          <ClipartIcon
+            svg={svg}
+            size={size}
+            color={previewColor}
+            strokeScale={element.strokeScale}
+            fitInk={lineEmoji}
+            frameWidth={lineEmoji && !element.tile && size === "100%" ? frameWidth : undefined}
+            frameHeight={lineEmoji && !element.tile && size === "100%" ? frameHeight : undefined}
+          />
         ) : (
-          <Text style={{ fontSize: size * 0.7, color: previewColor }}>
+          <Text style={{ fontSize: (size === "100%" ? unit : size) * 0.7, color: previewColor }}>
             {element.glyph ?? "★"}
           </Text>
         );
@@ -1480,6 +1495,13 @@ export function ElementContentView({
             ))}
           </View>
         );
+      }
+
+      // Line emoji is the frame: 100% of the live box, viewBox cropped to the ink.
+      // A fixed pixel glyph scaled by a parent transform leaves the stroke behind,
+      // so the empty margin grows as the frame grows.
+      if (lineEmoji && !element.tile) {
+        return <View style={styles.fill}>{renderGlyph("100%")}</View>;
       }
 
       return (

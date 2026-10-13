@@ -2,39 +2,39 @@ import type { ClipartCatalogEntry } from '@/constants/clipart-catalog';
 
 const VB = 24;
 
-function wrap(inner: string): string {
+export function wrap(inner: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VB} ${VB}" fill="none">${inner}</svg>`;
 }
 
-function p(d: string, fill = false, sw = 1.6): string {
+export function p(d: string, fill = false, sw = 1.6): string {
   return fill
     ? `<path fill="currentColor" d="${d}"/>`
     : `<path fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" d="${d}"/>`;
 }
 
-function c(cx: number, cy: number, r: number, fill = false, sw = 1.6): string {
+export function c(cx: number, cy: number, r: number, fill = false, sw = 1.6): string {
   return fill
     ? `<circle fill="currentColor" cx="${cx}" cy="${cy}" r="${r}"/>`
     : `<circle fill="none" stroke="currentColor" stroke-width="${sw}" cx="${cx}" cy="${cy}" r="${r}"/>`;
 }
 
-function r(x: number, y: number, w: number, h: number, rx = 0, fill = false, sw = 1.6): string {
+export function r(x: number, y: number, w: number, h: number, rx = 0, fill = false, sw = 1.6): string {
   return fill
     ? `<rect fill="currentColor" x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/>`
     : `<rect fill="none" stroke="currentColor" stroke-width="${sw}" x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/>`;
 }
 
-function l(x1: number, y1: number, x2: number, y2: number, sw = 1.6): string {
+export function l(x1: number, y1: number, x2: number, y2: number, sw = 1.6): string {
   return `<line stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
 }
 
-function e(cx: number, cy: number, rx: number, ry: number, fill = false, sw = 1.6): string {
+export function e(cx: number, cy: number, rx: number, ry: number, fill = false, sw = 1.6): string {
   return fill
     ? `<ellipse fill="currentColor" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"/>`
     : `<ellipse fill="none" stroke="currentColor" stroke-width="${sw}" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"/>`;
 }
 
-function poly(pts: string, fill = false, sw = 1.6): string {
+export function poly(pts: string, fill = false, sw = 1.6): string {
   return fill
     ? `<polygon fill="currentColor" points="${pts}"/>`
     : `<polygon fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linejoin="round" points="${pts}"/>`;

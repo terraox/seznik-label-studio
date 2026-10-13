@@ -8,9 +8,16 @@ const ACCENT = '#48C3C7';
 export function GrayThresholdSlider({
   value,
   onChange,
+  min = 0,
+  max = 255,
+  step = 1,
 }: {
   value: number;
   onChange: (next: number) => void;
+  /** Range and snap step. Defaults give the original 0-255 threshold slider. */
+  min?: number;
+  max?: number;
+  step?: number;
 }) {
   const widthRef = useRef(1);
   const onChangeRef = useRef(onChange);
@@ -19,7 +26,9 @@ export function GrayThresholdSlider({
   const setFromX = (x: number) => {
     const w = widthRef.current || 1;
     const ratio = Math.max(0, Math.min(1, x / w));
-    onChangeRef.current(Math.round(ratio * 255));
+    const raw = min + ratio * (max - min);
+    const snapped = Math.round((raw - min) / step) * step + min;
+    onChangeRef.current(Math.max(min, Math.min(max, Number(snapped.toFixed(4)))));
   };
 
   const gesture = useMemo(() => {
@@ -39,7 +48,7 @@ export function GrayThresholdSlider({
     return Gesture.Exclusive(pan, tap);
   }, []);
 
-  const ratio = Math.max(0, Math.min(1, value / 255));
+  const ratio = max > min ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0;
 
   return (
     <GestureDetector gesture={gesture}>

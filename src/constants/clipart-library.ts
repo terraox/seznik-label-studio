@@ -5,6 +5,7 @@ import {
   type ClipartCatalogEntry,
   type ClipartCategoryId,
 } from '@/constants/clipart-catalog';
+import { LINE_EMOJI } from '@/constants/line-emoji-catalog';
 import { buildClipartSvg } from '@/lib/clipart/build-svg';
 import { cachedUserSvg } from '@/lib/clipart/user-storage';
 import type { ClipartItem } from '@/lib/clipart/types';
@@ -21,7 +22,16 @@ const BUILTIN: ClipartItem[] = CLIPART_CATALOG.map((entry: ClipartCatalogEntry) 
   source: 'builtin',
 }));
 
-const BY_ID = new Map(BUILTIN.map((item) => [item.id, item]));
+const LINE_EMOJI_ITEMS: ClipartItem[] = LINE_EMOJI.map((entry) => ({
+  id: entry.id,
+  label: entry.label,
+  category: 'emoji',
+  group: entry.group,
+  svg: entry.svg,
+  source: 'builtin',
+}));
+
+const BY_ID = new Map([...BUILTIN, ...LINE_EMOJI_ITEMS].map((item) => [item.id, item]));
 
 export function getBuiltinClipart(): ClipartItem[] {
   return BUILTIN;
@@ -58,6 +68,10 @@ export function getClipartById(id: string | undefined): ClipartItem | undefined 
   if (builtin) return builtin;
   const user = useUserClipartStore.getState().items.find((item) => item.id === id);
   return user ? toUserClipart(user) : undefined;
+}
+
+export function getLineEmoji(group?: string): ClipartItem[] {
+  return group ? LINE_EMOJI_ITEMS.filter((item) => item.group === group) : LINE_EMOJI_ITEMS;
 }
 
 export function getClipartForCategory(category: ClipartCategoryId | 'local' | 'mine'): ClipartItem[] {
