@@ -4,10 +4,12 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   type TextInputProps,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -27,6 +29,8 @@ export type IosAlertModalProps = {
   children?: ReactNode;
   buttons?: IosAlertButton[];
   onRequestClose?: () => void;
+  /** Tap outside the card. Hardware back still uses `onRequestClose` or `onClose`. */
+  dismissOnBackdrop?: boolean;
   cardMaxWidth?: number;
 };
 
@@ -38,32 +42,37 @@ export function IosAlertModal({
   children,
   buttons = [{ text: 'OK', style: 'default', bold: true }],
   onRequestClose,
+  dismissOnBackdrop = true,
   cardMaxWidth = 280,
 }: IosAlertModalProps) {
-  const handleRequestClose = onRequestClose ?? onClose;
+  const { height: windowHeight } = useWindowDimensions();
+  const handleBack = onRequestClose ?? onClose;
+  const handleBackdrop = dismissOnBackdrop ? (onClose ?? onRequestClose) : undefined;
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={handleRequestClose}>
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={handleBack}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
-        <Pressable
-          style={styles.backdrop}
-          onPress={handleRequestClose}
-          pointerEvents={handleRequestClose ? 'auto' : 'none'}
-        />
-        <View style={[styles.card, { maxWidth: cardMaxWidth }]}>
-          {/* Header content */}
-          <View style={styles.body}>
+        <Pressable style={styles.backdrop} onPress={handleBackdrop} />
+        <View style={[styles.card, { maxWidth: cardMaxWidth, maxHeight: Math.round(windowHeight * 0.8) }]}>
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            style={styles.bodyScroll}
+            contentContainerStyle={styles.body}>
             {!!title && <Text style={styles.title}>{title}</Text>}
             {!!message && <Text style={styles.message}>{message}</Text>}
             {children}
-          </View>
+          </ScrollView>
 
           {/* Buttons footer */}
           {buttons.length === 2 ? (
@@ -124,7 +133,7 @@ export function IosAlertModal({
                       btn.disabled && styles.btnDisabled,
                     ]}>
                     <Text
-                      numberOfLines={1}
+                      numberOfLines={2}
                       style={[
                         styles.btnText,
                         btn.style === 'destructive' && styles.btnTextDestructive,
@@ -176,6 +185,10 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
+  bodyScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
   body: {
     paddingTop: 20,
     paddingHorizontal: 16,
@@ -211,6 +224,7 @@ const styles = StyleSheet.create({
   },
   actionRowHorizontal: {
     flexDirection: 'row',
+    flexShrink: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#D1D1D6',
     height: 45,
@@ -228,6 +242,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   actionRowVertical: {
+    flexShrink: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#D1D1D6',
   },
@@ -240,10 +255,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   btnVertical: {
-    height: 45,
+    minHeight: 45,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   btnText: {
     fontSize: 17,

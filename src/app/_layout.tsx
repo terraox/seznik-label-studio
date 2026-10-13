@@ -7,6 +7,7 @@ import { Component, type ErrorInfo, type ReactNode, useEffect } from 'react';
 import { ScrollView, Text, View, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { IosAlertHost } from '@/components/ui/ios-alert-host';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { startInstalledFontHydration } from '@/lib/fonts/runtime';
@@ -167,6 +168,7 @@ export default function RootLayout() {
     <RootErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AppRoot />
+        <IosAlertHost />
       </GestureHandlerRootView>
     </RootErrorBoundary>
   );
