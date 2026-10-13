@@ -7,7 +7,13 @@ import { barcodeModulesForMode } from '@/lib/barcode-code128';
 import { snap1DBarcodeModules } from '@/lib/barcode/barcode-snapping';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { elementSizeMm, ptToMm, type LabelDocument, type LabelElement } from '@/lib/label-document';
-import { contractLineAdvances, layoutPrintText } from '@/lib/text-metrics';
+import {
+  contractLineAdvances,
+  textHorizontalPaddingMm,
+  textLineBoxHeightMm,
+  textVerticalPaddingMm,
+} from '@/lib/text-metrics';
+import { visibleWrappedLines } from '@/lib/visible-text-layout';
 import { dotsPerMm, mmToDots, rectMmToDots } from '@/lib/printer/print-spec';
 import { sortLayers } from '@/lib/template-schema';
 import { drawQrMeet } from './qr-meet';
@@ -94,10 +100,9 @@ function drawEditorText(dot: DotSurface, el: Extract<LabelElement, { type: 'text
   const x0 = rect.x0;
   const y0 = rect.y0;
   const boxW = Math.max(1, rect.widthDots);
-  const boxH = Math.max(1, rect.heightDots);
   const raw =
     el.contentType === 'Data Source' && el.columnNameContent ? `{${el.columnNameContent}}` : el.text;
-  const layout = layoutPrintText({
+  const lines = visibleWrappedLines({
     text: raw,
     fontSize: el.fontSize,
     widthMm: el.width,
@@ -106,28 +111,31 @@ function drawEditorText(dot: DotSurface, el: Extract<LabelElement, { type: 'text
     charSpacing: el.charSpacing,
     bold: el.bold,
     verticalDisplay: el.verticalDisplay,
+    fontFamily: el.fontFamily,
   });
+  const padX = Math.round(textHorizontalPaddingMm(el.fontSize) * dpm);
+  const padY = Math.round(textVerticalPaddingMm(el.fontSize) * dpm);
   const fontH = Math.max(1, Math.round(ptToMm(el.fontSize) * dpm));
-  const lineH = Math.max(1, Math.round(layout.lineHeightMm * dpm));
-  const blockH = Math.max(lineH, layout.lines.length * lineH);
-  let ty = y0 + Math.floor((boxH - blockH) / 2);
-  for (let i = 0; i < layout.lines.length; i++) {
-    const line = layout.lines[i];
-    const next = ty + lineH;
-    if (next > y0 && ty < y0 + boxH && line.length > 0) {
-      const lineW = Math.max(1, Math.round(layout.widthsMm[i] * dpm));
-      let tx = x0;
-      if (el.align === 'center') tx = x0 + Math.floor((boxW - lineW) / 2);
-      else if (el.align === 'right') tx = x0 + Math.max(0, boxW - lineW);
+  const lineH = Math.max(fontH, Math.round(textLineBoxHeightMm(el.fontSize, el.lineSpacing, el.fontFamily, raw) * dpm));
+  const contentW = Math.max(1, boxW - padX * 2);
+  let ty = y0 + padY;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const emTop = ty + Math.max(0, Math.floor((lineH - fontH) / 2));
+    if (line.length > 0) {
+      const lineW = Math.max(1, Math.round(measureBlockWidth(line, fontH)));
+      let tx = x0 + padX;
+      if (el.align === 'center') tx = x0 + padX + Math.floor((contentW - lineW) / 2);
+      else if (el.align === 'right') tx = x0 + padX + Math.max(0, contentW - lineW);
       const advances = contractLineAdvances(line, el.bold ?? false, lineW);
       let cx = tx;
       for (let c = 0; c < line.length; c++) {
         const w = advances[c] ?? 0;
-        if (line[c] !== ' ' && w > 0) fillRect(dot, cx, ty, w, fontH, 0);
+        if (line[c] !== ' ' && w > 0) fillRect(dot, cx, emTop, w, fontH, 0);
         cx += w;
       }
     }
-    ty = next;
+    ty += lineH;
   }
 }
 

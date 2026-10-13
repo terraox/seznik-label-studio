@@ -44,6 +44,7 @@ import {
   type ResizeBehavior,
 } from '@/lib/editor/resize-policy';
 import { computeTextElementHeightMm } from '@/lib/text-metrics';
+import { useVisibleTextRevision, visibleTextHeightMm } from '@/lib/visible-text-layout';
 import {
   CHROME_HANDLE_FILL,
   CHROME_HANDLE_ICON_COLOR,
@@ -303,7 +304,48 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const verticalDisplaySv = useSharedValue(textVerticalDisplay);
   const fontFamilySv = useSharedValue(textFontFamily);
 
+  const [liveWrap, setLiveWrap] = useState<{ widthMm: number; heightMm: number } | null>(null);
+  const setLiveWrapJS = useCallback((widthMm: number, heightMm: number) => {
+    setLiveWrap((prev) =>
+      prev != null && Math.abs(prev.widthMm - widthMm) < 0.05 && Math.abs(prev.heightMm - heightMm) < 0.05
+        ? prev
+        : { widthMm, heightMm },
+    );
+  }, []);
+  useEffect(() => {
+    setLiveWrap(null);
+  }, [sizeMm.width, sizeMm.height]);
+
   const isInteracting = useSharedValue(false);
+  useVisibleTextRevision();
+  const fittedLiveHeight =
+    liveWrap && isTextElement
+      ? visibleTextHeightMm({
+          text: textContent,
+          fontSize: textFontSize,
+          widthMm: liveWrap.widthMm,
+          autoWrapping: textAutoWrapping,
+          lineSpacing: textLineSpacing,
+          charSpacing: textCharSpacing,
+          bold: textBold,
+          verticalDisplay: textVerticalDisplay,
+          fontFamily: textFontFamily || undefined,
+        })
+      : null;
+  // Apply the real line height after the new breaks have rendered, so a width
+  // drag never covers the words with a frame that is still the old size.
+  useEffect(() => {
+    if (!liveWrap || fittedLiveHeight == null) return;
+    if (!isInteracting.value) return;
+    const sy = sySv.value > 0 ? sySv.value : 1;
+    const target = Math.max(1, fittedLiveHeight * sy);
+    // Only grow while the finger is down. Shrinking here races the gesture
+    // and covers the lines that have not reflowed yet.
+    if (target > animH.value + 0.5) animH.value = target;
+    if (liveBounds && fittedLiveHeight > liveBounds.heightMm.value) {
+      liveBounds.heightMm.value = fittedLiveHeight;
+    }
+  }, [liveWrap, fittedLiveHeight, isInteracting, sySv, animH, liveBounds]);
   const liftSv = useSharedValue(1);
   const selectedSv = useSharedValue(selected);
   const multipleModeSv = useSharedValue(multipleMode);
@@ -318,7 +360,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const resizeBehaviorSSv = useSharedValue(resizePolicy.behavior.s ?? 'none');
   const beginTimeSv = useSharedValue(0);
   const containerRef = useRef<View>(null);
-  const [textResizing, setTextResizing] = useState(false);
 
   useEffect(() => {
     selectedSv.value = selected;
@@ -659,9 +700,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     (handle: ResizeAnchor, nextWPx: number, nextHPx: number, rot: number) => {
       const behavior = resizePolicy.behavior[handle];
       if (!behavior) {
-        if (isTextElement) {
-          setTextResizing(false);
-        }
         isInteracting.value = false;
         return;
       }
@@ -697,11 +735,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         naturalHeightMm,
       });
       if (isTextElement && handle === 'e') {
-        const wrapH = computeTextElementHeightMm({
+        const wrapH = visibleTextHeightMm({
           text: textContent,
           fontSize: textFontSize,
           widthMm: next.width,
-          autoWrapping: 'Word',
+          autoWrapping: textAutoWrapping,
           lineSpacing: textLineSpacing,
           charSpacing: textCharSpacing,
           bold: textBold,
@@ -709,7 +747,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           fontFamily: textFontFamily || undefined,
         });
         const maxH = Math.max(resizePolicy.minMm, canvasHeightMm - next.top);
-        next.height = roundMm(Math.min(maxH, wrapH));
+        next.height = roundMm(Math.min(maxH, Math.max(next.height, wrapH)));
       }
 
       const rotation = ((Math.round(rot) % 360) + 360) % 360;
@@ -724,9 +762,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         rotation,
         fontSize,
       });
-      if (isTextElement) {
-        setTextResizing(false);
-      }
       isInteracting.value = false;
     },
     [
@@ -737,8 +772,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       resizePolicy,
       isInteracting,
       isTextElement,
+      isAutoHeight,
       textContent,
       textFontSize,
+      textAutoWrapping,
       textLineSpacing,
       textCharSpacing,
       textBold,
@@ -759,11 +796,8 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   }, [baseHeightPx, baseWidthPx]);
 
   const notifyTransformStartJS = useCallback((id: string, kind: TransformStartKind) => {
-    if (isTextElement && kind === 'resize') {
-      setTextResizing(true);
-    }
     callbacksRef.current.onTransformStart?.(id, kind);
-  }, [isTextElement]);
+  }, []);
 
   /**
    * Touch-down selection so drag on another element switches panel before the move threshold.
@@ -1436,8 +1470,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             const wrapH = computeTextElementHeightMm({
               text: textContentSv.value,
               fontSize: textFontSizeSv.value,
-              widthMm: box.width,
-              autoWrapping: 'Word',
+              // Narrower than the box so the live frame is tall enough for the
+              // real font, which is wider than the em table.
+              widthMm: Math.max(0.5, box.width * 0.8),
+              autoWrapping: autoWrappingSv.value,
               lineSpacing: lineSpacingSv.value,
               charSpacing: charSpacingSv.value,
               bold: boldSv.value,
@@ -1445,7 +1481,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
               fontFamily: fontFamilySv.value || undefined,
             });
             const maxH = Math.max(minResizeMmSv.value, canvasHMmSv.value - box.top);
-            box.height = wrapH > maxH ? maxH : wrapH;
+            const needed = wrapH > maxH ? maxH : wrapH;
+            const sy = sySv.value > 0 ? sySv.value : 1;
+            const currentH = animH.value / sy;
+            box.height = needed > currentH ? needed : currentH;
+            runOnJS(setLiveWrapJS)(box.width, box.height);
           }
 
           animW.value = Math.max(1, box.width * sxSv.value);
@@ -1519,6 +1559,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       fontFamilySv,
       liveBounds,
       logLiveBoxJS,
+      setLiveWrapJS,
     ],
   );
 
@@ -1690,7 +1731,8 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                   mediaShape={borderMediaShape}
                   selectedTableCell={element.type === 'table' ? selectedTableCell : null}
                   tableSelectionColor={tableSelectionColor}
-                  layoutWidthMm={isTextElement && !textResizing ? sizeMm.width : undefined}
+                  layoutWidthMm={isTextElement ? (liveWrap?.widthMm ?? sizeMm.width) : undefined}
+                  layoutHeightMm={isTextElement ? (liveWrap?.heightMm ?? sizeMm.height) : undefined}
                 />
               </View>
             ) : (
@@ -1702,7 +1744,8 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 mediaShape={borderMediaShape}
                 selectedTableCell={element.type === 'table' ? selectedTableCell : null}
                 tableSelectionColor={tableSelectionColor}
-                layoutWidthMm={isTextElement && !textResizing ? sizeMm.width : undefined}
+                layoutWidthMm={isTextElement ? (liveWrap?.widthMm ?? sizeMm.width) : undefined}
+                layoutHeightMm={isTextElement ? (liveWrap?.heightMm ?? sizeMm.height) : undefined}
                 frameWidth={lineEmojiFrame ? animW : undefined}
                 frameHeight={lineEmojiFrame ? animH : undefined}
               />

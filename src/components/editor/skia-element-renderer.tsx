@@ -198,10 +198,11 @@ export const SkiaBarcode = memo(function SkiaBarcode({
 
   const showLabel = textFlag !== 'Hide';
   const labelSize = fontSizePx(fontSizePt, scale);
-  const labelH = showLabel ? Math.max(10, labelSize * 1.3) : 0;
+  const labelH = showLabel ? Math.max(10, labelSize * 1.35) : 0;
   const barsH = Math.max(2, heightPx - labelH - (showLabel ? 2 : 0));
   const barsY = textFlag === 'Top' ? labelH + 2 : 0;
-  const labelY = textFlag === 'Top' ? labelSize : heightPx - 3;
+  // Text y is the baseline. Keep the whole glyph inside the reserved band.
+  const labelY = textFlag === 'Top' ? labelSize : Math.max(labelSize, heightPx - labelH + labelSize);
 
   const font = useMemo(() => {
     if (!showLabel) return null;

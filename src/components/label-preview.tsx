@@ -7,11 +7,13 @@ import { PrintGridLayer } from '@/components/print-grid-layer';
 import { PrintRulerLayer } from '@/components/print-ruler-layer';
 import { StockSilhouetteOverlay } from '@/components/stock-silhouette';
 import { ElementContentView } from '@/components/editor/element-renderer';
+import { useVisibleTextRevision } from '@/lib/visible-text-layout';
 import { elementSizeMm, type LabelDocument } from '@/lib/label-document';
 import { fitLabelSize, mediaShapeClipStyle } from '@/lib/label-geometry';
 import { printGridKnockoutsMm, printGridSpacingMm } from '@/lib/print-grid';
 import { printRulerEnabled } from '@/lib/print-ruler';
 import { dotsPerMm, rectMmToDots, td404BorderOuterDots } from '@/lib/printer/print-spec';
+import { borderCoversBitmap } from '@/printing/raster/print-border';
 import { canvasFillFromDocument, sortLayers, templateUsesDieCutBackground } from '@/lib/template-schema';
 
 /** Workspace chrome around the artboard — not part of template content. */
@@ -173,6 +175,7 @@ function LabelElements({
   bakeTd404Feed?: boolean;
   shiftMm?: ShiftMm;
 }) {
+  useVisibleTextRevision();
   const dpm = printDpi != null ? dotsPerMm(printDpi) : null;
   const shiftDotsX = dpm != null ? Math.round((shiftMm?.x ?? 0) * dpm) : 0;
   const shiftDotsY = dpm != null ? Math.round((shiftMm?.y ?? 0) * dpm) : 0;
@@ -202,7 +205,9 @@ function LabelElements({
           const pageW = Math.round(document.widthMm * dpm);
           const pageH = Math.round(document.heightMm * dpm);
           const outer =
-            bakeTd404Feed && element.type === 'border'
+            bakeTd404Feed &&
+            element.type === 'border' &&
+            borderCoversBitmap(element, printDpi, pageW, pageH)
               ? td404BorderOuterDots(pageW, pageH, printDpi)
               : null;
           const box = outer
@@ -213,8 +218,9 @@ function LabelElements({
                 heightDots: outer.y1 - outer.y0,
               }
             : rectMmToDots(element.left, element.top, size.width, size.height, printDpi);
-          leftPx = (box.x0 + shiftDotsX) / density;
-          topPx = (box.y0 + shiftDotsY) / density;
+          // The baked TD-404 border is its own layer: the content shift does not move it.
+          leftPx = (box.x0 + (outer ? 0 : shiftDotsX)) / density;
+          topPx = (box.y0 + (outer ? 0 : shiftDotsY)) / density;
           widthPx = Math.max(1 / density, box.widthDots / density);
           heightPx = Math.max(1 / density, box.heightDots / density);
           widthDots = box.widthDots;

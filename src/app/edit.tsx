@@ -51,6 +51,7 @@ import {
   scaleDocumentToSize,
 } from '@/lib/element-sizing';
 import { borderBoxForCenterGap, defaultBorderPlacement } from '@/lib/border-geometry';
+import { visibleTextHeightMm } from '@/lib/visible-text-layout';
 import { labelOverlapRegionsMm, overlapBannerPositionsPx } from '@/lib/editor/safe-mode';
 import { clampToLabelBounds, fitFontSizeToLabel } from '@/lib/editor/label-bounds';
 import { GridSpacingPopover } from '@/components/editor/grid-spacing-popover';
@@ -2658,10 +2659,10 @@ export default function EditScreen() {
                 fs,
               );
               if (next.type === 'text' || next.type === 'degrees') {
+                const textEl = next as Extract<LabelElement, { type: 'text' } | { type: 'degrees' }>;
                 const widthChanged = Math.abs(clean.widthMm - el.width) > 0.02;
                 if (widthChanged) {
-                  const textEl = next as Extract<LabelElement, { type: 'text' } | { type: 'degrees' }>;
-                  const reflowed = computeTextElementHeightMm({
+                  const reflowed = visibleTextHeightMm({
                     text:
                       textEl.contentType === 'Data Source' && textEl.columnNameContent
                         ? `{${textEl.columnNameContent}}`
@@ -2670,21 +2671,15 @@ export default function EditScreen() {
                           : textEl.content,
                     fontSize: textEl.fontSize,
                     widthMm: textEl.width,
-                    autoWrapping: 'Word',
+                    autoWrapping: textEl.autoWrapping ?? 'Word',
                     lineSpacing: textEl.lineSpacing ?? '1.0',
                     charSpacing: textEl.charSpacing ?? 0,
                     bold: textEl.bold ?? false,
                     verticalDisplay: textEl.verticalDisplay ?? false,
                     fontFamily: textEl.fontFamily,
                   });
-                  next = {
-                    ...textEl,
-                    height: reflowed,
-                    autoWrapping: 'Word',
-                    autoTextHeight: false,
-                  };
-                } else {
-                  next = { ...next, autoWrapping: 'Word', autoTextHeight: false };
+                  const maxH = Math.max(0.5, canvas.heightMm - textEl.top);
+                  next = { ...textEl, height: Math.min(maxH, Math.max(textEl.height ?? 0, reflowed)) };
                 }
               }
             } else {

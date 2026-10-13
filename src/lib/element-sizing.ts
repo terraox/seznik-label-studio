@@ -1,13 +1,12 @@
 import { DEFAULT_TIME_STATE, TIME_DISPLAY_SAMPLE } from '@/components/editor/types';
 import { insetBorderBox } from '@/lib/border-geometry';
 import { elementSizeMm, mmToPt, ptToMm, textBlockHeightMm, type LabelDocument, type LabelElement } from '@/lib/label-document';
+import { visibleTextHeightMm } from '@/lib/visible-text-layout';
 import { isRatTailGeometry, ratTailBodyRectMm, scaleMediaGeometry } from '@/lib/media-geometry';
 import { clampToLabelBounds } from '@/lib/editor/label-bounds';
 import { roundMm } from '@/lib/editor/engine';
 import { DEFAULT_TEXT_FONT_PT } from '@/components/editor/types';
 import {
-  computeTextElementHeightMm,
-  computeWrappedLines,
   heightForWrappedTextMm,
   measureTextWidthMm,
   textHorizontalPaddingMm,
@@ -85,7 +84,7 @@ export function fitTextBoxToContent(
       measureTextWidthMm('W', fontSize, 0, bold, el.fontFamily),
     );
     const width = roundMm(Math.min(maxW, Math.max(minW, glyphW + insetX * 2)));
-    const height = computeTextElementHeightMm({
+    const height = visibleTextHeightMm({
       text: raw,
       fontSize,
       widthMm: width,
@@ -110,7 +109,7 @@ export function fitTextBoxToContent(
 
   const width = roundMm(Math.min(maxW, Math.max(minW, longestMm + insetX * 2)));
   const needsWrap = longestMm + insetX * 2 > maxW + 0.05;
-  const heightMm = computeTextElementHeightMm({
+  const heightMm = visibleTextHeightMm({
     text: raw,
     fontSize,
     widthMm: width,
@@ -197,7 +196,7 @@ export function mergeTextElementPatch(
       const { height: _removed, ...withoutHeight } = withFont as TextLikeElement & { height?: number };
       return withoutHeight as LabelElement;
     }
-    const height = computeTextElementHeightMm({
+    const height = visibleTextHeightMm({
       text: textRawContent(withFont),
       fontSize: withFont.fontSize,
       widthMm: withFont.width,
@@ -212,7 +211,7 @@ export function mergeTextElementPatch(
   }
 
   if (widthInPatch && Math.abs((updates.width as number) - el.width) > 0.02) {
-    const reflowed = computeTextElementHeightMm({
+    const reflowed = visibleTextHeightMm({
       text: textRawContent(merged),
       fontSize: merged.fontSize,
       widthMm: merged.width,
@@ -250,7 +249,7 @@ export function mergeTextElementPatch(
   }
 
   const autoHeight = merged.autoTextHeight !== false && merged.autoWrapping !== 'Close';
-  const computedHeight = computeTextElementHeightMm({
+  const computedHeight = visibleTextHeightMm({
     text: textRawContent(merged),
     fontSize: merged.fontSize,
     widthMm: merged.width,
@@ -642,7 +641,7 @@ function scaleElementFields(
           ? el.text
           : el.content;
 
-    const reflowedHeight = computeTextElementHeightMm({
+    const reflowedHeight = visibleTextHeightMm({
       text: rawText,
       fontSize: scaledFs,
       widthMm: Math.max(2, scaledWidth),
@@ -651,6 +650,7 @@ function scaleElementFields(
       charSpacing: el.charSpacing ?? 0,
       bold: el.bold ?? false,
       verticalDisplay: el.verticalDisplay ?? false,
+      fontFamily: el.fontFamily,
     });
 
     return {

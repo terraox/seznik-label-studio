@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { DEFAULT_ELEMENT_STATE } from '@/components/editor/types';
 import { fitTextBoxToContent, growTextFrameHeightForWidth, mergeTextElementPatch } from '@/lib/element-sizing';
 import { computeTextElementHeightMm } from '@/lib/text-metrics';
+import { visibleTextHeightMm } from '@/lib/visible-text-layout';
 import { measureTextWidthMm } from '@/lib/text-metrics';
 import type { LabelElement } from '@/lib/label-document';
 
@@ -59,13 +60,23 @@ test('mergeTextElementPatch reflows height when width narrows (ignores stale hei
   assert.equal(next.type, 'text');
   if (next.type !== 'text') return;
   assert.equal(next.width, 8);
-  const expected = computeTextElementHeightMm({
+  const expected = visibleTextHeightMm({
     text: 'Hello world',
     fontSize: 12,
     widthMm: 8,
     autoWrapping: 'Word',
   });
   assert.equal(next.height, expected);
+  assert.ok(
+    expected >=
+      computeTextElementHeightMm({
+        text: 'Hello world',
+        fontSize: 12,
+        widthMm: 8,
+        autoWrapping: 'Word',
+      }),
+    'visible height keeps every line the em table would draw',
+  );
   assert.ok(expected > 12, 'narrower box should need more vertical space than a short manual height');
   assert.equal(next.fontSize, 12);
   assert.equal(next.autoWrapping, 'Word');

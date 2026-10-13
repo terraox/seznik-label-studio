@@ -457,8 +457,8 @@ export function TextPropertyPanel({
                   onValueChange={(autoTextHeight) => patch({ autoTextHeight })}
                 />
                 <PanelNote>
-                  After &apos;Auto Calculate Height&apos; turn off, if the height is too low, the text will be
-                  reduced to fit the height.
+                  The frame stays tall enough for every line. Changing the font or the width
+                  reflows the text, and nothing is hidden.
                 </PanelNote>
                 <SectionGap />
               </>
@@ -648,8 +648,8 @@ export function TextPropertyPanel({
                 />
                 <View style={styles.noteWrap}>
                   <PanelNote>
-                    After &apos;Auto Calculate Height&apos; turn off, if the height is too low, the text will be
-                    reduced to fit the height.
+                    The frame stays tall enough for every line. Changing the font or the width
+                    reflows the text, and nothing is hidden.
                   </PanelNote>
                 </View>
               </>

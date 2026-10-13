@@ -55,15 +55,19 @@ import {
 import { ensureTableCells } from "@/lib/editor/table-cells";
 import { ptToMm, type LabelElement } from "@/lib/label-document";
 import { dotsPerMm } from "@/lib/printer/print-spec";
-import { applySerialOffset, lineSpacingMultiplier } from "@/lib/serial-content";
+import { applySerialOffset } from "@/lib/serial-content";
 import {
-  TEXT_FRAME_PADDING_X_RATIO,
-  TEXT_FRAME_PADDING_Y_RATIO,
   charSpacingToLetterSpacing,
-  computeWrappedLines,
   measureTextWidthMm,
-  textWrapWidthMm,
+  textHorizontalPaddingMm,
+  textLineBoxHeightMm,
+  textVerticalPaddingMm,
 } from "@/lib/text-metrics";
+import {
+  rememberVisibleLines,
+  visibleTextKey,
+  visibleWrappedLines,
+} from "@/lib/visible-text-layout";
 import { stretchThenRoundBars } from "@/printing/raster/barcode-stretch";
 import { borderShapeForMedia } from "@/printing/raster/border-shapes";
 import { generateQrMatrix } from "@/printing/renderer/qrcode";
@@ -122,6 +126,8 @@ type ContentProps = {
   tableSelectionColor?: string;
   /** When set, text wraps to this width instead of `element.width`. */
   layoutWidthMm?: number;
+  /** Live box height during a resize. Font fitting uses this instead of `element.height`. */
+  layoutHeightMm?: number;
   /** Live resize box. Line emoji sizes its SVG from these so the stroke tracks the frame. */
   frameWidth?: SharedValue<number>;
   frameHeight?: SharedValue<number>;
@@ -145,18 +151,18 @@ function textStyleFor(
   sampleText?: string,
 ) {
   const size = fontSizePx(state.fontSize, scale);
-  const lineMult = lineSpacingMultiplier(state.lineSpacing ?? "1.0");
   const decorations: string[] = [];
   if (state.underline) decorations.push("underline");
   if (state.strikethrough) decorations.push("line-through");
   const indicFace = isIndicScriptFamily(resolvedFamily);
   const fontFamily =
     sampleText && textContainsEmoji(sampleText) ? undefined : resolvedFamily;
+  const faceKey = resolvedFamily ?? state.fontFamily;
   return {
     fontSize: size,
-    lineHeight: size * 1.25 * lineMult,
-    paddingVertical: size * TEXT_FRAME_PADDING_Y_RATIO,
-    paddingHorizontal: size * TEXT_FRAME_PADDING_X_RATIO,
+    lineHeight: textLineBoxHeightMm(state.fontSize, state.lineSpacing, faceKey, sampleText) * scale,
+    paddingVertical: textVerticalPaddingMm(state.fontSize) * scale,
+    paddingHorizontal: textHorizontalPaddingMm(state.fontSize) * scale,
     includeFontPadding: false,
     fontFamily,
     // Android may drop the bundled Indic face when fontWeight is set on a single-weight TTF.
@@ -198,6 +204,8 @@ type TextLayoutFields = Pick<
   | "fontFamily"
   | "drawingColorIndex"
   | "antiColor"
+  | "autoTextHeight"
+  | "height"
 > & { degreesOffset?: number };
 
 function resolveTextRaw(
@@ -231,39 +239,45 @@ function dataColumnHighlightStyle(
   return null;
 }
 
+function visibleLayout(
+  element: TextLayoutFields,
+  raw: string,
+  layoutWidthMm: number | undefined,
+  resolvedFamily: string | undefined,
+) {
+  return {
+    text: raw,
+    fontSize: element.fontSize,
+    widthMm: layoutWidthMm ?? element.width,
+    autoWrapping: element.autoWrapping,
+    lineSpacing: element.lineSpacing,
+    charSpacing: element.charSpacing ?? 0,
+    bold: element.bold ?? false,
+    verticalDisplay: element.verticalDisplay ?? false,
+    fontFamily: resolvedFamily ?? element.fontFamily,
+  };
+}
+
 function formatTextForRender(
   element: TextLayoutFields,
   raw: string,
   layoutWidthMm?: number,
   resolvedFamily?: string,
 ) {
-  if (element.verticalDisplay) {
-    return {
-      text: raw.split("").join("\n"),
-      numberOfLines: undefined as number | undefined,
-    };
-  }
-  if (element.autoWrapping === "Close") {
+  if (element.autoWrapping === "Close" && !element.verticalDisplay) {
     return {
       text: raw.replace(/\r?\n/g, " "),
       numberOfLines: 1 as number | undefined,
       ellipsizeMode: "tail" as const,
+      layoutKey: "",
     };
   }
-  const boxWidth = layoutWidthMm ?? element.width;
-  const lines = computeWrappedLines({
-    text: raw,
-    fontSize: element.fontSize,
-    widthMm: textWrapWidthMm(boxWidth, element.fontSize, false),
-    autoWrapping: element.autoWrapping ?? "Word",
-    charSpacing: element.charSpacing ?? 0,
-    bold: element.bold ?? false,
-    verticalDisplay: false,
-    fontFamily: resolvedFamily ?? element.fontFamily,
-  });
+  const layout = visibleLayout(element, raw, layoutWidthMm, resolvedFamily);
+  const lines = visibleWrappedLines(layout);
   return {
     text: lines.join("\n"),
     numberOfLines: undefined as number | undefined,
+    layoutKey: visibleTextKey(layout),
   };
 }
 
@@ -292,6 +306,7 @@ function TextContent({
   scale: number;
   widthPx: number;
   layoutWidthMm?: number;
+  layoutHeightMm?: number;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -332,6 +347,13 @@ function TextContent({
         ellipsizeMode={
           "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
         }
+        onTextLayout={(event) => {
+          if (!formatted.layoutKey) return;
+          rememberVisibleLines(
+            formatted.layoutKey,
+            event.nativeEvent.lines.map((line) => line.text),
+          );
+        }}
       >
         {formatted.text}
       </Text>
@@ -348,6 +370,7 @@ function DegreesContent({
   scale: number;
   widthPx: number;
   layoutWidthMm?: number;
+  layoutHeightMm?: number;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -388,6 +411,13 @@ function DegreesContent({
         ellipsizeMode={
           "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
         }
+        onTextLayout={(event) => {
+          if (!formatted.layoutKey) return;
+          rememberVisibleLines(
+            formatted.layoutKey,
+            event.nativeEvent.lines.map((line) => line.text),
+          );
+        }}
       >
         {formatted.text}
       </Text>
@@ -514,8 +544,10 @@ function BarcodeContent({
     : "transparent";
   const labelSize = fontSizePx(element.fontSize, scale);
   const showLabel = element.textFlag !== "Hide";
+  // The digit line sits in its own band. Text-frame padding is for paragraphs and
+  // would push these numbers out of the barcode box, where the element clips them.
+  const labelHeight = showLabel ? Math.max(Math.ceil(labelSize + 2), Math.round(labelSize * 1.25)) : 0;
   const hri = formatBarcodeHri(element.encodeMode, content);
-  const labelHeight = showLabel ? Math.max(8, Math.round(labelSize * 1.2)) : 0;
   const align = element.align === "spacing" ? "justify" : element.align;
   const labelStyle = textStyleFor(
     element,
@@ -584,14 +616,19 @@ function BarcodeContent({
       <Text
         numberOfLines={1}
         allowFontScaling={false}
-        style={[
-          labelStyle,
-          {
-            width: "100%",
-            lineHeight: labelHeight,
-            textAlign: align,
-          },
-        ]}
+        style={{
+          width: "100%",
+          color: labelStyle.color,
+          fontFamily: labelStyle.fontFamily,
+          fontWeight: labelStyle.fontWeight,
+          fontStyle: labelStyle.fontStyle,
+          fontSize: labelSize,
+          lineHeight: labelHeight,
+          includeFontPadding: false,
+          paddingVertical: 0,
+          paddingHorizontal: 0,
+          textAlign: align,
+        }}
       >
         {hri}
       </Text>
@@ -1344,6 +1381,7 @@ export function ElementContentView({
   selectedTableCell,
   tableSelectionColor,
   layoutWidthMm,
+  layoutHeightMm,
   frameWidth,
   frameHeight,
 }: ContentProps) {
@@ -1357,6 +1395,7 @@ export function ElementContentView({
           scale={scale}
           widthPx={widthPx}
           layoutWidthMm={layoutWidthMm}
+          layoutHeightMm={layoutHeightMm}
         />
       );
     case "degrees":
@@ -1366,6 +1405,7 @@ export function ElementContentView({
           scale={scale}
           widthPx={widthPx}
           layoutWidthMm={layoutWidthMm}
+          layoutHeightMm={layoutHeightMm}
         />
       );
     case "time":

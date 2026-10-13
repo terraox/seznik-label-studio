@@ -48,6 +48,8 @@ export type TextDrawStyle = {
   italic?: boolean;
   family?: string;
   ink: number;
+  /** Extra advance after each character, in dots. 0 leaves the face's natural spacing. */
+  letterSpacingDots?: number;
 };
 
 export type RasterSurface = {
@@ -246,7 +248,7 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
       font = matchFont({
         ...(style.family ? { fontFamily: style.family } : {}),
         fontSize: style.fontSizeDots,
-        fontWeight: style.bold ? 'bold' : 'normal',
+        fontWeight: style.bold ? '600' : 'normal',
         fontStyle: style.italic ? 'italic' : 'normal',
       });
       try {
@@ -283,7 +285,8 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
       const shaped = measureShapedTextWidth(skiaMod, text, style);
       if (shaped != null) return shaped;
     }
-    return fontForText(text, style).measureText(text).width;
+    const natural = fontForText(text, style).measureText(text).width;
+    return natural + (style.letterSpacingDots ?? 0) * text.length;
   }
 
   function drawPlainSegment(text: string, x: number, y: number, style: TextDrawStyle): void {
@@ -296,7 +299,17 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
     fillPaint.setColor(grayToColor(skiaMod, style.ink));
     fillPaint.setStyle(PaintStyle.Fill);
     fillPaint.setAntiAlias(true);
-    canvas.drawText(text, x, y + style.fontSizeDots, fillPaint, font);
+    const gap = style.letterSpacingDots ?? 0;
+    if (!gap) {
+      canvas.drawText(text, x, y + style.fontSizeDots, fillPaint, font);
+    } else {
+      let cursor = x;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text.charAt(i);
+        canvas.drawText(ch, cursor, y + style.fontSizeDots, fillPaint, font);
+        cursor += font.measureText(ch).width + gap;
+      }
+    }
     fillPaint.setAntiAlias(false);
   }
 
@@ -557,18 +570,19 @@ function makeDotRasterSurface(dot: DotSurface): RasterSurface {
   function measureBlockText(text: string, style: TextDrawStyle): number {
     if (!text) return 0;
     const cellW = Math.max(1, Math.round(style.fontSizeDots * 0.55));
-    return text.length * cellW;
+    return text.length * (cellW + (style.letterSpacingDots ?? 0));
   }
 
   function drawBlockText(text: string, x: number, y: number, style: TextDrawStyle): void {
     const cellW = Math.max(1, Math.round(style.fontSizeDots * 0.55));
     const cellH = Math.max(1, style.fontSizeDots);
+    const gap = style.letterSpacingDots ?? 0;
     let cursor = x;
     for (const ch of text) {
       if (ch !== ' ') {
         paintRect(cursor, y, Math.max(1, cellW - 1), Math.max(1, cellH - 1), style.ink);
       }
-      cursor += cellW;
+      cursor += cellW + gap;
     }
   }
 

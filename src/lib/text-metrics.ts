@@ -59,9 +59,56 @@ export function usesMonospaceMetrics(fontFamily?: string): boolean {
   return key === 'mono' || key === 'monospace' || key === 'menlo' || key.indexOf('robotomono') >= 0;
 }
 
-/** Installed / decorative faces need extra vertical room vs Default metrics. */
-export function textLineHeightScale(fontFamily?: string): number {
+function containsIndicText(text: string): boolean {
   'worklet';
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if ((code >= 0x0900 && code <= 0x0d7f) || (code >= 0xa8e0 && code <= 0xa8ff)) return true;
+  }
+  return false;
+}
+
+/** Marks that must stay on the same line as the base letter. Width is ~0. */
+function isIndicCombiningMark(code: number): boolean {
+  'worklet';
+  if (code >= 0x0900 && code <= 0x0903) return true;
+  if (code >= 0x093a && code <= 0x094d) return true;
+  if (code >= 0x0951 && code <= 0x0957) return true;
+  if (code === 0x0962 || code === 0x0963) return true;
+  if (code >= 0x0981 && code <= 0x0983) return true;
+  if (code >= 0x09bc && code <= 0x09cd) return true;
+  if (code === 0x09e2 || code === 0x09e3) return true;
+  if (code >= 0x0a01 && code <= 0x0a03) return true;
+  if (code >= 0x0a3c && code <= 0x0a4d) return true;
+  if (code >= 0x0a70 && code <= 0x0a71) return true;
+  if (code >= 0x0a81 && code <= 0x0a83) return true;
+  if (code >= 0x0abc && code <= 0x0acd) return true;
+  if (code === 0x0ae2 || code === 0x0ae3) return true;
+  if (code === 0x0b82 || code === 0x0b83) return true;
+  if (code >= 0x0bbe && code <= 0x0bcd) return true;
+  if (code >= 0x0c00 && code <= 0x0c04) return true;
+  if (code >= 0x0c3e && code <= 0x0c56) return true;
+  if (code >= 0x0c81 && code <= 0x0c83) return true;
+  if (code >= 0x0cbc && code <= 0x0ccd) return true;
+  if (code === 0x0ce2 || code === 0x0ce3) return true;
+  if (code >= 0x0d00 && code <= 0x0d03) return true;
+  if (code >= 0x0d3e && code <= 0x0d4d) return true;
+  if (code >= 0x0d62 && code <= 0x0d63) return true;
+  return false;
+}
+
+/** Base letter plus the combining marks that follow it. */
+function takeCluster(text: string, index: number): string {
+  'worklet';
+  let end = index + 1;
+  while (end < text.length && isIndicCombiningMark(text.charCodeAt(end))) end += 1;
+  return text.slice(index, end);
+}
+
+/** Installed, decorative, and Indic faces need extra vertical room vs Default Latin. */
+export function textLineHeightScale(fontFamily?: string, sample?: string): number {
+  'worklet';
+  if (sample && containsIndicText(sample)) return 1.18;
   if (!fontFamily || fontFamily === 'Default') return 1;
   return 1.18;
 }
@@ -92,11 +139,16 @@ export function textWrapWidthMm(boxWidthMm: number, fontSizePt: number, conserva
 }
 
 /** One line box in mm — mirrors `textStyleFor` lineHeight. */
-export function textLineBoxHeightMm(fontSizePt: number, lineSpacing?: LineSpacing, fontFamily?: string): number {
+export function textLineBoxHeightMm(
+  fontSizePt: number,
+  lineSpacing?: LineSpacing,
+  fontFamily?: string,
+  sample?: string,
+): number {
   'worklet';
   const fontMm = ptToMm(fontSizePt);
   const mult = lineSpacingMultiplier(lineSpacing);
-  return fontMm * 1.25 * mult * textLineHeightScale(fontFamily);
+  return fontMm * 1.25 * mult * textLineHeightScale(fontFamily, sample);
 }
 
 /** Top + bottom inset — matches editor `paddingVertical`. */
@@ -114,8 +166,10 @@ export function charWidthEm(ch: string, bold = false, fontFamily?: string): numb
   'worklet';
   const code = ch.charCodeAt(0);
   // Indic scripts (Devanagari through Malayalam, plus Devanagari Extended).
+  // Combining marks sit on the previous letter and must not add a full em,
+  // or a syllable wraps in the middle and the matra clips off.
   if ((code >= 0x0900 && code <= 0x0d7f) || (code >= 0xa8e0 && code <= 0xa8ff)) {
-    return 1.0;
+    return isIndicCombiningMark(code) ? 0 : 1.0;
   }
   if (usesMonospaceMetrics(fontFamily)) {
     if (
@@ -342,6 +396,12 @@ export type ComputeWrappedLinesParams = {
   verticalDisplay?: boolean;
   /** Library name or family key. Monospace uses a flat advance. */
   fontFamily?: string;
+  /**
+   * Real font width in mm. The editor and the printer pass the same function
+   * so a line breaks in the same place on screen and on paper.
+   * The resize worklet omits it and uses the em table.
+   */
+  measureWidth?: (sample: string) => number;
 };
 
 /**
@@ -356,8 +416,13 @@ export function computeWrappedLines({
   bold = false,
   verticalDisplay = false,
   fontFamily,
+  measureWidth,
 }: ComputeWrappedLinesParams): string[] {
   'worklet';
+  const widthOf = (sample: string) => {
+    if (measureWidth) return measureWidth(sample);
+    return measureTextWidthMm(sample, fontSize, charSpacing, bold, fontFamily);
+  };
   if (!text || text.length === 0) return [''];
 
   if (verticalDisplay) {
@@ -382,12 +447,13 @@ export function computeWrappedLines({
         continue;
       }
       let currentLine = '';
-      for (let i = 0; i < para.length; i++) {
-        const ch = para.charAt(i);
-        const testLine = currentLine + ch;
-        if (currentLine.length > 0 && measureTextWidthMm(testLine, fontSize, charSpacing, bold, fontFamily) > safeWidthMm) {
+      for (let i = 0; i < para.length; ) {
+        const chunk = takeCluster(para, i);
+        i += chunk.length;
+        const testLine = currentLine + chunk;
+        if (currentLine.length > 0 && widthOf(testLine) > safeWidthMm) {
           result.push(currentLine);
-          currentLine = ch;
+          currentLine = chunk;
         } else {
           currentLine = testLine;
         }
@@ -414,7 +480,7 @@ export function computeWrappedLines({
       const word = words[w];
       const candidate = currentLine.length > 0 ? currentLine + ' ' + word : word;
 
-      if (measureTextWidthMm(candidate, fontSize, charSpacing, bold, fontFamily) <= safeWidthMm) {
+      if (widthOf(candidate) <= safeWidthMm) {
         currentLine = candidate;
       } else {
         if (currentLine.length > 0) {
@@ -423,17 +489,18 @@ export function computeWrappedLines({
         }
 
         // Check if individual word exceeds available width on its own
-        if (measureTextWidthMm(word, fontSize, charSpacing, bold, fontFamily) <= safeWidthMm) {
+        if (widthOf(word) <= safeWidthMm) {
           currentLine = word;
         } else {
           // Word is too long to fit in one line, break mid-word
           let partial = '';
-          for (let c = 0; c < word.length; c++) {
-            const ch = word.charAt(c);
-            const testPartial = partial + ch;
-            if (partial.length > 0 && measureTextWidthMm(testPartial, fontSize, charSpacing, bold, fontFamily) > safeWidthMm) {
+          for (let c = 0; c < word.length; ) {
+            const chunk = takeCluster(word, c);
+            c += chunk.length;
+            const testPartial = partial + chunk;
+            if (partial.length > 0 && widthOf(testPartial) > safeWidthMm) {
               result.push(partial);
-              partial = ch;
+              partial = chunk;
             } else {
               partial = testPartial;
             }
@@ -490,9 +557,83 @@ export function computeTextElementHeightMm({
     fontFamily,
   });
 
-  const lineH = textLineBoxHeightMm(fontSize, lineSpacing, fontFamily);
+  const lineH = textLineBoxHeightMm(fontSize, lineSpacing, fontFamily, text);
   const vertPad = textVerticalPaddingMm(fontSize);
   return Math.max(2.2, vertPad * 2 + lineH * Math.max(1, lines.length));
+}
+
+/**
+ * Largest font size (pt, half-point steps) whose wrapped block fits in `heightMm`.
+ * Never returns larger than `fontSize`. A box that already fits keeps `fontSize`.
+ */
+export function fitFontSizeToBoxMm(opts: ComputeTextElementHeightParams & { heightMm: number; minFontSize?: number }): number {
+  'worklet';
+  const maxFs = opts.fontSize > 0 ? opts.fontSize : 12;
+  const minFs = Math.max(4, opts.minFontSize ?? 4);
+  const heightMm = opts.heightMm > 0 ? opts.heightMm : maxFs;
+  const measure = (fontSize: number) =>
+    computeTextElementHeightMm({
+      text: opts.text,
+      fontSize,
+      widthMm: opts.widthMm,
+      autoWrapping: opts.autoWrapping ?? 'Word',
+      lineSpacing: opts.lineSpacing ?? '1.0',
+      charSpacing: opts.charSpacing ?? 0,
+      bold: opts.bold ?? false,
+      verticalDisplay: opts.verticalDisplay ?? false,
+      fontFamily: opts.fontFamily,
+    });
+  if (measure(maxFs) <= heightMm + 0.05) return maxFs;
+  let best = minFs;
+  let low = Math.round(minFs * 2);
+  let high = Math.round(maxFs * 2);
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const fs = mid / 2;
+    if (measure(fs) <= heightMm + 0.05) {
+      best = fs;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return best;
+}
+
+/** Font size to draw. Shrinks only when the wrapped block is taller than the box. */
+export function resolveDrawFontSizePt(opts: ComputeTextElementHeightParams & { heightMm?: number }): number {
+  'worklet';
+  if (!(typeof opts.heightMm === 'number') || !(opts.heightMm > 0)) return opts.fontSize;
+  return fitFontSizeToBoxMm({
+    text: opts.text,
+    fontSize: opts.fontSize,
+    widthMm: opts.widthMm,
+    heightMm: opts.heightMm,
+    autoWrapping: opts.autoWrapping,
+    lineSpacing: opts.lineSpacing,
+    charSpacing: opts.charSpacing,
+    bold: opts.bold,
+    verticalDisplay: opts.verticalDisplay,
+    fontFamily: opts.fontFamily,
+  });
+}
+
+/** Drop a trailing line that would be sliced by the box. Complete lines stay. */
+export function linesThatFitBox(
+  lines: string[],
+  fontSize: number,
+  heightMm: number,
+  lineSpacing?: LineSpacing,
+  fontFamily?: string,
+  sample?: string,
+): string[] {
+  'worklet';
+  if (lines.length <= 1 || !(heightMm > 0)) return lines;
+  const lineH = textLineBoxHeightMm(fontSize, lineSpacing, fontFamily, sample);
+  const pad = textVerticalPaddingMm(fontSize) * 2;
+  if (!(lineH > 0)) return lines;
+  const cap = Math.max(1, Math.floor((heightMm - pad + 0.04) / lineH));
+  return lines.length > cap ? lines.slice(0, cap) : lines;
 }
 
 /**
@@ -522,7 +663,7 @@ export type PrintTextLayout = {
   lines: string[];
   /** Width of each line from the same charWidthEm measure used to wrap. */
   widthsMm: number[];
-  /** One line, in mm: font size × line-spacing multiplier. */
+  /** One line, in mm. Same box the editor Text uses (1.25 × spacing × face scale). */
   lineHeightMm: number;
 };
 
@@ -555,7 +696,7 @@ export function layoutPrintText({
   return {
     lines,
     widthsMm: lines.map((line) => measureTextWidthMm(line, fontSize, charSpacing, bold, fontFamily)),
-    lineHeightMm: ptToMm(fontSize) * lineSpacingMultiplier(lineSpacing),
+    lineHeightMm: textLineBoxHeightMm(fontSize, lineSpacing, fontFamily, text),
   };
 }
 

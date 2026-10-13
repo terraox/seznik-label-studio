@@ -82,8 +82,9 @@ function paragraphStyle(skia: ShapedSkia, style: TextDrawStyle): Record<string, 
     color: skia.Skia.Color(grayToHex(style.ink)),
     fontFamilies: families,
     fontSize: style.fontSizeDots,
+    letterSpacing: style.letterSpacingDots ?? 0,
     fontStyle: {
-      weight: style.bold ? 700 : 400,
+      weight: style.bold ? 600 : 400,
       slant: style.italic ? 1 : 0,
     },
   };

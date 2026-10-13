@@ -13,7 +13,7 @@ import { barcodeModulesForMode } from '@/lib/barcode-code128';
 import { snap1DBarcodeModules } from '@/lib/barcode/barcode-snapping';
 import { createLabelDocument, elementSizeMm, type LabelDocument, type LabelElement } from '@/lib/label-document';
 import { dotsPerMm, rectMmToDots } from '@/lib/printer/print-spec';
-import { layoutPrintText, ptToMm } from '@/lib/text-metrics';
+import { layoutPrintText, ptToMm, textHorizontalPaddingMm, textVerticalPaddingMm, textWrapWidthMm } from '@/lib/text-metrics';
 import { stretchThenRoundBars } from './barcode-stretch';
 import { headlessInsetDots, measureBorderInk, type BorderMeasure } from './location-label';
 import { generateQrMatrix } from '@/printing/renderer/qrcode';
@@ -178,24 +178,26 @@ function canvasInk(el: LabelElement, dpi: number): ExclusiveRect {
     return { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 };
   }
   if (el.type === 'text') {
+    const padX = Math.round(textHorizontalPaddingMm(el.fontSize) * dpm);
+    const padY = Math.round(textVerticalPaddingMm(el.fontSize) * dpm);
     const layout = layoutPrintText({
       text: el.text,
       fontSize: el.fontSize,
-      widthMm: el.width,
+      widthMm: textWrapWidthMm(el.width, el.fontSize),
       autoWrapping: el.autoWrapping,
       lineSpacing: el.lineSpacing,
       charSpacing: el.charSpacing,
       bold: el.bold,
       verticalDisplay: el.verticalDisplay,
+      fontFamily: el.fontFamily,
     });
     const fontH = Math.max(1, Math.round(ptToMm(el.fontSize) * dpm));
-    const lineH = Math.max(1, Math.round(layout.lineHeightMm * dpm));
-    const blockH = Math.max(lineH, layout.lines.length * lineH);
-    const y = rect.y0 + Math.floor((rect.heightDots - blockH) / 2);
     const lineW = Math.max(1, Math.round((layout.widthsMm[0] ?? 0) * dpm));
-    let x = rect.x0;
-    if (el.align === 'center') x = rect.x0 + Math.floor((rect.widthDots - lineW) / 2);
-    else if (el.align === 'right') x = rect.x0 + Math.max(0, rect.widthDots - lineW);
+    const contentW = Math.max(1, rect.widthDots - padX * 2);
+    let x = rect.x0 + padX;
+    if (el.align === 'center') x = rect.x0 + padX + Math.floor((contentW - lineW) / 2);
+    else if (el.align === 'right') x = rect.x0 + padX + Math.max(0, contentW - lineW);
+    const y = rect.y0 + padY;
     return { x0: x, y0: y, x1: x + lineW, y1: y + fontH };
   }
   if (el.type === 'qrcode') {
