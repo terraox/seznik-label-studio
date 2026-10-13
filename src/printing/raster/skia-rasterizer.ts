@@ -20,19 +20,24 @@ import {
   type LabelElement,
 } from '@/lib/label-document';
 import { joshBorderGapMm } from '@/lib/printer/josh-print';
-import { dotsPerMm, mmToDots, rectMmToDots } from '@/lib/printer/print-spec';
+import { dotsPerMm, mmToDots, rectMmToDots, td404BorderOuterDots } from '@/lib/printer/print-spec';
 import { sortLayers } from '@/lib/template-schema';
 import { printGridKnockoutsMm, printGridRectsDots, printGridSpacingMm } from '@/lib/print-grid';
-import { drawPrintRuler, printRulerEnabled } from '@/lib/print-ruler';
+import { PRINT_RULER_LINE_MM, drawPrintRuler, printRulerEnabled } from '@/lib/print-ruler';
 import { parseSvgDrawOps, type ClipartDrawOp } from '@/lib/clipart/parse-svg';
 import { clampStrokeScale } from '@/lib/clipart/stroke-scale';
 import { clipartSvgSource } from '@/lib/clipart/types';
-import { resolvePrintFontFamily } from '@/lib/fonts/text-font-family';
-import { computeWrappedLines, layoutPrintText } from '@/lib/text-metrics';
+import { needsComplexTextShaping, resolvePrintFontFamily } from '@/lib/fonts/text-font-family';
+import {
+  textHorizontalPaddingMm,
+  textLineBoxHeightMm,
+  textVerticalPaddingMm,
+} from '@/lib/text-metrics';
+import { visibleWrappedLines } from '@/lib/visible-text-layout';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { stretchThenRoundBars } from './barcode-stretch';
 import { packGrayToMono1bpp } from './bit-packer';
-import { drawJoshEdgeBorder, drawPrintBorder } from './print-border';
+import { drawJoshEdgeBorder, drawPrintBorder, drawTd404EdgeBorder } from './print-border';
 import { borderShapeForMedia } from './border-shapes';
 import { applyInkDarkness, rectsToPx, scanCodeRectsMm } from './ink-darkness';
 import { drawQrMeet } from './qr-meet';
@@ -167,7 +172,7 @@ export function wrapPrintText(element: {
   bold?: boolean;
   verticalDisplay?: boolean;
 }): string[] {
-  return computeWrappedLines({
+  return visibleWrappedLines({
     text: element.text,
     fontSize: element.fontSize,
     widthMm: element.width,
@@ -261,7 +266,7 @@ function drawDocumentToSurface(
       surface.fillRect(r.left * s, r.top * s, r.width * s, r.height * s, 0);
     }
   }
-  if (printRulerEnabled(doc)) {
+  if (printRulerEnabled(doc) && !(activeEdgeBorders && !activeBakeFeed)) {
     const s = activeDotScale;
     drawPrintRuler(surface, doc.widthMm, doc.heightMm, dpi, s);
   }
@@ -355,7 +360,7 @@ export function rasterizeDocumentToBitmapTimed(
   activeDotScale = Math.max(1, Math.round(options.dotScale ?? 1));
   activeBakeFeed = options.bakeTd404Feed === true;
   const padRight = Math.max(0, Math.round(options.edgeBorders?.padRightDots ?? 0));
-  activeEdgeBorders = options.edgeBorders != null && activeDotScale === 1 && !activeBakeFeed;
+  activeEdgeBorders = options.edgeBorders != null && activeDotScale === 1;
   const borderGapMm = options.edgeBorders?.centerGapMm ?? 2;
   const outW = activeEdgeBorders && padRight > 0 ? Math.max(8, Math.ceil((page.sizeDotsW + padRight) / 8) * 8) : packedW;
   resetTextDrawLog();
@@ -404,9 +409,10 @@ export function rasterizeDocumentToBitmapTimed(
       surfW,
       surfH,
       // Borders use their own shift when given; otherwise the page shift.
+      // TD-404 never falls back to the page shift: its border is independent of it.
       {
-        x: Math.round(options.edgeBorders?.shiftDots?.x ?? options.shiftDots?.x ?? 0),
-        y: Math.round(options.edgeBorders?.shiftDots?.y ?? options.shiftDots?.y ?? 0),
+        x: Math.round(options.edgeBorders?.shiftDots?.x ?? (activeBakeFeed ? 0 : options.shiftDots?.x ?? 0)),
+        y: Math.round(options.edgeBorders?.shiftDots?.y ?? (activeBakeFeed ? 0 : options.shiftDots?.y ?? 0)),
       },
       threshold,
       steps,
@@ -467,7 +473,8 @@ function mergeEdgeBorders(
   centerGapMm: number,
 ): Uint8Array {
   const borders = doc.elements.filter((el) => isEdgeBorder(el, doc));
-  if (borders.length === 0) return gray;
+  const ruler = printRulerEnabled(doc) && !activeBakeFeed;
+  if (borders.length === 0 && !ruler) return gray;
   let layer: Uint8Array = new Uint8Array(width * height);
   layer.fill(255);
   const fillRect = (x: number, y: number, w: number, h: number, value: number) => {
@@ -478,8 +485,28 @@ function mergeEdgeBorders(
     for (let yy = ya; yy < yb; yy++) layer.fill(value, yy * width + xa, yy * width + xb);
   };
   const pageDots = { widthDots: mmToDots(doc.widthMm, dpi), heightDots: mmToDots(doc.heightMm, dpi) };
+  if (ruler) {
+    // Same calibrated layer and gap as the border, so the scale sits where a border does.
+    const gap = Math.max(0, centerGapMm - PRINT_RULER_LINE_MM / 2);
+    const inner = {
+      w: Math.max(1, doc.widthMm - 2 * gap),
+      h: Math.max(1, doc.heightMm - 2 * gap),
+    };
+    drawPrintRuler({ fillRect }, inner.w, inner.h, dpi, 1, {
+      x: mmToDots(gap, dpi) + shift.x,
+      y: mmToDots(gap, dpi) + shift.y,
+    });
+  }
   for (const el of sortLayers(doc.elements)) {
-    if (isEdgeBorder(el, doc)) drawJoshEdgeBorder({ fillRect }, el, dpi, pageDots, shift, el.edgeGapMm != null ? joshBorderGapMm(el.edgeGapMm) : centerGapMm);
+    if (activeBakeFeed && isEdgeBorder(el, doc)) {
+      drawTd404EdgeBorder({ fillRect }, el, dpi, pageDots, shift);
+      const o = td404BorderOuterDots(pageDots.widthDots, pageDots.heightDots, dpi);
+      console.info(
+        `[TD404-BORDER] layer x ${o.x0}-${o.x1} y ${o.y0}-${o.y1} dots of ${pageDots.widthDots}x${pageDots.heightDots} | shift ${shift.x},${shift.y}`,
+      );
+    } else if (isEdgeBorder(el, doc)) {
+      drawJoshEdgeBorder({ fillRect }, el, dpi, pageDots, shift, el.edgeGapMm != null ? joshBorderGapMm(el.edgeGapMm) : centerGapMm);
+    }
   }
   if (steps !== 0) layer = applyInkDarkness(layer, width, height, threshold, steps, []);
   const out = new Uint8Array(gray);
@@ -522,7 +549,8 @@ function drawText(
     el.contentType === 'Data Source' && el.columnNameContent
       ? `{${el.columnNameContent}}`
       : el.text;
-  const layout = layoutPrintText({
+  const family = resolvePrintFontFamily(raw, el.fontFamily);
+  const lines = visibleWrappedLines({
     text: raw,
     fontSize: el.fontSize,
     widthMm: el.width,
@@ -531,31 +559,58 @@ function drawText(
     charSpacing: el.charSpacing,
     bold: el.bold,
     verticalDisplay: el.verticalDisplay,
-    fontFamily: el.fontFamily,
+    fontFamily: family ?? el.fontFamily,
   });
-  const fontH = Math.max(1, Math.round(ptToMm(el.fontSize) * dpm));
-  const lineH = Math.max(1, Math.round(layout.lineHeightMm * dpm));
+  const padX = Math.round(textHorizontalPaddingMm(el.fontSize) * dpm);
+  const padY = Math.round(textVerticalPaddingMm(el.fontSize) * dpm);
+  const em = Math.max(1, Math.round(ptToMm(el.fontSize) * dpm));
+  const lineH = Math.max(
+    em,
+    Math.round(textLineBoxHeightMm(el.fontSize, el.lineSpacing, family ?? el.fontFamily, raw) * dpm),
+  );
   const ink = inkValue(el.antiColor);
-  const blockH = Math.max(lineH, layout.lines.length * lineH);
-  let ty = y0 + Math.floor((boxH - blockH) / 2);
-  for (let i = 0; i < layout.lines.length; i++) {
-    const line = layout.lines[i];
-    const next = ty + lineH;
-    if (next > y0 && ty < y0 + boxH && line.length > 0) {
+  const letterSpacingDots = (el.charSpacing ?? 0) * dpm;
+  const contentW = Math.max(1, boxW - padX * 2);
+  // Same line box as the editor: the em sits in the middle of the line, so the
+  // gap between lines matches the preview instead of stacking on the baseline.
+  let ty = y0 + padY;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const emTop = ty + Math.max(0, Math.floor((lineH - em) / 2));
+    if (line.length > 0) {
       const textStyle = {
-        fontSizeDots: fontH,
+        fontSizeDots: em,
         bold: el.bold,
         italic: el.italic,
         family: resolvePrintFontFamily(line, el.fontFamily),
         ink,
+        letterSpacingDots,
       };
       const lineW = Math.round(surface.measureTextWidth(line, textStyle));
-      let tx = x0;
-      if (el.align === 'center') tx = x0 + Math.floor((boxW - lineW) / 2);
-      else if (el.align === 'right') tx = x0 + Math.max(0, boxW - lineW);
-      surface.drawTextLine(line, tx, ty, textStyle);
+      const justify =
+        (el.align === 'justify' || el.align === 'spacing') &&
+        i < lines.length - 1 &&
+        line.includes(' ') &&
+        !needsComplexTextShaping(line);
+      if (justify && lineW < contentW) {
+        const words = line.split(' ');
+        const extra = (contentW - lineW) / Math.max(1, words.length - 1);
+        let cursor = x0 + padX;
+        for (let w = 0; w < words.length; w++) {
+          const word = words[w];
+          if (word.length > 0) surface.drawTextLine(word, Math.round(cursor), emTop, textStyle);
+          const wordW = word.length > 0 ? surface.measureTextWidth(word, textStyle) : 0;
+          const spaceW = w < words.length - 1 ? surface.measureTextWidth(' ', textStyle) : 0;
+          cursor += wordW + spaceW + (w < words.length - 1 ? extra : 0);
+        }
+      } else {
+        let tx = x0 + padX;
+        if (el.align === 'center') tx = x0 + padX + Math.floor((contentW - lineW) / 2);
+        else if (el.align === 'right') tx = x0 + padX + Math.max(0, contentW - lineW);
+        surface.drawTextLine(line, tx, emTop, textStyle);
+      }
     }
-    ty = next;
+    ty += lineH;
   }
 }
 

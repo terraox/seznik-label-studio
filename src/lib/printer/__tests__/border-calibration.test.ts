@@ -250,4 +250,34 @@ for (const [widthMm, heightMm] of [
   assert.ok(Math.abs(baked.B - bottomDots) <= 1, `baked ${widthMm}x${heightMm} bottom ${baked.B}`);
 }
 
+// A 2-up cell border must stay on its own half when feed is baked.
+// The page frame above still uses the calibrated outer edge.
+function cellInk(el: Parameters<typeof margins>[2]) {
+  return margins(50, 25, el, 0, true);
+}
+const leftCell = cellInk({
+  ...fullBleedBorderElement(25, 25),
+  left: 2,
+  top: 2,
+  width: 21,
+  height: 21,
+  geometryVersion: 1,
+  borderStyle: 'dashed',
+});
+const rightCell = cellInk({
+  ...fullBleedBorderElement(25, 25),
+  left: 27,
+  top: 2,
+  width: 21,
+  height: 21,
+  geometryVersion: 1,
+  borderStyle: 'rounded',
+});
+const pageW = Math.max(8, Math.floor(Math.round(50 * dotsPerMm(dpi)) / 8) * 8);
+const mid = pageW / 2;
+assert.ok(leftCell.L < mid, `left cell starts on the left (${leftCell.L})`);
+assert.ok(pageW - 1 - leftCell.R < mid, `left cell ends before the middle (${pageW - 1 - leftCell.R})`);
+assert.ok(rightCell.L > mid, `right cell starts after the middle (${rightCell.L})`);
+assert.ok(pageW - 1 - rightCell.R > mid, `right cell ends on the right (${pageW - 1 - rightCell.R})`);
+
 console.log('ok border-calibration');

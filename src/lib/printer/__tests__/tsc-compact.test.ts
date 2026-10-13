@@ -25,7 +25,7 @@ describe('encodeTscCompactTextSample', () => {
     expect(cmd).toMatch(/SIZE\s+50\.00\s*mm,\s*15\.00\s*mm/i);
     expect(cmd).toContain('DIRECTION 0,0');
     expect(cmd).toContain('OFFSET 0 mm');
-    expect(cmd).toContain('REFERENCE 12,0');
+    expect(cmd).toContain('REFERENCE 0,0');
     expect(cmd).toContain('TEXT 12,12,"1",0,1,1,"Test print by Sez Print"');
     expect(cmd).toContain('TEXT 12,93,"1",0,1,1,"Software by Seznik India"');
     expect(cmd).toContain('PRINT 1');

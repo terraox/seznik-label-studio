@@ -24,6 +24,7 @@ const josh = {
 };
 
 assert.equal(JOSH_MEDIA_ORIGIN_H_MM, 0);
+assert.equal(TD404_MEDIA_ORIGIN_H_MM, 0);
 assert.equal(mediaOriginXMm(josh), 0);
 assert.equal(mediaOriginXMm(PRINTER_PROFILES['td404-304']), TD404_MEDIA_ORIGIN_H_MM);
 assert.equal(mediaOriginXMm(PRINTER_PROFILES['generic-203-4in']), 0);

@@ -60,10 +60,10 @@ import {
 import { dataPageCount, resolveDocumentData } from '@/lib/data-binding';
 import { projectBulkDocument, resolveBulkSheet } from '@/lib/bulk-labels';
 import {
-  composeUpsDocument,
   createLabelDocument,
   generateId,
   mmToPt,
+  composeUpsDocument,
   type LabelDocument,
   type LabelOrientation,
   type PaperType,
@@ -86,10 +86,8 @@ import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-mana
 import {
   createPrintSpec,
   mmToDots,
-  TD404_BORDER_BOTTOM_MM,
-  TD404_BORDER_LEFT_MM,
-  TD404_BORDER_RIGHT_MM,
-  TD404_BORDER_TOP_MM,
+  TD404_BORDER_GAP_MM,
+  td404EdgeBorderOptions,
 } from '@/lib/printer/print-spec';
 import { joshEffectiveDpi, joshHeadlessRasterOptions, joshInkOffsetMm } from '@/lib/printer/josh-print';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -447,13 +445,13 @@ export default function PrintScreen() {
   const jewelryDieCutJob = isJewelryDieCutDocument(sourceDocument);
   const cableFlagJob = isCableFlagDieCutDocument(sourceDocument);
   const ratTail143Job = isRatTail143Document(sourceDocument);
+  // One 2-up piece: row 1 on the left, row 2 on the right. Jewellery, cable-flag,
+  // and rat-tail keep their own canvases.
   const baseDocument = useMemo<LabelDocument | null>(() => {
     if (!sourceDocument) return null;
-    // Jewellery 3-up: keep the 14 mm tag. Composing UPS first makes a 48 mm
-    // strip with empty side panels, then print lands on the left of the sheet.
-    // Cable pair is already the 50 × 73 mm canvas — do not compose/tile to 100 mm.
     if (jewelryDieCutJob || cableFlagJob || ratTail143Job) return sourceDocument;
-    return sourceDocument.ups ? composeUpsDocument(sourceDocument) : sourceDocument;
+    if ((sourceDocument.ups?.columns ?? 0) >= 2) return composeUpsDocument(sourceDocument);
+    return sourceDocument;
   }, [sourceDocument, jewelryDieCutJob, cableFlagJob, ratTail143Job]);
   // Always use the connected printer's real DPI — a hardcoded 304 blurs 203 DPI
   // Josh/Dev/Tez heads (already fixed for jewelry; cable-flag/rat-tail-143 had the same bug).
@@ -928,8 +926,8 @@ export default function PrintScreen() {
       });
       const { density: printDensity, threshold, speed: printSpeed, dither } = quality;
       const inkSteps = darknessSteps(darkness, jobCaps);
-      // TD-404 at 0°: the offset is drawn into the bitmap, so the border moves exactly
-      // like every other layer and REFERENCE keeps only the media origin.
+      // TD-404 at 0°: the saved offset is drawn into the bitmap. REFERENCE x stays 0
+      // unless the job is rotated, which sends the offset on REFERENCE instead.
       const bakeOffset = manager.usesTd404CommandSet && orientationDeg === 0;
       const offsetH = bakeOffset ? 0 : printOffsetMm.x;
       const offsetV = bakeOffset ? 0 : printOffsetMm.y;
@@ -944,6 +942,7 @@ export default function PrintScreen() {
 
       for (let page = 0; page < pageCount; page++) {
         const pageStart = Date.now();
+        const sendCopies = copies;
         if (pageCount > 1) {
           setPageIndex(page);
           timer.start('pageWaitForPaint');
@@ -1054,7 +1053,7 @@ export default function PrintScreen() {
         const wantsBline =
           media === 'bline' ||
           /black\s*mark/i.test(jobName) ||
-          (displayDocument ?? previewDocument)?.elements.some(
+          pageDoc?.elements.some(
             (el) =>
               (el.type === 'text' || el.type === 'degrees') &&
               /black\s*mark/i.test(
@@ -1067,7 +1066,7 @@ export default function PrintScreen() {
         let usedNative = false;
         if (manager.isLabelX) {
           console.info(
-            `[LABELX-PRINT] Label print via Label X LuckPrinter SDK: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm, copies=${copies}, media=${media}`,
+            `[LABELX-PRINT] Label print via Label X LuckPrinter SDK: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm, copies=${sendCopies}, media=${media}`,
           );
           timer.start('transmit');
           await manager.printLabelXPngLabelFast({
@@ -1077,7 +1076,7 @@ export default function PrintScreen() {
             widthMm: paper.widthMm,
             heightMm: paper.heightMm,
             gapMm: gapLength,
-            copies,
+            copies: sendCopies,
             density: printDensity !== undefined && printDensity !== null ? Math.min(2, Math.max(0, Math.floor(printDensity / 5))) : 1,
             speed: printSpeed,
             hOffsetMm: offsetH,
@@ -1093,7 +1092,7 @@ export default function PrintScreen() {
           );
         } else if (manager.isTez) {
           console.info(
-            `[TEZ-PRINT] Label print via OEM PrintSDK: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm, copies=${copies}, media=${media}`,
+            `[TEZ-PRINT] Label print via OEM PrintSDK: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm, copies=${sendCopies}, media=${media}`,
           );
           timer.start('transmit');
           await manager.printTezPngLabelFast({
@@ -1101,7 +1100,7 @@ export default function PrintScreen() {
             widthMm: paper.widthMm,
             heightMm: paper.heightMm,
             gapMm: gapLength,
-            copies,
+            copies: sendCopies,
             density: printDensity,
             speed: printSpeed,
             orientation: 0,
@@ -1168,7 +1167,7 @@ export default function PrintScreen() {
                 widthMm: pageDoc.widthMm,
                 heightMm: pageDoc.heightMm,
                 gapMm: gapLength,
-                copies,
+                copies: sendCopies,
                 density: printDensity,
                 speed: printSpeed,
                 hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
@@ -1193,7 +1192,7 @@ export default function PrintScreen() {
                 widthMm: paper.widthMm,
                 heightMm: paper.heightMm,
                 gapMm: gapLength,
-                copies: copies,
+                copies: sendCopies,
                 density: printDensity,
                 speed: printSpeed,
                 orientation: 0,
@@ -1226,7 +1225,7 @@ export default function PrintScreen() {
                 widthMm: paper.widthMm,
                 heightMm: paper.heightMm,
                 gapMm: gapLength,
-                copies,
+                copies: sendCopies,
                 density: printDensity,
                 speed: printSpeed,
                 orientation: 0,
@@ -1244,7 +1243,7 @@ export default function PrintScreen() {
           timer.end('transmit');
         } else if (manager.isDev) {
           console.info(
-            `[DEV-PRINT-P1:PREFLIGHT] Label print dispatching via DEV AutoReplyPrint SDK: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm, copies=${copies}`,
+            `[DEV-PRINT-P1:PREFLIGHT] Label print dispatching via DEV AutoReplyPrint SDK: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm, copies=${sendCopies}`,
           );
           timer.start('sdkFastPrint');
           try {
@@ -1253,7 +1252,7 @@ export default function PrintScreen() {
               widthMm: paper.widthMm,
               heightMm: paper.heightMm,
               gapMm: gapLength,
-              copies,
+              copies: sendCopies,
               density: darkness != null ? printDensity : 14,
               speed: speed != null ? printSpeed : 3,
               threshold,
@@ -1288,6 +1287,7 @@ export default function PrintScreen() {
                 threshold,
                 darknessSteps: inkSteps,
                 bakeTd404Feed: true,
+                edgeBorders: td404EdgeBorderOptions(jobDpi),
                 shiftDots: bakeOffset
                   ? { x: mmToDots(printOffsetMm.x, jobDpi), y: mmToDots(printOffsetMm.y, jobDpi) }
                   : undefined,
@@ -1302,7 +1302,7 @@ export default function PrintScreen() {
                 widthMm: pageDoc.widthMm,
                 heightMm: pageDoc.heightMm,
                 gapMm: gapLength,
-                copies,
+                copies: sendCopies,
                 density: printDensity,
                 speed: printSpeed,
                 vOffsetMm: offsetV,
@@ -1352,7 +1352,7 @@ export default function PrintScreen() {
                 widthMm: paper.widthMm,
                 heightMm: paper.heightMm,
                 gapMm: gapLength,
-                copies,
+                copies: sendCopies,
                 density: printDensity,
                 speed: printSpeed,
                 vOffsetMm: offsetV,
@@ -1425,7 +1425,7 @@ export default function PrintScreen() {
                 widthMm: paper.widthMm,
                 heightMm: paper.heightMm,
                 gapMm: gapLength,
-                copies,
+                copies: sendCopies,
                 density: printDensity,
                 speed: printSpeed,
                 vOffsetMm: offsetV,
@@ -1478,7 +1478,7 @@ export default function PrintScreen() {
           timer.end('encode');
 
           timer.start('transmit');
-          await sendIsolatedPrintCopies(bytes, copies);
+          await sendIsolatedPrintCopies(bytes, sendCopies);
           timer.end('transmit');
 
           console.info(
@@ -1938,7 +1938,7 @@ export default function PrintScreen() {
                     if (!unrotatedJob) {
                       return `Total offset ${total} (this printer plus Label Settings). Rotated jobs send it on REFERENCE.`;
                     }
-                    return `Total offset ${total} (this printer plus Label Settings). It moves text, codes and the border together inside the bitmap. REFERENCE stays at the media origin, ${spec.xOffsetDots},${spec.yOffsetDots} dots. The border has ${TD404_BORDER_LEFT_MM} mm room to the left, ${TD404_BORDER_RIGHT_MM} mm right, ${TD404_BORDER_TOP_MM} mm up and ${TD404_BORDER_BOTTOM_MM} mm down before it is cut off.`;
+                    return `Total offset ${total} (this printer plus Label Settings). It moves text and codes inside the bitmap. The border is its own layer and stays ${TD404_BORDER_GAP_MM} mm from the die-cut on every side.`;
                   })()}
                 </Text>
                 <StepperRow
@@ -2003,6 +2003,7 @@ export default function PrintScreen() {
                     const timed = rasterizeDocumentToBitmapTimed(doc, jobDpi, {
                       threshold: 160,
                       bakeTd404Feed: true,
+                      edgeBorders: td404EdgeBorderOptions(jobDpi),
                     });
                     const result = await printTd404MonoLabel({
                       monoBytes: timed.result.mono1bppBuffer,

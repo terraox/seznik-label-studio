@@ -13,7 +13,7 @@ import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { joshEffectiveDpi, joshHeadlessRasterOptions, joshInkOffsetMm } from '@/lib/printer/josh-print';
 import { tryNativeSdkPngPrint } from '@/lib/printer/print-job';
 import { resolvePrintQuality } from '@/lib/printer/print-quality';
-import { mmToDots } from '@/lib/printer/print-spec';
+import { mmToDots, td404EdgeBorderOptions } from '@/lib/printer/print-spec';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { unpackMono1bppToGray } from '@/printing/raster/bit-packer';
@@ -99,6 +99,7 @@ async function rasterizeForPipeline(
     threshold,
     darknessSteps: inkSteps,
     bakeTd404Feed: bakeOffset,
+    edgeBorders: bakeOffset ? td404EdgeBorderOptions(jobDpi) : undefined,
     pageWidthPack: 'floor',
     shiftDots: bakeOffset
       ? { x: mmToDots(printOffsetMm.x, jobDpi), y: mmToDots(printOffsetMm.y, jobDpi) }

@@ -4,6 +4,8 @@ import type { GridRect } from '@/lib/print-grid';
 import { gridRectsToPath } from '@/lib/print-grid';
 
 export const PRINT_RULER_LINE_MM = 0.4;
+/** Tick strokes are thinner than the frame so 1 mm ticks stay separate on thermal heads. */
+export const PRINT_RULER_TICK_MM = 0.28;
 
 export function printRulerLineDots(dpi: number): number {
   return Math.max(2, mmToDots(PRINT_RULER_LINE_MM, dpi));
@@ -219,8 +221,8 @@ export function buildPrintRulerGeometry(widthMm: number, heightMm: number): Prin
     { left: 0, top: 0, width: line, height: h },
     { left: w - line, top: 0, width: line, height: h },
   ];
-  addEdgeTicks(inkRects, w, line, major, minor, 'x');
-  addEdgeTicks(inkRects, h, line, major, minor, 'y');
+  addEdgeTicks(inkRects, w, PRINT_RULER_TICK_MM, major, minor, 'x');
+  addEdgeTicks(inkRects, h, PRINT_RULER_TICK_MM, major, minor, 'y');
 
   const labels: RulerLabel[] = [];
   labels.push(insetLabel('0', 0.35, numY, mainCell, 'start', w, h));
@@ -301,11 +303,12 @@ export function drawPrintRuler(
   heightMm: number,
   dpi: number,
   scale = 1,
+  originDots: { x: number; y: number } = { x: 0, y: 0 },
 ): void {
   const s = scale;
   const lineUnits = printRulerLineDots(dpi);
   const dpm = dotsPerMm(dpi);
   for (const r of mmRectsToUnits(buildPrintRulerGeometry(widthMm, heightMm).inkRects, dpm, lineUnits)) {
-    target.fillRect(r.left * s, r.top * s, r.width * s, r.height * s, 0);
+    target.fillRect(originDots.x + r.left * s, originDots.y + r.top * s, r.width * s, r.height * s, 0);
   }
 }

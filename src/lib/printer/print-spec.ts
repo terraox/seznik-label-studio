@@ -103,11 +103,10 @@ export const PRINTER_PROFILES: Record<string, PrinterProfile> = {
 export const DEFAULT_PRINTER_PROFILE = PRINTER_PROFILES['td404-304'];
 
 /**
- * TD-404 firmware origin is the liner / side edge, not the die-cut.
- * The sticker starts ~1 mm inboard. Canvas 0 mm is the die-cut, so REFERENCE
- * x is shifted +1 mm (on top of user H offset). BITMAP stays 0,0.
+ * Canvas 0 mm is the TD-404 origin. REFERENCE x is the saved Horizontal Offset
+ * only. BITMAP stays 0,0.
  */
-export const TD404_MEDIA_ORIGIN_H_MM = 1;
+export const TD404_MEDIA_ORIGIN_H_MM = 0;
 
 /**
  * JOSH / LPAPI: startJob(widthMm, heightMm) + drawBitmap(mm) use the die-cut size;
@@ -122,36 +121,65 @@ export function mediaOriginXMm(profile: PrinterProfile): number {
   return 0;
 }
 
-/**
- * Outer edge of a TD-404 border, in printer dots, measured from the packed bitmap.
- *
- * Ruler on the last print, with the previous insets: top 2 mm, left 2 mm,
- * right 0.5 mm, bottom 3 mm. Top and left already match, so those insets stay.
- * Right gains 1.5 mm (the stroke moves left). Bottom loses 1 mm (the stroke
- * moves down). At 304 DPI that is top 12, left 18, right 36, bottom 24.
- * The stroke stays inside the bitmap. REFERENCE is not moved.
- */
-export const TD404_BORDER_TOP_MM = 1;
-export const TD404_BORDER_LEFT_MM = 1.5;
-export const TD404_BORDER_RIGHT_MM = 3;
-export const TD404_BORDER_BOTTOM_MM = 2;
+/** Wanted gap from the die-cut to the outer edge of a TD-404 border, every side. */
+export const TD404_BORDER_GAP_MM = 2;
 
+/**
+ * Where the die-cut's centre sits relative to the centre of the label-sized bitmap, in mm
+ * (+x right, +y down). It is the printer's media registration: the bitmap origin is not the
+ * die-cut corner. The border is drawn around THIS centre with a size of label minus twice
+ * the gap, so all four gaps are equal by construction. Only these two numbers are tuned.
+ *
+ * 50x50 print with the border centred on the bitmap's own centre offset by (-0.75, -0.5)
+ * measured left 3, right 2, top 0, bottom 3 mm. The border centre was then 0.5 mm right
+ * and 1.5 mm above the die-cut centre, so the die-cut centre is (-1.25, +1.0) from it.
+ * Second 50x50 print with x -1.25: left ~1 (on the die-cut), right 3, top 2, bottom 2. Y is
+ * right. The 46 mm wide border sat 1 mm too far left, so x moved +1 mm to -0.25.
+ * Third print at x -0.25 (width extra 0): left 1.5, right 2.5, so x moved +0.5 mm to 0.25.
+ */
+export const TD404_DIECUT_CENTER_OFFSET_MM = { x: 0.25, y: 1 };
+
+/**
+ * Extra border width on the right, in mm. 0: a fit of every ruler reading (x -0.25, y +1)
+ * showed the drawn width is right and the readings spread about 0.8 mm per print. A 1 mm
+ * extra over-corrected the right gap to 1 mm. Kept as a knob.
+ */
+export const TD404_BORDER_WIDTH_EXTRA_MM = 0;
+
+/** Equivalent per-side margins from the bitmap edge, derived from the centre. */
+export const TD404_BORDER_LEFT_MM = TD404_BORDER_GAP_MM + TD404_DIECUT_CENTER_OFFSET_MM.x;
+export const TD404_BORDER_RIGHT_MM =
+  TD404_BORDER_GAP_MM - TD404_DIECUT_CENTER_OFFSET_MM.x - TD404_BORDER_WIDTH_EXTRA_MM;
+export const TD404_BORDER_TOP_MM = TD404_BORDER_GAP_MM + TD404_DIECUT_CENTER_OFFSET_MM.y;
+export const TD404_BORDER_BOTTOM_MM = TD404_BORDER_GAP_MM - TD404_DIECUT_CENTER_OFFSET_MM.y;
+
+/**
+ * Border layer for TD-404. Drawn after the page shift, so the H/V offset that places
+ * text and codes never moves it. `shiftMm` is its own calibration, 0 to start.
+ */
+export const TD404_BORDER_SHIFT_MM = { x: 0, y: 0 };
+
+/**
+ * Outer edge of a TD-404 border in printer dots. Finds the die-cut centre
+ * (label centre plus the media registration offset), then grows half of
+ * (label size − 2 × gap) each way from it.
+ */
 export function td404BorderOuterDots(
   widthDots: number,
   heightDots: number,
   dpi: number,
 ): { x0: number; y0: number; x1: number; y1: number } {
-  const left = mmToDots(TD404_BORDER_LEFT_MM, dpi);
-  const right = mmToDots(TD404_BORDER_RIGHT_MM, dpi);
-  const top = mmToDots(TD404_BORDER_TOP_MM, dpi);
-  const bottom = mmToDots(TD404_BORDER_BOTTOM_MM, dpi);
-  const x0 = left;
-  const y0 = top;
+  const extra = mmToDots(TD404_BORDER_WIDTH_EXTRA_MM, dpi);
+  const cx = widthDots / 2 + mmToDots(TD404_DIECUT_CENTER_OFFSET_MM.x, dpi) + extra / 2;
+  const cy = heightDots / 2 + mmToDots(TD404_DIECUT_CENTER_OFFSET_MM.y, dpi);
+  const gap = mmToDots(TD404_BORDER_GAP_MM, dpi);
+  const halfW = Math.max(0.5, widthDots / 2 - gap + extra / 2);
+  const halfH = Math.max(0.5, heightDots / 2 - gap);
   return {
-    x0,
-    y0,
-    x1: Math.max(x0 + 1, widthDots - right),
-    y1: Math.max(y0 + 1, heightDots - bottom),
+    x0: Math.round(cx - halfW),
+    y0: Math.round(cy - halfH),
+    x1: Math.round(cx + halfW),
+    y1: Math.round(cy + halfH),
   };
 }
 
@@ -357,7 +385,7 @@ export type CreatePrintSpecOptions = {
  * hardware sensor calibration (GAP / BLINE / REFERENCE 0,0) to establish
  * the label's origin at the top-left of the media.
  * Injecting an artificial printhead offset shifts the image off the physical label.
- * Hardware centering is 0. TD-404 adds TD404_MEDIA_ORIGIN_H_MM on REFERENCE x.
+ * Hardware centering is 0. TD-404 REFERENCE x is the saved Horizontal Offset only.
  * REFERENCE y is the user vertical offset only. The border inset is in dots.
  */
 export function computePrintheadCenteringOffset(
@@ -386,9 +414,9 @@ export function createPrintSpec(options: CreatePrintSpecOptions): PrintSpec {
   const rasterWidthDots = layout.bitmapDotsW;
   const bytesPerRow = layout.bytesPerRow;
 
-  // SIZE origin is firmware top-left (liner). Pack-down leftover is cropped on the right.
-  // TD-404 die-cut is ~1 mm inboard of the side edge — REFERENCE x includes that.
-  // Never bake the shift into the bitmap.
+  // SIZE origin is firmware top-left. Pack-down leftover is cropped on the right.
+  // TD-404 REFERENCE x is the saved Horizontal Offset only.
+  // Never bake that shift into the bitmap.
   const forceLeft = options.calibration?.forceLeftAligned === true;
   const centeringProfile = forceLeft ? { ...profile, alignment: 'left' as PrinterAlignment } : profile;
   const centeringOffsetDots = computePrintheadCenteringOffset(widthDots, centeringProfile);
@@ -549,5 +577,21 @@ export function computeDevTsplPrintLayout(
     drawX,
     drawY,
     sizeCommand,
+  };
+}
+
+/** Rasterizer edge-border option for TD-404: own layer, own shift, no content offset. */
+export function td404EdgeBorderOptions(dpi: number): {
+  padRightDots: number;
+  centerGapMm: number;
+  shiftDots: { x: number; y: number };
+} {
+  return {
+    padRightDots: 0,
+    centerGapMm: TD404_BORDER_GAP_MM,
+    shiftDots: {
+      x: mmToDots(TD404_BORDER_SHIFT_MM.x, dpi),
+      y: mmToDots(TD404_BORDER_SHIFT_MM.y, dpi),
+    },
   };
 }
