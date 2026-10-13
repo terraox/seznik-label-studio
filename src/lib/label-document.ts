@@ -16,7 +16,7 @@ import type { BorderStyleId } from '@/constants/border-library';
 import type { MediaGeometry } from '@/lib/media-geometry';
 import type { BulkLabelSet } from '@/lib/bulk-labels';
 import type { LabelSettings } from '@/lib/label-settings';
-import { computeTextElementHeightMm } from '@/lib/text-metrics';
+import { visibleTextHeightMm } from '@/lib/visible-text-layout';
 
 export type TemplateBackground =
   | { type: 'none' }
@@ -326,6 +326,25 @@ export function applyUpsBatchMirror(doc: LabelDocument): LabelDocument {
   return { ...synced, ups: { ...synced.ups!, panels } };
 }
 
+/**
+ * One N-up panel as a normal label at the cell size.
+ * Print sends this document once per column. The stored border inset stays;
+ * column spacing is not added into the width.
+ */
+export function upsPanelDocument(doc: LabelDocument, index: number): LabelDocument {
+  if (!doc.ups || doc.ups.columns < 2) return doc;
+  const synced = syncUpsActivePanel(doc);
+  const columns = synced.ups!.columns;
+  const clamped = Math.max(0, Math.min(columns - 1, Math.round(index)));
+  const elements = JSON.parse(JSON.stringify(synced.ups!.panels[clamped] ?? [])) as LabelElement[];
+  return {
+    ...synced,
+    elements,
+    ups: undefined,
+    updatedAt: Date.now(),
+  };
+}
+
 /** Flatten N-up panels into one print-ready document (horizontal tile). */
 export function composeUpsDocument(doc: LabelDocument): LabelDocument {
   if (!doc.ups || doc.ups.columns < 2) return doc;
@@ -345,8 +364,9 @@ export function composeUpsDocument(doc: LabelDocument): LabelDocument {
     const ox = i * (cellW + gap);
     const panelDoc = { widthMm: cellW, heightMm: cellH };
     for (const raw of panels[i] ?? []) {
-      // Clamp inside the single-panel bounds before tiling so print never spills.
-      const el = clampPanelElement(raw, panelDoc);
+      // A border keeps the inset stored for this cell, then moves onto its side.
+      // Rewriting it to the cell edge made the two sides share one frame.
+      const el = raw.type === 'border' ? raw : clampPanelElement(raw, panelDoc);
       elements.push({
         ...JSON.parse(JSON.stringify(el)),
         id: generateId(),
@@ -421,18 +441,15 @@ export function textBlockHeightMm(fontSizePt: number, lines: number, lineSpacing
   return Math.max(2.4, ptToMm(fontSizePt) * 1.25 * mult * Math.max(1, lines));
 }
 
-/** Bounding box of an element in mm. Text/degrees height derives dynamically from wrapped lines unless explicitly fixed. */
+/** Bounding box of an element in mm. Auto-height text grows to its lines; a fixed height stays put. */
 export function elementSizeMm(element: LabelElement): { width: number; height: number } {
   switch (element.type) {
     case 'text': {
-      if (typeof element.height === 'number' && element.height > 0) {
-        return { width: element.width, height: element.height };
-      }
       const rawText =
         element.contentType === 'Data Source' && element.columnNameContent
           ? `{${element.columnNameContent}}`
           : element.text;
-      const height = computeTextElementHeightMm({
+      const natural = visibleTextHeightMm({
         text: rawText,
         fontSize: element.fontSize,
         widthMm: element.width,
@@ -443,17 +460,17 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
         verticalDisplay: element.verticalDisplay ?? false,
         fontFamily: element.fontFamily,
       });
-      return { width: element.width, height };
+      const stored = typeof element.height === 'number' && element.height > 0 ? element.height : 0;
+      // A short stored box used to slice the last line. The frame grows so every
+      // line stays on screen and on the sticker.
+      return { width: element.width, height: Math.max(stored, natural) };
     }
     case 'degrees': {
-      if (typeof element.height === 'number' && element.height > 0) {
-        return { width: element.width, height: element.height };
-      }
       const rawText =
         element.contentType === 'Data Source' && element.columnNameContent
           ? `{${element.columnNameContent}}`
           : element.content;
-      const height = computeTextElementHeightMm({
+      const natural = visibleTextHeightMm({
         text: rawText,
         fontSize: element.fontSize,
         widthMm: element.width,
@@ -464,7 +481,8 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
         verticalDisplay: element.verticalDisplay ?? false,
         fontFamily: element.fontFamily,
       });
-      return { width: element.width, height };
+      const stored = typeof element.height === 'number' && element.height > 0 ? element.height : 0;
+      return { width: element.width, height: Math.max(stored, natural) };
     }
     case 'time': {
       const width = Math.max(0.5, element.width);
