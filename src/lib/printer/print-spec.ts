@@ -149,6 +149,14 @@ export function mediaOriginXMm(profile: PrinterProfile): number {
 
 /** Wanted gap from the die-cut to the outer edge of a TD-404 border, every side. */
 export const TD404_BORDER_GAP_MM = 2;
+export const TD404_BORDER_GAP_MIN_MM = 1;
+export const TD404_BORDER_GAP_MAX_MM = 10;
+
+/** User gap for one TD-404 border, clamped. Unset or invalid falls back to 2 mm. */
+export function td404BorderGapMm(edgeGapMm: number | undefined | null): number {
+  if (edgeGapMm == null || !Number.isFinite(edgeGapMm)) return TD404_BORDER_GAP_MM;
+  return Math.min(TD404_BORDER_GAP_MAX_MM, Math.max(TD404_BORDER_GAP_MIN_MM, edgeGapMm));
+}
 
 /**
  * Where the die-cut's centre sits relative to the centre of the label-sized bitmap, in mm
@@ -194,11 +202,12 @@ export function td404BorderOuterDots(
   widthDots: number,
   heightDots: number,
   dpi: number,
+  gapMm: number = TD404_BORDER_GAP_MM,
 ): { x0: number; y0: number; x1: number; y1: number } {
   const extra = mmToDots(TD404_BORDER_WIDTH_EXTRA_MM, dpi);
   const cx = widthDots / 2 + mmToDots(TD404_DIECUT_CENTER_OFFSET_MM.x, dpi) + extra / 2;
   const cy = heightDots / 2 + mmToDots(TD404_DIECUT_CENTER_OFFSET_MM.y, dpi);
-  const gap = mmToDots(TD404_BORDER_GAP_MM, dpi);
+  const gap = mmToDots(gapMm, dpi);
   const halfW = Math.max(0.5, widthDots / 2 - gap + extra / 2);
   const halfH = Math.max(0.5, heightDots / 2 - gap);
   return {

@@ -1,7 +1,7 @@
 import { resolveBorderStyle } from '@/constants/border-library';
 import type { LabelElement } from '@/lib/label-document';
 import { borderShapeForMedia } from '@/printing/raster/border-shapes';
-import { mmToDots, td404BorderOuterDots } from '@/lib/printer/print-spec';
+import { mmToDots, td404BorderGapMm, td404BorderOuterDots } from '@/lib/printer/print-spec';
 import {
   borderFrameInsetsForElement,
   borderInsetDots,
@@ -72,7 +72,7 @@ export function drawPrintBorder(
   let x1: number;
   let y1: number;
   if (baked) {
-    const outer = td404BorderOuterDots(bitmapW, bitmapH, dpi);
+    const outer = td404BorderOuterDots(bitmapW, bitmapH, dpi, td404BorderGapMm(el.edgeGapMm));
     x0 = outer.x0 * s;
     y0 = outer.y0 * s;
     x1 = outer.x1 * s;
@@ -194,7 +194,7 @@ export function drawTd404EdgeBorder(
   label: EdgeBorderPage,
   shift: { x: number; y: number },
 ): void {
-  const outer = td404BorderOuterDots(label.widthDots, label.heightDots, dpi);
+  const outer = td404BorderOuterDots(label.widthDots, label.heightDots, dpi, td404BorderGapMm(el.edgeGapMm));
   drawInwardFrameInBox(
     target,
     Math.max(1, outer.x1 - outer.x0),

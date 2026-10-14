@@ -20,7 +20,7 @@ import {
   type LabelElement,
 } from '@/lib/label-document';
 import { joshBorderGapMm } from '@/lib/printer/josh-print';
-import { dotsPerMm, mmToDots, rectMmToDots, td404BorderOuterDots } from '@/lib/printer/print-spec';
+import { dotsPerMm, mmToDots, rectMmToDots, td404BorderGapMm, td404BorderOuterDots } from '@/lib/printer/print-spec';
 import { sortLayers } from '@/lib/template-schema';
 import { printGridKnockoutsMm, printGridRectsDots, printGridSpacingMm } from '@/lib/print-grid';
 import { PRINT_RULER_LINE_MM, drawPrintRuler, printRulerEnabled } from '@/lib/print-ruler';
@@ -500,7 +500,7 @@ function mergeEdgeBorders(
   for (const el of sortLayers(doc.elements)) {
     if (activeBakeFeed && isEdgeBorder(el, doc)) {
       drawTd404EdgeBorder({ fillRect }, el, dpi, pageDots, shift);
-      const o = td404BorderOuterDots(pageDots.widthDots, pageDots.heightDots, dpi);
+      const o = td404BorderOuterDots(pageDots.widthDots, pageDots.heightDots, dpi, td404BorderGapMm(el.edgeGapMm));
       console.info(
         `[TD404-BORDER] layer x ${o.x0}-${o.x1} y ${o.y0}-${o.y1} dots of ${pageDots.widthDots}x${pageDots.heightDots} | shift ${shift.x},${shift.y}`,
       );

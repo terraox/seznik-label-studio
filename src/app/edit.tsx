@@ -209,6 +209,8 @@ import {
   JOSH_BORDER_GAP_MIN_MM,
   joshBorderGapMm,
 } from '@/lib/printer/josh-print';
+import { getPrinterManager } from '@/lib/printer/printer-manager';
+import { td404BorderGapMm } from '@/lib/printer/print-spec';
 import { editorBridge, barcodeEncodeModeForScanType, isQrScanType } from '@/constants/editor-bridge';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -4703,11 +4705,11 @@ export default function EditScreen() {
                 : { lineWidth },
             );
           }}
-          edgeGapMm={
-            joshBorderGapMm(
-              doc.elements.find((el): el is LabelElementOfType<'border'> => el.type === 'border')?.edgeGapMm,
-            )
-          }
+          edgeGapMm={(() => {
+            const stored = doc.elements.find((el): el is LabelElementOfType<'border'> => el.type === 'border')?.edgeGapMm;
+            // TD-404 defaults to 2 mm, other printers keep their own default.
+            return getPrinterManager().usesTd404CommandSet ? td404BorderGapMm(stored) : joshBorderGapMm(stored);
+          })()}
           onChangeEdgeGap={(edgeGapMm) => {
             const border = docRef.current.elements.find(
               (el): el is LabelElementOfType<'border'> => el.type === 'border',
