@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-import { needsComplexTextShaping } from '@/lib/fonts/text-font-family';
+import { needsComplexTextShaping, resolveEditorFontFamily } from '@/lib/fonts/text-font-family';
 import {
   computeWrappedLines,
   measureTextWidthMm,
@@ -21,6 +21,18 @@ function roundTenth(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+/**
+ * The face the text is really drawn in. Callers pass either the stored font name or the
+ * already-resolved face key; both must give one key and one measurer, or the frame height
+ * is computed from different lines than the ones drawn and the extra lines get clipped.
+ */
+function layoutFamily(opts: VisibleTextParams): string {
+  const stored = opts.fontFamily;
+  const resolved = resolveEditorFontFamily(opts.text, stored);
+  if (resolved) return resolved;
+  return stored && stored !== 'Default' && stored !== 'Barcode' ? stored : '';
+}
+
 /** Same key the preview stores and the printer reads. */
 export function visibleTextKey(opts: VisibleTextParams): string {
   return [
@@ -32,7 +44,7 @@ export function visibleTextKey(opts: VisibleTextParams): string {
     roundTenth(opts.charSpacing ?? 0),
     opts.bold ? 1 : 0,
     opts.verticalDisplay ? 1 : 0,
-    opts.fontFamily ?? '',
+    layoutFamily(opts),
   ].join('\u001f');
 }
 
@@ -152,7 +164,7 @@ export function visibleWrappedLines(opts: VisibleTextParams): string[] {
   const fontSize = opts.fontSize;
   const charSpacing = opts.charSpacing ?? 0;
   const bold = opts.bold ?? false;
-  const fontFamily = opts.fontFamily;
+  const fontFamily = layoutFamily(opts) || undefined;
   return computeWrappedLines({
     text: opts.text,
     fontSize,
@@ -169,7 +181,7 @@ export function visibleWrappedLines(opts: VisibleTextParams): string[] {
 /** Frame height that keeps every wrapped line fully visible. */
 export function visibleTextHeightMm(opts: VisibleTextParams): number {
   const lines = visibleWrappedLines(opts);
-  const lineH = textLineBoxHeightMm(opts.fontSize, opts.lineSpacing, opts.fontFamily, opts.text);
+  const lineH = textLineBoxHeightMm(opts.fontSize, opts.lineSpacing, layoutFamily(opts) || undefined, opts.text);
   const pad = textVerticalPaddingMm(opts.fontSize);
   return Math.max(2.2, pad * 2 + lineH * Math.max(1, lines.length));
 }

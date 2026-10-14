@@ -85,3 +85,10 @@ test('height comes from the line count only', () => {
   assert.ok(many > one);
   assert.ok(Number.isFinite(computeTextElementHeightMm({ text: 'hi', fontSize: 10, widthMm: Number.NaN })));
 });
+
+test('a stored font name and its resolved face key share one layout key', async () => {
+  const { visibleTextKey } = await import('@/lib/visible-text-layout');
+  const base = { text: 'hello world', fontSize: 10, widthMm: 20 };
+  assert.equal(visibleTextKey({ ...base, fontFamily: 'Default' }), visibleTextKey({ ...base, fontFamily: undefined }));
+  assert.equal(visibleTextKey({ ...base, fontFamily: 'Roboto_400Regular' }), visibleTextKey({ ...base, fontFamily: 'Roboto_400Regular' }));
+});
