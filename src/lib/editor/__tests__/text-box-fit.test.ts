@@ -2,9 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { DEFAULT_ELEMENT_STATE } from '@/components/editor/types';
-import { fitTextBoxToContent, growTextFrameHeightForWidth, mergeTextElementPatch } from '@/lib/element-sizing';
+import {
+  fitNewTextDefaults,
+  fitTextBoxToContent,
+  fitTextDefaults,
+  growTextFrameHeightForWidth,
+  mergeTextElementPatch,
+} from '@/lib/element-sizing';
 import { computeTextElementHeightMm } from '@/lib/text-metrics';
-import { visibleTextHeightMm } from '@/lib/visible-text-layout';
+import { visibleTextHeightMm, visibleWrappedLines } from '@/lib/visible-text-layout';
 import { measureTextWidthMm } from '@/lib/text-metrics';
 import { elementSizeMm, type LabelElement } from '@/lib/label-document';
 
@@ -148,4 +154,35 @@ test('explicit newlines grow height', () => {
   const one = fitTextBoxToContent(textEl('Line'), canvas);
   const two = fitTextBoxToContent(textEl('Line\nLine'), canvas);
   assert.ok(two.height > one.height + 1, `two-line height ${two.height} vs ${one.height}`);
+});
+
+test('dragging an auto-height text box wider keeps the wider frame', () => {
+  const start = textEl('Double tap to add text', { width: 31, fontSize: 8.5, autoTextHeight: true, autoWrapping: 'Word' });
+  const wide = mergeTextElementPatch(start, { width: 60, autoWrapping: 'Word' }, { widthMm: 100, heightMm: 50 });
+  assert.equal(elementSizeMm(wide).width, 60);
+  const narrow = mergeTextElementPatch(start, { width: 12, autoWrapping: 'Word' }, { widthMm: 100, heightMm: 50 });
+  assert.equal(elementSizeMm(narrow).width, 12);
+  assert.ok(elementSizeMm(narrow).height > elementSizeMm(start).height, 'narrowing wraps onto more lines');
+});
+
+test('new text box stays a share of the label when the auto-fit font is large', () => {
+  for (const [w, h] of [[50, 30], [100, 50], [75, 50]]) {
+    const fit = fitNewTextDefaults(w, h, [], fitTextDefaults(w, h, []).fontSize);
+    assert.ok(fit.width <= w * 0.72, `${w}x${h}: box ${fit.width} spans too much of the label`);
+    assert.ok(fit.fontSize >= 8.5);
+  }
+});
+
+test('a fitted new text box keeps the placeholder on one line at every font size', () => {
+  for (const fontSize of [4, 6, 8.5, 9, 10.5, 12, 14.5, 18, 24]) {
+    const el = textEl('Double tap to add text', { fontSize, autoWrapping: 'Word', autoTextHeight: true, left: 1 });
+    const fitted = fitTextBoxToContent(el, { widthMm: 200, heightMm: 100 });
+    const lines = visibleWrappedLines({
+      text: 'Double tap to add text',
+      fontSize,
+      widthMm: fitted.width,
+      autoWrapping: 'Word',
+    });
+    assert.equal(lines.length, 1, `font ${fontSize}: placeholder wrapped to ${lines.length} lines in a ${fitted.width} mm box`);
+  }
 });

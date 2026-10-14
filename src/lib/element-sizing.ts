@@ -107,7 +107,8 @@ export function fitTextBoxToContent(
     longestMm = Math.max(longestMm, measureTextWidthMm(line, fontSize, charSpacing, bold, el.fontFamily));
   }
 
-  const width = roundMm(Math.min(maxW, Math.max(minW, longestMm + insetX * 2)));
+  // Margin so rounding and the on-device font measure never push the last word onto a new line.
+  const width = roundMm(Math.min(maxW, Math.max(minW, longestMm + insetX * 2 + TEXT_FIT_SLACK_MM)));
   const needsWrap = longestMm + insetX * 2 > maxW + 0.05;
   const heightMm = visibleTextHeightMm({
     text: raw,
@@ -154,6 +155,14 @@ export function growTextFrameHeightForWidth(
 
 /** Merge typography patches and reflow/clear height for auto-text-height elements. */
 export function mergeTextElementPatch(
+  el: TextLikeElement,
+  updates: Record<string, unknown>,
+  canvas?: { widthMm: number; heightMm: number },
+): LabelElement {
+  return mergeTextElementPatchCore(el, updates, canvas);
+}
+
+function mergeTextElementPatchCore(
   el: TextLikeElement,
   updates: Record<string, unknown>,
   canvas?: { widthMm: number; heightMm: number },
@@ -386,6 +395,12 @@ function placeInLabel(
   };
 }
 
+/** Extra box width beyond the measured words, so a fitted box keeps its text on one line. */
+const TEXT_FIT_SLACK_MM = 0.6;
+
+/** Largest share of the label a new text box may span once its font is above the default. */
+const NEW_TEXT_MAX_WIDTH_SHARE = 0.7;
+
 export const NEW_TEXT_PLACEHOLDER = 'Double tap to add text';
 
 export function fitTextDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {
@@ -431,8 +446,16 @@ export function fitNewTextDefaults(
     return { width, height };
   };
 
+  // Past the default font, keep the box to a share of the label so a big label
+  // does not get a box that spans it.
+  const comfortW = Math.max(4, widthMm * NEW_TEXT_MAX_WIDTH_SHARE);
   let box = oneLine(fontSize);
-  while (fontSize > 4.01 && (box.width > maxW + 0.05 || box.height > maxH + 0.05)) {
+  while (
+    fontSize > 4.01 &&
+    (box.width > maxW + 0.05 ||
+      box.height > maxH + 0.05 ||
+      (fontSize > DEFAULT_TEXT_FONT_PT && box.width > comfortW))
+  ) {
     fontSize = Math.max(4, Math.round((fontSize - 0.5) * 2) / 2);
     box = oneLine(fontSize);
   }

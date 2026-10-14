@@ -404,10 +404,10 @@ export type ComputeWrappedLinesParams = {
   measureWidth?: (sample: string) => number;
 };
 
-/**
- * Compute the wrapped line segments for text content given width constraints and wrapping mode.
- */
-export function computeWrappedLines({
+/** Hard stop on line count. A guard against runaway layouts, not the wrapping rule. */
+export const MAX_WRAP_LINES = 500;
+
+function computeWrappedLinesCore({
   text,
   fontSize,
   widthMm,
@@ -435,12 +435,27 @@ export function computeWrappedLines({
     return lines.length > 0 ? lines : [''];
   }
 
-  const safeWidthMm = Math.max(0.5, widthMm);
+  // Width <= 0, NaN or Infinity must not stall wrapping. 0.5 mm is below any glyph, so a
+  // too-narrow box still puts one cluster on each line (progress per line is guaranteed).
+  const safeWidthMm = widthMm === widthMm && widthMm > 0.5 ? widthMm : 0.5;
   const paragraphs = text.split('\n');
   const result: string[] = [];
+  let capWarned = false;
+  const atCap = () => {
+    if (result.length < MAX_WRAP_LINES) return false;
+    if (!capWarned) {
+      capWarned = true;
+      console.warn('[wrap] MAX_WRAP_LINES reached, len=' + text.length + ' width=' + widthMm);
+    }
+    return true;
+  };
 
   if (autoWrapping === 'Char') {
     for (let p = 0; p < paragraphs.length; p++) {
+      if (atCap()) {
+        result.push(paragraphs.slice(p).join(' '));
+        break;
+      }
       const para = paragraphs[p];
       if (para.length === 0) {
         result.push('');
@@ -448,6 +463,11 @@ export function computeWrappedLines({
       }
       let currentLine = '';
       for (let i = 0; i < para.length; ) {
+        if (atCap()) {
+          // Nothing typed is dropped: the rest rides on the last line.
+          currentLine += para.slice(i);
+          break;
+        }
         const chunk = takeCluster(para, i);
         i += chunk.length;
         const testLine = currentLine + chunk;
@@ -467,6 +487,10 @@ export function computeWrappedLines({
 
   // AutoWrapping === 'Word' (default)
   for (let p = 0; p < paragraphs.length; p++) {
+    if (atCap()) {
+      result.push(paragraphs.slice(p).join(' '));
+      break;
+    }
     const para = paragraphs[p];
     if (para.length === 0) {
       result.push('');
@@ -477,6 +501,10 @@ export function computeWrappedLines({
     let currentLine = '';
 
     for (let w = 0; w < words.length; w++) {
+      if (atCap()) {
+        currentLine = (currentLine.length > 0 ? currentLine + ' ' : '') + words.slice(w).join(' ');
+        break;
+      }
       const word = words[w];
       const candidate = currentLine.length > 0 ? currentLine + ' ' + word : word;
 
@@ -495,6 +523,10 @@ export function computeWrappedLines({
           // Word is too long to fit in one line, break mid-word
           let partial = '';
           for (let c = 0; c < word.length; ) {
+            if (atCap()) {
+              partial += word.slice(c);
+              break;
+            }
             const chunk = takeCluster(word, c);
             c += chunk.length;
             const testPartial = partial + chunk;
@@ -516,6 +548,16 @@ export function computeWrappedLines({
   }
 
   return result.length > 0 ? result : [''];
+}
+
+/**
+ * Compute the wrapped line segments for text content given width constraints and wrapping mode.
+ * The core worklet is declared above: a worklet captures callees when it is created, so the
+ * callee has to exist first.
+ */
+export function computeWrappedLines(params: ComputeWrappedLinesParams): string[] {
+  'worklet';
+  return computeWrappedLinesCore(params);
 }
 
 export type ComputeTextElementHeightParams = {

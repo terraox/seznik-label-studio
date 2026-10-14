@@ -1,7 +1,7 @@
 import { computeArcTextLayout } from "@/lib/editor/arctext-layout";
 import { useEffect, useMemo, useState } from "react";
 import { Image, Platform, StyleSheet, Text, View } from "react-native";
-import type { SharedValue } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import Svg, {
   Circle,
   Ellipse,
@@ -67,6 +67,7 @@ import {
   textWrapWidthMm,
 } from "@/lib/text-metrics";
 import {
+  cleanNativeLines,
   rememberVisibleLines,
   visibleTextKey,
   visibleWrappedLines,
@@ -134,6 +135,11 @@ type ContentProps = {
   /** Live resize box. Line emoji sizes its SVG from these so the stroke tracks the frame. */
   frameWidth?: SharedValue<number>;
   frameHeight?: SharedValue<number>;
+  /**
+   * True while a text width drag is live. A second, naturally wrapping Text takes over on the
+   * UI thread (no React render), so the words reflow with the frame instead of being clipped.
+   */
+  liveReflowSv?: SharedValue<boolean>;
 };
 
 function textStyleFor(
@@ -298,6 +304,16 @@ function formatTextForRender(
   };
 }
 
+/**
+ * Opacity swap between the resting text (explicit, print-accurate lines) and the live text
+ * (native wrap) during a width drag. Both stay mounted so the swap is a UI-thread flip.
+ */
+function useReflowSwapStyles(liveReflowSv?: SharedValue<boolean>) {
+  const resting = useAnimatedStyle(() => ({ opacity: liveReflowSv?.value ? 0 : 1 }));
+  const live = useAnimatedStyle(() => ({ opacity: liveReflowSv?.value ? 1 : 0 }));
+  return { resting, live };
+}
+
 function letterSpacingStyle(
   element: Pick<TextLayoutFields, "charSpacing" | "fontSize">,
   text?: string,
@@ -320,6 +336,7 @@ function TextContent({
   heightPx,
   layoutWidthMm,
   layoutHeightMm,
+  liveReflowSv,
 }: {
   element: TextLayoutFields & { text: string };
   scale: number;
@@ -327,6 +344,7 @@ function TextContent({
   heightPx?: number;
   layoutWidthMm?: number;
   layoutHeightMm?: number;
+  liveReflowSv?: SharedValue<boolean>;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -359,6 +377,8 @@ function TextContent({
   const style = textStyleFor(drawElement, scale, resolvedFamily, raw);
   const formatted = formatTextForRender(drawElement, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
+  const swap = useReflowSwapStyles(liveReflowSv);
+  const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
   return (
     <View
       style={[
@@ -377,13 +397,14 @@ function TextContent({
         dataColumnHighlightStyle(element, highlightColumnName),
       ]}
     >
-      <Text
+      <RestingText
         allowFontScaling={false}
         style={[
           style,
           styles.textFill,
           { textAlign: align },
           letterSpacingStyle(drawElement, raw),
+          liveReflowSv ? swap.resting : null,
         ]}
         numberOfLines={formatted.numberOfLines}
         ellipsizeMode={
@@ -396,13 +417,32 @@ function TextContent({
                 if (!formatted.layoutKey) return;
                 rememberVisibleLines(
                   formatted.layoutKey,
-                  event.nativeEvent.lines.map((line) => line.text),
+                  cleanNativeLines(
+                    event.nativeEvent.lines.map((line) => line.text),
+                    raw,
+                  ),
                 );
               }
         }
       >
         {formatted.text}
-      </Text>
+      </RestingText>
+      {liveReflowSv ? (
+        <Animated.Text
+          pointerEvents="none"
+          allowFontScaling={false}
+          style={[
+            textStyleFor(element, scale, resolvedFamily, raw),
+            styles.textFill,
+            styles.liveReflowText,
+            { textAlign: align },
+            letterSpacingStyle(element, raw),
+            swap.live,
+          ]}
+        >
+          {raw}
+        </Animated.Text>
+      ) : null}
     </View>
   );
 }
@@ -413,6 +453,7 @@ function DegreesContent({
   heightPx,
   layoutWidthMm,
   layoutHeightMm,
+  liveReflowSv,
 }: {
   element: DegreesElementState;
   scale: number;
@@ -420,6 +461,7 @@ function DegreesContent({
   heightPx?: number;
   layoutWidthMm?: number;
   layoutHeightMm?: number;
+  liveReflowSv?: SharedValue<boolean>;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -452,6 +494,8 @@ function DegreesContent({
   const style = textStyleFor(drawElement, scale, resolvedFamily, raw);
   const formatted = formatTextForRender(drawElement, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
+  const swap = useReflowSwapStyles(liveReflowSv);
+  const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
   return (
     <View
       style={[
@@ -470,13 +514,14 @@ function DegreesContent({
         dataColumnHighlightStyle(element, highlightColumnName),
       ]}
     >
-      <Text
+      <RestingText
         allowFontScaling={false}
         style={[
           style,
           styles.textFill,
           { textAlign: align },
           letterSpacingStyle(drawElement, raw),
+          liveReflowSv ? swap.resting : null,
         ]}
         numberOfLines={formatted.numberOfLines}
         ellipsizeMode={
@@ -489,13 +534,32 @@ function DegreesContent({
                 if (!formatted.layoutKey) return;
                 rememberVisibleLines(
                   formatted.layoutKey,
-                  event.nativeEvent.lines.map((line) => line.text),
+                  cleanNativeLines(
+                    event.nativeEvent.lines.map((line) => line.text),
+                    raw,
+                  ),
                 );
               }
         }
       >
         {formatted.text}
-      </Text>
+      </RestingText>
+      {liveReflowSv ? (
+        <Animated.Text
+          pointerEvents="none"
+          allowFontScaling={false}
+          style={[
+            textStyleFor(element, scale, resolvedFamily, raw),
+            styles.textFill,
+            styles.liveReflowText,
+            { textAlign: align },
+            letterSpacingStyle(element, raw),
+            swap.live,
+          ]}
+        >
+          {raw}
+        </Animated.Text>
+      ) : null}
     </View>
   );
 }
@@ -1459,6 +1523,7 @@ export function ElementContentView({
   layoutHeightMm,
   frameWidth,
   frameHeight,
+  liveReflowSv,
 }: ContentProps) {
   useInstalledFontStore((state) => state.revision);
   useUserClipartStore((state) => state.revision);
@@ -1470,6 +1535,7 @@ export function ElementContentView({
           scale={scale}
           widthPx={widthPx}
           heightPx={heightPx}
+          liveReflowSv={liveReflowSv}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />
@@ -1481,6 +1547,7 @@ export function ElementContentView({
           scale={scale}
           widthPx={widthPx}
           heightPx={heightPx}
+          liveReflowSv={liveReflowSv}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />
@@ -1730,6 +1797,11 @@ const styles = StyleSheet.create({
   textFill: {
     width: "100%",
     flexShrink: 0,
+  },
+  liveReflowText: {
+    position: "absolute",
+    left: 0,
+    top: 0,
   },
   invalidBox: {
     flex: 1,

@@ -50,6 +50,26 @@ export function rememberVisibleLines(key: string, lines: string[]) {
   publish();
 }
 
+/**
+ * Lines React Native reports, cleaned for the cache. Native text can end a line in "\n", and
+ * re-joining with "\n" turns that into a blank line, which then comes back as one more line
+ * on the next layout. Only blank lines the typed text really has are kept.
+ */
+export function cleanNativeLines(nativeLines: string[], sourceText: string): string[] {
+  const allowedBlank = sourceText.split('\n').filter((part) => part.length === 0).length;
+  let blanks = 0;
+  const out: string[] = [];
+  for (const raw of nativeLines) {
+    const line = raw.replace(/\r?\n+$/, '');
+    if (line.length === 0) {
+      blanks += 1;
+      if (blanks > allowedBlank) continue;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
 export function useVisibleTextRevision(): number {
   return useSyncExternalStore(
     (listener) => {
@@ -155,21 +175,18 @@ export function visibleTextHeightMm(opts: VisibleTextParams): number {
 }
 
 /**
- * Selection frame for auto-height text.
- * Wider than the words: hug the words plus a little padding.
- * Narrower than the words: keep that width and grow with the wrapped lines.
+ * Selection frame for auto-height text. Width is the box the user set (typing
+ * and creation already fit it to the words); height follows the wrapped lines.
+ * Only a missing width falls back to hugging the words.
  */
 export function huggedTextFrameMm(
   opts: VisibleTextParams & { storedWidth: number },
 ): { width: number; height: number } {
   const fontSize = opts.fontSize > 0 ? opts.fontSize : 12;
   const inset = textHorizontalPaddingMm(fontSize) * 2;
-  const stored = opts.storedWidth > 0 ? opts.storedWidth : inset + 4;
-  if (opts.verticalDisplay) {
-    return {
-      width: stored,
-      height: visibleTextHeightMm({ ...opts, widthMm: stored }),
-    };
+  if (opts.storedWidth > 0 || opts.verticalDisplay) {
+    const width = opts.storedWidth > 0 ? opts.storedWidth : inset + 4;
+    return { width, height: visibleTextHeightMm({ ...opts, widthMm: width }) };
   }
   const rawLines = opts.text.length > 0 ? opts.text.split('\n') : [''];
   let longest = 0;
@@ -179,12 +196,6 @@ export function huggedTextFrameMm(
       lineWidthMm(line, fontSize, opts.charSpacing ?? 0, opts.bold ?? false, opts.fontFamily),
     );
   }
-  // A little wider than the ink so the line stays intact inside the padding.
-  const hugW = Math.max(4, longest + inset + 0.6);
-  const compressed = stored + 0.3 < hugW;
-  const width = compressed ? stored : hugW;
-  return {
-    width,
-    height: visibleTextHeightMm({ ...opts, widthMm: width }),
-  };
+  const width = Math.max(4, longest + inset + 0.6);
+  return { width, height: visibleTextHeightMm({ ...opts, widthMm: width }) };
 }
