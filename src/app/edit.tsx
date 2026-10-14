@@ -156,6 +156,7 @@ import {
 import { ResizeSizeHud } from '@/components/editor/resize-size-hud';
 import { LabelSettingsMenu } from '@/components/editor/more-menu';
 import { LabelSizeEditor } from '@/components/label-size-editor';
+import { BorderPropertyPanel } from '@/components/editor/border-property-panel';
 import { LinePropertyPanel } from '@/components/editor/line-property-panel';
 import { QrcodePropertyPanel } from '@/components/editor/qrcode-property-panel';
 import { ShapePropertyPanel } from '@/components/editor/shape-property-panel';
@@ -203,15 +204,7 @@ import {
   type TablePropertyTab,
   type TimePropertyTab,
 } from '@/components/editor/types';
-import { borderStyleStrokeMm } from '@/constants/border-library';
-import {
-  JOSH_BORDER_GAP_MAX_MM,
-  JOSH_BORDER_GAP_MIN_MM,
-  joshBorderGapMm,
-} from '@/lib/printer/josh-print';
-import { getPrinterManager } from '@/lib/printer/printer-manager';
-import { td404BorderGapMm } from '@/lib/printer/print-spec';
-import { editorBridge, barcodeEncodeModeForScanType, isQrScanType } from '@/constants/editor-bridge';
+import { editorBridge, barcodeEncodeModeForScanType, isBorderRemoval, isQrScanType } from '@/constants/editor-bridge';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple, cardShadow, Palette, Type } from '@/constants/ui';
@@ -238,7 +231,6 @@ import {
   type ElementType,
   type LabelDocument,
   type LabelElement,
-  type LabelElementOfType,
 } from '@/lib/label-document';
 import { isFontNameReady } from '@/lib/fonts/font-ready';
 import { resolveLabelSettings } from '@/lib/label-settings';
@@ -406,6 +398,7 @@ const PANEL_ELEMENT_TYPES: readonly ElementType[] = [
   'image',
   'clipart',
   'signature',
+  'border',
 ];
 
 function hasPropertyPanel(type: ElementType) {
@@ -739,7 +732,6 @@ export default function EditScreen() {
   const [showLabelMenu, setShowLabelMenu] = useState(false);
   const [labelMenuTop, setLabelMenuTop] = useState(0);
   const [showTablePicker, setShowTablePicker] = useState(false);
-  const [borderOptionsOpen, setBorderOptionsOpen] = useState(false);
   const [showSignatureBoard, setShowSignatureBoard] = useState(false);
   const signatureBoardIntentRef = useRef<'create' | 'edit'>('create');
   const [showOpenModal, setShowOpenModal] = useState(false);
@@ -2131,8 +2123,20 @@ export default function EditScreen() {
   const handleSelect = useCallback(
     (id: string, source: SelectSource = 'touch') => {
       const element = docRef.current.elements.find((el) => el.id === id);
-      if (!element || element.needPrinting === false || element.type === 'border') return;
+      if (!element || element.needPrinting === false) return;
       if (!mountedRef.current) return;
+
+      if (element.type === 'border') {
+        selectedIdsRef.current = [id];
+        primaryIdRef.current = id;
+        setSelectedIds([id]);
+        setPrimaryId(id);
+        topBarSelectionVisibleSv.value = 1;
+        bottomPanelVisibleSv.value = 1;
+        activeSelectedIdSv.value = id;
+        setPanelOpen(true);
+        return;
+      }
 
       const current = { ids: selectedIdsRef.current, primaryId: primaryIdRef.current };
       const alreadySelected = current.ids.includes(id);
@@ -2221,9 +2225,6 @@ export default function EditScreen() {
     bottomPanelVisibleSv.value = 1;
     setSelectedIds([id]);
     setPrimaryId(id);
-    if (element.type === 'border') {
-      return;
-    }
     resetTabToRegularForElement(element.type);
     setPanelOpen(true);
   }, [topBarSelectionVisibleSv, bottomPanelVisibleSv, resetTabToRegularForElement]);
@@ -2238,9 +2239,6 @@ export default function EditScreen() {
     if (element.type === 'signature') {
       signatureBoardIntentRef.current = 'edit';
       setShowSignatureBoard(true);
-      return;
-    }
-    if (element.type === 'border') {
       return;
     }
     resetTabToRegularForElement(element.type);
@@ -3330,14 +3328,42 @@ export default function EditScreen() {
       }
 
       if (editorBridge.borderResult) {
-        const borderStyle = editorBridge.borderResult;
+        const result = editorBridge.borderResult;
         editorBridge.borderResult = null;
-        const existingBorder = docRef.current.elements.find((el) => el.type === 'border');
-        const lineWidth = borderStyleStrokeMm(borderStyle);
-        if (existingBorder) {
-          patchElement(existingBorder.id, { borderStyle, lineWidth });
+        if (isBorderRemoval(result)) {
+          setElements((elements) => elements.filter((el) => el.type !== 'border'), true);
         } else {
-          addElement('border', { borderStyle, lineWidth });
+          const existingBorder = docRef.current.elements.find((el) => el.type === 'border');
+          const keepSettings =
+            existingBorder != null && selectedIdsRef.current.includes(existingBorder.id);
+          const box = borderBoxForCenterGap(
+            docRef.current.widthMm,
+            docRef.current.heightMm,
+            result.edgeGapMm,
+            result.lineWidth,
+          );
+          const patch = {
+            borderStyle: result.style,
+            lineWidth: result.lineWidth,
+            edgeGapMm: result.edgeGapMm,
+            geometryVersion: 1 as const,
+            ...box,
+          };
+          if (existingBorder) {
+            patchElement(existingBorder.id, patch);
+          } else {
+            addElement('border', patch);
+          }
+          if (!keepSettings) {
+            selectedIdsRef.current = [];
+            primaryIdRef.current = null;
+            activeSelectedIdSv.value = '';
+            topBarSelectionVisibleSv.value = 0;
+            bottomPanelVisibleSv.value = 0;
+            setSelectedIds([]);
+            setPrimaryId(null);
+            setPanelOpen(false);
+          }
         }
       }
 
@@ -3382,6 +3408,7 @@ export default function EditScreen() {
     }, [
       addElement,
       patchElement,
+      setElements,
       patchTableCellAt,
       placeIngestedImageOnCanvas,
       applyCroppedImageToElement,
@@ -3663,12 +3690,21 @@ export default function EditScreen() {
         break;
       }
       case 'Border': {
-        const existingBorder = docRef.current.elements.find((el) => el.type === 'border');
-        if (existingBorder) {
-          setBorderOptionsOpen(true);
-        } else {
-          router.push({ pathname: '/border-library', params: { from: 'edit' } });
-        }
+        const border = docRef.current.elements.find((el) => el.type === 'border');
+        router.push({
+          pathname: '/border-library',
+          params: {
+            from: 'edit',
+            ...(border?.type === 'border'
+              ? {
+                  style: border.borderStyle,
+                  lineWidth: String(border.lineWidth),
+                  ...(border.edgeGapMm != null ? { edgeGap: String(border.edgeGapMm) } : {}),
+                  hasBorder: '1',
+                }
+              : {}),
+          },
+        });
         break;
       }
       case 'Excel':
@@ -4197,6 +4233,37 @@ export default function EditScreen() {
             }}
           />
         );
+      case 'border':
+        return (
+          <BorderPropertyPanel
+            state={targetEl}
+            patch={patchSelected}
+            labelWidthMm={labelBounds.widthMm}
+            labelHeightMm={labelBounds.heightMm}
+            onChangeStyle={() => {
+              router.push({
+                pathname: '/border-library',
+                params: {
+                  from: 'edit',
+                  style: targetEl.borderStyle,
+                  ...(targetEl.edgeGapMm != null ? { edgeGap: String(targetEl.edgeGapMm) } : {}),
+                  hasBorder: '1',
+                },
+              });
+            }}
+            onRemove={() => {
+              setElements((elements) => elements.filter((el) => el.type !== 'border'), true);
+              selectedIdsRef.current = [];
+              primaryIdRef.current = null;
+              activeSelectedIdSv.value = '';
+              topBarSelectionVisibleSv.value = 0;
+              bottomPanelVisibleSv.value = 0;
+              setSelectedIds([]);
+              setPrimaryId(null);
+              setPanelOpen(false);
+            }}
+          />
+        );
       case 'signature':
         return (
           <SignaturePropertyPanel
@@ -4678,67 +4745,6 @@ export default function EditScreen() {
         }}
       />
 
-      {borderOptionsOpen && (
-        <BorderOptionsSheet
-          lineWidth={
-            doc.elements.find((el) => el.type === 'border')?.lineWidth ?? 0.55
-          }
-          onChangeWidth={(lineWidth) => {
-            const border = docRef.current.elements.find(
-              (el): el is LabelElementOfType<'border'> => el.type === 'border',
-            );
-            if (!border) return;
-            // A set distance keeps the stroke center fixed when the stroke gets thicker.
-            patchElement(
-              border.id,
-              border.edgeGapMm != null
-                ? {
-                    lineWidth,
-                    geometryVersion: 1,
-                    ...borderBoxForCenterGap(
-                      docRef.current.widthMm,
-                      docRef.current.heightMm,
-                      border.edgeGapMm,
-                      lineWidth,
-                    ),
-                  }
-                : { lineWidth },
-            );
-          }}
-          edgeGapMm={(() => {
-            const stored = doc.elements.find((el): el is LabelElementOfType<'border'> => el.type === 'border')?.edgeGapMm;
-            // TD-404 defaults to 2 mm, other printers keep their own default.
-            return getPrinterManager().usesTd404CommandSet ? td404BorderGapMm(stored) : joshBorderGapMm(stored);
-          })()}
-          onChangeEdgeGap={(edgeGapMm) => {
-            const border = docRef.current.elements.find(
-              (el): el is LabelElementOfType<'border'> => el.type === 'border',
-            );
-            if (!border) return;
-            // The rectangle moves too, so the canvas and preview show the distance.
-            patchElement(border.id, {
-              edgeGapMm,
-              geometryVersion: 1,
-              ...borderBoxForCenterGap(
-                docRef.current.widthMm,
-                docRef.current.heightMm,
-                edgeGapMm,
-                border.lineWidth > 0 ? border.lineWidth : borderStyleStrokeMm(border.borderStyle),
-              ),
-            });
-          }}
-          onReplace={() => {
-            setBorderOptionsOpen(false);
-            router.push({ pathname: '/border-library', params: { from: 'edit' } });
-          }}
-          onRemove={() => {
-            setElements((elements) => elements.filter((el) => el.type !== 'border'), true);
-            setBorderOptionsOpen(false);
-          }}
-          onCancel={() => setBorderOptionsOpen(false)}
-        />
-      )}
-
       {showTablePicker && (
         <TableSizePicker
           rows={pickerRows}
@@ -4917,91 +4923,6 @@ export default function EditScreen() {
       {documentSourceSheet}
       {excelImportModal}
     </View>
-  );
-}
-
-function BorderOptionsSheet({
-  lineWidth,
-  onChangeWidth,
-  edgeGapMm,
-  onChangeEdgeGap,
-  onReplace,
-  onRemove,
-  onCancel,
-}: {
-  lineWidth: number;
-  onChangeWidth: (next: number) => void;
-  edgeGapMm: number;
-  onChangeEdgeGap: (next: number) => void;
-  onReplace: () => void;
-  onRemove: () => void;
-  onCancel: () => void;
-}) {
-  const trackWidth = useRef(1);
-  const [gapText, setGapText] = useState(String(edgeGapMm));
-  const min = 0.1;
-  const max = 1;
-  const ratio = Math.min(1, Math.max(0, (lineWidth - min) / (max - min)));
-  const setFromX = (x: number) => {
-    const nextRatio = Math.min(1, Math.max(0, x / trackWidth.current));
-    const next = Math.round((min + nextRatio * (max - min)) * 100) / 100;
-    onChangeWidth(next);
-  };
-
-  return (
-    <Modal transparent animationType="fade" visible onRequestClose={onCancel}>
-      <View style={styles.borderSheetBackdrop}>
-        <View style={styles.borderSheetCard}>
-          <Text style={styles.borderSheetTitle}>Border</Text>
-          <View style={styles.borderSheetActions}>
-            <Pressable style={styles.borderReplaceBtn} onPress={onReplace}>
-              <Text style={styles.borderReplaceText}>Replace</Text>
-            </Pressable>
-            <Pressable style={styles.borderRemoveBtn} onPress={onRemove}>
-              <Text style={styles.borderRemoveText}>Cancel The Border</Text>
-            </Pressable>
-          </View>
-          <View style={styles.borderRangeLabels}>
-            <Text style={styles.borderRangeText}>MIN 0.1</Text>
-            <Text style={styles.borderRangeText}>MAX 1.0</Text>
-          </View>
-          <View
-            style={styles.borderSliderHit}
-            onLayout={(event) => {
-              trackWidth.current = event.nativeEvent.layout.width || 1;
-            }}
-            onStartShouldSetResponder={() => true}
-            onMoveShouldSetResponder={() => true}
-            onResponderGrant={(event) => setFromX(event.nativeEvent.locationX)}
-            onResponderMove={(event) => setFromX(event.nativeEvent.locationX)}>
-            <View style={styles.borderSliderTrack}>
-              <View style={[styles.borderSliderFill, { width: `${ratio * 100}%` }]} />
-            </View>
-            <View style={[styles.borderSliderThumb, { left: `${ratio * 100}%` }]} />
-          </View>
-          <View style={styles.borderGapRow}>
-            <Text style={styles.borderGapLabel}>
-              Distance from edge (mm, {JOSH_BORDER_GAP_MIN_MM}-{JOSH_BORDER_GAP_MAX_MM})
-            </Text>
-            <TextInput
-              style={styles.borderGapInput}
-              value={gapText}
-              keyboardType="decimal-pad"
-              selectTextOnFocus
-              onChangeText={(text) => {
-                setGapText(text);
-                const value = parseFloat(text.replace(',', '.'));
-                if (Number.isFinite(value)) onChangeEdgeGap(joshBorderGapMm(value));
-              }}
-              onBlur={() => setGapText(String(joshBorderGapMm(parseFloat(gapText.replace(',', '.')))))}
-            />
-          </View>
-        </View>
-        <Pressable style={styles.borderCancelBtn} onPress={onCancel}>
-          <Text style={styles.borderCancelText}>Cancel</Text>
-        </Pressable>
-      </View>
-    </Modal>
   );
 }
 
@@ -5690,123 +5611,5 @@ const styles = StyleSheet.create({
     width: StyleSheet.hairlineWidth,
     height: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  borderSheetBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 12,
-    paddingBottom: 16,
-    gap: 8,
-  },
-  borderSheetCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 18,
-  },
-  borderSheetTitle: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#8E8E93',
-    marginBottom: 14,
-  },
-  borderSheetActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  borderReplaceBtn: {
-    flex: 1,
-    backgroundColor: '#3EC6C9',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  borderReplaceText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  borderRemoveBtn: {
-    flex: 1,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#E25B5B',
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  borderRemoveText: {
-    color: '#E25B5B',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  borderGapRow: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  borderGapLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: '#3C4043',
-  },
-  borderGapInput: {
-    width: 72,
-    borderWidth: 1,
-    borderColor: '#D7DDE3',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    textAlign: 'center',
-    fontSize: 15,
-    color: '#1F2328',
-  },
-  borderRangeLabels: {
-    marginTop: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  borderRangeText: {
-    fontSize: 12,
-    color: '#9AA0A6',
-  },
-  borderSliderHit: {
-    marginTop: 8,
-    height: 28,
-    justifyContent: 'center',
-  },
-  borderSliderTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#D7DDE3',
-    overflow: 'hidden',
-  },
-  borderSliderFill: {
-    height: 4,
-    backgroundColor: '#3EC6C9',
-  },
-  borderSliderThumb: {
-    position: 'absolute',
-    width: 22,
-    height: 22,
-    marginLeft: -11,
-    borderRadius: 11,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  borderCancelBtn: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  borderCancelText: {
-    color: '#007AFF',
-    fontSize: 17,
-    fontWeight: '600',
   },
 });

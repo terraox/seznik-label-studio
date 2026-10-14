@@ -1,28 +1,43 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BorderPreview } from '@/components/border-preview';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
-import { BORDER_CATEGORIES, BORDER_LIBRARY } from '@/constants/border-library';
+import {
+  BORDER_CATEGORIES,
+  BORDER_LIBRARY,
+  borderStyleStrokeMm,
+  type BorderStyleId,
+} from '@/constants/border-library';
 import { editorBridge } from '@/constants/editor-bridge';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Palette, cardShadow } from '@/constants/ui';
+import { joshBorderGapMm } from '@/lib/printer/josh-print';
+import { getPrinterManager } from '@/lib/printer/printer-manager';
+import { td404BorderGapMm } from '@/lib/printer/print-spec';
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 export default function BorderLibraryScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const params = useLocalSearchParams<{ from?: string }>();
-  const fromEdit = params.from === 'edit';
-  const [selectedId, setSelectedId] = useState(BORDER_LIBRARY[0].id);
+  const params = useLocalSearchParams<{
+    from?: string;
+    style?: string;
+    edgeGap?: string;
+  }>();
+  const from = firstParam(params.from);
+  const applying = from === 'edit' || from === 'label-settings';
+  const requested = firstParam(params.style);
+  const [selectedId, setSelectedId] = useState<BorderStyleId>(
+    requested && BORDER_LIBRARY.some((item) => item.id === requested)
+      ? (requested as BorderStyleId)
+      : BORDER_LIBRARY[0].id,
+  );
   const [category, setCategory] = useState<(typeof BORDER_CATEGORIES)[number]>('All');
 
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
@@ -33,11 +48,24 @@ export default function BorderLibraryScreen() {
     return BORDER_LIBRARY.filter((item) => item.category === category);
   }, [category]);
 
+  const choose = (id: BorderStyleId) => {
+    setSelectedId(id);
+    if (!applying) return;
+    const parsedGap = Number(firstParam(params.edgeGap));
+    const clampGap = getPrinterManager().usesTd404CommandSet ? td404BorderGapMm : joshBorderGapMm;
+    editorBridge.borderResult = {
+      style: id,
+      lineWidth: borderStyleStrokeMm(id),
+      edgeGapMm: clampGap(Number.isFinite(parsedGap) ? parsedGap : undefined),
+    };
+    router.back();
+  };
+
   return (
     <View style={styles.root}>
       <SettingsStackHeader title="Border" />
 
-      {!fromEdit ? (
+      {!applying ? (
         <Text style={[styles.browseHint, { width: contentWidth }]}>
           Browsing borders. To apply one, open Border from the editor toolbar.
         </Text>
@@ -74,13 +102,7 @@ export default function BorderLibraryScreen() {
           const active = item.id === selectedId;
           return (
             <Pressable
-              onPress={() => {
-                setSelectedId(item.id);
-                if (fromEdit) {
-                  editorBridge.borderResult = item.id;
-                  router.back();
-                }
-              }}
+              onPress={() => choose(item.id)}
               style={({ pressed }) => [
                 styles.card,
                 { width: tileWidth },

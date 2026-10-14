@@ -1737,28 +1737,73 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   });
 
   if (element.type === 'border' || element.needPrinting === false) {
+    const borderHit =
+      element.type === 'border' && element.needPrinting !== false
+        ? Math.max(22, Math.round((element.lineWidth || 0.5) * pxPerMMSafe) + 10)
+        : 0;
     return (
       <View
-        pointerEvents="none"
+        pointerEvents={borderHit > 0 ? 'box-none' : 'none'}
         style={{
           position: 'absolute',
           left: baseLeftPx,
           top: baseTopPx,
           width: baseWidthPx,
           height: baseHeightPx,
-          zIndex: 0,
+          zIndex: borderHit > 0 ? 1000 : 0,
           transform: [{ rotate: `${baseRotation}deg` }],
           opacity: element.opacity ?? 1,
         }}>
-        <ElementContentView
-          element={element}
-          widthPx={baseWidthPx}
-          heightPx={baseHeightPx}
-          scale={pxPerMMSafe}
-          mediaShape={borderMediaShape}
-          selectedTableCell={element.type === 'table' ? selectedTableCell : null}
-          tableSelectionColor={tableSelectionColor}
-        />
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <ElementContentView
+            element={element}
+            widthPx={baseWidthPx}
+            heightPx={baseHeightPx}
+            scale={pxPerMMSafe}
+            mediaShape={borderMediaShape}
+            selectedTableCell={element.type === 'table' ? selectedTableCell : null}
+            tableSelectionColor={tableSelectionColor}
+          />
+        </View>
+        {borderHit > 0 ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Border"
+              onPress={() => onSelect(element.id)}
+              style={{ position: 'absolute', left: 0, right: 0, top: 0, height: borderHit }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Border"
+              onPress={() => onSelect(element.id)}
+              style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: borderHit }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Border"
+              onPress={() => onSelect(element.id)}
+              style={{ position: 'absolute', left: 0, top: borderHit, bottom: borderHit, width: borderHit }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Border"
+              onPress={() => onSelect(element.id)}
+              style={{ position: 'absolute', right: 0, top: borderHit, bottom: borderHit, width: borderHit }}
+            />
+            {selected ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  ...StyleSheet.absoluteFillObject,
+                  borderWidth: 1.5,
+                  borderStyle: 'dashed',
+                  borderColor: selectionColor || '#48C3C7',
+                }}
+              />
+            ) : null}
+          </>
+        ) : null}
       </View>
     );
   }

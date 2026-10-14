@@ -24,10 +24,9 @@ import {
   SettingsValueRow,
 } from '@/components/settings-ui';
 import { IosAlertInput, IosAlertModal } from '@/components/ui/ios-alert-modal';
-import { borderStyleStrokeMm } from '@/constants/border-library';
-import { editorBridge } from '@/constants/editor-bridge';
+import { editorBridge, isBorderRemoval } from '@/constants/editor-bridge';
 import { DRAWING_COLORS } from '@/components/editor/types';
-import { defaultBorderPlacement } from '@/lib/border-geometry';
+import { borderBoxForCenterGap } from '@/lib/border-geometry';
 import { generateId, parseOrientation, type LabelDocument, type LabelOrientation, type PaperType } from '@/lib/label-document';
 import { clampLabelMm } from '@/lib/label-geometry';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
@@ -114,28 +113,49 @@ export default function LabelSettingsScreen() {
       }
 
       if (editorBridge.borderResult && doc) {
-        const borderStyle = editorBridge.borderResult;
+        const result = editorBridge.borderResult;
         editorBridge.borderResult = null;
-        const existing = doc.elements.find((el) => el.type === 'border');
         const settingsNow = resolveLabelSettings(doc);
-        const nextElements = existing
-          ? doc.elements.map((el) =>
-              el.id === existing.id && el.type === 'border'
-                ? { ...el, borderStyle, lineWidth: borderStyleStrokeMm(borderStyle) }
-                : el,
-            )
-          : [
-              ...doc.elements,
-              {
-                id: generateId(),
-                type: 'border' as const,
-                borderStyle,
-                lineWidth: borderStyleStrokeMm(borderStyle),
-                ...defaultBorderPlacement(doc.widthMm, doc.heightMm),
-                needPrinting: true,
-                drawingColorIndex: settingsNow.defaultDrawingColorIndex,
-              },
-            ];
+        const nextElements = isBorderRemoval(result)
+          ? doc.elements.filter((el) => el.type !== 'border')
+          : (() => {
+              const existing = doc.elements.find((el) => el.type === 'border');
+              const box = borderBoxForCenterGap(
+                doc.widthMm,
+                doc.heightMm,
+                result.edgeGapMm,
+                result.lineWidth,
+              );
+              return existing
+                ? doc.elements.map((el) =>
+                    el.id === existing.id && el.type === 'border'
+                      ? {
+                          ...el,
+                          borderStyle: result.style,
+                          lineWidth: result.lineWidth,
+                          edgeGapMm: result.edgeGapMm,
+                          geometryVersion: 1 as const,
+                          ...box,
+                        }
+                      : el,
+                  )
+                : [
+                    ...doc.elements,
+                    {
+                      id: generateId(),
+                      type: 'border' as const,
+                      borderStyle: result.style,
+                      lineWidth: result.lineWidth,
+                      edgeGapMm: result.edgeGapMm,
+                      ...box,
+                      geometryVersion: 1 as const,
+                      lockMovement: true,
+                      rotation: 0 as const,
+                      needPrinting: true,
+                      drawingColorIndex: settingsNow.defaultDrawingColorIndex,
+                    },
+                  ];
+            })();
         const next = patchLabelDocument(doc, { elements: nextElements }, excelFiles);
         setDoc(next);
         upsertDocument(next);
@@ -247,7 +267,23 @@ export default function LabelSettingsScreen() {
         <SettingsValueRow
           label="Border"
           value={borderSummary(doc)}
-          onPress={() => router.push({ pathname: '/border-library', params: { from: 'label-settings' } })}
+          onPress={() => {
+            const border = doc.elements.find((el) => el.type === 'border');
+            router.push({
+              pathname: '/border-library',
+              params: {
+                from: 'label-settings',
+                ...(border?.type === 'border'
+                  ? {
+                      style: border.borderStyle,
+                      lineWidth: String(border.lineWidth),
+                      ...(border.edgeGapMm != null ? { edgeGap: String(border.edgeGapMm) } : {}),
+                      hasBorder: '1',
+                    }
+                  : {}),
+              },
+            });
+          }}
         />
       </SettingsCard>
 

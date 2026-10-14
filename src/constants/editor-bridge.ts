@@ -14,6 +14,18 @@ export type ClipartResult = {
   id: string;
 };
 
+export type BorderResult =
+  | { remove: true }
+  | {
+      style: import('@/constants/border-library').BorderStyleId;
+      lineWidth: number;
+      edgeGapMm: number;
+    };
+
+export function isBorderRemoval(result: BorderResult): result is { remove: true } {
+  return 'remove' in result && result.remove;
+}
+
 export type ImageCropMode = 'import' | 'replace' | 'recrop';
 
 export type ImageCropResult = {
@@ -32,7 +44,7 @@ export const editorBridge = {
   ocrResult: null as OcrResult | null,
   asrResult: null as OcrResult | null,
   clipartResult: null as ClipartResult | null,
-  borderResult: null as import('@/constants/border-library').BorderStyleId | null,
+  borderResult: null as BorderResult | null,
   fontResult: null as string | null,
   /** Set when picking a data file from Label Settings. */
   dataSourceFileId: null as string | null,

@@ -12,15 +12,43 @@ export type BorderStyleId =
   | 'corner-brackets'
   | 'industrial'
   | 'crosshair'
-  | 'caution-stripes';
+  | 'caution-stripes'
+  | 'bold-frame'
+  | 'rounded-double'
+  | 'octagon'
+  | 'corner-dots'
+  | 'hairline-inset'
+  | 'dash-dot'
+  | 'deco-corner'
+  | 'beaded'
+  | 'scallop'
+  | 'zigzag'
+  | 'rope'
+  | 'ornate-corner'
+  | 'double-bead'
+  | 'ticket-notch';
 
 export interface BorderLibraryItem {
   id: BorderStyleId;
   name: string;
-  category: 'Basic' | 'Label' | 'Frame' | 'Decorative' | 'Industrial' | 'Safety';
+  category: 'Basic' | 'Label' | 'Frame' | 'Decorative' | 'Ornate' | 'Industrial' | 'Safety';
 }
 
 export const BORDER_LIBRARY: BorderLibraryItem[] = [
+  { id: 'ticket-notch', name: 'Ticket Notch', category: 'Label' },
+  { id: 'bold-frame', name: 'Bold Frame', category: 'Frame' },
+  { id: 'rounded-double', name: 'Rounded Double', category: 'Label' },
+  { id: 'octagon', name: 'Octagon', category: 'Frame' },
+  { id: 'corner-dots', name: 'Corner Dots', category: 'Decorative' },
+  { id: 'hairline-inset', name: 'Hairline Inset', category: 'Frame' },
+  { id: 'dash-dot', name: 'Dash Dot', category: 'Basic' },
+  { id: 'deco-corner', name: 'Deco Corner', category: 'Decorative' },
+  { id: 'beaded', name: 'Beaded', category: 'Ornate' },
+  { id: 'scallop', name: 'Scallop', category: 'Ornate' },
+  { id: 'zigzag', name: 'Zigzag', category: 'Ornate' },
+  { id: 'rope', name: 'Rope', category: 'Ornate' },
+  { id: 'ornate-corner', name: 'Ornate Corner', category: 'Ornate' },
+  { id: 'double-bead', name: 'Double Bead', category: 'Ornate' },
   { id: 'solid-thin', name: 'Solid Thin', category: 'Basic' },
   { id: 'solid-medium', name: 'Solid Medium', category: 'Basic' },
   { id: 'solid-thick', name: 'Solid Thick', category: 'Basic' },
@@ -43,6 +71,7 @@ export const BORDER_CATEGORIES = [
   'Label',
   'Frame',
   'Decorative',
+  'Ornate',
   'Industrial',
   'Safety',
 ] as const;
@@ -66,15 +95,35 @@ export function borderStyleStrokeMm(id: string | null | undefined): number {
   switch (resolveBorderStyle(id)) {
     case 'solid-thin':
     case 'triple-line':
+    case 'rounded-double':
       return 0.35;
+    case 'beaded':
+    case 'scallop':
+    case 'zigzag':
+    case 'rope':
+      return 0.4;
+    case 'double-bead':
+    case 'ornate-corner':
+      return 0.6;
     case 'solid-thick':
     case 'industrial':
       return 0.9;
+    case 'bold-frame':
+      return 1.2;
+    case 'hairline-inset':
+      return 0.8;
     case 'dashed':
     case 'dotted':
+    case 'dash-dot':
       return 0.5;
     case 'corner-brackets':
+    case 'deco-corner':
+    case 'octagon':
       return 0.7;
+    case 'corner-dots':
+      return 0.45;
+    case 'ticket-notch':
+      return 0.55;
     default:
       return 0.55;
   }
