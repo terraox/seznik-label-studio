@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 
 import { ExcelImportOptionsModal } from '@/components/excel-import-options-modal';
 import { parsePickedExcel, toPickedExcelFile } from '@/lib/excel-import';
+import { withManualExportHint } from '@/lib/file-import/sheet-export-guidance';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import type { ExcelParseOptions } from '@/lib/excel-rows';
 import type { ExcelSheet } from '@/stores/data-store';
@@ -25,7 +26,10 @@ type PendingExcelFile = {
 const INVALID_EXCEL = 'Please choose an Excel workbook (.xlsx / .xls) or CSV file.';
 
 function alertImportError(error: unknown) {
-  Alert.alert('Error', error instanceof Error ? error.message : 'Unable to read this spreadsheet.');
+  Alert.alert(
+    'Error',
+    withManualExportHint(error instanceof Error ? error.message : 'Unable to read this spreadsheet.'),
+  );
 }
 
 /**

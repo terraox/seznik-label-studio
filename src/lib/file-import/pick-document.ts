@@ -41,9 +41,20 @@ export async function pickDocumentAsset(options: {
     }
   }
 
-  const result = await DocumentPicker.getDocumentAsync(
-    buildDocumentPickerRequest({ ...options, platform: Platform.OS }),
-  );
+  const request = buildDocumentPickerRequest({ ...options, platform: Platform.OS });
+  if (__DEV__) console.log('[pick-document] request', JSON.stringify(request));
+  const result = await DocumentPicker.getDocumentAsync(request);
+  if (__DEV__) {
+    const asset = result.assets?.[0];
+    console.log(
+      '[pick-document] result',
+      JSON.stringify(
+        result.canceled || !asset
+          ? { canceled: true }
+          : { name: asset.name, uri: asset.uri, mimeType: asset.mimeType, size: asset.size },
+      ),
+    );
+  }
 
   if (result.canceled || !result.assets?.length) {
     return { ok: false, reason: 'cancelled' };

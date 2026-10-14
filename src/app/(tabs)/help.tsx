@@ -74,6 +74,10 @@ const GUIDES = [
     body: 'Open Print from the editor or Home. Set copies, darkness, orientation, and offsets, then tap Print. Data-bound labels print one page per Excel row when automatic pages is on.',
   },
   {
+    title: 'Import a Google Sheet',
+    body: 'In Data File, tap Import, choose Google Drive (Sheets, Excel), and pick the Sheet. If it is greyed out or the download fails, open the Sheet in Google Sheets, tap File > Download > Microsoft Excel (.xlsx), then import that file from This Device.',
+  },
+  {
     title: 'Stickers and clipart',
     body: 'Stickers are black-and-white silhouettes so they print cleanly on thermal labels. Open Clipart from the editor and tap a sticker to place it.',
   },

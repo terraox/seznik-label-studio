@@ -26,8 +26,7 @@ export function androidSpreadsheetMimeTypes(mimeTypes: readonly string[]): strin
     if (ANDROID_PICKER_MIME_BLOCKLIST.has(normalized)) continue;
     if (!cleaned.includes(normalized)) cleaned.push(normalized);
   }
-  if (!cleaned.includes(GOOGLE_SHEETS_MIME)) cleaned.unshift(GOOGLE_SHEETS_MIME);
-  return cleaned;
+  return [GOOGLE_SHEETS_MIME, ...cleaned.filter((mime) => mime !== GOOGLE_SHEETS_MIME)];
 }
 
 export type DocumentPickerRequest = {

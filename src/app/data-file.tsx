@@ -17,6 +17,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { editorBridge } from '@/constants/editor-bridge';
 import { cardShadow, Palette, Type } from '@/constants/ui';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
+import { withManualExportHint } from '@/lib/file-import/sheet-export-guidance';
 import { useExcelImportFlow, type ExcelImportSuccess } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore, type ImportedExcelFile } from '@/stores/data-store';
@@ -293,7 +294,9 @@ export default function DataFileScreen() {
     } catch (error) {
       Alert.alert(
         'Error',
-        error instanceof Error ? error.message : 'Unable to pick or parse the document.',
+        withManualExportHint(
+          error instanceof Error ? error.message : 'Unable to pick or parse the document.',
+        ),
       );
     } finally {
       setImporting(false);

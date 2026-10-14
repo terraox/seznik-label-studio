@@ -85,3 +85,41 @@ test('drive image preset keeps image mime filter without local hints', () => {
   assert.equal(request.initialFolder, undefined);
   assert.deepEqual(request.type, DOCUMENT_PRESETS.image.mimeTypes);
 });
+
+test('android drive excel list has no wildcard, octet-stream or non-MIME entries', () => {
+  const request = buildDocumentPickerRequest({
+    preset: 'excel',
+    source: 'drive',
+    platform: 'android',
+  });
+  for (const mime of request.type) {
+    assert.ok(mime.includes('/'), `${mime} is not a MIME type`);
+    assert.notEqual(mime, '*/*');
+    assert.notEqual(mime, 'application/octet-stream');
+    assert.equal(mime.startsWith('public.'), false);
+  }
+  assert.equal(request.type[0], GOOGLE_SHEETS_MIME);
+  assert.equal(request.localOnly, false);
+});
+
+test('androidSpreadsheetMimeTypes strips bad entries, dedupes and keeps Sheets first', () => {
+  const cleaned = androidSpreadsheetMimeTypes([
+    '*/*',
+    'application/octet-stream',
+    'public.spreadsheet',
+    'Text/CSV; charset=utf-8',
+    'text/csv',
+    GOOGLE_SHEETS_MIME,
+  ]);
+  assert.deepEqual(cleaned, [GOOGLE_SHEETS_MIME, 'text/csv']);
+});
+
+test('android local excel keeps the preset list and routes to the local picker', () => {
+  const request = buildDocumentPickerRequest({
+    preset: 'excel',
+    source: 'local',
+    platform: 'android',
+  });
+  assert.deepEqual(request.type, DOCUMENT_PRESETS.excel.mimeTypes);
+  assert.equal(shouldUseLocalFilePicker('local', 'android'), true);
+});
