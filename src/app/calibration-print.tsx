@@ -412,7 +412,7 @@ export default function CalibrationPrintScreen() {
     setPrintCalibration(calibrationKey, { hOffsetMm, vOffsetMm, density: 10, speed: 3 });
     const summary = [
       `Saved REFERENCE fine-tune h ${hOffsetMm.toFixed(3)} mm, v ${vOffsetMm.toFixed(3)} mm.`,
-      'Positive vertical moves the print down. Horizontal is the saved offset only. The border bake is separate.',
+      'Positive vertical moves the print down. Horizontal is the saved offset only. The border bake is separate from the 1 mm element shift.',
       note,
       'Reprint the border check and measure three labels. Stop if the top jumps by more than 0.5 mm.',
     ].join('\n');

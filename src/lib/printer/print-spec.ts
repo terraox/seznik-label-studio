@@ -104,9 +104,34 @@ export const DEFAULT_PRINTER_PROFILE = PRINTER_PROFILES['td404-304'];
 
 /**
  * Canvas 0 mm is the TD-404 origin. REFERENCE x is the saved Horizontal Offset
- * only. BITMAP stays 0,0.
+ * only, so a page shift never moves the border. BITMAP stays 0,0.
  */
 export const TD404_MEDIA_ORIGIN_H_MM = 0;
+
+/**
+ * TD-404 content only. Text, codes, and other elements are drawn 1 mm right
+ * and 1 mm down. The border is composited after that shift and stays put.
+ */
+export const TD404_ELEMENT_SHIFT_H_MM = 1;
+export const TD404_ELEMENT_SHIFT_V_MM = 1;
+
+export function td404ContentShiftMm(offsetMm: { x: number; y: number } = { x: 0, y: 0 }): {
+  x: number;
+  y: number;
+} {
+  return {
+    x: offsetMm.x + TD404_ELEMENT_SHIFT_H_MM,
+    y: offsetMm.y + TD404_ELEMENT_SHIFT_V_MM,
+  };
+}
+
+export function td404ContentShiftDots(
+  dpi: number,
+  offsetMm: { x: number; y: number } = { x: 0, y: 0 },
+): { x: number; y: number } {
+  const shift = td404ContentShiftMm(offsetMm);
+  return { x: mmToDots(shift.x, dpi), y: mmToDots(shift.y, dpi) };
+}
 
 /**
  * JOSH / LPAPI: startJob(widthMm, heightMm) + drawBitmap(mm) use the die-cut size;
@@ -386,6 +411,7 @@ export type CreatePrintSpecOptions = {
  * the label's origin at the top-left of the media.
  * Injecting an artificial printhead offset shifts the image off the physical label.
  * Hardware centering is 0. TD-404 REFERENCE x is the saved Horizontal Offset only.
+ * The 1 mm right and 1 mm down element shift is drawn into the bitmap and does not move the border.
  * REFERENCE y is the user vertical offset only. The border inset is in dots.
  */
 export function computePrintheadCenteringOffset(
@@ -416,7 +442,7 @@ export function createPrintSpec(options: CreatePrintSpecOptions): PrintSpec {
 
   // SIZE origin is firmware top-left. Pack-down leftover is cropped on the right.
   // TD-404 REFERENCE x is the saved Horizontal Offset only.
-  // Never bake that shift into the bitmap.
+  // The 1 mm element shift is in the bitmap, not here, so the border stays.
   const forceLeft = options.calibration?.forceLeftAligned === true;
   const centeringProfile = forceLeft ? { ...profile, alignment: 'left' as PrinterAlignment } : profile;
   const centeringOffsetDots = computePrintheadCenteringOffset(widthDots, centeringProfile);

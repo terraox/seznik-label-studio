@@ -85,8 +85,9 @@ import {
 import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-manager';
 import {
   createPrintSpec,
-  mmToDots,
   TD404_BORDER_GAP_MM,
+  td404ContentShiftDots,
+  td404ContentShiftMm,
   td404EdgeBorderOptions,
 } from '@/lib/printer/print-spec';
 import { joshEffectiveDpi, joshHeadlessRasterOptions, joshInkOffsetMm } from '@/lib/printer/josh-print';
@@ -926,8 +927,9 @@ export default function PrintScreen() {
       });
       const { density: printDensity, threshold, speed: printSpeed, dither } = quality;
       const inkSteps = darknessSteps(darkness, jobCaps);
-      // TD-404 at 0°: the saved offset is drawn into the bitmap. REFERENCE x stays 0
-      // unless the job is rotated, which sends the offset on REFERENCE instead.
+      // TD-404 at 0°: the saved offset, plus 1 mm right and 1 mm down, is drawn
+      // into the elements. The border is a later layer and stays put. Rotated
+      // jobs send the saved offset on REFERENCE instead.
       const bakeOffset = manager.usesTd404CommandSet && orientationDeg === 0;
       const offsetH = bakeOffset ? 0 : printOffsetMm.x;
       const offsetV = bakeOffset ? 0 : printOffsetMm.y;
@@ -1288,9 +1290,7 @@ export default function PrintScreen() {
                 darknessSteps: inkSteps,
                 bakeTd404Feed: true,
                 edgeBorders: td404EdgeBorderOptions(jobDpi),
-                shiftDots: bakeOffset
-                  ? { x: mmToDots(printOffsetMm.x, jobDpi), y: mmToDots(printOffsetMm.y, jobDpi) }
-                  : undefined,
+                shiftDots: bakeOffset ? td404ContentShiftDots(jobDpi, printOffsetMm) : undefined,
               });
               const bitmap = timed.result;
               const tNative0 = Date.now();
@@ -1553,7 +1553,7 @@ export default function PrintScreen() {
     if (printerSdkId === 'josh') {
       return joshInkOffsetMm(printOffsetMm.x, printOffsetMm.y);
     }
-    if (getPrinterManager().usesTd404CommandSet) return printOffsetMm;
+    if (getPrinterManager().usesTd404CommandSet) return td404ContentShiftMm(printOffsetMm);
     return undefined;
   }, [unrotatedJob, printerSdkId, printOffsetMm.x, printOffsetMm.y]);
 
@@ -1938,7 +1938,7 @@ export default function PrintScreen() {
                     if (!unrotatedJob) {
                       return `Total offset ${total} (this printer plus Label Settings). Rotated jobs send it on REFERENCE.`;
                     }
-                    return `Total offset ${total} (this printer plus Label Settings). It moves text and codes inside the bitmap. The border is its own layer and stays ${TD404_BORDER_GAP_MM} mm from the die-cut on every side.`;
+                    return `Total offset ${total} (this printer plus Label Settings), plus 1 mm right and 1 mm down on text and codes. The border is its own layer and stays ${TD404_BORDER_GAP_MM} mm from the die-cut on every side.`;
                   })()}
                 </Text>
                 <StepperRow
@@ -2004,6 +2004,7 @@ export default function PrintScreen() {
                       threshold: 160,
                       bakeTd404Feed: true,
                       edgeBorders: td404EdgeBorderOptions(jobDpi),
+                      shiftDots: td404ContentShiftDots(jobDpi, printOffsetMm),
                     });
                     const result = await printTd404MonoLabel({
                       monoBytes: timed.result.mono1bppBuffer,
