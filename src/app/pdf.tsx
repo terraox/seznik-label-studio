@@ -1,6 +1,7 @@
+import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,18 +14,25 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
+import { PdfColorTool } from '@/components/pdf-editor/pdf-color-tool';
 import { PdfCropTool } from '@/components/pdf-editor/pdf-crop-tool';
 import { PdfOutputSizeRow } from '@/components/pdf-editor/pdf-output-size-row';
 import { PdfPageNav } from '@/components/pdf-editor/pdf-page-nav';
 import { PdfPageViewer } from '@/components/pdf-editor/pdf-page-viewer';
+import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor/pdf-print-sheet';
 import { PdfRotateTool } from '@/components/pdf-editor/pdf-rotate-tool';
 import { PdfSharpnessTool } from '@/components/pdf-editor/pdf-sharpness-tool';
 import { PdfToolPanel, type PdfToolId } from '@/components/pdf-editor/pdf-tool-panel';
 import { PdfWatermarkTool } from '@/components/pdf-editor/pdf-watermark-tool';
+import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import { exportEditedPdf } from '@/lib/pdf-editor/export';
 import { copyPdfToCache, loadPdfMetadata } from '@/lib/pdf-editor/load';
+import { printEditedPdf } from '@/lib/pdf-editor/print';
+import { resolvePrintPageIndices, type PdfPrintSelection } from '@/lib/pdf-editor/session';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
+import { formatPrintFailure } from '@/lib/printer/print-job';
+import { getPrinterManager } from '@/lib/printer/printer-manager';
 import {
   PREVIEW_DPI,
   clearRasterCache,
@@ -32,16 +40,27 @@ import {
   rasterPdfPageCached,
 } from '@/lib/pdf-editor/raster';
 import {
-  cropWindowFitsPage,
   cropWindowPts,
   defaultWatermark,
+  pageColorMode,
   resolveScopeIndices,
   type PageScope,
 } from '@/lib/pdf-editor/session';
 import { downscaleWatermarkTile, previewTileSize } from '@/lib/pdf-editor/watermark-tile';
 import { usePdfEditStore } from '@/stores/pdf-edit-store';
+import { usePrinterStore } from '@/stores/printer-store';
+import { useSettingsStore } from '@/stores/settings-store';
 
-/** Standalone PDF Editor screen with Crop, Rotate, Sharpness, and Watermark tools. */
+type Step = 'pick' | 'size' | 'edit' | 'print';
+
+const STEP_TITLE: Record<Step, string> = {
+  pick: 'Print PDF',
+  size: 'Label size',
+  edit: 'Edit PDF',
+  print: 'Print',
+};
+
+/** Standalone PDF editor: size, then crop tools, then print or export. */
 export default function PdfEditorScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
@@ -57,18 +76,24 @@ export default function PdfEditorScreen() {
   const setOutputSize = usePdfEditStore((s) => s.setOutputSize);
   const setCrop = usePdfEditStore((s) => s.setCrop);
   const setCropScope = usePdfEditStore((s) => s.setCropScope);
-  const setCropOrigin = usePdfEditStore((s) => s.setCropOrigin);
   const setCropRect = usePdfEditStore((s) => s.setCropRect);
-  const setRotationForCurrent = usePdfEditStore((s) => s.setRotationForCurrent);
-  const setSharpnessForCurrent = usePdfEditStore((s) => s.setSharpnessForCurrent);
+  const setRotationForScope = usePdfEditStore((s) => s.setRotationForScope);
+  const setSharpnessForScope = usePdfEditStore((s) => s.setSharpnessForScope);
   const setWatermark = usePdfEditStore((s) => s.setWatermark);
   const patchWatermark = usePdfEditStore((s) => s.patchWatermark);
+  const setColorModeForScope = usePdfEditStore((s) => s.setColorModeForScope);
+  const deviceName = usePrinterStore((s) => s.deviceName);
+  const grayThreshold = useSettingsStore((s) => s.defaults.grayThreshold);
 
+  const [step, setStep] = useState<Step>('pick');
   const [tool, setTool] = useState<PdfToolId | null>(null);
   const [pageUri, setPageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [printProgress, setPrintProgress] = useState<string | null>(null);
+  const printPanelRef = useRef<PdfPrintPanelHandle>(null);
   const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
 
   useEffect(() => {
@@ -96,6 +121,7 @@ export default function PdfEditorScreen() {
             pageCount: meta.pageCount,
             pageSizesPt: meta.pageSizesPt,
           });
+          setStep('size');
         }
       } catch (err) {
         if (!cancelled) {
@@ -154,6 +180,7 @@ export default function PdfEditorScreen() {
         pageCount: meta.pageCount,
         pageSizesPt: meta.pageSizesPt,
       });
+      setStep('size');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not open this PDF.';
       Alert.alert('PDF', msg);
@@ -188,8 +215,58 @@ export default function PdfEditorScreen() {
     }
   }, [exporting, session]);
 
+  const printPdf = useCallback(
+    async (selection: PdfPrintSelection, copies: number) => {
+      if (!session || printing) return;
+      const indices = resolvePrintPageIndices(selection, session.pageCount, session.currentPageIndex);
+      if (indices.length === 0) {
+        Alert.alert('Print', 'No pages match this selection.');
+        return;
+      }
+      const manager = getPrinterManager();
+      if (!manager.isConnected) {
+        Alert.alert('Printer Not Connected', 'Please connect your thermal printer before printing.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Connect', onPress: () => router.push('/printer-connect') },
+        ]);
+        return;
+      }
+      setPrinting(true);
+      setPrintProgress('Rendering…');
+      try {
+        const result = await printEditedPdf(session, indices, {
+          copies,
+          onProgress: (current, total) => setPrintProgress(`Page ${current} / ${total}`),
+        });
+        Alert.alert(
+          'Print Sent',
+          `${result.pagesPrinted} page${result.pagesPrinted === 1 ? '' : 's'} sent to ${deviceName || 'the printer'}.`,
+        );
+      } catch (err) {
+        const message = formatPrintFailure(err);
+        if (message) Alert.alert('Print Failed', message);
+      } finally {
+        setPrinting(false);
+        setPrintProgress(null);
+      }
+    },
+    [deviceName, printing, session],
+  );
+
+  const goBack = () => {
+    if (printing || exporting) return;
+    if (step === 'print') {
+      setStep('edit');
+      return;
+    }
+    if (step === 'edit') {
+      setStep('size');
+      return;
+    }
+    router.back();
+  };
+
   const pageSize = session?.pageSizesPt[session.currentPageIndex] ?? { w: 612, h: 792 };
-  const fits = session ? cropWindowFitsPage(pageSize.w, pageSize.h, session.outputSize) : false;
   const defaultOrigin = (() => {
     if (!session) return { x: 0, y: 0 };
     const box = cropWindowPts(pageSize, session.outputSize, { x: 0, y: 0 });
@@ -225,72 +302,122 @@ export default function PdfEditorScreen() {
       ),
   );
 
+  const renderViewer = (mode: { crop: boolean; watermark: boolean; expand?: boolean }) => {
+    if (!session) return null;
+    return (
+      <PdfPageViewer
+        uri={pageUri}
+        pageWpt={pageSize.w}
+        pageHpt={pageSize.h}
+        rotation={session.rotationByPage[session.currentPageIndex] ?? 0}
+        outputSize={session.outputSize}
+        originNorm={origin}
+        sizeNorm={session.crop?.sizeNorm}
+        onCropRect={setCropRect}
+        cropEnabled={mode.crop}
+        isCropped={isCropped}
+        expand={mode.expand}
+        watermark={session.watermark}
+        watermarkEnabled={mode.watermark && !!session.watermark}
+        onStampOffset={(offsetNorm) => {
+          const wm = session.watermark ?? defaultWatermark();
+          patchWatermark({
+            stamp: {
+              anchor: wm.stamp?.anchor ?? 'center',
+              offsetNorm,
+              sizeNorm: wm.stamp?.sizeNorm ?? 0.42,
+            },
+          });
+        }}
+        sharpness={session.sharpnessByPage[session.currentPageIndex] ?? 0}
+        colorMode={pageColorMode(session, session.currentPageIndex)}
+        grayThreshold={grayThreshold}
+      />
+    );
+  };
+
+  const sizePreview = pageUri ? (
+    <Image source={{ uri: pageUri }} style={StyleSheet.absoluteFill} contentFit="contain" />
+  ) : (
+    <View style={[StyleSheet.absoluteFill, styles.previewSpinner]}>
+      <ActivityIndicator color={Palette.accent} />
+    </View>
+  );
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.headerBtn}>
+        <Pressable onPress={goBack} hitSlop={8} style={styles.headerBtn}>
           <AppIcon name="chevron.left" size={22} tintColor="#fff" />
         </Pressable>
-        <Text style={styles.headerTitle}>Print PDF</Text>
-        <Pressable
-          onPress={exportPdf}
-          disabled={!session || exporting}
-          style={styles.headerBtn}
-          hitSlop={8}>
-          <Text style={[styles.export, (!session || exporting) && styles.exportOff]}>Export</Text>
-        </Pressable>
+        <Text style={styles.headerTitle}>{STEP_TITLE[step]}</Text>
+        <View style={styles.headerBtn} />
       </View>
 
-      {!session ? (
+      {step === 'pick' || !session ? (
         <View style={styles.empty}>
+          {loading ? <ActivityIndicator color={Palette.accent} /> : null}
           <Text style={styles.emptyTitle}>Import a PDF</Text>
-          <Text style={styles.emptyBody}>Crop, rotate, sharpen, and watermark — then export a new PDF. Printing is not part of this editor.</Text>
-          <Pressable onPress={importPdf} style={styles.importBtn}>
-            <Text style={styles.importText}>Import from This Device or Google Drive</Text>
-          </Pressable>
+          <Text style={styles.emptyBody}>
+            Choose a file from this device or Google Drive. You will set the label size next.
+          </Text>
         </View>
-      ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-          <PdfPageViewer
-            uri={pageUri}
-            pageWpt={pageSize.w}
-            pageHpt={pageSize.h}
-            rotation={session.rotationByPage[session.currentPageIndex] ?? 0}
-            outputSize={session.outputSize}
-            originNorm={origin}
-            sizeNorm={session.crop?.sizeNorm}
-            onCropRect={setCropRect}
-            cropEnabled={tool === 'crop'}
-            isCropped={isCropped}
-            watermark={session.watermark}
-            watermarkEnabled={tool === 'watermark' && !!session.watermark}
-            onStampOffset={(offsetNorm) => {
-              const wm = session.watermark ?? defaultWatermark();
-              patchWatermark({
-                stamp: {
-                  anchor: wm.stamp?.anchor ?? 'center',
-                  offsetNorm,
-                  sizeNorm: wm.stamp?.sizeNorm ?? 0.42,
-                },
-              });
-            }}
-            sharpness={session.sharpnessByPage[session.currentPageIndex] ?? 0}
-          />
-          {loading ? <ActivityIndicator color={Palette.accent} style={{ marginVertical: 8 }} /> : null}
-          <PdfPageNav
-            index={session.currentPageIndex}
-            total={session.pageCount}
-            onPrev={() => setCurrentPage(session.currentPageIndex - 1)}
-            onNext={() => setCurrentPage(session.currentPageIndex + 1)}
-          />
-          <PdfOutputSizeRow value={session.outputSize} onChange={setOutputSize} />
+      ) : step === 'size' ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.fileRow}>
+            <View style={styles.fileIcon}>
+              <AppIcon name="doc.text" size={22} tintColor={Palette.accent} />
+            </View>
+            <View style={styles.fileText}>
+              <Text style={styles.fileName} numberOfLines={1}>
+                {session.sourceName}
+              </Text>
+              <Text style={styles.fileMeta}>
+                {session.pageCount} {session.pageCount === 1 ? 'page' : 'pages'}
+              </Text>
+            </View>
+            <Pressable onPress={() => void importPdf()} hitSlop={8} disabled={loading}>
+              <Text style={styles.change}>Change</Text>
+            </Pressable>
+          </View>
+          <PdfOutputSizeRow value={session.outputSize} onChange={setOutputSize} preview={sizePreview} />
+        </ScrollView>
+      ) : step === 'edit' ? (
+        <View style={styles.editColumn}>
+          {tool === 'crop' ? (
+            <View style={styles.cropStage}>
+              {renderViewer({ crop: true, watermark: false, expand: true })}
+              {loading ? <ActivityIndicator color={Palette.accent} style={{ marginVertical: 8 }} /> : null}
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.editContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              {renderViewer({ crop: false, watermark: tool === 'watermark' })}
+              {loading ? <ActivityIndicator color={Palette.accent} style={{ marginVertical: 8 }} /> : null}
+            </ScrollView>
+          )}
+          {session.pageCount > 1 ? (
+            <PdfPageNav
+              index={session.currentPageIndex}
+              total={session.pageCount}
+              onPrev={() => setCurrentPage(session.currentPageIndex - 1)}
+              onNext={() => setCurrentPage(session.currentPageIndex + 1)}
+            />
+          ) : null}
           <PdfToolPanel
             active={tool}
             onChange={(id) => {
               const nextTool = tool === id ? null : id;
               setTool(nextTool);
               if (nextTool === 'crop' && !session.crop) {
-                setCropRect(defaultOrigin, { w: 0.8, h: 0.8 });
+                setCropRect({ x: 0.1, y: 0.1 }, { w: 0.8, h: 0.8 });
               }
               if (id === 'watermark') ensureWatermark();
             }}>
@@ -298,7 +425,6 @@ export default function PdfEditorScreen() {
               <PdfCropTool
                 scope={cropScope}
                 pageCount={session.pageCount}
-                fits={fits}
                 hasCrop={Boolean(session.crop)}
                 onResetCrop={() => setCrop(null)}
                 onApplyCrop={() => setTool(null)}
@@ -310,13 +436,15 @@ export default function PdfEditorScreen() {
             {tool === 'rotate' ? (
               <PdfRotateTool
                 value={session.rotationByPage[session.currentPageIndex] ?? 0}
-                onChange={setRotationForCurrent}
+                pageCount={session.pageCount}
+                onChange={setRotationForScope}
               />
             ) : null}
             {tool === 'sharpness' ? (
               <PdfSharpnessTool
                 value={session.sharpnessByPage[session.currentPageIndex] ?? 0}
-                onChange={setSharpnessForCurrent}
+                pageCount={session.pageCount}
+                onChange={setSharpnessForScope}
               />
             ) : null}
             {tool === 'watermark' && session.watermark ? (
@@ -324,16 +452,9 @@ export default function PdfEditorScreen() {
                 value={session.watermark}
                 pageCount={session.pageCount}
                 onChange={async (next) => {
-                  if (
-                    next.type === 'image' &&
-                    next.layout === 'tiled' &&
-                    next.image?.sourceUri
-                  ) {
+                  if (next.type === 'image' && next.layout === 'tiled' && next.image?.sourceUri) {
                     const minSide = Math.min(session.outputSize.widthMm, session.outputSize.heightMm);
-                    const tilePx = previewTileSize(
-                      minSide,
-                      next.tiled?.spacingNorm ?? { x: 0.22, y: 0.22 },
-                    );
+                    const tilePx = previewTileSize(minSide, next.tiled?.spacingNorm ?? { x: 0.22, y: 0.22 });
                     const tile = await downscaleWatermarkTile(next.image.sourceUri, tilePx);
                     setWatermark({
                       ...next,
@@ -346,13 +467,88 @@ export default function PdfEditorScreen() {
                 onPickImage={onPickWmImage}
               />
             ) : null}
+            {tool === 'color' ? (
+              <PdfColorTool
+                value={pageColorMode(session, session.currentPageIndex)}
+                pageCount={session.pageCount}
+                onChange={setColorModeForScope}
+              />
+            ) : null}
           </PdfToolPanel>
-          {exportProgress ? <Text style={styles.progress}>{exportProgress}</Text> : null}
-          <Pressable onPress={importPdf} style={styles.replace}>
-            <Text style={styles.replaceText}>Replace from This Device or Google Drive</Text>
-          </Pressable>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          {renderViewer({ crop: false, watermark: false })}
+          <PdfPrintPanel
+            ref={printPanelRef}
+            pageCount={session.pageCount}
+            currentPage={session.currentPageIndex + 1}
+            printing={printing}
+            progress={printProgress ?? exportProgress}
+            onPrint={(selection, copies) => {
+              void printPdf(selection, copies);
+            }}
+          />
         </ScrollView>
       )}
+
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.two + 6 }]}>
+        {step === 'print' && session ? (
+          <View style={styles.printActions}>
+            <Pressable
+              onPress={() => void exportPdf()}
+              disabled={exporting || printing}
+              style={({ pressed }) => [
+                styles.exportBtn,
+                (exporting || printing) && styles.btnOff,
+                pressed && styles.pressed,
+              ]}>
+              <Text style={styles.exportBtnText}>{exporting ? 'Exporting…' : 'Export'}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => printPanelRef.current?.submit()}
+              disabled={printing || exporting}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                styles.printBtn,
+                (printing || exporting) && styles.btnOff,
+                pressed && styles.pressed,
+              ]}>
+              {printing ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.primaryText}>Print</Text>
+              )}
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => {
+              if (step === 'pick' || !session) {
+                void importPdf();
+                return;
+              }
+              if (step === 'size') setStep('edit');
+              else if (step === 'edit') setStep('print');
+            }}
+            disabled={loading && (step === 'pick' || !session)}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              loading && (step === 'pick' || !session) && styles.btnOff,
+              pressed && styles.pressed,
+            ]}>
+            {loading && (step === 'pick' || !session) ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.primaryText}>{step === 'pick' || !session ? 'Import PDF' : 'Next'}</Text>
+            )}
+          </Pressable>
+        )}
+      </View>
       {documentSourceSheet}
     </View>
   );
@@ -365,26 +561,76 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.header,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 8,
   },
-  headerBtn: { minWidth: 64, paddingHorizontal: 8, paddingVertical: 8 },
-  headerTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  export: { color: '#fff', fontWeight: '700', textAlign: 'right' },
-  exportOff: { opacity: 0.4 },
+  headerBtn: { width: 44, paddingHorizontal: 6, paddingVertical: 8 },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  editColumn: { flex: 1 },
+  cropStage: { flex: 1, width: '100%' },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24, gap: 12 },
+  editContent: { paddingBottom: 24 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: Palette.ink },
   emptyBody: { fontSize: 14, color: Palette.muted, textAlign: 'center', lineHeight: 20 },
-  importBtn: {
-    marginTop: 8,
-    backgroundColor: Palette.accent,
-    paddingHorizontal: 20,
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
     paddingVertical: 12,
-    borderRadius: 10,
   },
-  importText: { color: '#fff', fontWeight: '700' },
-  progress: { textAlign: 'center', color: Palette.muted, marginTop: 8 },
-  replace: { alignSelf: 'center', padding: 16 },
-  replaceText: { color: Palette.accent, fontWeight: '600' },
+  fileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileText: { flex: 1, gap: 2 },
+  fileName: { fontSize: 15, fontWeight: '600', color: Palette.ink },
+  fileMeta: { fontSize: 12, color: '#64748B' },
+  change: { fontSize: 14, fontWeight: '600', color: Palette.accent },
+  previewSpinner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  bottomBar: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    backgroundColor: Palette.screen,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+  },
+  primaryBtn: {
+    backgroundColor: Palette.accent,
+    borderRadius: 12,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  printActions: { flexDirection: 'row', gap: 10 },
+  exportBtn: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Palette.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  exportBtnText: { color: Palette.accent, fontSize: 16, fontWeight: '600' },
+  printBtn: { flex: 1.4 },
+  btnOff: { opacity: 0.5 },
+  pressed: { opacity: 0.72 },
 });
-

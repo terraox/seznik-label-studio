@@ -3,7 +3,9 @@ import assert from 'node:assert';
 import {
   cropWindowPts,
   mmToPt,
+  parseCustomPageList,
   parsePageRange,
+  resolvePrintPageIndices,
   resolveScopeIndices,
   sharpness0CropBoxesEqual,
   shouldRasterizePage,
@@ -42,7 +44,9 @@ assert.ok(Math.abs(box.h - mmToPt(152.4)) < 0.05);
 assert.ok(Math.abs(box.y + box.h - page.h) < 0.05, 'top-left origin maps to top of page (PDF y-up)');
 
 const tooBig = cropWindowPts({ w: mmToPt(50), h: mmToPt(50) }, output, { x: 0, y: 0 });
-assert.strictEqual(tooBig.fits, false);
+assert.strictEqual(tooBig.fits, true, 'oversized window is scaled into the page');
+assert.ok(tooBig.w <= mmToPt(50) + 0.05);
+assert.ok(tooBig.h <= mmToPt(50) + 0.05);
 
 const media = { ...box };
 const crop = { ...box };
@@ -61,6 +65,11 @@ assert.ok(stamp.y >= box.y - 0.01);
 const mixed = cropWindowPts({ w: mmToPt(150), h: mmToPt(200) }, output, { x: 0.1, y: 0.1 });
 assert.strictEqual(mixed.fits, true);
 
+const heightCrop = cropWindowPts(page, output, { x: 0.1, y: 0.2 }, { w: 0.45, h: 0.3 });
+assert.ok(Math.abs(heightCrop.w - page.w * 0.45) < 0.05, 'width fraction is kept');
+assert.ok(Math.abs(heightCrop.h - page.h * 0.3) < 0.05, 'height fraction is kept');
+assert.ok(heightCrop.h < page.h * 0.5, 'height crop is not the full page');
+
 const repeats = tiledRepeatCount({ x: 0.2, y: 0.25 });
 assert.strictEqual(repeats.cols, 5);
 assert.strictEqual(repeats.rows, 4);
@@ -68,6 +77,32 @@ assert.notStrictEqual(repeats.cols, 4096, 'repeat count is not sourced from imag
 
 assert.strictEqual(shouldRasterizePage(0), false);
 assert.strictEqual(shouldRasterizePage(1), true);
+
+const custom = parseCustomPageList('5, 1, 3, 3', 8);
+assert.deepStrictEqual(custom.pages, [1, 3, 5]);
+assert.strictEqual(custom.error, undefined);
+
+const customBad = parseCustomPageList('1, a', 8);
+assert.deepStrictEqual(customBad.pages, []);
+assert.ok(customBad.error);
+
+const customOut = parseCustomPageList('9', 8);
+assert.ok(customOut.error);
+assert.deepStrictEqual(customOut.pages, []);
+
+assert.deepStrictEqual(resolvePrintPageIndices({ mode: 'current' }, 6, 2), [2]);
+assert.deepStrictEqual(
+  resolvePrintPageIndices({ mode: 'range', start: 2, end: 4 }, 6, 0),
+  [1, 2, 3],
+);
+assert.deepStrictEqual(
+  resolvePrintPageIndices({ mode: 'custom', pages: [1, 3, 3] }, 6, 0),
+  [0, 2],
+);
+assert.deepStrictEqual(resolvePrintPageIndices({ mode: 'even' }, 5, 0), [1, 3]);
+assert.deepStrictEqual(resolvePrintPageIndices({ mode: 'odd' }, 5, 0), [0, 2, 4]);
+assert.deepStrictEqual(resolvePrintPageIndices({ mode: 'even' }, 1, 0), []);
+assert.deepStrictEqual(resolvePrintPageIndices({ mode: 'odd' }, 1, 0), [0]);
 
 const afterSizeChange = { crop: { scope: { mode: 'this' as const }, originNorm: { x: 0.2, y: 0.2 } }, outputSize: output };
 const reset = { ...afterSizeChange, outputSize: { kind: '4x4' as const, widthMm: 100, heightMm: 100 }, crop: null };

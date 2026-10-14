@@ -31,6 +31,7 @@ import {
   type BluetoothCapabilities,
   type DiscoveredPrinter,
 } from '@/lib/printer/printer-manager';
+import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { normalizePrinterMac, usePrinterStore } from '@/stores/printer-store';
 
 const ANDROID_BLUETOOTH_SETTINGS = 'android.settings.BLUETOOTH_SETTINGS';
@@ -118,7 +119,10 @@ export default function PrinterConnectScreen() {
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
+  const sdkId = usePrinterStore((s) => s.sdkId);
+  const transport = usePrinterStore((s) => s.transport);
   const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
+  const showBattery = printerReportsBattery({ sdkId, transport });
   const setSelectedPrinterModel = usePrinterStore((s) => s.setSelectedPrinterModel);
 
   const printer = CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas;
@@ -504,6 +508,7 @@ export default function PrinterConnectScreen() {
               modelName={printer.shortName}
               deviceName={deviceName}
               batteryPercent={batteryPercent}
+              showBattery={showBattery}
               testing={testing}
               onTest={() => void handleTestPrint()}
               onDisconnect={() => void handleDisconnect()}

@@ -12,6 +12,7 @@ type ConnectedActionsProps = {
   modelName: string;
   deviceName: string | null;
   batteryPercent?: number | null;
+  showBattery?: boolean;
   testing: boolean;
   onTest: () => void;
   onDisconnect: () => void;
@@ -23,6 +24,7 @@ export function ConnectedActions({
   modelName,
   deviceName,
   batteryPercent = null,
+  showBattery = true,
   testing,
   onTest,
   onDisconnect,
@@ -36,10 +38,12 @@ export function ConnectedActions({
       <Text style={styles.kicker}>Connected</Text>
       <Text style={styles.name}>{deviceName || modelName}</Text>
       <Text style={styles.detail}>{modelName} is ready to print.</Text>
-      <View style={styles.batteryRow}>
-        <Text style={styles.batteryPrefix}>Battery</Text>
-        <PrinterBatteryLabel percent={batteryPercent} size={18} showWhenUnknown unknownText="Not reported" />
-      </View>
+      {showBattery ? (
+        <View style={styles.batteryRow}>
+          <Text style={styles.batteryPrefix}>Battery</Text>
+          <PrinterBatteryLabel percent={batteryPercent} size={18} showWhenUnknown unknownText="Not reported" />
+        </View>
+      ) : null}
       <Pressable
         onPress={onTest}
         disabled={testing}

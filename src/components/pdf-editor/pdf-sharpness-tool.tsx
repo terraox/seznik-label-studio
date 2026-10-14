@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PdfScopeSelector } from '@/components/pdf-editor/pdf-scope-selector';
 import { Palette } from '@/constants/ui';
+import { parsePageRange, type PageScope } from '@/lib/pdf-editor/session';
 
 const PRESETS = [
   { label: '0 (Off)', val: 0 },
@@ -15,11 +17,16 @@ const THUMB_SIZE = 28;
 
 export function PdfSharpnessTool({
   value,
+  pageCount,
   onChange,
 }: {
   value: number;
-  onChange: (n: number) => void;
+  pageCount: number;
+  onChange: (n: number, scope: PageScope) => void;
 }) {
+  const [scope, setScope] = useState<PageScope>({ mode: 'this' });
+  const rangeError =
+    scope.mode === 'range' ? parsePageRange(String(scope.start), String(scope.end), pageCount).error : undefined;
   const [trackWidth, setTrackWidth] = useState(0);
   const trackWidthRef = useRef(0);
   trackWidthRef.current = trackWidth;
@@ -47,7 +54,7 @@ export function PdfSharpnessTool({
         onPanResponderGrant: (evt) => {
           const initialPct = calculatePctFromX(evt.nativeEvent.locationX);
           startPctRef.current = initialPct;
-          onChange(initialPct);
+          onChange(initialPct, scope);
         },
         onPanResponderMove: (_evt, gestureState) => {
           const width = trackWidthRef.current;
@@ -55,10 +62,10 @@ export function PdfSharpnessTool({
           const travel = width - THUMB_SIZE;
           const deltaPct = (gestureState.dx / travel) * 100;
           const nextPct = Math.round(Math.min(100, Math.max(0, startPctRef.current + deltaPct)));
-          onChange(nextPct);
+          onChange(nextPct, scope);
         },
       }),
-    [calculatePctFromX, onChange],
+    [calculatePctFromX, onChange, scope],
   );
 
   const travel = Math.max(1, trackWidth - THUMB_SIZE);
@@ -79,7 +86,7 @@ export function PdfSharpnessTool({
       {/* Interactive Slider Row with Steppers */}
       <View style={styles.sliderRow}>
         <Pressable
-          onPress={() => onChange(Math.max(0, pct - 5))}
+          onPress={() => onChange(Math.max(0, pct - 5), scope)}
           style={styles.stepBtn}
           hitSlop={8}
           accessibilityLabel="Decrease sharpness">
@@ -112,7 +119,7 @@ export function PdfSharpnessTool({
         </View>
 
         <Pressable
-          onPress={() => onChange(Math.min(100, pct + 5))}
+          onPress={() => onChange(Math.min(100, pct + 5), scope)}
           style={styles.stepBtn}
           hitSlop={8}
           accessibilityLabel="Increase sharpness">
@@ -127,13 +134,30 @@ export function PdfSharpnessTool({
           return (
             <Pressable
               key={p.val}
-              onPress={() => onChange(p.val)}
+              onPress={() => onChange(p.val, scope)}
               style={[styles.presetBtn, active && styles.presetBtnActive]}>
               <Text style={[styles.presetText, active && styles.presetTextActive]}>{p.label}</Text>
             </Pressable>
           );
         })}
       </View>
+      <PdfScopeSelector
+        scope={scope}
+        pageCount={pageCount}
+        rangeError={rangeError}
+        onChange={(next) => {
+          const resolved =
+            next.mode === 'range'
+              ? {
+                  mode: 'range' as const,
+                  start: parsePageRange(String(next.start), String(next.end), pageCount).start,
+                  end: parsePageRange(String(next.start), String(next.end), pageCount).end,
+                }
+              : next;
+          setScope(resolved);
+          onChange(value, resolved);
+        }}
+      />
     </View>
   );
 }

@@ -3,10 +3,13 @@ import { create } from 'zustand';
 import {
   DEFAULT_OUTPUT_SIZE,
   defaultWatermark,
+  clampCropNorm,
   normalizeRotation,
+  resolveScopeIndices,
   type OutputSize,
   type PageScope,
   type PdfCrop,
+  type PdfColorMode,
   type PdfEditSession,
   type PdfWatermark,
 } from '@/lib/pdf-editor/session';
@@ -27,9 +30,13 @@ type PdfEditState = {
   setCropOrigin: (originNorm: { x: number; y: number }) => void;
   setCropRect: (originNorm: { x: number; y: number }, sizeNorm?: { w: number; h: number }) => void;
   setRotationForCurrent: (deg: number) => void;
+  setRotationForScope: (deg: number, scope: PageScope) => void;
   setSharpnessForCurrent: (value: number) => void;
+  setSharpnessForScope: (value: number, scope: PageScope) => void;
   setWatermark: (watermark: PdfWatermark | null) => void;
   patchWatermark: (patch: Partial<PdfWatermark>) => void;
+  setColorMode: (colorMode: PdfColorMode) => void;
+  setColorModeForScope: (colorMode: PdfColorMode, scope: PageScope) => void;
 };
 
 function emptyArrays(pageCount: number) {
@@ -53,6 +60,7 @@ export const usePdfEditStore = create<PdfEditState>((set) => ({
         outputSize: { ...DEFAULT_OUTPUT_SIZE },
         crop: null,
         watermark: null,
+        colorMode: 'Original',
         ...emptyArrays(pageCount),
       },
     }),
@@ -93,7 +101,8 @@ export const usePdfEditStore = create<PdfEditState>((set) => ({
     set((s) => {
       if (!s.session) return s;
       const crop = s.session.crop ?? { scope: { mode: 'this' as const }, originNorm };
-      return { session: { ...s.session, crop: { ...crop, originNorm, sizeNorm } } };
+      const clamped = clampCropNorm(originNorm, sizeNorm);
+      return { session: { ...s.session, crop: { ...crop, ...clamped } } };
     }),
 
   setRotationForCurrent: (deg) =>
@@ -101,6 +110,17 @@ export const usePdfEditStore = create<PdfEditState>((set) => ({
       if (!s.session) return s;
       const rotationByPage = [...s.session.rotationByPage];
       rotationByPage[s.session.currentPageIndex] = normalizeRotation(deg);
+      return { session: { ...s.session, rotationByPage } };
+    }),
+
+  setRotationForScope: (deg, scope) =>
+    set((s) => {
+      if (!s.session) return s;
+      const rotationByPage = [...s.session.rotationByPage];
+      const next = normalizeRotation(deg);
+      for (const i of resolveScopeIndices(scope, s.session.pageCount, s.session.currentPageIndex)) {
+        rotationByPage[i] = next;
+      }
       return { session: { ...s.session, rotationByPage } };
     }),
 
@@ -112,6 +132,17 @@ export const usePdfEditStore = create<PdfEditState>((set) => ({
       return { session: { ...s.session, sharpnessByPage } };
     }),
 
+  setSharpnessForScope: (value, scope) =>
+    set((s) => {
+      if (!s.session) return s;
+      const sharpnessByPage = [...s.session.sharpnessByPage];
+      const next = Math.min(100, Math.max(0, value));
+      for (const i of resolveScopeIndices(scope, s.session.pageCount, s.session.currentPageIndex)) {
+        sharpnessByPage[i] = next;
+      }
+      return { session: { ...s.session, sharpnessByPage } };
+    }),
+
   setWatermark: (watermark) =>
     set((s) => (s.session ? { session: { ...s.session, watermark } } : s)),
 
@@ -120,6 +151,28 @@ export const usePdfEditStore = create<PdfEditState>((set) => ({
       if (!s.session) return s;
       const base = s.session.watermark ?? defaultWatermark();
       return { session: { ...s.session, watermark: { ...base, ...patch } } };
+    }),
+
+  setColorMode: (colorMode) =>
+    set((s) => (s.session ? { session: { ...s.session, colorMode, colorModeByPage: undefined } } : s)),
+
+  setColorModeForScope: (colorMode, scope) =>
+    set((s) => {
+      if (!s.session) return s;
+      const colorModeByPage = [
+        ...(s.session.colorModeByPage ??
+          Array.from({ length: s.session.pageCount }, () => s.session.colorMode)),
+      ];
+      for (const i of resolveScopeIndices(scope, s.session.pageCount, s.session.currentPageIndex)) {
+        colorModeByPage[i] = colorMode;
+      }
+      return {
+        session: {
+          ...s.session,
+          colorMode: colorModeByPage[s.session.currentPageIndex] ?? colorMode,
+          colorModeByPage,
+        },
+      };
     }),
 }));
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { LabelDimensionModal } from '@/components/label-dimension-modal';
@@ -32,7 +32,16 @@ type LabelSizeSetupSectionProps = {
   onWidthChange: (mm: number) => void;
   onHeightChange: (mm: number) => void;
   onUnitChange: (unit: LabelUnit) => void;
+  /** Replaces the empty proportion box. The frame keeps the label aspect ratio. */
+  preview?: ReactNode;
 };
+
+function previewFrameWidth(widthMm: number, heightMm: number): number {
+  const max = 220;
+  const aspect = widthMm / Math.max(heightMm, 1);
+  if (aspect >= 1) return max;
+  return Math.max(72, Math.round(max * aspect));
+}
 
 export function LabelSizeSetupSection({
   widthMm,
@@ -41,6 +50,7 @@ export function LabelSizeSetupSection({
   onWidthChange,
   onHeightChange,
   onUnitChange,
+  preview,
 }: LabelSizeSetupSectionProps) {
   const [widthModalVisible, setWidthModalVisible] = useState(false);
   const [heightModalVisible, setHeightModalVisible] = useState(false);
@@ -53,12 +63,23 @@ export function LabelSizeSetupSection({
   return (
     <>
       <View style={styles.previewPad}>
-        <View style={styles.previewRow}>
+        <View style={[styles.previewRow, preview ? styles.previewRowLive : null]}>
           <View
             style={[
               styles.previewCell,
               { aspectRatio: widthMm / Math.max(heightMm, 1) },
-            ]} />
+              preview
+                ? {
+                    width: previewFrameWidth(widthMm, heightMm),
+                    maxWidth: '100%',
+                    flex: 0,
+                    minHeight: 0,
+                    overflow: 'hidden',
+                  }
+                : null,
+            ]}>
+            {preview}
+          </View>
         </View>
         <Text style={styles.previewHint}>
           {widthMm} × {heightMm} mm
@@ -171,6 +192,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   previewRow: { flexDirection: 'row', alignItems: 'stretch', maxWidth: '100%' },
+  previewRowLive: { alignItems: 'center', justifyContent: 'center', width: '100%' },
   previewCell: {
     flex: 1,
     maxWidth: 120,

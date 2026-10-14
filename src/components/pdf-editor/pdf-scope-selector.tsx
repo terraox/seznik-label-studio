@@ -14,6 +14,8 @@ export function PdfScopeSelector({
   rangeError?: string;
   onChange: (scope: PageScope) => void;
 }) {
+  if (pageCount < 2) return null;
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>Apply to</Text>

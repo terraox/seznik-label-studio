@@ -19,6 +19,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple, cardShadow, Palette } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTranslation } from '@/lib/i18n';
+import { useAuthStore } from '@/stores/auth-store';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
 type IconName = AppIconName;
@@ -74,6 +75,7 @@ export default function SettingScreen() {
   const { width } = useWindowDimensions();
   const { t } = useTranslation();
   const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const logout = useAuthStore((s) => s.logout);
 
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
 
@@ -94,6 +96,13 @@ export default function SettingScreen() {
       'Sez Print',
       `Version ${version}\n\nDesign and print labels on generic ESC/POS Bluetooth thermal printers. Supports barcodes, QR codes, tables, cliparts, data files, and 22 Indian languages.`,
     );
+  };
+
+  const handleLogout = () => {
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log out', style: 'destructive', onPress: logout },
+    ]);
   };
 
   return (
@@ -191,6 +200,14 @@ export default function SettingScreen() {
               showDivider
             />
             <SettingRow label={t('setting.aboutUs')} icon="info.circle" onPress={handleAbout} />
+          </SettingGroup>
+
+          <SettingGroup>
+            <SettingRow
+              label="Log out"
+              icon="rectangle.portrait.and.arrow.right"
+              onPress={handleLogout}
+            />
           </SettingGroup>
         </View>
       </ScrollView>

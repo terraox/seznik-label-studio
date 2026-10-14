@@ -6,6 +6,7 @@ import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import { CONSUMER_PRINTERS } from '@/constants/printer-models';
 import { androidRipple, HomeLayout, HomeStatusColors } from '@/constants/ui';
+import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-store';
 
@@ -21,6 +22,9 @@ export function StatusChip() {
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
+  const sdkId = usePrinterStore((s) => s.sdkId);
+  const transport = usePrinterStore((s) => s.transport);
+  const showBattery = printerReportsBattery({ sdkId, transport });
 
   useEffect(() => {
     const sync = () => {
@@ -44,7 +48,11 @@ export function StatusChip() {
   const busy = status === 'scanning' || status === 'connecting';
   const text = live ? deviceName || modelName : busy ? 'Connecting…' : 'Not connected';
   const batteryLabel =
-    batteryPercent != null ? `${batteryPercent}%` : live ? 'battery not reported' : '';
+    showBattery && batteryPercent != null
+      ? `${batteryPercent}%`
+      : showBattery && live
+        ? 'battery not reported'
+        : '';
 
   return (
     <Pressable
@@ -65,7 +73,7 @@ export function StatusChip() {
       ]}>
       {status === 'disconnected' ? (
         <AppIcon name="link" tintColor="#FFFFFF" size={15} pointerEvents="none" />
-      ) : live ? (
+      ) : live && showBattery ? (
         <PrinterBatteryLabel
           percent={batteryPercent}
           size={15}
@@ -73,6 +81,8 @@ export function StatusChip() {
           showWhenUnknown
           unknownText="—"
         />
+      ) : live ? (
+        <AppIcon name="printer" tintColor="#FFFFFF" size={15} pointerEvents="none" />
       ) : (
         <View style={styles.dot} />
       )}

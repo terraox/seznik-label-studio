@@ -21,6 +21,7 @@ import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { accentStrong, cardShadow, Palette } from '@/constants/ui';
+import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
 import { GRID_SPACING_PRESETS_MM } from '@/lib/editor/canvas-grid';
 import {
@@ -81,6 +82,9 @@ export default function PrinterDiagnosticsScreen() {
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
+  const sdkId = usePrinterStore((s) => s.sdkId);
+  const transport = usePrinterStore((s) => s.transport);
+  const showBattery = printerReportsBattery({ sdkId, transport });
   const [diag, setDiag] = useState<DiagnosticInfo | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -284,7 +288,7 @@ export default function PrinterDiagnosticsScreen() {
             </View>
             <Text style={styles.deviceName}>{diag?.deviceName || diag?.deviceId || 'No printer selected'}</Text>
             <Text style={styles.deviceMeta}>{prettyTransport(diag?.activeTransport)}</Text>
-            {linked ? (
+            {linked && showBattery ? (
               <View style={styles.heroBattery}>
                 <Text style={styles.heroBatteryLabel}>Battery</Text>
                 <PrinterBatteryLabel
@@ -304,10 +308,12 @@ export default function PrinterDiagnosticsScreen() {
             <DiagRow label="Device" value={diag?.deviceName ?? 'None'} />
             <DiagRow label="Address" value={diag?.deviceId ?? 'None'} mono />
             <DiagRow label="App status" value={status} />
-            <DiagRow
-              label="Battery"
-              value={batteryPercent != null ? `${batteryPercent}%` : linked ? 'Not reported' : 'N/A'}
-            />
+            {showBattery ? (
+              <DiagRow
+                label="Battery"
+                value={batteryPercent != null ? `${batteryPercent}%` : linked ? 'Not reported' : 'N/A'}
+              />
+            ) : null}
           </View>
 
           {showBle ? (

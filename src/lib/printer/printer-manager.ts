@@ -3176,6 +3176,12 @@ class PrinterManager {
       if (store.batteryPercent != null) store.setBatteryPercent(null);
       return;
     }
+    const { printerReportsBattery } = await import('@/lib/printer/printer-battery');
+    if (!printerReportsBattery({ sdkId: store.sdkId, transport: this.activeTransport ?? store.transport })) {
+      this.stopBatteryPolling();
+      if (store.batteryPercent != null) store.setBatteryPercent(null);
+      return;
+    }
     this.ensureBatteryPolling();
     const now = Date.now();
     if (!opts?.force && now - this.lastBatteryRefreshAt < PrinterManager.BATTERY_REFRESH_MIN_MS) return;

@@ -1,15 +1,16 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { Palette } from '@/constants/ui';
 
-export type PdfToolId = 'crop' | 'rotate' | 'sharpness' | 'watermark';
+export type PdfToolId = 'crop' | 'rotate' | 'sharpness' | 'watermark' | 'color';
 
 const TOOLS: { id: PdfToolId; label: string; icon: string }[] = [
   { id: 'crop', label: 'Crop', icon: 'rectangle.dashed' },
   { id: 'rotate', label: 'Rotate', icon: 'arrow.clockwise' },
   { id: 'sharpness', label: 'Sharpness', icon: 'slider.horizontal.3' },
   { id: 'watermark', label: 'Watermark', icon: 'character' },
+  { id: 'color', label: 'Color', icon: 'circle.lefthalf.filled' },
 ];
 
 export function PdfToolPanel({
@@ -25,8 +26,7 @@ export function PdfToolPanel({
 }) {
   return (
     <View style={styles.wrap}>
-      {/* Compact Segmented Toolbar Ribbon */}
-      <View style={styles.segmentBar}>
+      <View style={styles.grid}>
         {TOOLS.map((t) => {
           const isActive = active === t.id;
           return (
@@ -34,78 +34,62 @@ export function PdfToolPanel({
               key={t.id}
               disabled={disabled}
               onPress={() => onChange(t.id)}
-              style={[
-                styles.segmentBtn,
-                isActive && styles.segmentBtnActive,
-                disabled && styles.segmentBtnOff,
-              ]}>
-              <AppIcon
-                name={t.icon}
-                size={15}
-                tintColor={isActive ? Palette.accent : Palette.muted}
-              />
-              <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
+              style={[styles.tool, isActive && styles.toolOn, disabled && styles.toolOff]}>
+              <AppIcon name={t.icon} size={20} tintColor={isActive ? Palette.accent : '#475569'} />
+              <Text style={[styles.toolText, isActive && styles.toolTextOn]} numberOfLines={1}>
                 {t.label}
               </Text>
             </Pressable>
           );
         })}
       </View>
-
-      {/* Expandable tool panel content (only takes space when a tool is selected) */}
-      {active !== null ? <View style={styles.body}>{children}</View> : null}
+      {active !== null ? (
+        <ScrollView style={styles.body} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+          {children}
+        </ScrollView>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingVertical: 6,
-    borderTopWidth: 1,
-    borderTopColor: Palette.hairline,
-    backgroundColor: Palette.card,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 10,
+    paddingBottom: 8,
+    gap: 8,
   },
-  segmentBar: {
+  grid: {
     flexDirection: 'row',
-    marginHorizontal: 12,
-    backgroundColor: Palette.cardTop,
-    borderRadius: 10,
-    padding: 3,
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  tool: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    minHeight: 58,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Palette.hairline,
-  },
-  segmentBtn: {
-    flex: 1,
-    flexDirection: 'row',
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 7,
-    borderRadius: 7,
+    gap: 4,
+    paddingHorizontal: 2,
+    paddingVertical: 8,
   },
-  segmentBtnActive: {
-    backgroundColor: '#FFFFFF',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+  toolOn: {
+    borderColor: Palette.accent,
+    backgroundColor: '#EEF2FF',
   },
-  segmentBtnOff: {
-    opacity: 0.4,
-  },
-  segmentText: {
-    fontSize: 12,
-    color: Palette.muted,
-    fontWeight: '500',
-  },
-  segmentTextActive: {
-    color: Palette.accent,
-    fontWeight: '700',
-  },
+  toolOff: { opacity: 0.4 },
+  toolText: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  toolTextOn: { color: Palette.accent },
   body: {
+    maxHeight: 240,
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 4,
   },
 });

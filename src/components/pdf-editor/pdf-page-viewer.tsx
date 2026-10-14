@@ -1,17 +1,28 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image as RNImage, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, ColorMatrix, Image as SkiaImage, useImage } from '@shopify/react-native-skia';
+import { Canvas, ColorMatrix, Image as SkiaImage, RuntimeShader, Skia, useImage } from '@shopify/react-native-skia';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 import { Palette } from '@/constants/ui';
-import { sharpnessPreviewMatrix } from '@/lib/pdf-editor/sharpen';
+import { MONO_IMAGE_SKSL } from '@/lib/editor/image-mono';
+import { colorContrastPreviewMatrix, monoPreviewMatrix } from '@/lib/pdf-editor/sharpen';
 import {
+  clampCropNorm,
   ptToMm,
   tiledRepeatCount,
   type OutputSize,
+  type PdfColorMode,
   type PdfWatermark,
 } from '@/lib/pdf-editor/session';
+
+const monoPreviewEffect = (() => {
+  try {
+    return Skia.RuntimeEffect.Make(MONO_IMAGE_SKSL);
+  } catch {
+    return null;
+  }
+})();
 
 export function PdfPageViewer({
   uri,
@@ -28,6 +39,9 @@ export function PdfPageViewer({
   watermarkEnabled,
   onStampOffset,
   sharpness,
+  colorMode,
+  grayThreshold,
+  expand,
 }: {
   uri: string | null;
   pageWpt: number;
@@ -43,14 +57,21 @@ export function PdfPageViewer({
   watermarkEnabled: boolean;
   onStampOffset: (o: { x: number; y: number }) => void;
   sharpness: number;
+  colorMode?: PdfColorMode;
+  grayThreshold?: number;
+  /** Use the full space above the tools so a page can be cropped at screen size. */
+  expand?: boolean;
 }) {
+  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null);
   const image = useImage(uri ?? undefined);
+  const mode: PdfColorMode = colorMode ?? 'Original';
+  const threshold = Number.isFinite(grayThreshold) ? (grayThreshold as number) : 160;
   const pageMmW = ptToMm(pageWpt);
   const pageMmH = ptToMm(pageHpt);
 
   const layout = useMemo(() => {
-    const maxW = 320;
-    const maxH = 340;
+    const maxW = expand && measured ? measured.w : 320;
+    const maxH = expand && measured ? measured.h : 340;
     const scale = Math.min(maxW / Math.max(pageMmW, 1), maxH / Math.max(pageMmH, 1));
     const dispW = pageMmW * scale;
     const dispH = pageMmH * scale;
@@ -81,86 +102,53 @@ export function PdfPageViewer({
     const cropTop = oy * dispH;
 
     return { dispW, dispH, winW, winH, ox, oy, maxOx, maxOy, cropLeft, cropTop, scale };
-  }, [originNorm.x, originNorm.y, outputSize.heightMm, outputSize.widthMm, pageMmH, pageMmW, sizeNorm]);
+  }, [expand, measured, originNorm.x, originNorm.y, outputSize.heightMm, outputSize.widthMm, pageMmH, pageMmW, sizeNorm]);
 
-  const fitFrame = useMemo(() => {
-    const maxW = 320;
-    const maxH = 340;
-    const frameScale = Math.min(maxW / Math.max(outputSize.widthMm, 1), maxH / Math.max(outputSize.heightMm, 1));
-    const stageW = outputSize.widthMm * frameScale;
-    const stageH = outputSize.heightMm * frameScale;
-    const contain = Math.min(stageW / Math.max(pageMmW, 1), stageH / Math.max(pageMmH, 1));
-    const imgW = pageMmW * contain;
-    const imgH = pageMmH * contain;
+  /** Label frame. A saved crop is the only content, scaled to fit inside that frame. */
+  const labelFit = useMemo(() => {
+    const maxW = 340;
+    const maxH = 380;
+    const frameScale = Math.min(
+      maxW / Math.max(outputSize.widthMm, 1),
+      maxH / Math.max(outputSize.heightMm, 1),
+    );
+    const stageW = Math.max(96, outputSize.widthMm * frameScale);
+    const stageH = Math.max(64, outputSize.heightMm * frameScale);
+    const clamped = isCropped ? clampCropNorm(originNorm, sizeNorm) : null;
+    const cropNormW = clamped ? clamped.sizeNorm.w : 1;
+    const cropNormH = clamped ? clamped.sizeNorm.h : 1;
+    const cropNormX = clamped ? clamped.originNorm.x : 0;
+    const cropNormY = clamped ? clamped.originNorm.y : 0;
+    const srcW = Math.max(1, cropNormW * pageMmW);
+    const srcH = Math.max(1, cropNormH * pageMmH);
+    const contain = Math.min(stageW / srcW, stageH / srcH);
+    const drawW = srcW * contain;
+    const drawH = srcH * contain;
     return {
       stageW,
       stageH,
-      imgW,
-      imgH,
-      imgX: (stageW - imgW) / 2,
-      imgY: (stageH - imgH) / 2,
+      imgW: pageMmW * contain,
+      imgH: pageMmH * contain,
+      imgX: (stageW - drawW) / 2 - cropNormX * pageMmW * contain,
+      imgY: (stageH - drawH) / 2 - cropNormY * pageMmH * contain,
     };
-  }, [outputSize.heightMm, outputSize.widthMm, pageMmH, pageMmW]);
-
-  const presentOnlyCrop = Boolean(isCropped && !cropEnabled);
-
-  const cropLayout = useMemo(() => {
-    if (!presentOnlyCrop) {
-      return null;
-    }
-    const cropNormX = originNorm.x;
-    const cropNormY = originNorm.y;
-    const cropNormW = sizeNorm && sizeNorm.w > 0 ? sizeNorm.w : layout.winW / layout.dispW;
-    const cropNormH = sizeNorm && sizeNorm.h > 0 ? sizeNorm.h : layout.winH / layout.dispH;
-
-    const cropMmW = Math.max(5, cropNormW * pageMmW);
-    const cropMmH = Math.max(5, cropNormH * pageMmH);
-
-    const zoom = Math.min(320 / cropMmW, 340 / cropMmH);
-    const stageW = cropMmW * zoom;
-    const stageH = cropMmH * zoom;
-
-    const imgW = pageMmW * zoom;
-    const imgH = pageMmH * zoom;
-    const imgX = -cropNormX * pageMmW * zoom;
-    const imgY = -cropNormY * pageMmH * zoom;
-
-    return { stageW, stageH, imgW, imgH, imgX, imgY, cropNormW, cropNormH };
   }, [
-    presentOnlyCrop,
+    isCropped,
     originNorm.x,
     originNorm.y,
-    sizeNorm,
-    layout.winW,
-    layout.dispW,
-    layout.winH,
-    layout.dispH,
-    pageMmW,
+    outputSize.heightMm,
+    outputSize.widthMm,
     pageMmH,
+    pageMmW,
+    sizeNorm,
   ]);
 
-  const activeStageW = cropEnabled || presentOnlyCrop
-    ? cropLayout
-      ? cropLayout.stageW
-      : layout.dispW
-    : fitFrame.stageW;
-  const activeStageH = cropEnabled || presentOnlyCrop
-    ? cropLayout
-      ? cropLayout.stageH
-      : layout.dispH
-    : fitFrame.stageH;
-  const activeImgW = cropEnabled || presentOnlyCrop
-    ? cropLayout
-      ? cropLayout.imgW
-      : layout.dispW
-    : fitFrame.imgW;
-  const activeImgH = cropEnabled || presentOnlyCrop
-    ? cropLayout
-      ? cropLayout.imgH
-      : layout.dispH
-    : fitFrame.imgH;
-  const activeImgX = cropEnabled || presentOnlyCrop ? (cropLayout ? cropLayout.imgX : 0) : fitFrame.imgX;
-  const activeImgY = cropEnabled || presentOnlyCrop ? (cropLayout ? cropLayout.imgY : 0) : fitFrame.imgY;
+  const activeStageW = cropEnabled ? layout.dispW : labelFit.stageW;
+  const activeStageH = cropEnabled ? layout.dispH : labelFit.stageH;
+  const activeImgW = cropEnabled ? layout.dispW : labelFit.imgW;
+  const activeImgH = cropEnabled ? layout.dispH : labelFit.imgH;
+  const activeImgX = cropEnabled ? 0 : labelFit.imgX;
+  const activeImgY = cropEnabled ? 0 : labelFit.imgY;
 
   const swap = rotation === 90 || rotation === 270;
 
@@ -169,6 +157,9 @@ export function PdfPageViewer({
   const cropY = useSharedValue(layout.cropTop);
   const cropW = useSharedValue(layout.winW);
   const cropH = useSharedValue(layout.winH);
+  const dispW = useSharedValue(layout.dispW);
+  const dispH = useSharedValue(layout.dispH);
+  const gestureActive = useSharedValue(false);
 
   const startCrop = useSharedValue({
     left: layout.cropLeft,
@@ -185,11 +176,28 @@ export function PdfPageViewer({
   });
 
   useEffect(() => {
+    dispW.value = layout.dispW;
+    dispH.value = layout.dispH;
+    if (gestureActive.value) return;
     cropX.value = layout.cropLeft;
     cropY.value = layout.cropTop;
     cropW.value = layout.winW;
     cropH.value = layout.winH;
-  }, [layout.cropLeft, layout.cropTop, layout.winW, layout.winH, cropX, cropY, cropW, cropH]);
+  }, [
+    layout.cropLeft,
+    layout.cropTop,
+    layout.winW,
+    layout.winH,
+    layout.dispW,
+    layout.dispH,
+    cropX,
+    cropY,
+    cropW,
+    cropH,
+    dispW,
+    dispH,
+    gestureActive,
+  ]);
 
   useEffect(() => {
     stampNormX.value = watermark?.stamp?.offsetNorm.x ?? 0.5;
@@ -252,54 +260,53 @@ export function PdfPageViewer({
     };
   });
 
+  const beginCrop = useCallback(() => {
+    'worklet';
+    gestureActive.value = true;
+    startCrop.value = {
+      left: cropX.value,
+      top: cropY.value,
+      w: cropW.value,
+      h: cropH.value,
+    };
+  }, [cropH, cropW, cropX, cropY, gestureActive, startCrop]);
+
+  const commitCrop = useCallback(() => {
+    'worklet';
+    gestureActive.value = false;
+    const dw = Math.max(1, dispW.value);
+    const dh = Math.max(1, dispH.value);
+    runOnJS(onCropRect)(
+      { x: cropX.value / dw, y: cropY.value / dh },
+      { w: cropW.value / dw, h: cropH.value / dh },
+    );
+  }, [cropH, cropW, cropX, cropY, dispH, dispW, gestureActive, onCropRect]);
+
   // Center pan gesture: moves crop box on UI thread, commits onEnd
   const cropCenterPan = useMemo(
     () =>
       Gesture.Pan()
-        .onBegin(() => {
-          'worklet';
-          startCrop.value = {
-            left: cropX.value,
-            top: cropY.value,
-            w: cropW.value,
-            h: cropH.value,
-          };
-        })
+        .onBegin(beginCrop)
         .onUpdate((e) => {
           'worklet';
-          const maxLeft = layout.dispW - startCrop.value.w;
-          const maxTop = layout.dispH - startCrop.value.h;
+          const maxLeft = dispW.value - startCrop.value.w;
+          const maxTop = dispH.value - startCrop.value.h;
           const nLeft = Math.min(maxLeft, Math.max(0, startCrop.value.left + e.translationX));
           const nTop = Math.min(maxTop, Math.max(0, startCrop.value.top + e.translationY));
           cropX.value = nLeft;
           cropY.value = nTop;
         })
-        .onEnd(() => {
-          'worklet';
-          runOnJS(onCropRect)(
-            { x: cropX.value / layout.dispW, y: cropY.value / layout.dispH },
-            { w: cropW.value / layout.dispW, h: cropH.value / layout.dispH },
-          );
-        }),
-    [cropH, cropW, cropX, cropY, layout.dispH, layout.dispW, onCropRect, startCrop],
+        .onFinalize(commitCrop),
+    [beginCrop, commitCrop, cropX, cropY, dispH, dispW, startCrop],
   );
 
-  // Corner resize gestures
   const resizeTL = useMemo(
     () =>
       Gesture.Pan()
-        .onBegin(() => {
-          'worklet';
-          startCrop.value = {
-            left: cropX.value,
-            top: cropY.value,
-            w: cropW.value,
-            h: cropH.value,
-          };
-        })
+        .onBegin(beginCrop)
         .onUpdate((e) => {
           'worklet';
-          const minSize = 24;
+          const minSize = 48;
           const maxL = startCrop.value.left + startCrop.value.w - minSize;
           const maxT = startCrop.value.top + startCrop.value.h - minSize;
           const nLeft = Math.min(maxL, Math.max(0, startCrop.value.left + e.translationX));
@@ -309,108 +316,124 @@ export function PdfPageViewer({
           cropW.value = startCrop.value.left + startCrop.value.w - nLeft;
           cropH.value = startCrop.value.top + startCrop.value.h - nTop;
         })
-        .onEnd(() => {
-          'worklet';
-          runOnJS(onCropRect)(
-            { x: cropX.value / layout.dispW, y: cropY.value / layout.dispH },
-            { w: cropW.value / layout.dispW, h: cropH.value / layout.dispH },
-          );
-        }),
-    [cropH, cropW, cropX, cropY, layout.dispH, layout.dispW, onCropRect, startCrop],
+        .onFinalize(commitCrop),
+    [beginCrop, commitCrop, cropH, cropW, cropX, cropY, startCrop],
   );
 
   const resizeTR = useMemo(
     () =>
       Gesture.Pan()
-        .onBegin(() => {
-          'worklet';
-          startCrop.value = {
-            left: cropX.value,
-            top: cropY.value,
-            w: cropW.value,
-            h: cropH.value,
-          };
-        })
+        .onBegin(beginCrop)
         .onUpdate((e) => {
           'worklet';
-          const minSize = 24;
+          const minSize = 48;
           const maxT = startCrop.value.top + startCrop.value.h - minSize;
           const nTop = Math.min(maxT, Math.max(0, startCrop.value.top + e.translationY));
-          const maxW = layout.dispW - startCrop.value.left;
+          const maxW = dispW.value - startCrop.value.left;
           cropY.value = nTop;
           cropW.value = Math.min(maxW, Math.max(minSize, startCrop.value.w + e.translationX));
           cropH.value = startCrop.value.top + startCrop.value.h - nTop;
         })
-        .onEnd(() => {
-          'worklet';
-          runOnJS(onCropRect)(
-            { x: cropX.value / layout.dispW, y: cropY.value / layout.dispH },
-            { w: cropW.value / layout.dispW, h: cropH.value / layout.dispH },
-          );
-        }),
-    [cropH, cropW, cropX, cropY, layout.dispH, layout.dispW, onCropRect, startCrop],
+        .onFinalize(commitCrop),
+    [beginCrop, commitCrop, cropH, cropW, cropY, dispW, startCrop],
   );
 
   const resizeBL = useMemo(
     () =>
       Gesture.Pan()
-        .onBegin(() => {
-          'worklet';
-          startCrop.value = {
-            left: cropX.value,
-            top: cropY.value,
-            w: cropW.value,
-            h: cropH.value,
-          };
-        })
+        .onBegin(beginCrop)
         .onUpdate((e) => {
           'worklet';
-          const minSize = 24;
+          const minSize = 48;
           const maxL = startCrop.value.left + startCrop.value.w - minSize;
           const nLeft = Math.min(maxL, Math.max(0, startCrop.value.left + e.translationX));
-          const maxH = layout.dispH - startCrop.value.top;
+          const maxH = dispH.value - startCrop.value.top;
           cropX.value = nLeft;
           cropW.value = startCrop.value.left + startCrop.value.w - nLeft;
           cropH.value = Math.min(maxH, Math.max(minSize, startCrop.value.h + e.translationY));
         })
-        .onEnd(() => {
-          'worklet';
-          runOnJS(onCropRect)(
-            { x: cropX.value / layout.dispW, y: cropY.value / layout.dispH },
-            { w: cropW.value / layout.dispW, h: cropH.value / layout.dispH },
-          );
-        }),
-    [cropH, cropW, cropX, cropY, layout.dispH, layout.dispW, onCropRect, startCrop],
+        .onFinalize(commitCrop),
+    [beginCrop, commitCrop, cropH, cropW, cropX, dispH, startCrop],
   );
 
   const resizeBR = useMemo(
     () =>
       Gesture.Pan()
-        .onBegin(() => {
-          'worklet';
-          startCrop.value = {
-            left: cropX.value,
-            top: cropY.value,
-            w: cropW.value,
-            h: cropH.value,
-          };
-        })
+        .onBegin(beginCrop)
         .onUpdate((e) => {
           'worklet';
-          const minSize = 24;
-          const maxW = layout.dispW - startCrop.value.left;
-          const maxH = layout.dispH - startCrop.value.top;
+          const minSize = 48;
+          const maxW = dispW.value - startCrop.value.left;
+          const maxH = dispH.value - startCrop.value.top;
           cropW.value = Math.min(maxW, Math.max(minSize, startCrop.value.w + e.translationX));
           cropH.value = Math.min(maxH, Math.max(minSize, startCrop.value.h + e.translationY));
         })
-        .onEnd(() => {
+        .onFinalize(commitCrop),
+    [beginCrop, commitCrop, cropH, cropW, dispH, dispW, startCrop],
+  );
+
+  const resizeTop = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-3, 3])
+        .onBegin(beginCrop)
+        .onUpdate((e) => {
           'worklet';
-          runOnJS(onCropRect)(
-            { x: cropX.value / layout.dispW, y: cropY.value / layout.dispH },
-            { w: cropW.value / layout.dispW, h: cropH.value / layout.dispH },
-          );
-        }),
-    [cropH, cropW, cropX, cropY, layout.dispH, layout.dispW, onCropRect, startCrop],
+          const minSize = 48;
+          const maxT = startCrop.value.top + startCrop.value.h - minSize;
+          const nTop = Math.min(maxT, Math.max(0, startCrop.value.top + e.translationY));
+          cropY.value = nTop;
+          cropH.value = startCrop.value.top + startCrop.value.h - nTop;
+        })
+        .onFinalize(commitCrop),
+    [beginCrop, commitCrop, cropH, cropY, startCrop],
+  );
+
+  const resizeBottom = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-3, 3])
+        .onBegin(beginCrop)
+        .onUpdate((e) => {
+          'worklet';
+          const minSize = 48;
+          const maxH = dispH.value - startCrop.value.top;
+          cropH.value = Math.min(maxH, Math.max(minSize, startCrop.value.h + e.translationY));
+        })
+        .onFinalize(commitCrop),
+    [beginCrop, commitCrop, cropH, dispH, startCrop],
+  );
+
+  const resizeLeft = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-3, 3])
+        .onBegin(beginCrop)
+        .onUpdate((e) => {
+          'worklet';
+          const minSize = 48;
+          const maxL = startCrop.value.left + startCrop.value.w - minSize;
+          const nLeft = Math.min(maxL, Math.max(0, startCrop.value.left + e.translationX));
+          cropX.value = nLeft;
+          cropW.value = startCrop.value.left + startCrop.value.w - nLeft;
+        })
+        .onFinalize(commitCrop),
+    [beginCrop, commitCrop, cropW, cropX, startCrop],
+  );
+
+  const resizeRight = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-3, 3])
+        .onBegin(beginCrop)
+        .onUpdate((e) => {
+          'worklet';
+          const minSize = 48;
+          const maxW = dispW.value - startCrop.value.left;
+          cropW.value = Math.min(maxW, Math.max(minSize, startCrop.value.w + e.translationX));
+        })
+        .onFinalize(commitCrop),
+    [beginCrop, commitCrop, cropW, dispW, startCrop],
   );
 
   const stampPan = useMemo(
@@ -442,7 +465,17 @@ export function PdfPageViewer({
   const tiles = watermark?.layout === 'tiled' ? tiledRepeatCount(watermark.tiled?.spacingNorm ?? { x: 0.22, y: 0.22 }) : null;
 
   return (
-    <View style={styles.stage}>
+    <View
+      style={expand ? styles.fillStage : styles.stage}
+      onLayout={
+        expand
+          ? (e) => {
+              const w = Math.max(120, Math.floor(e.nativeEvent.layout.width - 8));
+              const h = Math.max(160, Math.floor(e.nativeEvent.layout.height - 28));
+              setMeasured((prev) => (prev && prev.w === w && prev.h === h ? prev : { w, h }));
+            }
+          : undefined
+      }>
       <View
         style={{
           width: swap ? activeStageH : activeStageW,
@@ -451,12 +484,13 @@ export function PdfPageViewer({
           justifyContent: 'center',
         }}>
         <View
+          collapsable={false}
           style={{
             width: activeStageW,
             height: activeStageH,
-            transform: [{ rotate: `${rotation}deg` }],
+            transform: rotation ? [{ rotate: `${rotation}deg` }] : undefined,
             backgroundColor: '#fff',
-            overflow: 'hidden',
+            overflow: rotation ? 'visible' : 'hidden',
             borderRadius: 4,
             elevation: 2,
             shadowColor: '#000',
@@ -464,6 +498,13 @@ export function PdfPageViewer({
             shadowOpacity: 0.1,
             shadowRadius: 3,
           }}>
+          <View
+            style={{
+              width: activeStageW,
+              height: activeStageH,
+              overflow: 'hidden',
+              borderRadius: 4,
+            }}>
           {image ? (
             <Canvas style={{ width: activeStageW, height: activeStageH }}>
               <SkiaImage
@@ -473,7 +514,21 @@ export function PdfPageViewer({
                 width={activeImgW}
                 height={activeImgH}
                 fit="fill">
-                <ColorMatrix matrix={sharpnessPreviewMatrix(sharpness)} />
+                {mode === 'Original' ? (
+                  sharpness > 0 ? (
+                    <ColorMatrix matrix={colorContrastPreviewMatrix(sharpness)} />
+                  ) : null
+                ) : monoPreviewEffect ? (
+                  <RuntimeShader
+                    source={monoPreviewEffect}
+                    uniforms={{ threshold, mode: mode === 'Halftone' ? 2 : 1 }}>
+                    {sharpness > 0 ? (
+                      <ColorMatrix matrix={colorContrastPreviewMatrix(sharpness)} />
+                    ) : null}
+                  </RuntimeShader>
+                ) : (
+                  <ColorMatrix matrix={monoPreviewMatrix(mode === 'Halftone')} />
+                )}
               </SkiaImage>
             </Canvas>
           ) : uri ? (
@@ -485,6 +540,7 @@ export function PdfPageViewer({
               <Text style={styles.placeholderText}>No page</Text>
             </View>
           )}
+          </View>
 
           {/* Semi-transparent outer mask overlays (only shown when crop tool is actively open) */}
           {cropEnabled ? (
@@ -509,9 +565,30 @@ export function PdfPageViewer({
                 cropBoxStyle,
                 { borderColor: '#FFFFFF' },
               ]}>
-              {/* Center pan gesture to move crop window */}
+              {/* Center pan stays inset so the edge handles can crop height and width. */}
               <GestureDetector gesture={cropCenterPan}>
-                <View style={StyleSheet.absoluteFill} />
+                <View style={styles.centerHit} />
+              </GestureDetector>
+
+              <GestureDetector gesture={resizeTop}>
+                <View style={[styles.edgeH, styles.edgeTop]}>
+                  <View style={styles.edgeBarH} />
+                </View>
+              </GestureDetector>
+              <GestureDetector gesture={resizeBottom}>
+                <View style={[styles.edgeH, styles.edgeBottom]}>
+                  <View style={styles.edgeBarH} />
+                </View>
+              </GestureDetector>
+              <GestureDetector gesture={resizeLeft}>
+                <View style={[styles.edgeV, styles.edgeLeft]}>
+                  <View style={styles.edgeBarV} />
+                </View>
+              </GestureDetector>
+              <GestureDetector gesture={resizeRight}>
+                <View style={[styles.edgeV, styles.edgeRight]}>
+                  <View style={styles.edgeBarV} />
+                </View>
               </GestureDetector>
 
               {/* Corner Resize Handles */}
@@ -644,13 +721,24 @@ export function PdfPageViewer({
           ) : null}
         </View>
       </View>
-      <Text style={styles.hint}>Preview is grayscale only — export keeps color.</Text>
+      <Text style={styles.hint}>
+        {cropEnabled
+          ? 'Drag the top or bottom bar to crop height. Drag the side bars to crop width.'
+          : isCropped
+            ? `Cropped area fitted to ${outputSize.widthMm} × ${outputSize.heightMm} mm.`
+            : mode === 'Halftone'
+              ? 'Halftone preview. Export and print use this mode.'
+              : mode === 'B & W'
+                ? 'Black and white preview. Export and print use this mode.'
+                : `Full page fitted to ${outputSize.widthMm} × ${outputSize.heightMm} mm.`}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   stage: { alignItems: 'center', paddingVertical: 8 },
+  fillStage: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
   placeholder: { backgroundColor: Palette.cardTop, alignItems: 'center', justifyContent: 'center' },
   placeholderText: { color: Palette.muted },
   mask: {
@@ -673,12 +761,57 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    zIndex: 20,
   },
-  handleTouchTL: { top: -18, left: -18 },
-  handleTouchTR: { top: -18, right: -18 },
-  handleTouchBL: { bottom: -18, left: -18 },
-  handleTouchBR: { bottom: -18, right: -18 },
+  centerHit: {
+    position: 'absolute',
+    left: 28,
+    right: 28,
+    top: 28,
+    bottom: 28,
+  },
+  edgeH: {
+    position: 'absolute',
+    left: 36,
+    right: 36,
+    height: 28,
+    zIndex: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  edgeTop: { top: 0 },
+  edgeBottom: { bottom: 0 },
+  edgeV: {
+    position: 'absolute',
+    top: 36,
+    bottom: 36,
+    width: 28,
+    zIndex: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  edgeLeft: { left: 0 },
+  edgeRight: { right: 0 },
+  edgeBarH: {
+    width: 42,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: Palette.accent,
+  },
+  edgeBarV: {
+    width: 6,
+    height: 42,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: Palette.accent,
+  },
+  handleTouchTL: { top: 0, left: 0 },
+  handleTouchTR: { top: 0, right: 0 },
+  handleTouchBL: { bottom: 0, left: 0 },
+  handleTouchBR: { bottom: 0, right: 0 },
   handleVisual: {
     width: 14,
     height: 14,

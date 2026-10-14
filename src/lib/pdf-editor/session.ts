@@ -1,5 +1,9 @@
+import type { EditorColorMode } from '@/lib/editor/image-mono';
+
 /** 72 PDF points per inch. */
 export const PT_PER_INCH = 72;
+
+export type PdfColorMode = EditorColorMode;
 export const MM_PER_INCH = 25.4;
 export const PT_PER_MM = PT_PER_INCH / MM_PER_INCH;
 
@@ -25,9 +29,9 @@ export const OUTPUT_SIZE_PRESETS: { kind: Exclude<OutputSizeKind, 'custom'>; lab
   ];
 
 export const DEFAULT_OUTPUT_SIZE: OutputSize = {
-  kind: '4x6',
-  widthMm: 101.6,
-  heightMm: 152.4,
+  kind: 'custom',
+  widthMm: 50,
+  heightMm: 30,
 };
 
 export type NinePoint =
@@ -65,6 +69,18 @@ export type PdfCrop = {
   sizeNorm?: { w: number; h: number };
 };
 
+/** Keep the crop window inside the page. Origin and size are fractions of the page. */
+export function clampCropNorm(
+  origin: { x: number; y: number },
+  size?: { w: number; h: number },
+): { originNorm: { x: number; y: number }; sizeNorm: { w: number; h: number } } {
+  const w = Math.min(1, Math.max(0.05, size?.w && size.w > 0 ? size.w : 1));
+  const h = Math.min(1, Math.max(0.05, size?.h && size.h > 0 ? size.h : 1));
+  const x = Math.min(1 - w, Math.max(0, origin.x));
+  const y = Math.min(1 - h, Math.max(0, origin.y));
+  return { originNorm: { x, y }, sizeNorm: { w, h } };
+}
+
 export type PdfWatermark = {
   scope: PageScope;
   type: 'text' | 'image';
@@ -99,7 +115,22 @@ export type PdfEditSession = {
   rotationByPage: number[];
   sharpnessByPage: number[];
   watermark: PdfWatermark | null;
+  /** Original keeps color. B & W thresholds. Halftone uses ordered dither on export. */
+  colorMode: PdfColorMode;
+  /** Per-page color. Missing entries use `colorMode`. */
+  colorModeByPage?: PdfColorMode[];
 };
+
+export function pageColorMode(session: PdfEditSession, pageIndex: number): PdfColorMode {
+  return session.colorModeByPage?.[pageIndex] ?? session.colorMode ?? 'Original';
+}
+
+export type PdfPrintSelection =
+  | { mode: 'current' }
+  | { mode: 'range'; start: number; end: number }
+  | { mode: 'custom'; pages: number[] }
+  | { mode: 'even' }
+  | { mode: 'odd' };
 
 export type PdfBoxPts = { x: number; y: number; w: number; h: number; fits: boolean };
 
@@ -177,11 +208,13 @@ export function cropWindowPts(
   originNorm: { x: number; y: number },
   sizeNorm?: { w: number; h: number },
 ): PdfBoxPts {
+  const hasNorm = Boolean(sizeNorm && sizeNorm.w > 0 && sizeNorm.h > 0);
+  const clamped = hasNorm ? clampCropNorm(originNorm, sizeNorm) : { originNorm, sizeNorm: { w: 1, h: 1 } };
   let w: number;
   let h: number;
   if (sizeNorm && sizeNorm.w > 0 && sizeNorm.h > 0) {
-    w = Math.min(page.w, Math.max(10, sizeNorm.w * page.w));
-    h = Math.min(page.h, Math.max(10, sizeNorm.h * page.h));
+    w = Math.min(page.w, Math.max(10, clamped.sizeNorm.w * page.w));
+    h = Math.min(page.h, Math.max(10, clamped.sizeNorm.h * page.h));
   } else {
     w = mmToPt(output.widthMm);
     h = mmToPt(output.heightMm);
@@ -193,8 +226,8 @@ export function cropWindowPts(
   }
   const maxX = Math.max(0, page.w - w);
   const maxYTop = Math.max(0, page.h - h);
-  const x = Math.min(maxX, Math.max(0, originNorm.x * page.w));
-  const yTop = Math.min(maxYTop, Math.max(0, originNorm.y * page.h));
+  const x = Math.min(maxX, Math.max(0, clamped.originNorm.x * page.w));
+  const yTop = Math.min(maxYTop, Math.max(0, clamped.originNorm.y * page.h));
   const y = Math.max(0, page.h - yTop - h);
   return { x, y, w, h, fits: true };
 }
@@ -248,6 +281,65 @@ export function tiledRepeatCount(
     cols: Math.max(1, Math.round(1 / sx)),
     rows: Math.max(1, Math.round(1 / sy)),
   };
+}
+
+/**
+ * Custom page list: "1, 3, 5" or "1 3 5". 1-based, unique, sorted.
+ * Out-of-range or non-numeric tokens set `error` and return no pages.
+ */
+export function parseCustomPageList(
+  raw: string,
+  pageCount: number,
+): { pages: number[]; error?: string } {
+  const max = Math.max(0, pageCount);
+  const parts = raw
+    .split(/[,;\s]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length === 0) return { pages: [], error: 'Enter at least one page number.' };
+  const pages = new Set<number>();
+  for (const part of parts) {
+    if (!/^\d+$/.test(part)) {
+      return { pages: [], error: `"${part}" is not a page number.` };
+    }
+    const n = Number.parseInt(part, 10);
+    if (n < 1 || n > max) {
+      return { pages: [], error: `Page ${n} is outside 1–${Math.max(1, max)}.` };
+    }
+    pages.add(n);
+  }
+  return { pages: [...pages].sort((a, b) => a - b) };
+}
+
+/** 0-based page indices for a print selection. Even/odd use 1-based page numbers. */
+export function resolvePrintPageIndices(
+  selection: PdfPrintSelection,
+  pageCount: number,
+  currentPageIndex: number,
+): number[] {
+  if (pageCount <= 0) return [];
+  if (selection.mode === 'current') {
+    const i = Math.min(pageCount - 1, Math.max(0, currentPageIndex));
+    return [i];
+  }
+  if (selection.mode === 'range') {
+    return resolveScopeIndices(
+      { mode: 'range', start: selection.start, end: selection.end },
+      pageCount,
+      currentPageIndex,
+    );
+  }
+  if (selection.mode === 'custom') {
+    return selection.pages
+      .filter((n) => n >= 1 && n <= pageCount)
+      .map((n) => n - 1)
+      .filter((n, i, arr) => arr.indexOf(n) === i)
+      .sort((a, b) => a - b);
+  }
+  const out: number[] = [];
+  const start = selection.mode === 'even' ? 1 : 0;
+  for (let i = start; i < pageCount; i += 2) out.push(i);
+  return out;
 }
 
 export function defaultWatermark(): PdfWatermark {

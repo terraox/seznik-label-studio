@@ -8,7 +8,6 @@ import { parsePageRange, type PageScope } from '@/lib/pdf-editor/session';
 export function PdfCropTool({
   scope,
   pageCount,
-  fits,
   hasCrop,
   onScope,
   onResetCrop,
@@ -16,7 +15,6 @@ export function PdfCropTool({
 }: {
   scope: PageScope;
   pageCount: number;
-  fits: boolean;
   hasCrop?: boolean;
   onScope: (scope: PageScope) => void;
   onResetCrop?: () => void;
@@ -40,13 +38,8 @@ export function PdfCropTool({
       </View>
 
       <Text style={styles.help}>
-        Drag or resize the window on the page. Tap Apply Crop when ready to see only the cropped section.
+        Drag the top or bottom bar to crop height, and the side bars to crop width. Apply keeps only that area.
       </Text>
-      {!fits ? (
-        <Text style={styles.err}>
-          This output size is larger than the current page. Pick a smaller size — the page will not be scaled.
-        </Text>
-      ) : null}
       <PdfScopeSelector
         scope={scope}
         pageCount={pageCount}
@@ -86,7 +79,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   help: { fontSize: 11, color: Palette.muted, lineHeight: 15 },
-  err: { fontSize: 11, color: Palette.danger, lineHeight: 15 },
   resetBtn: {
     paddingVertical: 7,
     paddingHorizontal: 12,

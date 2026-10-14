@@ -1,8 +1,8 @@
 import { Platform } from 'react-native';
 
-import { normalizeBatteryPercent } from '@/lib/printer/battery-percent';
+import { normalizeBatteryPercent, printerReportsBattery } from '@/lib/printer/battery-percent';
 
-export { normalizeBatteryPercent } from '@/lib/printer/battery-percent';
+export { normalizeBatteryPercent, printerReportsBattery } from '@/lib/printer/battery-percent';
 
 export type BatteryFetchContext = {
   transport: string | null;
@@ -15,6 +15,7 @@ export type BatteryFetchContext = {
  * Tez and Label X use vendor SDKs; other bridges fall back to Android 13+ OS battery for that MAC.
  */
 export async function fetchPrinterBatteryPercent(ctx: BatteryFetchContext): Promise<number | null> {
+  if (!printerReportsBattery(ctx)) return null;
   if (Platform.OS !== 'android') return null;
 
   if (ctx.sdkId === 'tez' || ctx.transport === 'tez-spp') {

@@ -95,6 +95,34 @@ export const GRAYSCALE_COLOR_MATRIX = [
 ];
 
 /** Grayscale + contrast boost for live sharpness preview. Export uses unsharpRgba. */
+/** Contrast boost that keeps color. Used for Original preview. */
+export function colorContrastPreviewMatrix(slider0to100: number): number[] {
+  const norm = Math.min(100, Math.max(0, slider0to100)) / 100;
+  const c = 1 + norm * 0.8;
+  const intercept = 0.5 * (1 - c);
+  return [
+    c, 0, 0, 0, intercept,
+    0, c, 0, 0, intercept,
+    0, 0, c, 0, intercept,
+    0, 0, 0, 1, 0,
+  ];
+}
+
+/** Steep grayscale when the halftone shader cannot be compiled. */
+export function monoPreviewMatrix(halftone: boolean): number[] {
+  const c = halftone ? 1.35 : 8;
+  const intercept = 0.5 * (1 - c);
+  const r = 0.299 * c;
+  const g = 0.587 * c;
+  const b = 0.114 * c;
+  return [
+    r, g, b, 0, intercept,
+    r, g, b, 0, intercept,
+    r, g, b, 0, intercept,
+    0, 0, 0, 1, 0,
+  ];
+}
+
 export function sharpnessPreviewMatrix(slider0to100: number): number[] {
   const norm = Math.min(100, Math.max(0, slider0to100)) / 100;
   if (norm <= 0) {
