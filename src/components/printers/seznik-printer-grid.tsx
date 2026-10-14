@@ -246,7 +246,7 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
               <View style={[styles.warningBox, { borderColor: model.accentBorder }]}>
                 <Text style={styles.warningText}>{model.howToConnect}</Text>
               </View>
-            )}
+            ) : null}
           </View>
         );
       })}
