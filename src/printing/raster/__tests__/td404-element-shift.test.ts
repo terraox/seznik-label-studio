@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import type { LabelDocument } from '@/lib/label-document';
 import { fullBleedBorderElement } from '@/lib/printer/border-calibration';
-import { mmToDots, td404ContentShiftDots, td404EdgeBorderOptions } from '@/lib/printer/print-spec';
+import {
+  mmToDots,
+  TD404_ELEMENT_SHIFT_H_MM,
+  TD404_ELEMENT_SHIFT_V_MM,
+  td404ContentShiftDots,
+  td404EdgeBorderOptions,
+} from '@/lib/printer/print-spec';
 import { rasterizeDocumentToBitmapTimed } from '@/printing/raster/skia-rasterizer';
 
 const dpi = 304;
@@ -80,12 +86,12 @@ assert.equal(borderMoved.maxX, borderStill.maxX, 'border right stays');
 assert.equal(borderMoved.minY, borderStill.minY, 'border top stays');
 assert.equal(borderMoved.maxY, borderStill.maxY, 'border bottom stays');
 
-const dx = mmToDots(1, dpi);
-const dy = mmToDots(1, dpi);
+const dx = mmToDots(TD404_ELEMENT_SHIFT_H_MM, dpi);
+const dy = mmToDots(TD404_ELEMENT_SHIFT_V_MM, dpi);
 const mid = { x0: mmToDots(10, dpi), y0: mmToDots(7, dpi), x1: mmToDots(40, dpi), y1: mmToDots(23, dpi) };
 const shapeStill = inkBox(still.gray, w, h, mid.x0, mid.y0, mid.x1, mid.y1);
 const shapeMoved = inkBox(moved.gray, w, h, mid.x0 + dx, mid.y0 + dy, mid.x1 + dx, mid.y1 + dy);
-assert.equal(shapeMoved.minX - shapeStill.minX, dx, 'element moves 1 mm right');
-assert.equal(shapeMoved.minY - shapeStill.minY, dy, 'element moves 1 mm down');
+assert.equal(shapeMoved.minX - shapeStill.minX, dx, 'element moves by the horizontal shift');
+assert.equal(shapeMoved.minY - shapeStill.minY, dy, 'element moves by the vertical shift');
 
 console.log('ok td404 element shift');

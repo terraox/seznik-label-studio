@@ -109,11 +109,12 @@ export const DEFAULT_PRINTER_PROFILE = PRINTER_PROFILES['td404-304'];
 export const TD404_MEDIA_ORIGIN_H_MM = 0;
 
 /**
- * TD-404 content only. Text, codes, and other elements are drawn 1 mm right
- * and 1 mm down. The border is composited after that shift and stays put.
+ * TD-404 content only. Text, codes, and other elements are drawn 0 mm
+ * horizontally and 2 mm down (1 mm right, 1 mm down, then 1 mm left and 1 mm
+ * further down). The border is composited after that shift and stays put.
  */
-export const TD404_ELEMENT_SHIFT_H_MM = 1;
-export const TD404_ELEMENT_SHIFT_V_MM = 1;
+export const TD404_ELEMENT_SHIFT_H_MM = 0;
+export const TD404_ELEMENT_SHIFT_V_MM = 2;
 
 export function td404ContentShiftMm(offsetMm: { x: number; y: number } = { x: 0, y: 0 }): {
   x: number;
@@ -411,7 +412,7 @@ export type CreatePrintSpecOptions = {
  * the label's origin at the top-left of the media.
  * Injecting an artificial printhead offset shifts the image off the physical label.
  * Hardware centering is 0. TD-404 REFERENCE x is the saved Horizontal Offset only.
- * The 1 mm right and 1 mm down element shift is drawn into the bitmap and does not move the border.
+ * The element shift (TD404_ELEMENT_SHIFT_*) is drawn into the bitmap and does not move the border.
  * REFERENCE y is the user vertical offset only. The border inset is in dots.
  */
 export function computePrintheadCenteringOffset(

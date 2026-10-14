@@ -1948,7 +1948,7 @@ export default function PrintScreen() {
                     if (!unrotatedJob) {
                       return `Total offset ${total} (this printer plus Label Settings). Rotated jobs send it on REFERENCE.`;
                     }
-                    return `Total offset ${total} (this printer plus Label Settings), plus 1 mm right and 1 mm down on text and codes. The border is its own layer and stays ${TD404_BORDER_GAP_MM} mm from the die-cut on every side.`;
+                    return `Total offset ${total} (this printer plus Label Settings), plus 0 mm across and 2 mm down on text and codes. The border is its own layer and stays ${TD404_BORDER_GAP_MM} mm from the die-cut on every side.`;
                   })()}
                 </Text>
                 <StepperRow
