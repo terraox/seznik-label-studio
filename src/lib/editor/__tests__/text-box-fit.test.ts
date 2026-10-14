@@ -6,7 +6,7 @@ import { fitTextBoxToContent, growTextFrameHeightForWidth, mergeTextElementPatch
 import { computeTextElementHeightMm } from '@/lib/text-metrics';
 import { visibleTextHeightMm } from '@/lib/visible-text-layout';
 import { measureTextWidthMm } from '@/lib/text-metrics';
-import type { LabelElement } from '@/lib/label-document';
+import { elementSizeMm, type LabelElement } from '@/lib/label-document';
 
 const canvas = { widthMm: 50, heightMm: 30 };
 
@@ -41,7 +41,8 @@ test('mergeTextElementPatch applies content-fit when text is edited', () => {
   assert.equal(next.type, 'text');
   if (next.type !== 'text') return;
   assert.ok(next.width > start.width);
-  assert.ok(typeof next.height === 'number' && next.height >= start.height);
+  const size = elementSizeMm(next);
+  assert.ok(size.height >= elementSizeMm(start).height);
 });
 
 test('mergeTextElementPatch keeps width and reflows height when the font changes', () => {

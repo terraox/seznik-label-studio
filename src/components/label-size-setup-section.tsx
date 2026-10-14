@@ -31,6 +31,8 @@ type LabelSizeSetupSectionProps = {
   unit: LabelUnit;
   onWidthChange: (mm: number) => void;
   onHeightChange: (mm: number) => void;
+  /** When set, size presets update width and height in one call (avoids stale half-updates). */
+  onSizeChange?: (widthMm: number, heightMm: number) => void;
   onUnitChange: (unit: LabelUnit) => void;
   /** Replaces the empty proportion box. The frame keeps the label aspect ratio. */
   preview?: ReactNode;
@@ -49,6 +51,7 @@ export function LabelSizeSetupSection({
   unit,
   onWidthChange,
   onHeightChange,
+  onSizeChange,
   onUnitChange,
   preview,
 }: LabelSizeSetupSectionProps) {
@@ -56,6 +59,10 @@ export function LabelSizeSetupSection({
   const [heightModalVisible, setHeightModalVisible] = useState(false);
 
   const applyPreset = (width: number, height: number) => {
+    if (onSizeChange) {
+      onSizeChange(width, height);
+      return;
+    }
     onWidthChange(width);
     onHeightChange(height);
   };

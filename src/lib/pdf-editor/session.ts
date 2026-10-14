@@ -81,6 +81,53 @@ export function clampCropNorm(
   return { originNorm: { x, y }, sizeNorm: { w, h } };
 }
 
+/**
+ * Starting crop window for the Crop tool: the label's aspect ratio, as large as
+ * fits inside 90% of the page, centred. Fractions of the page, top-left origin.
+ */
+export function defaultCropWindow(
+  page: { w: number; h: number },
+  output: { widthMm: number; heightMm: number },
+): { originNorm: { x: number; y: number }; sizeNorm: { w: number; h: number } } {
+  const labelAspect = Math.max(0.01, output.widthMm) / Math.max(0.01, output.heightMm);
+  const pageAspect = Math.max(1, page.w) / Math.max(1, page.h);
+  let w = 0.9;
+  let h = 0.9;
+  if (labelAspect > pageAspect) h = (0.9 * pageAspect) / labelAspect;
+  else w = (0.9 * labelAspect) / pageAspect;
+  return clampCropNorm({ x: (1 - w) / 2, y: (1 - h) / 2 }, { w, h });
+}
+
+/**
+ * Width / height a crop must have, in page space, to fill the label exactly.
+ * A page rotated a quarter turn swaps the label's axes.
+ */
+export function cropAspectForLabel(output: { widthMm: number; heightMm: number }, rotationDeg: number): number {
+  const turned = Math.abs(Math.round(rotationDeg / 90)) % 2 === 1;
+  const w = Math.max(0.01, turned ? output.heightMm : output.widthMm);
+  const h = Math.max(0.01, turned ? output.widthMm : output.heightMm);
+  return w / h;
+}
+
+/** Shrink a crop (about its centre) so its shape on the page is exactly `aspect` (width / height). */
+export function snapCropToAspect(
+  crop: { originNorm: { x: number; y: number }; sizeNorm: { w: number; h: number } },
+  page: { w: number; h: number },
+  aspect: number,
+): { originNorm: { x: number; y: number }; sizeNorm: { w: number; h: number } } {
+  const cw = crop.sizeNorm.w * page.w;
+  const ch = crop.sizeNorm.h * page.h;
+  let nw = cw;
+  let nh = ch;
+  if (cw / ch > aspect) nw = ch * aspect;
+  else nh = cw / aspect;
+  const w = nw / page.w;
+  const h = nh / page.h;
+  const cx = crop.originNorm.x + crop.sizeNorm.w / 2;
+  const cy = crop.originNorm.y + crop.sizeNorm.h / 2;
+  return clampCropNorm({ x: cx - w / 2, y: cy - h / 2 }, { w, h });
+}
+
 export type PdfWatermark = {
   scope: PageScope;
   type: 'text' | 'image';

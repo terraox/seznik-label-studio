@@ -47,7 +47,7 @@ test('a vowel sign stays on the same line as its consonant', () => {
   assert.deepEqual(lines, [syllable]);
 });
 
-test('a short stored height still keeps every line', () => {
+test('auto text height still keeps every line', () => {
   const text = 'ZUBAIR KING OF SUS';
   const element = {
     id: 't',
@@ -58,7 +58,7 @@ test('a short stored height still keeps every line', () => {
     width: 28,
     height: 4,
     fontSize: 18,
-    autoTextHeight: false,
+    autoTextHeight: true,
     autoWrapping: 'Word',
   } as Extract<LabelElement, { type: 'text' }>;
   const size = elementSizeMm(element);
@@ -67,6 +67,22 @@ test('a short stored height still keeps every line', () => {
   assert.ok(size.height > element.height);
   const lines = visibleWrappedLines({ text, fontSize: 18, widthMm: 28, autoWrapping: 'Word', bold: true });
   assert.equal(lines.join(' ').replace(/\s+/g, ' '), text);
+});
+
+test('a fixed text height stays at the size the user set', () => {
+  const element = {
+    id: 't',
+    type: 'text',
+    text: 'ZUBAIR KING OF SUS',
+    left: 0,
+    top: 0,
+    width: 28,
+    height: 4,
+    fontSize: 18,
+    autoTextHeight: false,
+    autoWrapping: 'Word',
+  } as Extract<LabelElement, { type: 'text' }>;
+  assert.equal(elementSizeMm(element).height, 4);
 });
 
 test('a wider face wraps earlier and still keeps every word', () => {

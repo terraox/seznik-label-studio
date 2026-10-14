@@ -211,22 +211,28 @@ export function mergeTextElementPatch(
   }
 
   if (widthInPatch && Math.abs((updates.width as number) - el.width) > 0.02) {
+    const wrapping = merged.autoWrapping === 'Close' ? 'Word' : merged.autoWrapping ?? 'Word';
+    const autoHeight = merged.autoTextHeight !== false && wrapping !== 'Close';
+    const withWrap = { ...merged, autoWrapping: wrapping } as TextLikeElement;
+    if (autoHeight) {
+      const { height: _removed, ...withoutHeight } = withWrap as TextLikeElement & { height?: number };
+      return withoutHeight as LabelElement;
+    }
     const reflowed = visibleTextHeightMm({
-      text: textRawContent(merged),
-      fontSize: merged.fontSize,
-      widthMm: merged.width,
-      autoWrapping: merged.autoWrapping ?? 'Word',
-      lineSpacing: merged.lineSpacing ?? '1.0',
-      charSpacing: merged.charSpacing ?? 0,
-      bold: merged.bold ?? false,
-      verticalDisplay: merged.verticalDisplay ?? false,
-      fontFamily: merged.fontFamily,
+      text: textRawContent(withWrap),
+      fontSize: withWrap.fontSize,
+      widthMm: withWrap.width,
+      autoWrapping: wrapping,
+      lineSpacing: withWrap.lineSpacing ?? '1.0',
+      charSpacing: withWrap.charSpacing ?? 0,
+      bold: withWrap.bold ?? false,
+      verticalDisplay: withWrap.verticalDisplay ?? false,
+      fontFamily: withWrap.fontFamily,
     });
     return {
-      ...merged,
+      ...withWrap,
       height: reflowed,
       autoTextHeight: false,
-      autoWrapping: merged.autoWrapping === 'Close' ? 'Word' : merged.autoWrapping ?? 'Word',
     } as LabelElement;
   }
 
@@ -236,6 +242,11 @@ export function mergeTextElementPatch(
     const growsWidth = Object.keys(updates).some((key) => CONTENT_GROW_KEYS.has(key));
     if (growsWidth) {
       const fitted = fitTextBoxToContent(merged, bounds);
+      const autoHeight = merged.autoTextHeight !== false && merged.autoWrapping !== 'Close';
+      if (autoHeight) {
+        const { height: _removed, ...withoutHeight } = merged as TextLikeElement & { height?: number };
+        return { ...withoutHeight, width: fitted.width } as LabelElement;
+      }
       return { ...merged, width: fitted.width, height: fitted.height } as LabelElement;
     }
     const autoHeight = merged.autoTextHeight !== false && merged.autoWrapping !== 'Close';
@@ -390,15 +401,63 @@ export function fitTextDefaults(widthMm: number, heightMm: number, existing: Lab
   return { left: placed.left, top: placed.top, width: placed.width, fontSize };
 }
 
-/** New text box hugs the placeholder line instead of spanning most of the label. */
-export function fitNewTextDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {
-  const base = fitTextDefaults(widthMm, heightMm, existing);
-  const fontSize = DEFAULT_TEXT_FONT_PT;
-  const measured = measureTextWidthMm(NEW_TEXT_PLACEHOLDER, fontSize) + 1.5;
-  const boxW = Math.min(base.width, Math.max(4, measured));
-  const boxH = textBlockHeightMm(fontSize, 1);
-  const placed = placeInLabel(widthMm, heightMm, boxW, boxH, existing);
-  return { left: placed.left, top: placed.top, width: placed.width, fontSize };
+/**
+ * New text box is one line of the placeholder, fully inside the label.
+ * A font that would wrap into a frame taller than the label is reduced until
+ * the box — and its resize handles — stay on the sticker.
+ */
+export function fitNewTextDefaults(
+  widthMm: number,
+  heightMm: number,
+  existing: LabelElement[] = [],
+  preferredFontPt = DEFAULT_TEXT_FONT_PT,
+) {
+  const pad = padMm(widthMm, heightMm);
+  const maxW = Math.max(4, widthMm - pad * 2);
+  const maxH = Math.max(2, heightMm - pad * 2);
+  let fontSize = Math.max(4, Math.min(28, preferredFontPt));
+
+  const oneLine = (pt: number) => {
+    const textW = measureTextWidthMm(NEW_TEXT_PLACEHOLDER, pt);
+    const padX = textHorizontalPaddingMm(pt);
+    // 0.96 matches the wrap limit, so Word wrap still keeps this string on one line.
+    const width = textW / 0.96 + padX * 2 + 0.6;
+    const height = visibleTextHeightMm({
+      text: NEW_TEXT_PLACEHOLDER,
+      fontSize: pt,
+      widthMm: width,
+      autoWrapping: 'Close',
+    });
+    return { width, height };
+  };
+
+  let box = oneLine(fontSize);
+  while (fontSize > 4.01 && (box.width > maxW + 0.05 || box.height > maxH + 0.05)) {
+    fontSize = Math.max(4, Math.round((fontSize - 0.5) * 2) / 2);
+    box = oneLine(fontSize);
+  }
+
+  const width = Math.min(maxW, Math.max(4, box.width));
+  let height = box.height;
+  if (box.width > maxW + 0.05) {
+    height = visibleTextHeightMm({
+      text: NEW_TEXT_PLACEHOLDER,
+      fontSize,
+      widthMm: width,
+      autoWrapping: 'Word',
+    });
+  }
+  height = Math.min(maxH, Math.max(2, height));
+
+  const placed = placeInLabel(widthMm, heightMm, width, height, existing);
+  const top = Math.min(placed.top, Math.max(0, heightMm - placed.height));
+  return {
+    left: placed.left,
+    top,
+    width: placed.width,
+    height: Math.min(placed.height, Math.max(2, heightMm - top)),
+    fontSize,
+  };
 }
 
 export function fitBarcodeDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {

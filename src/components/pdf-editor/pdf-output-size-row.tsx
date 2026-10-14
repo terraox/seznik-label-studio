@@ -32,6 +32,7 @@ export function PdfOutputSizeRow({
         widthMm={value.widthMm}
         heightMm={value.heightMm}
         unit={unit}
+        onSizeChange={(widthMm, heightMm) => onChange(sizeFromMm(widthMm, heightMm))}
         onWidthChange={(widthMm) => onChange(sizeFromMm(widthMm, value.heightMm))}
         onHeightChange={(heightMm) => onChange(sizeFromMm(value.widthMm, heightMm))}
         onUnitChange={setUnit}

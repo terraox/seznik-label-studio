@@ -82,9 +82,17 @@ export function resizePolicyFor(element: LabelElement): ResizePolicy {
         rotateHandle: false,
         minMm: MIN_ELEMENT_MM,
         comment:
-          'Text: width only. Font size stays put; narrowing the box wraps onto more lines and the frame grows with them.',
+          'Text: width only. Height follows content; narrowing wraps onto more lines.',
       };
     case 'degrees':
+      return {
+        anchors: ['e'],
+        behavior: { e: 'width' },
+        rotateHandle: false,
+        minMm: MIN_ELEMENT_MM,
+        comment:
+          'Counter/degrees: width only. Height follows wrapped content.',
+      };
     case 'time':
       return {
         anchors: ['e', 's'],
@@ -92,7 +100,7 @@ export function resizePolicyFor(element: LabelElement): ResizePolicy {
         rotateHandle: false,
         minMm: MIN_ELEMENT_MM,
         comment:
-          'Text: box width and height only. Font size stays put; narrowing the box wraps onto more lines.',
+          'Time: box width and height. Font size stays put; narrowing wraps onto more lines.',
       };
     default:
       return {

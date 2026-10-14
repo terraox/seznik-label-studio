@@ -131,6 +131,7 @@ export default function PrinterConnectScreen() {
   const [scanning, setScanning] = useState(false);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
+  const [measuring, setMeasuring] = useState(false);
   const [nativeHint, setNativeHint] = useState<string | null>(null);
   const [scanErrors, setScanErrors] = useState<string[]>([]);
   const [caps, setCaps] = useState<BluetoothCapabilities>(() => getPrinterManager().getCapabilities());
@@ -488,6 +489,18 @@ export default function PrinterConnectScreen() {
     }
   };
 
+  const handleMeasureLabelSize = async () => {
+    setMeasuring(true);
+    try {
+      await getPrinterManager().printLabelSize();
+      Alert.alert('Scale sent', `${printer.shortName} is calibrating. Read the last number on the printed scale: that is the label length in mm.`);
+    } catch (error) {
+      Alert.alert('Could not print size', error instanceof Error ? error.message : 'Try again.');
+    } finally {
+      setMeasuring(false);
+    }
+  };
+
   const showBluetoothSettings =
     Platform.OS !== 'web' &&
     !showConnected &&
@@ -511,6 +524,10 @@ export default function PrinterConnectScreen() {
               showBattery={showBattery}
               testing={testing}
               onTest={() => void handleTestPrint()}
+              onMeasure={
+                getPrinterManager().canPrintLabelSize ? () => void handleMeasureLabelSize() : undefined
+              }
+              measuring={measuring}
               onDisconnect={() => void handleDisconnect()}
               onDiagnostics={() => router.push('/printer-diagnostics')}
             />

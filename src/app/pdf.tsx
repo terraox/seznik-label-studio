@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,12 +23,14 @@ import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor
 import { PdfRotateTool } from '@/components/pdf-editor/pdf-rotate-tool';
 import { PdfSharpnessTool } from '@/components/pdf-editor/pdf-sharpness-tool';
 import { PdfToolPanel, type PdfToolId } from '@/components/pdf-editor/pdf-tool-panel';
+import { PrinterConnectionPill } from '@/components/printers/printer-connection-pill';
 import { PdfWatermarkTool } from '@/components/pdf-editor/pdf-watermark-tool';
 import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
+import { planLabelRender } from '@/lib/pdf-editor/label-render-plan';
 import { exportEditedPdf } from '@/lib/pdf-editor/export';
 import { copyPdfToCache, loadPdfMetadata } from '@/lib/pdf-editor/load';
-import { printEditedPdf } from '@/lib/pdf-editor/print';
+import { printEditedPdf, type PdfPrintOptions } from '@/lib/pdf-editor/print';
 import { resolvePrintPageIndices, type PdfPrintSelection } from '@/lib/pdf-editor/session';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import { formatPrintFailure } from '@/lib/printer/print-job';
@@ -36,14 +38,17 @@ import { getPrinterManager } from '@/lib/printer/printer-manager';
 import {
   PREVIEW_DPI,
   clearRasterCache,
-  prefetchNeighborPages,
   rasterPdfPageCached,
 } from '@/lib/pdf-editor/raster';
 import {
-  cropWindowPts,
+  clampCropNorm,
+  cropAspectForLabel,
+  defaultCropWindow,
   defaultWatermark,
   pageColorMode,
+  ptToMm,
   resolveScopeIndices,
+  snapCropToAspect,
   type PageScope,
 } from '@/lib/pdf-editor/session';
 import { downscaleWatermarkTile, previewTileSize } from '@/lib/pdf-editor/watermark-tile';
@@ -75,14 +80,14 @@ export default function PdfEditorScreen() {
   const setCurrentPage = usePdfEditStore((s) => s.setCurrentPage);
   const setOutputSize = usePdfEditStore((s) => s.setOutputSize);
   const setCrop = usePdfEditStore((s) => s.setCrop);
-  const setCropScope = usePdfEditStore((s) => s.setCropScope);
-  const setCropRect = usePdfEditStore((s) => s.setCropRect);
   const setRotationForScope = usePdfEditStore((s) => s.setRotationForScope);
   const setSharpnessForScope = usePdfEditStore((s) => s.setSharpnessForScope);
   const setWatermark = usePdfEditStore((s) => s.setWatermark);
   const patchWatermark = usePdfEditStore((s) => s.patchWatermark);
   const setColorModeForScope = usePdfEditStore((s) => s.setColorModeForScope);
   const deviceName = usePrinterStore((s) => s.deviceName);
+  const printerStatus = usePrinterStore((s) => s.status);
+  const printerLive = printerStatus === 'connected' || printerStatus === 'printing';
   const grayThreshold = useSettingsStore((s) => s.defaults.grayThreshold);
 
   const [step, setStep] = useState<Step>('pick');
@@ -94,6 +99,16 @@ export default function PdfEditorScreen() {
   const [printing, setPrinting] = useState(false);
   const [printProgress, setPrintProgress] = useState<string | null>(null);
   const printPanelRef = useRef<PdfPrintPanelHandle>(null);
+  // Crop is edited as a draft and only saved to the session when Apply is pressed.
+  const [draftCrop, setDraftCrop] = useState<{
+    originNorm: { x: number; y: number };
+    sizeNorm: { w: number; h: number };
+  } | null>(null);
+  const [draftScope, setDraftScope] = useState<PageScope>({ mode: 'this' });
+  // Optional: lock the crop to the label's shape. Off by default so width and height crop freely.
+  const [matchLabel, setMatchLabel] = useState(false);
+  // Page size as the PDF renderer sees it; crop fractions are measured against this bitmap.
+  const [rasterPt, setRasterPt] = useState<{ index: number; w: number; h: number } | null>(null);
   const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
 
   useEffect(() => {
@@ -137,32 +152,6 @@ export default function PdfEditorScreen() {
       cancelled = true;
     };
   }, [params.docUri, params.uri, params.docName, params.name, session, startSession]);
-
-  useEffect(() => {
-    if (!session) {
-      setPageUri(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    rasterPdfPageCached(session.sourceUri, session.currentPageIndex, PREVIEW_DPI)
-      .then((page) => {
-        if (!cancelled) setPageUri(page.uri);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          const msg = err instanceof Error ? err.message : 'Could not render this page.';
-          Alert.alert('PDF', msg);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    prefetchNeighborPages(session.sourceUri, session.currentPageIndex, session.pageCount, PREVIEW_DPI);
-    return () => {
-      cancelled = true;
-    };
-  }, [session?.sourceUri, session?.currentPageIndex, session?.pageCount]);
 
   const importPdf = useCallback(async () => {
     try {
@@ -216,7 +205,7 @@ export default function PdfEditorScreen() {
   }, [exporting, session]);
 
   const printPdf = useCallback(
-    async (selection: PdfPrintSelection, copies: number) => {
+    async (selection: PdfPrintSelection, options: PdfPrintOptions) => {
       if (!session || printing) return;
       const indices = resolvePrintPageIndices(selection, session.pageCount, session.currentPageIndex);
       if (indices.length === 0) {
@@ -225,7 +214,7 @@ export default function PdfEditorScreen() {
       }
       const manager = getPrinterManager();
       if (!manager.isConnected) {
-        Alert.alert('Printer Not Connected', 'Please connect your thermal printer before printing.', [
+        Alert.alert('Connect your printer first', 'Your printer is not connected. Connect it, then come back to print.', [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Connect', onPress: () => router.push('/printer-connect') },
         ]);
@@ -235,7 +224,7 @@ export default function PdfEditorScreen() {
       setPrintProgress('Rendering…');
       try {
         const result = await printEditedPdf(session, indices, {
-          copies,
+          ...options,
           onProgress: (current, total) => setPrintProgress(`Page ${current} / ${total}`),
         });
         Alert.alert(
@@ -266,18 +255,40 @@ export default function PdfEditorScreen() {
     router.back();
   };
 
-  const pageSize = session?.pageSizesPt[session.currentPageIndex] ?? { w: 612, h: 792 };
-  const defaultOrigin = (() => {
-    if (!session) return { x: 0, y: 0 };
-    const box = cropWindowPts(pageSize, session.outputSize, { x: 0, y: 0 });
-    if (!box.fits) return { x: 0, y: 0 };
-    return {
-      x: Math.max(0, (pageSize.w - box.w) / 2 / pageSize.w),
-      y: Math.max(0, (pageSize.h - box.h) / 2 / pageSize.h),
-    };
-  })();
-  const origin = session?.crop?.originNorm ?? defaultOrigin;
-  const cropScope: PageScope = session?.crop?.scope ?? { mode: 'this' };
+  const metaPageSize = session?.pageSizesPt[session.currentPageIndex] ?? { w: 612, h: 792 };
+  const pageSize =
+    rasterPt && session && rasterPt.index === session.currentPageIndex
+      ? { w: rasterPt.w, h: rasterPt.h }
+      : metaPageSize;
+  const currentRotation = session?.rotationByPage[session.currentPageIndex] ?? 0;
+  const labelAspect = session ? cropAspectForLabel(session.outputSize, currentRotation) : 1;
+  const onCropRect = useCallback(
+    (o: { x: number; y: number }, sz: { w: number; h: number }) => setDraftCrop(clampCropNorm(o, sz)),
+    [],
+  );
+
+  const openCrop = () => {
+    const saved = session?.crop;
+    setDraftScope(saved?.scope ?? { mode: 'this' });
+    const start = saved?.sizeNorm
+      ? clampCropNorm(saved.originNorm, saved.sizeNorm)
+      : session
+        ? defaultCropWindow(pageSize, session.outputSize)
+        : null;
+    setDraftCrop(start && matchLabel ? snapCropToAspect(start, pageSize, labelAspect) : start);
+  };
+  const applyCrop = () => {
+    if (draftCrop) setCrop({ scope: draftScope, ...draftCrop });
+    setTool(null);
+  };
+  const toggleMatchLabel = (on: boolean) => {
+    setMatchLabel(on);
+    if (on && draftCrop) setDraftCrop(snapCropToAspect(draftCrop, pageSize, labelAspect));
+  };
+  const removeCrop = () => {
+    setCrop(null);
+    if (session) setDraftCrop(defaultCropWindow(pageSize, session.outputSize));
+  };
 
   const ensureWatermark = () => {
     if (!session?.watermark) setWatermark(defaultWatermark());
@@ -296,13 +307,63 @@ export default function PdfEditorScreen() {
   };
 
   const isCropped = Boolean(
-    session?.crop &&
+    session?.crop?.sizeNorm &&
       resolveScopeIndices(session.crop.scope, session.pageCount, session.currentPageIndex).includes(
         session.currentPageIndex,
       ),
   );
 
-  const renderViewer = (mode: { crop: boolean; watermark: boolean; expand?: boolean }) => {
+  // Render the preview only as sharp as the label needs: a zoomed-in crop gets more pixels,
+  // a whole page fitted to a small label gets fewer. Keeps page changes quick.
+  const previewDpi = useMemo(() => {
+    if (!session) return PREVIEW_DPI;
+    const cropForPreview = tool !== 'crop' && isCropped && session.crop?.sizeNorm ? session.crop : null;
+    const longMm = Math.max(session.outputSize.widthMm, session.outputSize.heightMm, 1);
+    const plan = planLabelRender({
+      pageWpt: pageSize.w,
+      pageHpt: pageSize.h,
+      crop: cropForPreview ? { originNorm: cropForPreview.originNorm, sizeNorm: cropForPreview.sizeNorm! } : null,
+      rotationDeg: 0,
+      widthMm: session.outputSize.widthMm,
+      heightMm: session.outputSize.heightMm,
+      dpi: 640 / (longMm / 25.4),
+      oversample: 1,
+    });
+    const floor = tool === 'crop' || !cropForPreview ? 150 : 0;
+    // Few fixed steps, so switching tools never triggers a pile of new renders.
+    const want = Math.max(floor, plan.rasterDpi);
+    return want <= 150 ? 150 : want <= 225 ? 225 : PREVIEW_DPI;
+  }, [isCropped, pageSize.h, pageSize.w, session, tool]);
+
+  useEffect(() => {
+    if (!session) {
+      setPageUri(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    rasterPdfPageCached(session.sourceUri, session.currentPageIndex, previewDpi)
+      .then((page) => {
+        if (!cancelled) {
+          setPageUri(page.uri);
+          setRasterPt({ index: session.currentPageIndex, w: page.widthPt, h: page.heightPt });
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Could not render this page.';
+          Alert.alert('PDF', msg);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.sourceUri, session?.currentPageIndex, session?.pageCount, previewDpi]);
+
+  const renderViewer = (mode: { crop: boolean; watermark: boolean; expand?: boolean; hideHint?: boolean }) => {
     if (!session) return null;
     return (
       <PdfPageViewer
@@ -311,12 +372,14 @@ export default function PdfEditorScreen() {
         pageHpt={pageSize.h}
         rotation={session.rotationByPage[session.currentPageIndex] ?? 0}
         outputSize={session.outputSize}
-        originNorm={origin}
-        sizeNorm={session.crop?.sizeNorm}
-        onCropRect={setCropRect}
+        originNorm={mode.crop ? (draftCrop?.originNorm ?? { x: 0, y: 0 }) : (session.crop?.originNorm ?? { x: 0, y: 0 })}
+        sizeNorm={mode.crop ? draftCrop?.sizeNorm : session.crop?.sizeNorm}
+        onCropRect={onCropRect}
+        aspectLock={mode.crop && matchLabel ? labelAspect : 0}
         cropEnabled={mode.crop}
         isCropped={isCropped}
         expand={mode.expand}
+        hideHint={mode.hideHint}
         watermark={session.watermark}
         watermarkEnabled={mode.watermark && !!session.watermark}
         onStampOffset={(offsetNorm) => {
@@ -351,8 +414,33 @@ export default function PdfEditorScreen() {
           <AppIcon name="chevron.left" size={22} tintColor="#fff" />
         </Pressable>
         <Text style={styles.headerTitle}>{STEP_TITLE[step]}</Text>
-        <View style={styles.headerBtn} />
+        <PrinterConnectionPill />
       </View>
+
+      {step !== 'pick' && session ? (
+        <View style={styles.stepBar}>
+          {(['size', 'edit', 'print'] as const).map((id, i) => {
+            const order = ['size', 'edit', 'print'];
+            const done = order.indexOf(step) > i;
+            const on = step === id;
+            return (
+              <View key={id} style={styles.stepItem}>
+                <View style={[styles.stepDot, (on || done) && styles.stepDotOn]}>
+                  {done ? (
+                    <AppIcon name="checkmark" size={11} tintColor="#FFFFFF" />
+                  ) : (
+                    <Text style={[styles.stepNum, (on || done) && styles.stepNumOn]}>{i + 1}</Text>
+                  )}
+                </View>
+                <Text style={[styles.stepLabel, on && styles.stepLabelOn]}>
+                  {id === 'size' ? 'Size' : id === 'edit' ? 'Edit' : 'Print'}
+                </Text>
+                {i < 2 ? <View style={[styles.stepLine, done && styles.stepLineOn]} /> : null}
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
 
       {step === 'pick' || !session ? (
         <View style={styles.empty}>
@@ -399,8 +487,18 @@ export default function PdfEditorScreen() {
               contentContainerStyle={styles.editContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
-              {renderViewer({ crop: false, watermark: tool === 'watermark' })}
-              {loading ? <ActivityIndicator color={Palette.accent} style={{ marginVertical: 8 }} /> : null}
+              <View style={styles.previewArea}>
+                <View style={styles.previewShadow}>
+                  {renderViewer({ crop: false, watermark: tool === 'watermark', hideHint: true })}
+                </View>
+                <View style={styles.sizeBadge}>
+                  <Text style={styles.sizeBadgeText}>
+                    {isCropped ? 'Cropped · ' : ''}
+                    {session.outputSize.widthMm} × {session.outputSize.heightMm} mm
+                  </Text>
+                </View>
+                {loading ? <ActivityIndicator color="#FFFFFF" style={{ marginTop: 8 }} /> : null}
+              </View>
             </ScrollView>
           )}
           {session.pageCount > 1 ? (
@@ -416,21 +514,29 @@ export default function PdfEditorScreen() {
             onChange={(id) => {
               const nextTool = tool === id ? null : id;
               setTool(nextTool);
-              if (nextTool === 'crop' && !session.crop) {
-                setCropRect({ x: 0.1, y: 0.1 }, { w: 0.8, h: 0.8 });
-              }
+              if (nextTool === 'crop') openCrop();
               if (id === 'watermark') ensureWatermark();
             }}>
             {tool === 'crop' ? (
               <PdfCropTool
-                scope={cropScope}
+                scope={draftScope}
                 pageCount={session.pageCount}
                 hasCrop={Boolean(session.crop)}
-                onResetCrop={() => setCrop(null)}
-                onApplyCrop={() => setTool(null)}
-                onScope={(scope) => {
-                  setCropScope(scope);
-                }}
+                selectionMm={
+                  draftCrop
+                    ? {
+                        w: draftCrop.sizeNorm.w * ptToMm(pageSize.w),
+                        h: draftCrop.sizeNorm.h * ptToMm(pageSize.h),
+                      }
+                    : null
+                }
+                outputSize={session.outputSize}
+                matchLabel={matchLabel}
+                onMatchLabel={toggleMatchLabel}
+                onResetCrop={removeCrop}
+                onApplyCrop={applyCrop}
+                onCancel={() => setTool(null)}
+                onScope={setDraftScope}
               />
             ) : null}
             {tool === 'rotate' ? (
@@ -479,20 +585,41 @@ export default function PdfEditorScreen() {
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={styles.printContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          {renderViewer({ crop: false, watermark: false })}
-          <PdfPrintPanel
-            ref={printPanelRef}
-            pageCount={session.pageCount}
-            currentPage={session.currentPageIndex + 1}
-            printing={printing}
-            progress={printProgress ?? exportProgress}
-            onPrint={(selection, copies) => {
-              void printPdf(selection, copies);
-            }}
-          />
+          <View style={styles.previewArea}>
+            <View style={styles.previewShadow}>
+              {renderViewer({ crop: false, watermark: false, hideHint: true })}
+            </View>
+            <View style={styles.sizeBadge}>
+              <Text style={styles.sizeBadgeText}>
+                {session.outputSize.widthMm} × {session.outputSize.heightMm} mm
+              </Text>
+            </View>
+            {session.pageCount > 1 ? (
+              <PdfPageNav
+                index={session.currentPageIndex}
+                total={session.pageCount}
+                onPrev={() => setCurrentPage(session.currentPageIndex - 1)}
+                onNext={() => setCurrentPage(session.currentPageIndex + 1)}
+              />
+            ) : null}
+            {loading ? <ActivityIndicator color="#FFFFFF" style={{ marginTop: 8 }} /> : null}
+          </View>
+          <View style={styles.printSettings}>
+            <PdfPrintPanel
+              ref={printPanelRef}
+              pageCount={session.pageCount}
+              currentPage={session.currentPageIndex + 1}
+              printing={printing}
+              progress={printProgress ?? exportProgress}
+              outputLabel={`${session.outputSize.widthMm} × ${session.outputSize.heightMm} mm`}
+              onPrint={(selection, options) => {
+                void printPdf(selection, options);
+              }}
+            />
+          </View>
         </ScrollView>
       )}
 
@@ -510,18 +637,25 @@ export default function PdfEditorScreen() {
               <Text style={styles.exportBtnText}>{exporting ? 'Exporting…' : 'Export'}</Text>
             </Pressable>
             <Pressable
-              onPress={() => printPanelRef.current?.submit()}
+              onPress={() => {
+                if (!printerLive) {
+                  router.push('/printer-connect');
+                  return;
+                }
+                printPanelRef.current?.submit();
+              }}
               disabled={printing || exporting}
               style={({ pressed }) => [
                 styles.primaryBtn,
                 styles.printBtn,
+                !printerLive && styles.connectFirstBtn,
                 (printing || exporting) && styles.btnOff,
                 pressed && styles.pressed,
               ]}>
               {printing ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.primaryText}>Print</Text>
+                <Text style={styles.primaryText}>{printerLive ? 'Print' : 'Connect printer'}</Text>
               )}
             </Pressable>
           </View>
@@ -566,13 +700,63 @@ const styles = StyleSheet.create({
   headerBtn: { width: 44, paddingHorizontal: 6, paddingVertical: 8 },
   headerTitle: {
     flex: 1,
-    textAlign: 'center',
+    textAlign: 'left',
     color: '#fff',
     fontSize: 17,
     fontWeight: '600',
   },
+  stepBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
+  },
+  stepItem: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  stepDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDotOn: { backgroundColor: Palette.accent },
+  stepNum: { fontSize: 11, fontWeight: '700', color: '#64748B' },
+  stepNumOn: { color: '#FFFFFF' },
+  stepLabel: { marginLeft: 6, fontSize: 13, fontWeight: '600', color: '#94A3B8' },
+  stepLabelOn: { color: Palette.ink },
+  stepLine: { flex: 1, height: 2, marginHorizontal: 8, backgroundColor: '#E2E8F0', borderRadius: 1 },
+  stepLineOn: { backgroundColor: Palette.accent },
   editColumn: { flex: 1 },
-  cropStage: { flex: 1, width: '100%' },
+  cropStage: { flex: 1, width: '100%', backgroundColor: '#111827' },
+  previewArea: {
+    backgroundColor: '#AEB4BC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 12,
+  },
+  previewShadow: {
+    borderRadius: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  sizeBadge: {
+    marginTop: 10,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  sizeBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
+  printContent: { paddingBottom: 24 },
+  printSettings: { paddingHorizontal: 12, paddingTop: 12 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24, gap: 12 },
   editContent: { paddingBottom: 24 },
@@ -612,8 +796,8 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     backgroundColor: Palette.accent,
-    borderRadius: 12,
-    minHeight: 48,
+    borderRadius: 26,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -621,9 +805,9 @@ const styles = StyleSheet.create({
   printActions: { flexDirection: 'row', gap: 10 },
   exportBtn: {
     flex: 1,
-    minHeight: 48,
-    borderRadius: 12,
-    borderWidth: 1,
+    minHeight: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
     borderColor: Palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -631,6 +815,7 @@ const styles = StyleSheet.create({
   },
   exportBtnText: { color: Palette.accent, fontSize: 16, fontWeight: '600' },
   printBtn: { flex: 1.4 },
+  connectFirstBtn: { backgroundColor: '#DC2626' },
   btnOff: { opacity: 0.5 },
   pressed: { opacity: 0.72 },
 });

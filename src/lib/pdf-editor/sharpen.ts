@@ -144,3 +144,39 @@ export function sharpnessPreviewMatrix(slider0to100: number): number[] {
 }
 
 
+
+/**
+ * Unsharp mask on a luminance raster (1 byte/pixel). Runs on the final
+ * printer-resolution raster, so it stays cheap.
+ */
+export function unsharpGray(
+  src: Uint8Array,
+  width: number,
+  height: number,
+  slider0to100: number,
+  radius = 1,
+): Uint8Array {
+  const amount = sharpnessAmount(slider0to100);
+  if (amount <= 0 || width < 3 || height < 3) return src;
+  const r = Math.max(1, Math.round(radius));
+  const tmp = new Float32Array(src.length);
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      for (let d = -r; d <= r; d++) sum += src[row + Math.min(width - 1, Math.max(0, x + d))];
+      tmp[row + x] = sum / (2 * r + 1);
+    }
+  }
+  const out = new Uint8Array(src.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      for (let d = -r; d <= r; d++) sum += tmp[Math.min(height - 1, Math.max(0, y + d)) * width + x];
+      const blurred = sum / (2 * r + 1);
+      const o = src[y * width + x];
+      out[y * width + x] = clampByte(o + amount * (o - blurred));
+    }
+  }
+  return out;
+}

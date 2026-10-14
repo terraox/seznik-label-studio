@@ -123,11 +123,16 @@ test('labelOverlapRegionsMm keeps separate warnings for distant overlap piles', 
   assert.notDeepEqual(placements[0], placements[1]);
 });
 
-test('new text box is only as wide as the placeholder line', () => {
-  const wide = fitTextDefaults(80, 30, []);
-  const fitted = fitNewTextDefaults(80, 30, []);
+test('new text box stays on one line inside the label', () => {
+  const wide = fitTextDefaults(40, 30, []);
+  const fitted = fitNewTextDefaults(40, 30, [], wide.fontSize);
   assert.equal(NEW_TEXT_PLACEHOLDER, 'Double tap to add text');
-  assert.ok(fitted.width < wide.width);
-  assert.ok(fitted.width <= measureTextWidthMm(NEW_TEXT_PLACEHOLDER, fitted.fontSize) + 1.6);
-  assert.equal(fitted.fontSize, wide.fontSize);
+  assert.ok(fitted.top + fitted.height <= 30.05, `bottom ${fitted.top + fitted.height} leaves the label`);
+  assert.ok(fitted.left + fitted.width <= 40.05, `right ${fitted.left + fitted.width} leaves the label`);
+  assert.ok(fitted.height < 10, `height ${fitted.height} should be a single line`);
+  const textW = measureTextWidthMm(NEW_TEXT_PLACEHOLDER, fitted.fontSize);
+  assert.ok(fitted.width >= textW, `width ${fitted.width} should cover the ${textW}mm line`);
+  const short = fitNewTextDefaults(50, 15, [], 28);
+  assert.ok(short.top + short.height <= 15.05, `short label bottom ${short.top + short.height}`);
+  assert.ok(short.left + short.width <= 50.05);
 });

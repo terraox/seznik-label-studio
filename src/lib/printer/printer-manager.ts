@@ -48,6 +48,7 @@ import {
   printLabelDocumentMainPipeline,
 } from '@/lib/printer/main-pipeline-print';
 import { encodeTscCompactTextSample } from '@/lib/printer/tsc';
+import { buildLabelSizeScaleJob } from '@/lib/printer/td404-label-size';
 import { assertTd404MonoBuffer } from '@/printing/raster/td404-mono-validate';
 import { usePrinterStore, normalizePrinterMac, type PrinterTransport } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -3440,6 +3441,22 @@ class PrinterManager {
     if (!this.isConnected) throw new Error('No printer connected. Connect to printer before printing.');
     const bytes = typeof tspl === 'string' ? new TextEncoder().encode(tspl) : tspl;
     await this.print(bytes);
+  }
+
+  /** True when the connected printer can print its own measured label size (TD-404 only). */
+  get canPrintLabelSize(): boolean {
+    return this.isConnected && this.activeTransport === 'td404-spp';
+  }
+
+  /**
+   * Calibrate on the gap and print a mm scale that ends at the label edge.
+   * The firmware cannot report it, so a mm scale is printed instead.
+   */
+  async printLabelSize(): Promise<void> {
+    if (!this.canPrintLabelSize) {
+      throw new Error('Label size printing is available for Tejas and Rudra only.');
+    }
+    await this.print(new TextEncoder().encode(buildLabelSizeScaleJob()));
   }
 
   async printDiagnosticTestLabel(): Promise<void> {

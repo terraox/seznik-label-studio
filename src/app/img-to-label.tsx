@@ -256,6 +256,10 @@ export default function ImgToLabelScreen() {
               widthMm={widthMm}
               heightMm={heightMm}
               unit={labelUnit}
+              onSizeChange={(w, h) => {
+                setWidthMm(w);
+                setHeightMm(h);
+              }}
               onWidthChange={setWidthMm}
               onHeightChange={setHeightMm}
               onUnitChange={setLabelUnit}

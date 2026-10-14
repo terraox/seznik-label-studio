@@ -1,5 +1,6 @@
 import { defaultLabelSettings } from '@/lib/label-settings';
 import { renderEditedPdfPages } from '@/lib/pdf-editor/export';
+import { pageNeedsComposer, renderLabelPageGray, type LabelPageRaster } from '@/lib/pdf-editor/render-label';
 import { pageColorMode, type PdfEditSession } from '@/lib/pdf-editor/session';
 import {
   qualityCapsFor,
@@ -43,11 +44,21 @@ function nativeBridgeUnavailable(error: unknown): boolean {
  * Print edited PDF pages through the connected printer's native bridge
  * (`printArtworkJob`). JS TSPL/ESC encode runs only if that bridge is missing.
  */
+export type PdfPrintOptions = {
+  copies: number;
+  /** null = Auto. */
+  darkness: number | null;
+  speed: number | null;
+  gapMm: number;
+  /** Total offsets: printer calibration plus label offset. */
+  hOffsetMm: number;
+  vOffsetMm: number;
+};
+
 export async function printEditedPdf(
   session: PdfEditSession,
   pageIndices: number[],
-  options?: {
-    copies?: number;
+  options?: Partial<PdfPrintOptions> & {
     onProgress?: (current: number, total: number) => void;
   },
 ): Promise<{ pagesPrinted: number }> {
@@ -64,8 +75,8 @@ export async function printEditedPdf(
   const printer = usePrinterStore.getState();
   const colorMode = pageColorMode(session, session.currentPageIndex);
   const quality = resolvePrintQuality({
-    darkness: label.printDarkness,
-    speed: label.printSpeed,
+    darkness: options && 'darkness' in options ? (options.darkness ?? null) : label.printDarkness,
+    speed: options && 'speed' in options ? (options.speed ?? null) : label.printSpeed,
     grayThreshold: settings.defaults.grayThreshold,
     colorMode,
     caps: qualityCapsFor(
@@ -80,8 +91,25 @@ export async function printEditedPdf(
   const mediaType = paper === 'Receipt' ? 'continuous' : paper === 'Black mark' ? 'bline' : 'gap';
   const copies = Math.max(1, Math.round(options?.copies ?? 1));
   const dpi = manager.getPrintDpi();
+  const gapMm = options?.gapMm ?? label.gapLengthMm;
+  const hOffsetMm = options?.hOffsetMm ?? label.hOffsetMm;
+  const vOffsetMm = options?.vOffsetMm ?? label.vOffsetMm;
 
-  const pages = await renderEditedPdfPages(session, pageIndices, dpi, options?.onProgress);
+  const pages: LabelPageRaster[] = [];
+  for (let n = 0; n < pageIndices.length; n++) {
+    const pageIndex = pageIndices[n];
+    options?.onProgress?.(n + 1, pageIndices.length);
+    if (!pageNeedsComposer(session, pageIndex)) {
+      try {
+        pages.push(await renderLabelPageGray(session, pageIndex, dpi));
+        continue;
+      } catch (error) {
+        console.warn('[pdf-print] native label render failed, using PDF composer', error);
+      }
+    }
+    // Watermarked pages (or a failed native render) go through the slower PDF composer.
+    pages.push(...(await renderEditedPdfPages(session, [pageIndex], dpi)));
+  }
 
   let pagesPrinted = 0;
   for (let i = 0; i < pages.length; i++) {
@@ -115,12 +143,12 @@ export async function printEditedPdf(
         threshold: quality.threshold,
         alreadyBinarized,
         copies,
-        gapMm: label.gapLengthMm,
+        gapMm,
         mediaType,
         density: quality.density,
         speed: quality.speed,
-        offsetXmm: label.hOffsetMm,
-        offsetYmm: label.vOffsetMm,
+        offsetXmm: hOffsetMm,
+        offsetYmm: vOffsetMm,
       });
     } catch (error) {
       if (!nativeBridgeUnavailable(error)) throw error;
@@ -131,18 +159,18 @@ export async function printEditedPdf(
         orientation: 0,
         threshold: quality.threshold,
         dither: pageDither,
-        hOffsetMm: label.hOffsetMm,
+        hOffsetMm,
         dpi,
       });
       const bytes = encodeConnectedPrinterJob(bits, {
         widthMm,
         heightMm,
-        gapMm: label.gapLengthMm,
+        gapMm,
         copies: 1,
         density: quality.density,
         speed: quality.speed,
-        vOffsetMm: label.vOffsetMm,
-        hOffsetMm: label.hOffsetMm,
+        vOffsetMm,
+        hOffsetMm,
         media: mediaType,
         dpi,
       });

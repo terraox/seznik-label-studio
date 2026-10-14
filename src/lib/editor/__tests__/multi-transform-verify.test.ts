@@ -162,12 +162,12 @@ test('item 7: shrinking stops the whole group when one member hits minMm', () =>
   assert.ok(boxes[1].width >= 5 - 0.02);
 });
 
-test('text resize is width-only with no south handle', () => {
+test('text width handle changes width and the bottom handle changes height', () => {
   const el = { id: 't', type: 'text', left: 4, top: 4, width: 20, height: 6, fontSize: 12 } as LabelElement;
   const policy = resizePolicyFor(el);
-  assert.deepEqual(policy.anchors, ['e']);
+  assert.deepEqual(policy.anchors, ['e', 's']);
   assert.equal(policy.behavior.e, 'width');
-  assert.equal(policy.behavior.s, undefined);
+  assert.equal(policy.behavior.s, 'height');
   const east = resizeMemberByScale({
     start: { left: 4, top: 4, width: 20, height: 6 },
     handle: 'e',
@@ -182,4 +182,19 @@ test('text resize is width-only with no south handle', () => {
   assert.equal(east.top, 4);
   assert.equal(east.height, 6);
   assert.ok(east.width < 20);
+  const south = resizeMemberByScale({
+    start: { left: 4, top: 4, width: 20, height: 6 },
+    handle: 's',
+    behavior: 'height',
+    scaleX: 1,
+    scaleY: 1.5,
+    aspect: aspectRatioOf(el),
+    minMm: policy.minMm,
+    canvas,
+  });
+  assert.equal(south.left, 4);
+  assert.equal(south.top, 4);
+  assert.equal(south.width, 20);
+  assert.ok(south.height > 6);
+  assert.ok(south.top + south.height <= canvas.heightMm + 0.05);
 });

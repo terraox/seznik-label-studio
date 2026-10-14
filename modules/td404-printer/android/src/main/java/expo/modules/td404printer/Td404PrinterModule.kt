@@ -380,6 +380,50 @@ class Td404PrinterModule : Module() {
     }
 
     /**
+     * Write [bytes], then read whatever the printer sends back. Returns base64 of the reply
+     * (empty when silent). Stops once the reply has been idle for idleMs or timeoutMs passes.
+     */
+    AsyncFunction("queryRaw") { bytes: ByteArray, timeoutMs: Int, idleMs: Int, promise: Promise ->
+      val sock = socket
+      if (sock == null || !sock.isConnected) {
+        promise.reject("NOT_CONNECTED", "No TD-404 printer connected.", null)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        try {
+          val input = sock.inputStream ?: throw IOException("Printer input stream unavailable.")
+          // Drop stale bytes so the reply belongs to this query.
+          while (input.available() > 0) input.skip(input.available().toLong())
+          writeBytesToSocketSync(bytes)
+          val reply = ByteArrayOutputStream()
+          val buf = ByteArray(256)
+          val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(100, 30000)
+          var lastRx = 0L
+          while (System.currentTimeMillis() < deadline) {
+            val n = input.available()
+            if (n > 0) {
+              val got = input.read(buf, 0, minOf(n, buf.size))
+              if (got > 0) {
+                reply.write(buf, 0, got)
+                lastRx = System.currentTimeMillis()
+              }
+            } else {
+              if (reply.size() > 0 && System.currentTimeMillis() - lastRx >= idleMs.coerceIn(20, 5000)) break
+              Thread.sleep(20)
+            }
+          }
+          promise.resolve(android.util.Base64.encodeToString(reply.toByteArray(), android.util.Base64.NO_WRAP))
+        } catch (e: IOException) {
+          android.util.Log.e("Td404Printer", "SPP query failed: ${e.message}")
+          promise.reject("QUERY_FAILED", e.message, e)
+        } catch (e: InterruptedException) {
+          Thread.currentThread().interrupt()
+          promise.reject("QUERY_FAILED", "Interrupted", e)
+        }
+      }
+    }
+
+    /**
      * Fast SDK-style print: PNG → LabelCommand (native) → SPP write without waiting
      * for printer ACK. Skips the slow JS PNG→gray→1-bit→TSPL path.
      *

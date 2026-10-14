@@ -4,6 +4,7 @@ import { needsComplexTextShaping } from '@/lib/fonts/text-font-family';
 import {
   computeWrappedLines,
   measureTextWidthMm,
+  textHorizontalPaddingMm,
   textLineBoxHeightMm,
   textVerticalPaddingMm,
   textWrapWidthMm,
@@ -127,8 +128,7 @@ export function visibleWrappedLines(opts: VisibleTextParams): string[] {
   const cached = remembered.get(key);
   if (cached) return cached;
   const inner = textWrapWidthMm(opts.widthMm, opts.fontSize, false);
-  // A line that measures exactly the content width still wraps in React Native.
-  const limit = Math.max(0.5, inner * 0.96);
+  const limit = Math.max(0.5, inner);
   const fontSize = opts.fontSize;
   const charSpacing = opts.charSpacing ?? 0;
   const bold = opts.bold ?? false;
@@ -152,4 +152,39 @@ export function visibleTextHeightMm(opts: VisibleTextParams): number {
   const lineH = textLineBoxHeightMm(opts.fontSize, opts.lineSpacing, opts.fontFamily, opts.text);
   const pad = textVerticalPaddingMm(opts.fontSize);
   return Math.max(2.2, pad * 2 + lineH * Math.max(1, lines.length));
+}
+
+/**
+ * Selection frame for auto-height text.
+ * Wider than the words: hug the words plus a little padding.
+ * Narrower than the words: keep that width and grow with the wrapped lines.
+ */
+export function huggedTextFrameMm(
+  opts: VisibleTextParams & { storedWidth: number },
+): { width: number; height: number } {
+  const fontSize = opts.fontSize > 0 ? opts.fontSize : 12;
+  const inset = textHorizontalPaddingMm(fontSize) * 2;
+  const stored = opts.storedWidth > 0 ? opts.storedWidth : inset + 4;
+  if (opts.verticalDisplay) {
+    return {
+      width: stored,
+      height: visibleTextHeightMm({ ...opts, widthMm: stored }),
+    };
+  }
+  const rawLines = opts.text.length > 0 ? opts.text.split('\n') : [''];
+  let longest = 0;
+  for (const line of rawLines) {
+    longest = Math.max(
+      longest,
+      lineWidthMm(line, fontSize, opts.charSpacing ?? 0, opts.bold ?? false, opts.fontFamily),
+    );
+  }
+  // A little wider than the ink so the line stays intact inside the padding.
+  const hugW = Math.max(4, longest + inset + 0.6);
+  const compressed = stored + 0.3 < hugW;
+  const width = compressed ? stored : hugW;
+  return {
+    width,
+    height: visibleTextHeightMm({ ...opts, widthMm: width }),
+  };
 }

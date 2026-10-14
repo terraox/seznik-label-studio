@@ -59,9 +59,12 @@ import { applySerialOffset } from "@/lib/serial-content";
 import {
   charSpacingToLetterSpacing,
   measureTextWidthMm,
+  computeWrappedLines,
+  resolveDrawFontSizePt,
   textHorizontalPaddingMm,
   textLineBoxHeightMm,
   textVerticalPaddingMm,
+  textWrapWidthMm,
 } from "@/lib/text-metrics";
 import {
   rememberVisibleLines,
@@ -273,7 +276,21 @@ function formatTextForRender(
     };
   }
   const layout = visibleLayout(element, raw, layoutWidthMm, resolvedFamily);
-  const lines = visibleWrappedLines(layout);
+  // Live resize uses the same wrap as the frame height so the lines and the box
+  // move together. Resting text keeps the measured preview lines.
+  const lines =
+    layoutWidthMm != null
+      ? computeWrappedLines({
+          text: raw,
+          fontSize: element.fontSize,
+          widthMm: textWrapWidthMm(layoutWidthMm, element.fontSize, false),
+          autoWrapping: element.autoWrapping,
+          charSpacing: element.charSpacing ?? 0,
+          bold: element.bold ?? false,
+          verticalDisplay: element.verticalDisplay ?? false,
+          fontFamily: resolvedFamily ?? element.fontFamily,
+        })
+      : visibleWrappedLines(layout);
   return {
     text: lines.join("\n"),
     numberOfLines: undefined as number | undefined,
@@ -300,11 +317,14 @@ function letterSpacingStyle(
 function TextContent({
   element,
   scale,
+  heightPx,
   layoutWidthMm,
+  layoutHeightMm,
 }: {
   element: TextLayoutFields & { text: string };
   scale: number;
   widthPx: number;
+  heightPx?: number;
   layoutWidthMm?: number;
   layoutHeightMm?: number;
 }) {
@@ -314,8 +334,30 @@ function TextContent({
   );
   const raw = resolveTextRaw(element, element.text, showColumnName);
   const resolvedFamily = resolveEditorFontFamily(raw, element.fontFamily);
-  const style = textStyleFor(element, scale, resolvedFamily, raw);
-  const formatted = formatTextForRender(element, raw, layoutWidthMm, resolvedFamily);
+  const frameH =
+    layoutHeightMm ??
+    (scale > 0 && typeof heightPx === "number" && heightPx > 0 ? heightPx / scale : element.height);
+  const autoHeight = element.autoTextHeight !== false && element.autoWrapping !== "Close";
+  const drawFont =
+    autoHeight || layoutWidthMm != null
+      ? element.fontSize
+      : typeof frameH === "number" && frameH > 0
+        ? resolveDrawFontSizePt({
+            text: raw,
+            fontSize: element.fontSize,
+            widthMm: element.width,
+            heightMm: frameH,
+            autoWrapping: element.autoWrapping,
+            lineSpacing: element.lineSpacing,
+            charSpacing: element.charSpacing,
+            bold: element.bold,
+            verticalDisplay: element.verticalDisplay,
+            fontFamily: resolvedFamily ?? element.fontFamily,
+          })
+        : element.fontSize;
+  const drawElement = drawFont === element.fontSize ? element : { ...element, fontSize: drawFont };
+  const style = textStyleFor(drawElement, scale, resolvedFamily, raw);
+  const formatted = formatTextForRender(drawElement, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
@@ -329,7 +371,7 @@ function TextContent({
               : align === "right"
                 ? "flex-end"
                 : "stretch",
-          overflow: "visible",
+          overflow: "hidden",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
@@ -341,19 +383,23 @@ function TextContent({
           style,
           styles.textFill,
           { textAlign: align },
-          letterSpacingStyle(element, raw),
+          letterSpacingStyle(drawElement, raw),
         ]}
         numberOfLines={formatted.numberOfLines}
         ellipsizeMode={
           "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
         }
-        onTextLayout={(event) => {
-          if (!formatted.layoutKey) return;
-          rememberVisibleLines(
-            formatted.layoutKey,
-            event.nativeEvent.lines.map((line) => line.text),
-          );
-        }}
+        onTextLayout={
+          layoutWidthMm != null
+            ? undefined
+            : (event) => {
+                if (!formatted.layoutKey) return;
+                rememberVisibleLines(
+                  formatted.layoutKey,
+                  event.nativeEvent.lines.map((line) => line.text),
+                );
+              }
+        }
       >
         {formatted.text}
       </Text>
@@ -364,11 +410,14 @@ function TextContent({
 function DegreesContent({
   element,
   scale,
+  heightPx,
   layoutWidthMm,
+  layoutHeightMm,
 }: {
   element: DegreesElementState;
   scale: number;
   widthPx: number;
+  heightPx?: number;
   layoutWidthMm?: number;
   layoutHeightMm?: number;
 }) {
@@ -378,8 +427,30 @@ function DegreesContent({
   );
   const raw = resolveTextRaw(element, element.content, showColumnName);
   const resolvedFamily = resolveEditorFontFamily(raw, element.fontFamily);
-  const style = textStyleFor(element, scale, resolvedFamily, raw);
-  const formatted = formatTextForRender(element, raw, layoutWidthMm, resolvedFamily);
+  const frameH =
+    layoutHeightMm ??
+    (scale > 0 && typeof heightPx === "number" && heightPx > 0 ? heightPx / scale : element.height);
+  const autoHeight = element.autoTextHeight !== false && element.autoWrapping !== "Close";
+  const drawFont =
+    autoHeight || layoutWidthMm != null
+      ? element.fontSize
+      : typeof frameH === "number" && frameH > 0
+        ? resolveDrawFontSizePt({
+            text: raw,
+            fontSize: element.fontSize,
+            widthMm: element.width,
+            heightMm: frameH,
+            autoWrapping: element.autoWrapping,
+            lineSpacing: element.lineSpacing,
+            charSpacing: element.charSpacing,
+            bold: element.bold,
+            verticalDisplay: element.verticalDisplay,
+            fontFamily: resolvedFamily ?? element.fontFamily,
+          })
+        : element.fontSize;
+  const drawElement = drawFont === element.fontSize ? element : { ...element, fontSize: drawFont };
+  const style = textStyleFor(drawElement, scale, resolvedFamily, raw);
+  const formatted = formatTextForRender(drawElement, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
   return (
     <View
@@ -393,7 +464,7 @@ function DegreesContent({
               : align === "right"
                 ? "flex-end"
                 : "stretch",
-          overflow: "visible",
+          overflow: "hidden",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
@@ -405,19 +476,23 @@ function DegreesContent({
           style,
           styles.textFill,
           { textAlign: align },
-          letterSpacingStyle(element, raw),
+          letterSpacingStyle(drawElement, raw),
         ]}
         numberOfLines={formatted.numberOfLines}
         ellipsizeMode={
           "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
         }
-        onTextLayout={(event) => {
-          if (!formatted.layoutKey) return;
-          rememberVisibleLines(
-            formatted.layoutKey,
-            event.nativeEvent.lines.map((line) => line.text),
-          );
-        }}
+        onTextLayout={
+          layoutWidthMm != null
+            ? undefined
+            : (event) => {
+                if (!formatted.layoutKey) return;
+                rememberVisibleLines(
+                  formatted.layoutKey,
+                  event.nativeEvent.lines.map((line) => line.text),
+                );
+              }
+        }
       >
         {formatted.text}
       </Text>
@@ -1394,6 +1469,7 @@ export function ElementContentView({
           element={element}
           scale={scale}
           widthPx={widthPx}
+          heightPx={heightPx}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />
@@ -1404,6 +1480,7 @@ export function ElementContentView({
           element={element}
           scale={scale}
           widthPx={widthPx}
+          heightPx={heightPx}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />

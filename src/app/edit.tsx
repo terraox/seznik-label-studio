@@ -41,11 +41,11 @@ import {
   fitTableDefaults,
   fitTextDefaults,
   fitNewTextDefaults,
+  fitTextBoxToContent,
   fitTimeDefaults,
   mergeTextElementPatch,
   growTextFrameHeightForWidth,
   NEW_TEXT_PLACEHOLDER,
-  computeTextElementHeightMm,
   textBlockHeightMm,
   normalizeDocumentElements,
   scaleDocumentToSize,
@@ -557,7 +557,10 @@ function paletteDefaultSizeMm(
           : type === 'text'
             ? fitNewTextDefaults(canvas.widthMm, canvas.heightMm, elements)
             : fitTextDefaults(canvas.widthMm, canvas.heightMm, elements);
-      return { widthMm: fit.width, heightMm: textBlockHeightMm(fit.fontSize, 1) };
+      return {
+        widthMm: fit.width,
+        heightMm: 'height' in fit && typeof fit.height === 'number' ? fit.height : textBlockHeightMm(fit.fontSize, 1),
+      };
     }
   }
 }
@@ -1644,9 +1647,11 @@ export default function EditScreen() {
       let element: LabelElement;
       switch (type) {
         case 'text': {
-          const fit = defaults.autoFitSize
-            ? fitTextDefaults(maxW, maxH, elements)
-            : fitNewTextDefaults(maxW, maxH, elements);
+          const preferred =
+            defaults.autoFitFont || defaults.autoFitSize
+              ? fitTextDefaults(maxW, maxH, elements).fontSize
+              : DEFAULT_ELEMENT_STATE.fontSize;
+          const fit = fitNewTextDefaults(maxW, maxH, elements, preferred);
           element = {
             ...DEFAULT_ELEMENT_STATE,
             ...base,
@@ -1655,28 +1660,28 @@ export default function EditScreen() {
             left: fit.left,
             top: fit.top,
             width: fit.width,
-            fontSize:
-              defaults.autoFitFont || defaults.autoFitSize
-                ? fit.fontSize
-                : DEFAULT_ELEMENT_STATE.fontSize,
+            height: fit.height,
+            fontSize: fit.fontSize,
             autoWrapping: defaults.autoWrap,
             autoTextHeight: defaults.autoTextHeight,
             ...overrides,
           };
-          if (element.autoTextHeight && element.type === 'text') {
-            element = {
-              ...element,
-              height: computeTextElementHeightMm({
-                text: element.text,
-                fontSize: element.fontSize,
-                widthMm: element.width,
-                autoWrapping: element.autoWrapping,
-                lineSpacing: element.lineSpacing,
-                charSpacing: element.charSpacing,
-                bold: element.bold,
-                verticalDisplay: element.verticalDisplay,
-              }),
-            };
+          if (element.type === 'text') {
+            const maxBoxW = Math.max(4, maxW - Math.max(0, element.left));
+            const maxBoxH = Math.max(2, maxH - Math.max(0, element.top));
+            const fitted = fitTextBoxToContent(element, { widthMm: maxW, heightMm: maxH });
+            const width = Math.min(maxBoxW, fitted.width);
+            const autoHeight = element.autoTextHeight !== false && element.autoWrapping !== 'Close';
+            if (autoHeight) {
+              const { height: _drop, ...rest } = element;
+              element = { ...rest, width };
+            } else {
+              element = {
+                ...element,
+                width,
+                height: Math.min(maxBoxH, Math.max(2, fitted.height)),
+              };
+            }
           }
           break;
         }
@@ -2340,7 +2345,12 @@ export default function EditScreen() {
     [patchElement, textEditField, textEditId],
   );
 
-  const selectedElementHeightMm = primaryElement ? elementSizeMm(primaryElement).height : 0;
+  const selectedElementHeightMm = primaryElement
+    ? Math.min(
+        elementSizeMm(primaryElement).height,
+        Math.max(0.5, doc.heightMm - Math.max(0, primaryElement.top)),
+      )
+    : 0;
   const labelBounds = useMemo(
     () => ({ widthMm: doc.widthMm, heightMm: doc.heightMm }),
     [doc.widthMm, doc.heightMm],
@@ -2593,7 +2603,11 @@ export default function EditScreen() {
               logMultiTransformBox('commit', el.id, live);
               let patched = patchBox(el, live, clean.rotation, fs);
               if (patched.type === 'text' || patched.type === 'degrees') {
-                patched = { ...patched, autoWrapping: 'Word', autoTextHeight: false };
+                patched = mergeTextElementPatch(
+                  patched as Extract<LabelElement, { type: 'text' } | { type: 'degrees' }>,
+                  { width: patched.width, autoWrapping: 'Word' },
+                  canvas,
+                );
               }
               return patched;
             }),
@@ -2662,24 +2676,11 @@ export default function EditScreen() {
                 const textEl = next as Extract<LabelElement, { type: 'text' } | { type: 'degrees' }>;
                 const widthChanged = Math.abs(clean.widthMm - el.width) > 0.02;
                 if (widthChanged) {
-                  const reflowed = visibleTextHeightMm({
-                    text:
-                      textEl.contentType === 'Data Source' && textEl.columnNameContent
-                        ? `{${textEl.columnNameContent}}`
-                        : 'text' in textEl
-                          ? textEl.text
-                          : textEl.content,
-                    fontSize: textEl.fontSize,
-                    widthMm: textEl.width,
-                    autoWrapping: textEl.autoWrapping ?? 'Word',
-                    lineSpacing: textEl.lineSpacing ?? '1.0',
-                    charSpacing: textEl.charSpacing ?? 0,
-                    bold: textEl.bold ?? false,
-                    verticalDisplay: textEl.verticalDisplay ?? false,
-                    fontFamily: textEl.fontFamily,
-                  });
-                  const maxH = Math.max(0.5, canvas.heightMm - textEl.top);
-                  next = { ...textEl, height: Math.min(maxH, Math.max(textEl.height ?? 0, reflowed)) };
+                  next = mergeTextElementPatch(
+                    textEl,
+                    { width: textEl.width, autoWrapping: textEl.autoWrapping ?? 'Word' },
+                    canvas,
+                  ) as typeof next;
                 }
               }
             } else {

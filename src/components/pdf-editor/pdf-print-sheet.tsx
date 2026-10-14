@@ -1,8 +1,16 @@
-import { forwardRef, useCallback, useImperativeHandle, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Palette } from '@/constants/ui';
+import { AppIcon } from '@/components/app-icon';
+import { QualityControl, type QualityStepperProps } from '@/components/quality-control';
+import { cardShadow, Palette, Type } from '@/constants/ui';
+import { defaultLabelSettings } from '@/lib/label-settings';
+import type { PdfPrintOptions } from '@/lib/pdf-editor/print';
 import { parseCustomPageList, parsePageRange, type PdfPrintSelection } from '@/lib/pdf-editor/session';
+import { clampToCap, qualityCapsFor, resolveQualityBridge } from '@/lib/printer/bridge-quality-caps';
+import { getPrinterManager } from '@/lib/printer/printer-manager';
+import { usePrinterStore } from '@/stores/printer-store';
 
 type Mode = PdfPrintSelection['mode'];
 
@@ -13,6 +21,57 @@ const MODES: { id: Mode; label: string; detail: string }[] = [
   { id: 'even', label: 'Even', detail: 'Pages 2, 4, 6…' },
   { id: 'odd', label: 'Odd', detail: 'Pages 1, 3, 5…' },
 ];
+
+function SettingRow({
+  label,
+  value,
+  valueColor,
+  onMinus,
+  onPlus,
+  minusDisabled,
+  plusDisabled,
+  last,
+}: Omit<QualityStepperProps, 'plusDisabled'> & {
+  plusDisabled?: boolean;
+  last?: boolean;
+  valueColor?: string;
+}) {
+  return (
+    <View style={[styles.stepperRow, !last && styles.stepperRowBorder]}>
+      <Text style={styles.stepperLabel}>{label}</Text>
+      <View style={styles.stepperControls}>
+        <Pressable
+          disabled={minusDisabled}
+          onPress={onMinus}
+          hitSlop={10}
+          style={({ pressed }) => [
+            styles.stepperCircle,
+            minusDisabled && styles.stepperCircleDisabled,
+            pressed && !minusDisabled && styles.pressed,
+          ]}>
+          <Text style={[styles.stepperSymbol, minusDisabled && styles.stepperSymbolDisabled]}>−</Text>
+        </Pressable>
+        <Text style={[styles.stepperValue, valueColor ? { color: valueColor } : null]}>{value}</Text>
+        <Pressable
+          disabled={plusDisabled}
+          onPress={onPlus}
+          hitSlop={10}
+          style={({ pressed }) => [
+            styles.stepperCircle,
+            plusDisabled && styles.stepperCircleDisabled,
+            pressed && !plusDisabled && styles.pressed,
+          ]}>
+          <Text style={[styles.stepperSymbol, plusDisabled && styles.stepperSymbolDisabled]}>+</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/** Same stepper, with a bottom border; QualityControl renders this one. */
+function BorderedSettingRow(props: QualityStepperProps) {
+  return <SettingRow {...props} />;
+}
 
 export type PdfPrintPanelHandle = {
   submit: () => void;
@@ -25,9 +84,83 @@ export const PdfPrintPanel = forwardRef<
     currentPage: number;
     printing: boolean;
     progress: string | null;
-    onPrint: (selection: PdfPrintSelection, copies: number) => void;
+    outputLabel: string;
+    onPrint: (selection: PdfPrintSelection, options: PdfPrintOptions) => void;
   }
->(function PdfPrintPanel({ pageCount, currentPage, printing, progress, onPrint }, ref) {
+>(function PdfPrintPanel({ pageCount, currentPage, printing, progress, outputLabel, onPrint }, ref) {
+  const router = useRouter();
+  const status = usePrinterStore((s) => s.status);
+  const printerDeviceId = usePrinterStore((s) => s.deviceId ?? s.lastDeviceId);
+  const printerSdkId = usePrinterStore((s) => s.sdkId);
+  const printerTransport = usePrinterStore((s) => s.transport);
+  const printCalibration = usePrinterStore((s) => s.printCalibration);
+  const setPrintCalibration = usePrinterStore((s) => s.setPrintCalibration);
+  const live = status === 'connected' || status === 'printing';
+  const busy = status === 'scanning' || status === 'connecting';
+
+  const qualityCaps = useMemo(
+    () =>
+      qualityCapsFor(
+        resolveQualityBridge({
+          activeTransport: getPrinterManager().transport,
+          storeTransport: printerTransport,
+          sdkId: printerSdkId,
+        }),
+      ),
+    // `status` re-reads the manager's live transport after connect / disconnect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [printerTransport, printerSdkId, status],
+  );
+
+  const labelDefaults = useMemo(() => defaultLabelSettings(), []);
+  const calibrationKey = printerDeviceId ?? printerSdkId ?? 'unknown';
+  const savedCalibration = printCalibration[calibrationKey];
+  const [darkness, setDarkness] = useState<number | null>(labelDefaults.printDarkness);
+  const [speed, setSpeed] = useState<number | null>(labelDefaults.printSpeed);
+  const [gapMm, setGapMm] = useState(labelDefaults.gapLengthMm);
+  const [hOffset, setHOffset] = useState(savedCalibration?.hOffsetMm ?? 0);
+  const [vOffset, setVOffset] = useState(savedCalibration?.vOffsetMm ?? 0);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Offsets saved for a printer load when it connects.
+  const loadedKey = useRef(calibrationKey);
+  useEffect(() => {
+    if (loadedKey.current === calibrationKey) return;
+    loadedKey.current = calibrationKey;
+    setHOffset(savedCalibration?.hOffsetMm ?? 0);
+    setVOffset(savedCalibration?.vOffsetMm ?? 0);
+  }, [calibrationKey, savedCalibration?.hOffsetMm, savedCalibration?.vOffsetMm]);
+
+  // Keep darkness and speed inside the connected bridge's scale.
+  useEffect(() => {
+    const d = clampToCap(darkness, qualityCaps.density);
+    const sp = clampToCap(speed, qualityCaps.speed);
+    if (d.clamped) setDarkness(d.value);
+    if (sp.clamped) setSpeed(sp.value);
+  }, [darkness, speed, qualityCaps]);
+
+  const changeOffset = (axis: 'h' | 'v', next: number) => {
+    const h = axis === 'h' ? next : hOffset;
+    const v = axis === 'v' ? next : vOffset;
+    if (axis === 'h') setHOffset(next);
+    else setVOffset(next);
+    if (calibrationKey === 'unknown') return;
+    const prev = usePrinterStore.getState().printCalibration[calibrationKey];
+    setPrintCalibration(calibrationKey, { ...prev, hOffsetMm: h, vOffsetMm: v });
+  };
+
+  const buildOptions = useCallback(
+    (copies: number): PdfPrintOptions => ({
+      copies,
+      darkness,
+      speed,
+      gapMm,
+      hOffsetMm: Math.round((hOffset + labelDefaults.hOffsetMm) * 100) / 100,
+      vOffsetMm: Math.round((vOffset + labelDefaults.vOffsetMm) * 100) / 100,
+    }),
+    [darkness, gapMm, hOffset, labelDefaults.hOffsetMm, labelDefaults.vOffsetMm, speed, vOffset],
+  );
+
   const [mode, setMode] = useState<Mode>('current');
   const [rangeStart, setRangeStart] = useState('1');
   const [rangeEnd, setRangeEnd] = useState(String(Math.max(1, pageCount)));
@@ -39,12 +172,12 @@ export const PdfPrintPanel = forwardRef<
     if (printing) return;
     if (mode === 'current') {
       setError(null);
-      onPrint({ mode: 'current' }, copies);
+      onPrint({ mode: 'current' }, buildOptions(copies));
       return;
     }
     if (mode === 'even' || mode === 'odd') {
       setError(null);
-      onPrint({ mode }, copies);
+      onPrint({ mode }, buildOptions(copies));
       return;
     }
     if (mode === 'range') {
@@ -54,7 +187,7 @@ export const PdfPrintPanel = forwardRef<
         return;
       }
       setError(parsed.error ?? null);
-      onPrint({ mode: 'range', start: parsed.start, end: parsed.end }, copies);
+      onPrint({ mode: 'range', start: parsed.start, end: parsed.end }, buildOptions(copies));
       return;
     }
     const parsed = parseCustomPageList(custom, pageCount);
@@ -63,138 +196,219 @@ export const PdfPrintPanel = forwardRef<
       return;
     }
     setError(null);
-    onPrint({ mode: 'custom', pages: parsed.pages }, copies);
-  }, [copies, custom, mode, onPrint, pageCount, printing, rangeEnd, rangeStart]);
+    onPrint({ mode: 'custom', pages: parsed.pages }, buildOptions(copies));
+  }, [buildOptions, copies, custom, mode, onPrint, pageCount, printing, rangeEnd, rangeStart]);
 
   useImperativeHandle(ref, () => ({ submit }), [submit]);
 
+  const modeLabel = MODES.find((m) => m.id === mode)?.label ?? '';
+
   return (
     <View style={styles.wrap}>
+      {!live && !busy ? (
+        <Pressable
+          onPress={() => router.push('/printer-connect')}
+          style={({ pressed }) => [styles.banner, pressed && styles.pressed]}>
+          <AppIcon name="link" size={16} tintColor="#B91C1C" />
+          <View style={styles.bannerText}>
+            <Text style={styles.bannerTitle}>Printer not connected</Text>
+            <Text style={styles.bannerSub}>Tap to connect your printer before printing.</Text>
+          </View>
+          <Text style={styles.bannerAction}>Connect</Text>
+        </Pressable>
+      ) : null}
+
       <View style={styles.card}>
-        <Text style={styles.title}>What to print</Text>
-        <Text style={styles.sub}>
-          Page {currentPage} of {pageCount}. The preview above is the label that will print.
-        </Text>
-        {MODES.map((item) => {
-          const selected = mode === item.id;
-          return (
-            <Pressable
-              key={item.id}
-              disabled={printing}
-              onPress={() => {
-                setMode(item.id);
-                setError(null);
-              }}
-              style={[styles.option, selected && styles.optionOn]}>
-              <View style={[styles.radio, selected && styles.radioOn]}>
-                {selected ? <View style={styles.radioDot} /> : null}
-              </View>
-              <View style={styles.optionText}>
-                <Text style={[styles.optionLabel, selected && styles.optionLabelOn]}>{item.label}</Text>
-                <Text style={styles.optionDetail}>{item.detail}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
-        {mode === 'range' ? (
-          <View style={styles.rangeRow}>
+        <SettingRow
+          label="Number of Copies"
+          value={String(copies)}
+          valueColor={Palette.accent}
+          minusDisabled={printing || copies <= 1}
+          plusDisabled={printing || copies >= 99}
+          onMinus={() => setCopies((n) => Math.max(1, n - 1))}
+          onPlus={() => setCopies((n) => Math.min(99, n + 1))}
+        />
+
+        <View style={styles.section}>
+          <Text style={styles.groupLabel}>
+            Pages <Text style={styles.groupHint}>· on page {currentPage} of {pageCount}</Text>
+          </Text>
+          <View style={styles.chipRow}>
+            {MODES.map((item) => {
+              const selected = mode === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  disabled={printing}
+                  onPress={() => {
+                    setMode(item.id);
+                    setError(null);
+                  }}
+                  style={[styles.chip, selected && styles.chipOn]}>
+                  <Text style={[styles.chipText, selected && styles.chipTextOn]}>{item.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.sub}>{MODES.find((m) => m.id === mode)?.detail}</Text>
+          {mode === 'range' ? (
+            <View style={styles.rangeRow}>
+              <TextInput
+                keyboardType="number-pad"
+                value={rangeStart}
+                onChangeText={setRangeStart}
+                style={styles.input}
+                editable={!printing}
+              />
+              <Text style={styles.to}>to</Text>
+              <TextInput
+                keyboardType="number-pad"
+                value={rangeEnd}
+                onChangeText={setRangeEnd}
+                style={styles.input}
+                editable={!printing}
+              />
+              <Text style={styles.hint}>of {pageCount}</Text>
+            </View>
+          ) : null}
+          {mode === 'custom' ? (
             <TextInput
-              keyboardType="number-pad"
-              value={rangeStart}
-              onChangeText={setRangeStart}
-              style={styles.input}
+              value={custom}
+              onChangeText={setCustom}
+              placeholder="1, 3, 5"
+              placeholderTextColor={Palette.muted}
+              style={styles.custom}
               editable={!printing}
+              autoCapitalize="none"
+              autoCorrect={false}
             />
-            <Text style={styles.to}>to</Text>
-            <TextInput
-              keyboardType="number-pad"
-              value={rangeEnd}
-              onChangeText={setRangeEnd}
-              style={styles.input}
-              editable={!printing}
+          ) : null}
+          {error ? <Text style={styles.err}>{error}</Text> : null}
+        </View>
+
+        <Pressable onPress={() => setShowAdvanced((v) => !v)} style={[styles.section, styles.advHead]}>
+          <Text style={styles.advTitle}>Advanced</Text>
+          <View style={styles.advRight}>
+            <Text style={styles.advSummary} numberOfLines={1}>
+              Darkness {darkness == null ? 'Auto' : darkness}
+            </Text>
+            <AppIcon name={showAdvanced ? 'chevron.up' : 'chevron.down'} size={14} tintColor="#94A3B8" />
+          </View>
+        </Pressable>
+        {showAdvanced ? (
+          <View style={styles.advBody}>
+            {qualityCaps.density !== 'legacy' ? (
+              <QualityControl cap={qualityCaps.density} value={darkness} onChange={setDarkness} Stepper={BorderedSettingRow} />
+            ) : (
+              <SettingRow
+                label="Print Darkness"
+                value={darkness == null ? 'Auto' : String(darkness)}
+                minusDisabled={darkness != null && darkness <= 1}
+                plusDisabled={darkness != null && darkness >= 15}
+                onMinus={() => setDarkness((d) => (d == null ? 7 : d <= 1 ? null : d - 1))}
+                onPlus={() => setDarkness((d) => (d == null ? 8 : Math.min(15, d + 1)))}
+              />
+            )}
+            {qualityCaps.speed !== 'legacy' ? (
+              <QualityControl
+                cap={qualityCaps.speed}
+                value={speed}
+                onChange={setSpeed}
+                Stepper={BorderedSettingRow}
+                untestedNote="not tested on TD-404"
+              />
+            ) : (
+              <SettingRow
+                label="Print Speed"
+                value={speed == null ? 'Auto' : String(speed)}
+                minusDisabled={speed != null && speed <= 1}
+                plusDisabled={speed != null && speed >= 8}
+                onMinus={() => setSpeed((v) => (v == null ? 2 : v <= 1 ? null : v - 1))}
+                onPlus={() => setSpeed((v) => (v == null ? 3 : Math.min(8, v + 1)))}
+              />
+            )}
+            <SettingRow
+              label="Gap Length"
+              value={`${gapMm.toFixed(2)} mm`}
+              minusDisabled={gapMm <= 0}
+              onMinus={() => setGapMm((v) => Math.max(0, Math.round((v - 0.5) * 100) / 100))}
+              onPlus={() => setGapMm((v) => Math.min(20, Math.round((v + 0.5) * 100) / 100))}
             />
-            <Text style={styles.hint}>of {pageCount}</Text>
+            <SettingRow
+              label="Horizontal Offset (saved for this printer)"
+              value={`${hOffset.toFixed(2)} mm`}
+              minusDisabled={hOffset <= -10}
+              plusDisabled={hOffset >= 10}
+              onMinus={() => changeOffset('h', Math.max(-10, Math.round((hOffset - 0.5) * 100) / 100))}
+              onPlus={() => changeOffset('h', Math.min(10, Math.round((hOffset + 0.5) * 100) / 100))}
+            />
+            <SettingRow
+              label="Vertical Offset (saved for this printer)"
+              value={`${vOffset.toFixed(2)} mm`}
+              minusDisabled={vOffset <= -10}
+              plusDisabled={vOffset >= 20}
+              last
+              onMinus={() => changeOffset('v', Math.max(-10, Math.round((vOffset - 0.5) * 100) / 100))}
+              onPlus={() => changeOffset('v', Math.min(20, Math.round((vOffset + 0.5) * 100) / 100))}
+            />
           </View>
         ) : null}
-        {mode === 'custom' ? (
-          <TextInput
-            value={custom}
-            onChangeText={setCustom}
-            placeholder="1, 3, 5"
-            placeholderTextColor={Palette.muted}
-            style={styles.custom}
-            editable={!printing}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        ) : null}
-        {error ? <Text style={styles.err}>{error}</Text> : null}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Copies</Text>
-        <View style={styles.stepper}>
-          <Pressable
-            disabled={printing || copies <= 1}
-            onPress={() => setCopies((n) => Math.max(1, n - 1))}
-            style={[styles.stepBtn, (printing || copies <= 1) && styles.off]}>
-            <Text style={styles.stepBtnText}>−</Text>
-          </Pressable>
-          <Text style={styles.stepValue}>{copies}</Text>
-          <Pressable
-            disabled={printing || copies >= 99}
-            onPress={() => setCopies((n) => Math.min(99, n + 1))}
-            style={[styles.stepBtn, (printing || copies >= 99) && styles.off]}>
-            <Text style={styles.stepBtnText}>+</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <Text style={styles.note}>Darkness, speed, and gap follow Label Settings.</Text>
       {progress ? <Text style={styles.progress}>{progress}</Text> : null}
+      <Text style={styles.note}>
+        {modeLabel} · {outputLabel}. Preview above is exactly what prints.
+      </Text>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  wrap: { gap: 12 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 10,
-  },
-  title: { fontSize: 16, fontWeight: '600', color: Palette.ink },
-  sub: { fontSize: 13, color: Palette.muted, lineHeight: 18 },
-  option: {
+  wrap: { gap: 10 },
+  pressed: { opacity: 0.65 },
+  banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    borderRadius: 10,
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  optionOn: { borderColor: Palette.accent, backgroundColor: '#EEF2FF' },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
+  bannerText: { flex: 1, gap: 1 },
+  bannerTitle: { fontSize: 14, fontWeight: '700', color: '#991B1B' },
+  bannerSub: { fontSize: 12, color: '#B91C1C' },
+  bannerAction: { fontSize: 14, fontWeight: '700', color: Palette.danger },
+  card: {
+    backgroundColor: Palette.card,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    ...cardShadow,
   },
-  radioOn: { borderColor: Palette.accent },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Palette.accent },
-  optionText: { flex: 1, gap: 2 },
-  optionLabel: { fontSize: 15, fontWeight: '600', color: Palette.ink },
-  optionLabelOn: { color: Palette.accent },
-  optionDetail: { fontSize: 12, color: '#64748B' },
+  section: {
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#ECEEF1',
+    gap: 8,
+  },
+  groupLabel: { ...Type.bodyMedium, color: Palette.ink },
+  groupHint: { fontWeight: '400', color: '#64748B', fontSize: 12 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D5DAE0',
+    backgroundColor: '#FFFFFF',
+  },
+  chipOn: { backgroundColor: Palette.accent, borderColor: Palette.accent },
+  chipText: { fontSize: 13, fontWeight: '600', color: Palette.actionText },
+  chipTextOn: { color: '#FFFFFF' },
+  sub: { fontSize: 12, color: '#64748B' },
   rangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: {
     width: 64,
@@ -219,20 +433,38 @@ const styles = StyleSheet.create({
   to: { color: Palette.muted },
   hint: { color: Palette.muted, fontSize: 13 },
   err: { color: Palette.danger, fontSize: 12 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  stepBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  advHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  advTitle: { ...Type.body, fontWeight: '600', color: Palette.ink },
+  advRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  advSummary: { fontSize: 12, color: '#64748B', flexShrink: 1 },
+  advBody: {
+    paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#ECEEF1',
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 52,
+    paddingVertical: 10,
+  },
+  stepperRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ECEEF1' },
+  stepperLabel: { ...Type.body, color: Palette.ink, flex: 1, paddingRight: 8 },
+  stepperControls: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  stepperCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
   },
-  stepBtnText: { fontSize: 22, color: Palette.ink, fontWeight: '500' },
-  stepValue: { minWidth: 28, textAlign: 'center', fontSize: 18, fontWeight: '600', color: Palette.ink },
-  note: { fontSize: 12, color: '#94A3B8', lineHeight: 16, paddingHorizontal: 4 },
+  stepperCircleDisabled: { borderColor: Palette.disabled },
+  stepperSymbol: { fontSize: 18, fontWeight: '400', color: Palette.accent, lineHeight: 20 },
+  stepperSymbolDisabled: { color: Palette.disabled },
+  stepperValue: { ...Type.bodyMedium, color: Palette.ink, minWidth: 68, textAlign: 'center' },
+  note: { fontSize: 12, color: '#94A3B8', textAlign: 'center' },
   progress: { textAlign: 'center', color: Palette.muted },
-  off: { opacity: 0.4 },
 });

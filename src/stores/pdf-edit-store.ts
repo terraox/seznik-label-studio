@@ -77,7 +77,7 @@ export const usePdfEditStore = create<PdfEditState>((set) => ({
   setOutputSize: (size) =>
     set((s) => {
       if (!s.session) return s;
-      return { session: { ...s.session, outputSize: size, crop: null } };
+      return { session: { ...s.session, outputSize: size } };
     }),
 
   setCrop: (crop) =>
@@ -159,9 +159,9 @@ export const usePdfEditStore = create<PdfEditState>((set) => ({
   setColorModeForScope: (colorMode, scope) =>
     set((s) => {
       if (!s.session) return s;
+      const current = s.session.colorMode;
       const colorModeByPage = [
-        ...(s.session.colorModeByPage ??
-          Array.from({ length: s.session.pageCount }, () => s.session.colorMode)),
+        ...(s.session.colorModeByPage ?? Array.from({ length: s.session.pageCount }, () => current)),
       ];
       for (const i of resolveScopeIndices(scope, s.session.pageCount, s.session.currentPageIndex)) {
         colorModeByPage[i] = colorMode;

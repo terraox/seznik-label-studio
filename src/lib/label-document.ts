@@ -16,7 +16,7 @@ import type { BorderStyleId } from '@/constants/border-library';
 import type { MediaGeometry } from '@/lib/media-geometry';
 import type { BulkLabelSet } from '@/lib/bulk-labels';
 import type { LabelSettings } from '@/lib/label-settings';
-import { visibleTextHeightMm } from '@/lib/visible-text-layout';
+import { huggedTextFrameMm } from '@/lib/visible-text-layout';
 
 export type TemplateBackground =
   | { type: 'none' }
@@ -449,10 +449,12 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
         element.contentType === 'Data Source' && element.columnNameContent
           ? `{${element.columnNameContent}}`
           : element.text;
-      const natural = visibleTextHeightMm({
+      const stored = typeof element.height === 'number' && element.height > 0 ? element.height : 0;
+      const autoHeight = element.autoTextHeight !== false && element.autoWrapping !== 'Close';
+      const frame = huggedTextFrameMm({
         text: rawText,
         fontSize: element.fontSize,
-        widthMm: element.width,
+        storedWidth: element.width,
         autoWrapping: element.autoWrapping ?? 'Word',
         lineSpacing: element.lineSpacing ?? '1.0',
         charSpacing: element.charSpacing ?? 0,
@@ -460,20 +462,21 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
         verticalDisplay: element.verticalDisplay ?? false,
         fontFamily: element.fontFamily,
       });
-      const stored = typeof element.height === 'number' && element.height > 0 ? element.height : 0;
-      // A short stored box used to slice the last line. The frame grows so every
-      // line stays on screen and on the sticker.
-      return { width: element.width, height: Math.max(stored, natural) };
+      if (autoHeight) return frame;
+      if (stored > 0) return { width: element.width, height: stored };
+      return frame;
     }
     case 'degrees': {
       const rawText =
         element.contentType === 'Data Source' && element.columnNameContent
           ? `{${element.columnNameContent}}`
           : element.content;
-      const natural = visibleTextHeightMm({
+      const stored = typeof element.height === 'number' && element.height > 0 ? element.height : 0;
+      const autoHeight = element.autoTextHeight !== false && element.autoWrapping !== 'Close';
+      const frame = huggedTextFrameMm({
         text: rawText,
         fontSize: element.fontSize,
-        widthMm: element.width,
+        storedWidth: element.width,
         autoWrapping: element.autoWrapping ?? 'Word',
         lineSpacing: element.lineSpacing ?? '1.0',
         charSpacing: element.charSpacing ?? 0,
@@ -481,8 +484,9 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
         verticalDisplay: element.verticalDisplay ?? false,
         fontFamily: element.fontFamily,
       });
-      const stored = typeof element.height === 'number' && element.height > 0 ? element.height : 0;
-      return { width: element.width, height: Math.max(stored, natural) };
+      if (autoHeight) return frame;
+      if (stored > 0) return { width: element.width, height: stored };
+      return frame;
     }
     case 'time': {
       const width = Math.max(0.5, element.width);
