@@ -14,7 +14,25 @@ export type LayoutRect = {
 
 export const FULL_CROP: NormalizedCrop = { x: 0, y: 0, w: 1, h: 1 };
 
-const MIN_FRACTION = 0.08;
+export type ImageCropFormat = 'jpeg' | 'png';
+
+/** JPEG stays the in-editor recrop default; Fit Label passes `png`. */
+export function imageCropSaveOptions(format?: ImageCropFormat): {
+  compress: number;
+  format: ImageCropFormat;
+} {
+  const png = format === 'png';
+  return {
+    compress: png ? 1 : 0.92,
+    format: png ? 'png' : 'jpeg',
+  };
+}
+
+export function cropFormatFromUri(uri: string): ImageCropFormat {
+  return /\.png(?:\?|#|$)/i.test(uri) ? 'png' : 'jpeg';
+}
+
+const MIN_FRACTION = 0.04;
 
 export function computeContainRect(
   containerW: number,
@@ -105,6 +123,20 @@ export function resizeCropCorner(
   const w = anchorRight - x;
   const h = anchorBottom - y;
   return { x, y, w, h };
+}
+
+export function applySourceCropToElementMm(
+  rect: { left: number; top: number; width: number; height: number },
+  crop: NormalizedCrop,
+): { left: number; top: number; width: number; height: number } {
+  const width = Math.max(0.5, crop.w * rect.width);
+  const height = Math.max(0.5, crop.h * rect.height);
+  return {
+    left: rect.left + crop.x * rect.width,
+    top: rect.top + crop.y * rect.height,
+    width,
+    height,
+  };
 }
 
 export function cropNormToPixels(

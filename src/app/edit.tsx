@@ -88,6 +88,12 @@ import {
 import { collectImageFileUris, placeImportedImageMm } from '@/lib/editor/image-ingest';
 import { ingestEditorImage, sweepEditorImageFiles } from '@/lib/editor/image-ingest-native';
 import {
+  applySourceCropToElementMm,
+  cropFormatFromUri,
+  FULL_CROP,
+  type NormalizedCrop,
+} from '@/lib/editor/image-crop-math';
+import {
   ensureTableCells,
   patchTableCellInElement,
   tableCellToEditorState,
@@ -239,7 +245,7 @@ import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore } from '@/stores/data-store';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
-import { CANVAS_BOTTOM_CHIP_CLEARANCE_PX, STAGE_PADDING_PX, clampLabelMm, fitEditorPadBoard } from '@/lib/label-geometry';
+import { CANVAS_BOTTOM_CHIP_CLEARANCE_PX, STAGE_PADDING_PX, clampLabelMm, containFitImageOnLabel, fitEditorPadBoard } from '@/lib/label-geometry';
 import { applyDocumentStockSize, stockSizePromptCopy, type StockSizeHandling } from '@/lib/stock-size';
 import { sortLayers } from '@/lib/template-schema';
 import { useTranslation } from '@/lib/i18n';
@@ -3070,18 +3076,53 @@ export default function EditScreen() {
   );
 
   const applyCroppedImageToElement = useCallback(
-    async (elementId: string, uri: string, width?: number, height?: number) => {
+    async (
+      elementId: string,
+      uri: string,
+      width?: number,
+      height?: number,
+      mode: 'replace' | 'recrop' = 'recrop',
+      cropNorm?: NormalizedCrop,
+    ) => {
       setImageIngesting(true);
       try {
-        const ingested = await ingestEditorImage({ uri, width, height });
+        const ingested = await ingestEditorImage({
+          uri,
+          width,
+          height,
+          printFormat: cropFormatFromUri(uri) === 'png' ? 'png' : undefined,
+        });
         if (!mountedRef.current) return;
-        patchElement(elementId, {
+        const current = docRef.current;
+        const el = current.elements.find((item) => item.id === elementId);
+        const next: Record<string, unknown> = {
           uri: ingested.previewUri,
           printUri: ingested.printUri,
           originalAspect: ingested.originalAspect,
           workingWidthPx: ingested.workingWidthPx,
           workingHeightPx: ingested.workingHeightPx,
-        });
+          contentFit: 'contain',
+          aspectRatioLocked: true,
+        };
+        if (el && el.type === 'image') {
+          const box =
+            mode === 'recrop'
+              ? applySourceCropToElementMm(
+                  { left: el.left, top: el.top, width: el.width, height: el.height },
+                  cropNorm ?? FULL_CROP,
+                )
+              : { left: el.left, top: el.top, width: el.width, height: el.height };
+          const placed = containFitImageOnLabel(
+            { widthMm: current.widthMm, heightMm: current.heightMm },
+            { widthPx: ingested.widthPx, heightPx: ingested.heightPx },
+            box,
+          );
+          next.left = placed.left;
+          next.top = placed.top;
+          next.width = placed.width;
+          next.height = placed.height;
+        }
+        patchElement(elementId, next);
       } catch (error) {
         if (!mountedRef.current) return;
         Alert.alert(
@@ -3330,7 +3371,14 @@ export default function EditScreen() {
         if (crop.mode === 'import') {
           void placeIngestedImageOnCanvas(crop.uri, crop.width, crop.height);
         } else if (crop.elementId) {
-          void applyCroppedImageToElement(crop.elementId, crop.uri, crop.width, crop.height);
+          void applyCroppedImageToElement(
+            crop.elementId,
+            crop.uri,
+            crop.width,
+            crop.height,
+            crop.mode === 'replace' ? 'replace' : 'recrop',
+            crop.crop,
+          );
         }
       }
     }, [

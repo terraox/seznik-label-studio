@@ -45,17 +45,20 @@ export async function ingestEditorImage(source: {
   uri: string;
   width?: number;
   height?: number;
+  /** Fit Label uses PNG so QR/barcode modules are not JPEG-rounded. */
+  printFormat?: 'jpeg' | 'png';
 }): Promise<IngestedEditorImage> {
   await new Promise<void>((resolve) => setTimeout(resolve, 16));
 
   const id = generateId();
+  const png = source.printFormat === 'png';
   const context = ImageManipulator.manipulate(source.uri);
   const originalRef = await context.renderAsync();
   const widthPx = originalRef.width || source.width || 1;
   const heightPx = originalRef.height || source.height || 1;
   const printSaved = await originalRef.saveAsync({
-    compress: 0.92,
-    format: SaveFormat.JPEG,
+    compress: png ? 1 : 0.92,
+    format: png ? SaveFormat.PNG : SaveFormat.JPEG,
   });
 
   const working = workingSizePx(widthPx, heightPx, EDITOR_IMAGE_MAX_EDGE_PX);
@@ -71,7 +74,7 @@ export async function ingestEditorImage(source: {
     previewSavedUri = previewSaved.uri;
   }
 
-  const printUri = await persistToEditorDir(printSaved.uri, `${id}-print.jpg`);
+  const printUri = await persistToEditorDir(printSaved.uri, png ? `${id}-print.png` : `${id}-print.jpg`);
   const previewUri = working.downscaled
     ? await persistToEditorDir(previewSavedUri, `${id}-preview.jpg`)
     : printUri;

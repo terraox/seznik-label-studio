@@ -10,6 +10,7 @@ import { GrayThresholdSlider } from '@/components/editor/gray-threshold-slider';
 import type { ImageElementState } from '@/lib/label-document';
 import { resolveEditorColorMode } from '@/lib/editor/image-mono';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { containFitImageOnLabel } from '@/lib/label-coordinate-system';
 
 const ACCENT = '#48C3C7';
 const TABS = ['Regular', 'Position', 'Image', 'Effect'] as const;
@@ -165,13 +166,8 @@ export function ImagePropertyPanel({
   const handleCropImage = useCallback(() => {
     const sourceUri = state.printUri || state.uri;
     if (!sourceUri) return;
-    openCropScreen(
-      sourceUri,
-      state.workingWidthPx ?? 0,
-      state.workingHeightPx ?? 0,
-      'recrop',
-    );
-  }, [openCropScreen, state.printUri, state.uri, state.workingWidthPx, state.workingHeightPx]);
+    openCropScreen(sourceUri, 0, 0, 'recrop');
+  }, [openCropScreen, state.printUri, state.uri]);
 
   const handleReplaceImage = useCallback(async () => {
     const asset = await pickImageAsset();
@@ -188,15 +184,32 @@ export function ImagePropertyPanel({
   }, [state.flipV, patch]);
 
   const handleFitToCanvasPad = useCallback(() => {
+    const widthPx =
+      state.workingWidthPx && state.workingWidthPx > 0
+        ? state.workingWidthPx
+        : Math.max(1, state.originalAspect ?? 1);
+    const heightPx =
+      state.workingHeightPx && state.workingHeightPx > 0 ? state.workingHeightPx : 1;
+    const placed = containFitImageOnLabel(
+      { widthMm: labelWidthMm, heightMm: labelHeightMm },
+      { widthPx, heightPx },
+    );
     patch({
-      left: 0,
-      top: 0,
-      width: labelWidthMm,
-      height: labelHeightMm,
-      contentFit: 'fill',
-      aspectRatioLocked: false,
+      left: placed.left,
+      top: placed.top,
+      width: placed.width,
+      height: placed.height,
+      contentFit: 'contain',
+      aspectRatioLocked: true,
     });
-  }, [labelWidthMm, labelHeightMm, patch]);
+  }, [
+    labelHeightMm,
+    labelWidthMm,
+    patch,
+    state.originalAspect,
+    state.workingHeightPx,
+    state.workingWidthPx,
+  ]);
 
   const handleFitToWidth = useCallback(() => {
     const newW = labelWidthMm;
@@ -466,7 +479,7 @@ export function ImagePropertyPanel({
                   onPress={handleFitToCanvasPad}
                   style={({ pressed }) => [styles.toolChip, styles.toolChipPrimary, pressed && styles.pressed]}>
                   <AppIcon name="aspectratio" tintColor="#FFFFFF" size={15} />
-                  <Text style={styles.toolChipTextPrimary}>Fit Canvas Pad</Text>
+                  <Text style={styles.toolChipTextPrimary}>Fit Label</Text>
                 </Pressable>
                 <Pressable
                   onPress={handleFitToWidth}

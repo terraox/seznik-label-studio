@@ -25,7 +25,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { editorBridge, type OcrResultType } from '@/constants/editor-bridge';
 import { isScanEmptyError, payloadFromBarcodeResult } from '@/lib/scan-codes';
 import { Palette } from '@/constants/ui';
-import { recognizeTextFromImage } from '@/lib/text-recognition';
+import {
+  OCR_ERROR_MESSAGES,
+  OcrResultPanel,
+  isOcrError,
+  ocrErrorMessage,
+  useOcrSession,
+} from '@/lib/ocr';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -71,9 +77,11 @@ export default function OcrScreen() {
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
   const returnToEdit = fromParam === 'edit';
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
+  const ocr = useOcrSession();
 
   const cameraRef = useRef<CameraView>(null);
   const previewInputRef = useRef<TextInput>(null);
+  const identifyGenerationRef = useRef(0);
 
   const [permission, requestPermission] = useCameraPermissions();
   const [step, setStep] = useState<OcrStep>('capture');
@@ -85,16 +93,24 @@ export default function OcrScreen() {
   const [previewText, setPreviewText] = useState('');
   const [identifying, setIdentifying] = useState(false);
 
+  const cancelIdentify = useCallback(() => {
+    identifyGenerationRef.current += 1;
+    setIdentifying(false);
+    ocr.reset();
+  }, [ocr.reset]);
+
   const goBack = useCallback(() => {
     if (step === 'identify') {
+      cancelIdentify();
       setStep('capture');
       setPreviewText('');
       return;
     }
     router.back();
-  }, [step]);
+  }, [cancelIdentify, step]);
 
   const openIdentifyStep = (uri: string) => {
+    cancelIdentify();
     setImageUri(uri);
     setPreviewText('');
     setRecognitionType('Text');
@@ -130,6 +146,7 @@ export default function OcrScreen() {
   };
 
   const handleClear = () => {
+    cancelIdentify();
     setImageUri(null);
     setPreviewText('');
     setStep('capture');
@@ -149,12 +166,16 @@ export default function OcrScreen() {
       Alert.alert('No Image', 'Capture or choose a photo first.');
       return;
     }
+    if (identifying || ocr.running) return;
 
+    const generation = ++identifyGenerationRef.current;
+    const isCurrent = () => generation === identifyGenerationRef.current;
     setIdentifying(true);
     try {
       if (recognitionType === 'QRCode') {
         try {
           const results = await scanFromURLAsync(imageUri, QR_TYPES);
+          if (!isCurrent()) return;
           const payload = results.map(payloadFromBarcodeResult).find(Boolean);
           if (payload) {
             setPreviewText(payload.data);
@@ -162,6 +183,7 @@ export default function OcrScreen() {
             Alert.alert('Not Found', 'No QR code was detected in this photo.');
           }
         } catch (error) {
+          if (!isCurrent()) return;
           Alert.alert(
             'Not Found',
             isScanEmptyError(error)
@@ -175,6 +197,7 @@ export default function OcrScreen() {
       if (recognitionType === 'Barcode') {
         try {
           const results = await scanFromURLAsync(imageUri, BARCODE_TYPES);
+          if (!isCurrent()) return;
           const payload = results.map(payloadFromBarcodeResult).find(Boolean);
           if (payload) {
             setPreviewText(payload.data);
@@ -182,6 +205,7 @@ export default function OcrScreen() {
             Alert.alert('Not Found', 'No barcode was detected in this photo.');
           }
         } catch (error) {
+          if (!isCurrent()) return;
           Alert.alert(
             'Not Found',
             isScanEmptyError(error)
@@ -192,14 +216,25 @@ export default function OcrScreen() {
         return;
       }
 
-      const recognized = await recognizeTextFromImage(imageUri);
-      if (recognized) {
-        setRecognitionType('Text');
-        setPreviewText(recognized);
+      try {
+        const recognized = await ocr.recognize(imageUri);
+        if (!isCurrent()) return;
+        if (recognized) {
+          setRecognitionType('Text');
+          setPreviewText(recognized.text);
+          return;
+        }
         return;
+      } catch (error) {
+        if (!isCurrent()) return;
+        if (!isOcrError(error) || error.code !== 'no_text') {
+          Alert.alert('Identify Failed', ocrErrorMessage(error));
+          return;
+        }
       }
 
       const codeResults = await scanFromURLAsync(imageUri, [...QR_TYPES, ...BARCODE_TYPES]);
+      if (!isCurrent()) return;
       if (codeResults[0]?.data) {
         const isQr = QR_TYPES.includes(codeResults[0].type as BarcodeType);
         setRecognitionType(isQr ? 'QRCode' : 'Barcode');
@@ -208,18 +243,19 @@ export default function OcrScreen() {
       }
 
       previewInputRef.current?.focus();
-      Alert.alert(
-        'Enter Text',
-        'No text or code was found automatically. Type or edit the text you see in the photo inside the preview field below. (Full text OCR requires a development build.)',
-      );
+      Alert.alert('No Text Found', OCR_ERROR_MESSAGES.no_text);
     } catch {
+      if (generation !== identifyGenerationRef.current) return;
       Alert.alert('Identify Failed', 'Unable to analyze this image. Please try another photo.');
     } finally {
-      setIdentifying(false);
+      if (generation === identifyGenerationRef.current) {
+        setIdentifying(false);
+      }
     }
   };
 
   const handleConfirm = () => {
+    if (identifying || ocr.running) return;
     const value = previewText.trim();
     if (!value) {
       Alert.alert('Required', 'Identify content first or enter text in the preview field.');
@@ -340,7 +376,11 @@ export default function OcrScreen() {
           <AppIcon name="chevron.left" tintColor="#FFFFFF" size={24} />
         </Pressable>
         <Text style={styles.headerTitle}>OCR</Text>
-        <Pressable onPress={handleConfirm} hitSlop={10} style={[styles.headerSide, styles.headerSideRight]}>
+        <Pressable
+          onPress={handleConfirm}
+          disabled={identifying || ocr.running}
+          hitSlop={10}
+          style={[styles.headerSide, styles.headerSideRight]}>
           <Text style={styles.confirmText}>Confirm</Text>
         </Pressable>
       </View>
@@ -357,9 +397,9 @@ export default function OcrScreen() {
         <View style={styles.actionRow}>
           <Pressable
             onPress={handleIdentify}
-            disabled={identifying}
+            disabled={identifying || ocr.running}
             style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}>
-            {identifying ? (
+            {identifying || ocr.running ? (
               <ActivityIndicator size="small" color={Palette.accent} />
             ) : (
               <Text style={styles.actionIdentifyText}>Identify</Text>
@@ -401,15 +441,14 @@ export default function OcrScreen() {
           />
         </View>
 
-        <TextInput
-          ref={previewInputRef}
-          style={styles.previewInput}
+        <OcrResultPanel
+          inputRef={previewInputRef}
           value={previewText}
           onChangeText={setPreviewText}
-          placeholder=""
-          placeholderTextColor="#A4B0BC"
-          multiline
-          textAlignVertical="center"
+          identifying={identifying || ocr.running}
+          errorMessage={recognitionType === 'Text' ? ocr.error?.message : null}
+          onCopy={() => ocr.copy(previewText)}
+          onCopyError={(error) => Alert.alert('Copy Failed', ocrErrorMessage(error))}
         />
 
         <Text style={styles.effectPreviewLabel}>Effect Preview</Text>
@@ -637,16 +676,6 @@ const styles = StyleSheet.create({
   radioLabelActive: {
     color: Palette.accent,
     fontWeight: '600',
-  },
-  previewInput: {
-    minHeight: 52,
-    borderRadius: 6,
-    backgroundColor: '#EEF1F5',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#2C3E50',
-    marginBottom: 14,
   },
   effectPreviewLabel: {
     textAlign: 'center',

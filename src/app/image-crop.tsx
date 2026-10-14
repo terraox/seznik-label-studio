@@ -36,6 +36,7 @@ export default function ImageCropRoute() {
           height: result.height,
           mode,
           elementId,
+          crop: result.crop,
         };
         router.back();
       }}

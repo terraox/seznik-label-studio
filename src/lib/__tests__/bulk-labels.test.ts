@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { barcodeModulesForMode } from '@/lib/barcode-code128';
+import { DEFAULT_TEXT_FONT_PT } from '@/components/editor/types';
+import {
+  fitBarcodeDefaults,
+  fitQrcodeDefaults,
+} from '@/lib/element-sizing';
 import {
   applyGeometryToAllLabels,
   applyGeometryToThisLabel,
@@ -113,6 +118,53 @@ test('layoutBulkSlotsEvenly keeps equal gaps for mixed slot kinds', () => {
   const gaps = geos.slice(1).map((geo, index) => geo.top - (geos[index].top + geos[index].height));
   assert.equal(gaps.length, 2);
   assert.ok(Math.abs(gaps[0] - gaps[1]) < 0.2);
+});
+
+test('Excel slots start at the same default sizes as adding tools on the canvas', () => {
+  const widthMm = 50;
+  const heightMm = 40;
+  const textOnly = createBulkLabelDocument({
+    name: 'text-defaults',
+    widthMm,
+    heightMm,
+    excelFileId: 'xls_test',
+    sheetIndex: 0,
+    sheet,
+    mappings: [{ columnIndex: 0, include: true, kind: 'text' }],
+  });
+  const barcodeOnly = createBulkLabelDocument({
+    name: 'barcode-defaults',
+    widthMm,
+    heightMm,
+    excelFileId: 'xls_test',
+    sheetIndex: 0,
+    sheet,
+    mappings: [{ columnIndex: 1, include: true, kind: 'barcode' }],
+  });
+  const qrOnly = createBulkLabelDocument({
+    name: 'qr-defaults',
+    widthMm,
+    heightMm,
+    excelFileId: 'xls_test',
+    sheetIndex: 0,
+    sheet,
+    mappings: [{ columnIndex: 2, include: true, kind: 'qrcode' }],
+  });
+  assert.ok(textOnly && barcodeOnly && qrOnly);
+
+  const canvasBarcode = fitBarcodeDefaults(widthMm, heightMm, []);
+  const canvasQr = fitQrcodeDefaults(widthMm, heightMm, []);
+
+  const text = textOnly.elements.find((el) => el.type === 'text');
+  const barcode = barcodeOnly.elements.find((el) => el.type === 'barcode');
+  const qr = qrOnly.elements.find((el) => el.type === 'qrcode');
+  assert.ok(text && barcode && qr);
+  assert.equal(text.fontSize, DEFAULT_TEXT_FONT_PT);
+  assert.equal(barcode.width, canvasBarcode.width);
+  assert.equal(barcode.height, canvasBarcode.height);
+  assert.equal(barcode.fontSize, canvasBarcode.fontSize);
+  assert.equal(qr.width, canvasQr.width);
+  assert.equal(qr.height, canvasQr.height);
 });
 
 test('Excel text slots hug the cell string instead of spanning the label', () => {

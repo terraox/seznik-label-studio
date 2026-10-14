@@ -48,6 +48,8 @@ export type ArtworkPrintInput = {
   offsetYmm?: number;
   /** When set, raster was already rendered at geometry.sizeDots — skip UniversalRenderer resize. */
   preparedGeometry?: PrintGeometry;
+  /** Raster is already 1-bit (0/255). Skip a second threshold/dither pass. */
+  alreadyBinarized?: boolean;
 };
 
 function capabilitiesFromManager() {
@@ -177,13 +179,19 @@ export async function printPreparedGrayJob(
     );
   }
 
-  const threshold = input.threshold ?? 165;
-  const printGray = binarizeGrayForPrint(gray, {
-    threshold,
-    dither: Boolean(input.dither),
-    stretchContrast: true,
+  const alreadyBinarized = Boolean(input.alreadyBinarized);
+  const threshold = alreadyBinarized ? 128 : (input.threshold ?? 165);
+  const printGray = alreadyBinarized
+    ? gray
+    : binarizeGrayForPrint(gray, {
+        threshold,
+        dither: Boolean(input.dither),
+        stretchContrast: true,
+      });
+  let bits = grayToBits(printGray, {
+    threshold: alreadyBinarized ? 128 : 254,
+    dither: false,
   });
-  let bits = grayToBits(printGray, { threshold: 254, dither: false });
   if (bits.bytesPerRow * 8 !== geometry.bitmapDotsW || bits.height !== geometry.bitmapDotsH) {
     bits = padBitsCentered(bits, geometry.bitmapDotsW, geometry.bitmapDotsH);
   }
@@ -300,13 +308,13 @@ export async function printPreparedGrayJob(
         copies: input.copies ?? 1,
         density: input.density ?? 10,
         speed: input.speed ?? 3,
-        threshold: input.threshold ?? 160,
+        threshold: alreadyBinarized ? 254 : (input.threshold ?? 160),
         hOffsetMm: input.offsetXmm,
         vOffsetMm: input.offsetYmm,
         media: input.mediaType ?? 'gap',
         orientation: 0,
         dpi: manager.getPrintDpi(),
-        dither: Boolean(input.dither),
+        dither: alreadyBinarized ? false : Boolean(input.dither),
       });
     });
     return job;

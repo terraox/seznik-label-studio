@@ -14,7 +14,8 @@
 import { createPrintGeometry, mmToDots, type PrintGeometry } from '@/lib/printer/print-spec';
 import {
   binarizeGrayForPrint,
-  fitGrayToSize,
+  cropGrayRect,
+  downsampleGrayToSize,
   lockGrayToCanvas,
   rotateGray,
   trimGrayInkBounds,
@@ -27,6 +28,13 @@ export type FitMode = 'contain' | 'cover' | 'stretch';
 export type Orientation = 'portrait' | 'landscape' | 'auto';
 export type HAlign = 'left' | 'center' | 'right';
 export type VAlign = 'top' | 'center' | 'bottom';
+
+export type LabelCropNorm = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
 
 export interface ImgToLabelConfig {
   /** Physical label width in mm (as selected by user). */
@@ -49,6 +57,8 @@ export interface ImgToLabelConfig {
   trimBorder?: boolean;
   /** Inset from label edge in mm so ink stays inside the die-cut. Default: 0. */
   safeMarginMm?: number;
+  /** Normalized crop of one label out of a sheet/photo (0–1). */
+  cropNorm?: LabelCropNorm | null;
 }
 
 export interface PrintLabelResult {
@@ -126,6 +136,78 @@ export function calcPrintCanvas(
 
 // ─── Alignment ─────────────────────────────────────────────────────────────
 
+function alignOffset(align: HAlign | VAlign, dest: number, src: number): number {
+  if (align === 'left' || align === 'top') return 0;
+  if (align === 'right' || align === 'bottom') return dest - src;
+  return Math.floor((dest - src) / 2);
+}
+
+function blitGray(
+  src: GrayRaster,
+  destW: number,
+  destH: number,
+  ox: number,
+  oy: number,
+): GrayRaster {
+  const width = Math.max(1, Math.round(destW));
+  const height = Math.max(1, Math.round(destH));
+  const out = new Uint8Array(width * height);
+  out.fill(255);
+  const copyW = Math.min(src.width, Math.max(0, width - Math.max(ox, 0)));
+  const copyH = Math.min(src.height, Math.max(0, height - Math.max(oy, 0)));
+  const srcX = Math.max(0, -ox);
+  const srcY = Math.max(0, -oy);
+  const destX = Math.max(0, ox);
+  const destY = Math.max(0, oy);
+  const rowW = Math.min(copyW, src.width - srcX, width - destX);
+  const rowH = Math.min(copyH, src.height - srcY, height - destY);
+  if (rowW <= 0 || rowH <= 0) return { width, height, gray: out };
+  for (let y = 0; y < rowH; y++) {
+    const srcRow = (srcY + y) * src.width + srcX;
+    out.set(src.gray.subarray(srcRow, srcRow + rowW), (destY + y) * width + destX);
+  }
+  return { width, height, gray: out };
+}
+
+function bilinearGrayToSize(src: GrayRaster, width: number, height: number): GrayRaster {
+  const out = new Uint8Array(width * height);
+  const srcW = src.width;
+  const srcH = src.height;
+  const gray = src.gray;
+  const xScale = width <= 1 || srcW <= 1 ? 0 : (srcW - 1) / (width - 1);
+  const yScale = height <= 1 || srcH <= 1 ? 0 : (srcH - 1) / (height - 1);
+  for (let y = 0; y < height; y++) {
+    const fy = y * yScale;
+    const y0 = Math.min(srcH - 1, Math.floor(fy));
+    const y1 = Math.min(srcH - 1, y0 + 1);
+    const wy = fy - y0;
+    const row0 = y0 * srcW;
+    const row1 = y1 * srcW;
+    const outRow = y * width;
+    for (let x = 0; x < width; x++) {
+      const fx = x * xScale;
+      const x0 = Math.min(srcW - 1, Math.floor(fx));
+      const x1 = Math.min(srcW - 1, x0 + 1);
+      const wx = fx - x0;
+      const top = gray[row0 + x0] + (gray[row0 + x1] - gray[row0 + x0]) * wx;
+      const bot = gray[row1 + x0] + (gray[row1 + x1] - gray[row1 + x0]) * wx;
+      out[outRow + x] = Math.round(top + (bot - top) * wy);
+    }
+  }
+  return { width, height, gray: out };
+}
+
+/** Box-average when shrinking (keeps barcode bars), bilinear when growing. */
+export function resampleGrayToSize(src: GrayRaster, destW: number, destH: number): GrayRaster {
+  const width = Math.max(1, Math.round(destW));
+  const height = Math.max(1, Math.round(destH));
+  if (src.width === width && src.height === height) return src;
+  if (width <= src.width && height <= src.height) {
+    return downsampleGrayToSize(src, width, height);
+  }
+  return bilinearGrayToSize(src, width, height);
+}
+
 /**
  * Apply alignment offsets to a contain-fitted image within the label canvas.
  * Returns a GrayRaster with the image placed according to alignment settings.
@@ -139,54 +221,17 @@ function applyContainWithAlignment(
 ): GrayRaster {
   const width = Math.max(1, Math.round(destW));
   const height = Math.max(1, Math.round(destH));
-  const out = new Uint8Array(width * height);
-  out.fill(255); // white background
-
   const scale = Math.min(width / Math.max(src.width, 1), height / Math.max(src.height, 1));
   const dw = Math.max(1, Math.round(src.width * scale));
   const dh = Math.max(1, Math.round(src.height * scale));
-
-  // Horizontal offset
-  let ox: number;
-  if (hAlign === 'left') ox = 0;
-  else if (hAlign === 'right') ox = width - dw;
-  else ox = Math.floor((width - dw) / 2);
-
-  // Vertical offset
-  let oy: number;
-  if (vAlign === 'top') oy = 0;
-  else if (vAlign === 'bottom') oy = height - dh;
-  else oy = Math.floor((height - dh) / 2);
-
-  // Build source lookup maps
-  const buildMap = (destSize: number, srcSize: number): Uint32Array => {
-    const map = new Uint32Array(destSize);
-    const last = Math.max(0, srcSize - 1);
-    if (destSize <= 1) { map[0] = 0; return map; }
-    for (let i = 0; i < destSize; i++) {
-      map[i] = Math.round((i * last) / (destSize - 1));
-    }
-    return map;
-  };
-
-  const yMap = buildMap(dh, src.height);
-  const xMap = buildMap(dw, src.width);
-  const srcW = src.width;
-  const srcGray = src.gray;
-
-  for (let y = 0; y < dh; y++) {
-    const dy = y + oy;
-    if (dy < 0 || dy >= height) continue;
-    const srcRow = yMap[y] * srcW;
-    const outRow = dy * width;
-    for (let x = 0; x < dw; x++) {
-      const dx = x + ox;
-      if (dx < 0 || dx >= width) continue;
-      out[outRow + dx] = srcGray[srcRow + xMap[x]];
-    }
-  }
-
-  return { width, height, gray: out };
+  const scaled = resampleGrayToSize(src, dw, dh);
+  return blitGray(
+    scaled,
+    width,
+    height,
+    alignOffset(hAlign, width, scaled.width),
+    alignOffset(vAlign, height, scaled.height),
+  );
 }
 
 /**
@@ -201,73 +246,112 @@ function applyCoverWithAlignment(
 ): GrayRaster {
   const width = Math.max(1, Math.round(destW));
   const height = Math.max(1, Math.round(destH));
-  const out = new Uint8Array(width * height);
-  out.fill(255);
-
   const scale = Math.max(width / Math.max(src.width, 1), height / Math.max(src.height, 1));
   const dw = Math.max(1, Math.round(src.width * scale));
   const dh = Math.max(1, Math.round(src.height * scale));
-
-  // Crop position based on alignment
-  let cropX: number;
-  if (hAlign === 'left') cropX = 0;
-  else if (hAlign === 'right') cropX = dw - width;
-  else cropX = Math.floor((dw - width) / 2);
-
-  let cropY: number;
-  if (vAlign === 'top') cropY = 0;
-  else if (vAlign === 'bottom') cropY = dh - height;
-  else cropY = Math.floor((dh - height) / 2);
-
-  const buildMap = (destSize: number, srcSize: number): Uint32Array => {
-    const map = new Uint32Array(destSize);
-    const last = Math.max(0, srcSize - 1);
-    if (destSize <= 1) { map[0] = 0; return map; }
-    for (let i = 0; i < destSize; i++) {
-      map[i] = Math.round((i * last) / (destSize - 1));
-    }
-    return map;
-  };
-
-  const yMap = buildMap(dh, src.height);
-  const xMap = buildMap(dw, src.width);
-  const srcW = src.width;
-  const srcGray = src.gray;
-
-  for (let y = 0; y < height; y++) {
-    const sy = y + cropY;
-    if (sy < 0 || sy >= dh) continue;
-    const srcRow = yMap[sy] * srcW;
-    const outRow = y * width;
-    for (let x = 0; x < width; x++) {
-      const sx = x + cropX;
-      if (sx < 0 || sx >= dw) continue;
-      out[outRow + x] = srcGray[srcRow + xMap[sx]];
-    }
-  }
-
-  return { width, height, gray: out };
+  const scaled = resampleGrayToSize(src, dw, dh);
+  const cropX = alignOffset(hAlign, scaled.width, width);
+  const cropY = alignOffset(vAlign, scaled.height, height);
+  return blitGray(scaled, width, height, -cropX, -cropY);
 }
 
 function insetDots(totalDots: number, marginDots: number): number {
   return Math.max(1, totalDots - Math.max(0, marginDots) * 2);
 }
 
-function prepareSourceGray(gray: GrayRaster, trimBorder: boolean): GrayRaster {
-  if (!trimBorder) return gray;
-  const trimmed = trimGrayInkBounds(gray);
-  return trimmed.width > 0 && trimmed.height > 0 ? trimmed : gray;
+export function clampLabelCropNorm(crop: LabelCropNorm): LabelCropNorm {
+  const w = Math.min(1, Math.max(0.02, crop.w));
+  const h = Math.min(1, Math.max(0.02, crop.h));
+  const x = Math.min(1 - w, Math.max(0, crop.x));
+  const y = Math.min(1 - h, Math.max(0, crop.y));
+  return { x, y, w, h };
+}
+
+export function cropGrayByNorm(src: GrayRaster, crop: LabelCropNorm): GrayRaster {
+  const next = clampLabelCropNorm(crop);
+  const x = Math.round(next.x * src.width);
+  const y = Math.round(next.y * src.height);
+  const w = Math.max(1, Math.round(next.w * src.width));
+  const h = Math.max(1, Math.round(next.h * src.height));
+  return cropGrayRect(src, x, y, w, h);
+}
+
+/** Grow a tight ink box so QR quiet-zone and label edges stay inside the crop. */
+export function expandLabelCropNorm(crop: LabelCropNorm, padRatio = 0.08): LabelCropNorm {
+  const next = clampLabelCropNorm(crop);
+  const padW = Math.max(0.01, next.w * Math.max(0, padRatio));
+  const padH = Math.max(0.01, next.h * Math.max(0, padRatio));
+  return clampLabelCropNorm({
+    x: next.x - padW,
+    y: next.y - padH,
+    w: next.w + padW * 2,
+    h: next.h + padH * 2,
+  });
+}
+
+/** Tight rectangle around printed ink, as a 0–1 crop of the full page/photo. */
+export function findLabelCropNorm(src: GrayRaster, whiteMin = 236): LabelCropNorm | null {
+  const { width, height, gray } = src;
+  const n = gray.length;
+  if (n === 0 || width < 2 || height < 2) return null;
+
+  const sampleCount = Math.min(n, 4096);
+  const sample = new Uint8Array(sampleCount);
+  const step = Math.max(1, Math.floor(n / sampleCount));
+  let si = 0;
+  for (let i = 0; i < n && si < sampleCount; i += step) sample[si++] = gray[i];
+  sample.sort();
+  const p90 = sample[Math.min(si - 1, Math.floor(si * 0.9))] ?? 255;
+  const inkMax = Math.min(whiteMin, Math.max(40, p90 - 12));
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) {
+      if (gray[row + x] < inkMax) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX) return null;
+  return clampLabelCropNorm({
+    x: minX / width,
+    y: minY / height,
+    w: (maxX - minX + 1) / width,
+    h: (maxY - minY + 1) / height,
+  });
+}
+
+function prepareSourceGray(
+  gray: GrayRaster,
+  trimBorder: boolean,
+  cropNorm?: LabelCropNorm | null,
+): GrayRaster {
+  let next = gray;
+  if (cropNorm) {
+    next = cropGrayByNorm(next, cropNorm);
+  }
+  if (!trimBorder) return next;
+  const trimmed = trimGrayInkBounds(next);
+  return trimmed.width > 0 && trimmed.height > 0 ? trimmed : next;
 }
 
 /**
  * Render an imported image into a label-sized print bitmap.
  *
  * Pipeline:
- *   1. Apply image rotation
- *   2. Resolve label orientation (portrait/landscape/auto)
- *   3. Calculate print canvas from physical mm + DPI
- *   4. Apply fit mode (contain/cover/stretch) with alignment
- *   5. Return final GrayRaster at exact print resolution
+ *   1. Crop in source image space, then optional border trim
+ *   2. Apply image rotation (crop coordinates stay valid)
+ *   3. Resolve label orientation (portrait/landscape/auto)
+ *   4. Calculate print canvas from physical mm + DPI
+ *   5. Apply fit mode (contain/cover/stretch) with alignment
+ *   6. Return final GrayRaster at exact print resolution
  *
  * The returned bitmap is ready for `printArtworkJob` via universal-bridge.
  */
@@ -275,15 +359,14 @@ export function renderImgToLabel(
   sourceGray: GrayRaster,
   config: ImgToLabelConfig,
 ): PrintLabelResult {
-  const trimBorder = config.trimBorder !== false;
+  const trimBorder = config.trimBorder === true;
   const safeMarginMm = Math.max(0, config.safeMarginMm ?? 0);
 
-  // 1. Apply image rotation (independent of label orientation)
-  let gray = sourceGray;
+  // Crop in the original photo/PDF page, then rotate that window.
+  let gray = prepareSourceGray(sourceGray, trimBorder, config.cropNorm);
   if (config.imageRotationDeg) {
     gray = rotateGray(gray, config.imageRotationDeg);
   }
-  gray = prepareSourceGray(gray, trimBorder);
 
   // 2. Resolve orientation
   const oriented = resolveOrientation(
@@ -311,7 +394,7 @@ export function renderImgToLabel(
       inner = applyCoverWithAlignment(gray, innerW, innerH, config.hAlign, config.vAlign);
       break;
     case 'stretch':
-      inner = fitGrayToSize(gray, innerW, innerH, 'stretch');
+      inner = resampleGrayToSize(gray, innerW, innerH);
       break;
     default:
       inner = applyContainWithAlignment(gray, innerW, innerH, config.hAlign, config.vAlign);
@@ -422,7 +505,7 @@ export function defaultImgToLabelConfig(
     imageRotationDeg: 0,
     hAlign: 'center',
     vAlign: 'center',
-    trimBorder: true,
+    trimBorder: false,
     safeMarginMm: 0,
   };
 }

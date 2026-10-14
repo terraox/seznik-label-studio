@@ -2,6 +2,7 @@ import {
   DEFAULT_BARCODE_STATE,
   DEFAULT_ELEMENT_STATE,
   DEFAULT_QRCODE_STATE,
+  DEFAULT_TEXT_FONT_PT,
   type QrErrorLevel,
 } from '@/components/editor/types';
 import {
@@ -13,9 +14,9 @@ import {
 } from '@/lib/label-document';
 import {
   fitBarcodeDefaults,
-  fitFontSizePt,
   fitQrcodeDefaults,
   fitTextBoxToContent,
+  fitTextDefaults,
   repositionDocumentToSize,
   scaleDocumentToSize,
   textBlockHeightMm,
@@ -195,38 +196,33 @@ type BulkSlotDraft = {
   fontSize?: number;
 };
 
-/** Natural size for one Excel slot, budgeted for how many columns share the label. */
+/** Natural size for one Excel slot — same defaults as adding that tool on the canvas. */
 function draftBulkSlotSize(
   kind: BulkSlotKind,
   widthMm: number,
   heightMm: number,
-  slotCount: number,
 ): BulkSlotDraft {
-  const pad = bulkPadMm(widthMm, heightMm);
-  const innerW = Math.max(4, widthMm - pad * 2);
-  const innerH = Math.max(4, heightMm - pad * 2);
-  const slotBudget = innerH / Math.max(1, slotCount);
-  const minGap = Math.max(0.5, pad * 0.35);
-  const targetH = Math.max(2, slotBudget - minGap);
-
   if (kind === 'text') {
-    const fontSize = fitFontSizePt(widthMm, targetH, 1);
-    const height = Math.min(textBlockHeightMm(fontSize, 1), targetH * 0.92);
-    return { width: innerW, height: Math.max(2, height), fontSize };
+    const fit = fitTextDefaults(widthMm, heightMm, []);
+    const fontSize = DEFAULT_TEXT_FONT_PT;
+    return {
+      width: fit.width,
+      height: textBlockHeightMm(fontSize, 1),
+      fontSize,
+    };
   }
 
   if (kind === 'barcode') {
-    const fit = fitBarcodeDefaults(widthMm, targetH, []);
+    const fit = fitBarcodeDefaults(widthMm, heightMm, []);
     return {
-      width: Math.min(fit.width, innerW),
-      height: Math.max(2, Math.min(fit.height, targetH * 0.92)),
+      width: fit.width,
+      height: fit.height,
       fontSize: fit.fontSize,
     };
   }
 
-  const fit = fitQrcodeDefaults(widthMm, targetH, []);
-  const size = Math.max(2, Math.min(fit.width, fit.height, innerW, targetH * 0.92));
-  return { width: size, height: size };
+  const fit = fitQrcodeDefaults(widthMm, heightMm, []);
+  return { width: fit.width, height: fit.height };
 }
 
 /**
@@ -298,8 +294,7 @@ function layoutSlotTemplates(
 ): { templates: Record<string, LabelElement>; geometry: Record<string, BulkGeometry> } {
   const templates: Record<string, LabelElement> = {};
   const geometry: Record<string, BulkGeometry> = {};
-  const slotCount = slots.length;
-  const drafts = slots.map((slot) => draftBulkSlotSize(slot.kind, widthMm, heightMm, slotCount));
+  const drafts = slots.map((slot) => draftBulkSlotSize(slot.kind, widthMm, heightMm));
   const positions = layoutBulkSlotsEvenly(slots, drafts, widthMm, heightMm);
 
   slots.forEach((slot, index) => {
@@ -307,9 +302,11 @@ function layoutSlotTemplates(
     const geo = positions[index];
     const scale = draft.height > 0 ? geo.height / draft.height : 1;
     const fontSize =
-      draft.fontSize != null
-        ? Math.max(4, Math.round((draft.fontSize * scale) * 2) / 2)
-        : undefined;
+      draft.fontSize == null
+        ? undefined
+        : scale === 1
+          ? draft.fontSize
+          : Math.max(4, Math.round(draft.fontSize * scale * 2) / 2);
 
     if (slot.kind === 'text') {
       const el: LabelElement = {
@@ -390,7 +387,11 @@ function fitProjectedText(
 ): LabelElement {
   if (el.type !== 'text') return el;
   const fitted = fitTextBoxToContent(el, canvas);
-  return { ...el, width: fitted.width, height: fitted.height };
+  const height =
+    typeof el.height === 'number' && el.height > 0
+      ? Math.min(fitted.height, el.height)
+      : fitted.height;
+  return { ...el, width: fitted.width, height };
 }
 
 export function projectBulkElements(

@@ -22,6 +22,7 @@ export type ImageCropResult = {
   height: number;
   mode: ImageCropMode;
   elementId?: string;
+  crop?: import('@/lib/editor/image-crop-math').NormalizedCrop;
 };
 
 export const editorBridge = {
