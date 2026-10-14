@@ -6,11 +6,12 @@ import { Animated, Pressable, StyleSheet, useWindowDimensions } from 'react-nati
 // Rendered from splash-remotion/ (`npm run render` in that folder).
 const SPLASH_ANIMATION = require('../../assets/images/splash-animation.webp');
 const SPLASH_BACKGROUND = '#FEFEFE';
-const PLAY_MS = 2900;
+// The WebP is ~3.0 s and plays once (loop count 1), then holds on its last frame.
+const PLAY_MS = 3000;
 const FADE_MS = 120;
-// After the animation ends the app mounts behind the still-opaque splash; give it a moment to
-// draw its first frame so the fade reveals the home screen instead of a blank one.
-const HANDOFF_MS = 350;
+// Hold on the finished logo for 0.6 s; the app mounts behind the opaque splash meanwhile, so the
+// fade reveals a drawn home screen instead of a blank one.
+const HANDOFF_MS = 600;
 
 /** Plays the "label getting printed" logo animation over the app, then fades out. Tap to skip. */
 export function AnimatedSplash({ onFinish, onDone }: { onFinish: () => void; onDone: () => void }) {

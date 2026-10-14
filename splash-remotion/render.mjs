@@ -16,7 +16,7 @@ try {
   run(`npx remotion render src/index.ts Splash "${tmp}" --sequence --image-format=png --scale=0.8`);
   run(
     `ffmpeg -y -loglevel error -framerate 60 -pattern_type glob -i "${tmp}/element-*.png" ` +
-      `-c:v libwebp_anim -quality 68 -compression_level 6 -loop 0 -f webp "${tmpOut}"`,
+      `-c:v libwebp_anim -quality 68 -compression_level 6 -loop 1 -f webp "${tmpOut}"`,
   );
   renameSync(tmpOut, out);
   console.log(`Wrote ${out} (${(statSync(out).size / 1024).toFixed(0)} KB)`);
