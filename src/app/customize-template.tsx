@@ -5,9 +5,7 @@ import { TemplateChoiceSheet } from '@/components/template-choice-sheet';
 export default function CustomizeTemplateScreen() {
   return (
     <TemplateChoiceSheet
-      title="Customize"
-      subtitle="Create a new template or open one you already saved."
-      createDetail="Blank canvas — set size and layout from scratch"
+      title="Please select the size method"
       onCreate={() =>
         router.replace({ pathname: '/new-label-setup', params: { focusSize: '1', isSingleCanvas: 'true' } })
       }
