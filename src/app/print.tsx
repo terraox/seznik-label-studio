@@ -83,6 +83,7 @@ import {
   waitForNextPaint,
 } from '@/lib/printer/print-job';
 import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-manager';
+import { resolveTd404JobParams } from '@/lib/printer/td404-job-params';
 import {
   createPrintSpec,
   TD404_BORDER_GAP_MM,
@@ -1063,6 +1064,15 @@ export default function PrintScreen() {
               ),
           );
 
+        const td404Job = manager.usesTd404CommandSet
+          ? resolveTd404JobParams({
+              density: printDensity,
+              speed: printSpeed,
+              gapMm: gapLength,
+              paperType,
+            })
+          : null;
+
         const artworkPhoto = Boolean(params.imageUri) && !params.labelId;
 
         let usedNative = false;
@@ -1301,13 +1311,13 @@ export default function PrintScreen() {
                 bytesPerRow: bitmap.bytesPerRow,
                 widthMm: pageDoc.widthMm,
                 heightMm: pageDoc.heightMm,
-                gapMm: gapLength,
+                gapMm: td404Job?.gapMm ?? gapLength,
                 copies: sendCopies,
-                density: printDensity,
-                speed: printSpeed,
+                density: td404Job?.density ?? printDensity,
+                speed: td404Job?.speed ?? printSpeed,
                 vOffsetMm: offsetV,
                 hOffsetMm: offsetH,
-                media: wantsBline ? 'bline' : media,
+                media: td404Job?.media ?? (wantsBline ? 'bline' : media),
                 dpi: jobDpi,
               });
               const nativeCallMs = Date.now() - tNative0;
@@ -1351,13 +1361,13 @@ export default function PrintScreen() {
                 pngBase64: rotatedBase64,
                 widthMm: paper.widthMm,
                 heightMm: paper.heightMm,
-                gapMm: gapLength,
+                gapMm: td404Job?.gapMm ?? gapLength,
                 copies: sendCopies,
-                density: printDensity,
-                speed: printSpeed,
+                density: td404Job?.density ?? printDensity,
+                speed: td404Job?.speed ?? printSpeed,
                 vOffsetMm: offsetV,
                 hOffsetMm: offsetH,
-                media: wantsBline ? 'bline' : media,
+                media: td404Job?.media ?? (wantsBline ? 'bline' : media),
                 orientation: 0,
                 dpi: jobDpi,
               });
@@ -1424,13 +1434,13 @@ export default function PrintScreen() {
                 pngBase64: rotatedBase64,
                 widthMm: paper.widthMm,
                 heightMm: paper.heightMm,
-                gapMm: gapLength,
+                gapMm: td404Job?.gapMm ?? gapLength,
                 copies: sendCopies,
-                density: printDensity,
-                speed: printSpeed,
+                density: td404Job?.density ?? printDensity,
+                speed: td404Job?.speed ?? printSpeed,
                 vOffsetMm: offsetV,
                 hOffsetMm: offsetH,
-                media: wantsBline ? 'bline' : media,
+                media: td404Job?.media ?? (wantsBline ? 'bline' : media),
                 orientation: 0,
                 dpi: jobDpi,
               }).catch(() => false);
@@ -1466,13 +1476,13 @@ export default function PrintScreen() {
           const bytes = encodeConnectedPrinterJob(bits, {
             widthMm: paper.widthMm,
             heightMm: paper.heightMm,
-            gapMm: gapLength,
+            gapMm: td404Job?.gapMm ?? gapLength,
             copies: 1,
-            density: printDensity,
-            speed: printSpeed,
+            density: td404Job?.density ?? printDensity,
+            speed: td404Job?.speed ?? printSpeed,
             vOffsetMm: offsetV,
             hOffsetMm: offsetH,
-            media: wantsBline ? 'bline' : media,
+            media: td404Job?.media ?? (wantsBline ? 'bline' : media),
             dpi: jobDpi,
           });
           timer.end('encode');

@@ -604,14 +604,14 @@ class Td404PrinterModule : Module() {
       ?: throw IllegalArgumentException("pngBase64 is required")
     val widthMm = (options["widthMm"] as? Number)?.toDouble() ?: 50.0
     val heightMm = (options["heightMm"] as? Number)?.toDouble() ?: 30.0
-    val gapMm = (options["gapMm"] as? Number)?.toDouble() ?: 2.0
-    val density = (options["density"] as? Number)?.toInt() ?: 10
-    val speed = (options["speed"] as? Number)?.toInt() ?: 3
+    val gapMm = clampTd404GapMm((options["gapMm"] as? Number)?.toDouble() ?: 2.0)
+    val density = clampTd404Density((options["density"] as? Number)?.toInt() ?: 10)
+    val speed = clampTd404Speed((options["speed"] as? Number)?.toInt() ?: 3)
     val threshold = (options["threshold"] as? Number)?.toInt() ?: 160
     val xDots = (options["xDots"] as? Number)?.toInt() ?: 0
     val yDots = (options["yDots"] as? Number)?.toInt() ?: 0
     val copies = ((options["copies"] as? Number)?.toInt() ?: 1).coerceAtLeast(1)
-    val media = (options["media"] as? String) ?: "gap"
+    val media = normalizeTd404Media(options["media"] as? String)
     val orientation = (options["orientation"] as? Number)?.toInt() ?: 0
     val dpi = (options["dpi"] as? Number)?.toDouble() ?: 304.0
     // DIRECTION 1 matches the JS TSPL pipeline default. DIRECTION 0 mirrors the
@@ -829,13 +829,13 @@ class Td404PrinterModule : Module() {
   private fun printMonoLabelNative(monoBytes: ByteArray, options: Map<String, Any?>): Map<String, Any?> {
     val widthMm = (options["widthMm"] as? Number)?.toDouble() ?: 50.0
     val heightMm = (options["heightMm"] as? Number)?.toDouble() ?: 30.0
-    val gapMm = (options["gapMm"] as? Number)?.toDouble() ?: 2.0
-    val density = (options["density"] as? Number)?.toInt() ?: 10
-    val speed = (options["speed"] as? Number)?.toInt() ?: 3
+    val gapMm = clampTd404GapMm((options["gapMm"] as? Number)?.toDouble() ?: 2.0)
+    val density = clampTd404Density((options["density"] as? Number)?.toInt() ?: 10)
+    val speed = clampTd404Speed((options["speed"] as? Number)?.toInt() ?: 3)
     val xDots = (options["xDots"] as? Number)?.toInt() ?: 0
     val yDots = (options["yDots"] as? Number)?.toInt() ?: 0
     val copies = ((options["copies"] as? Number)?.toInt() ?: 1).coerceAtLeast(1)
-    val media = (options["media"] as? String) ?: "gap"
+    val media = normalizeTd404Media(options["media"] as? String)
     val dpi = (options["dpi"] as? Number)?.toDouble() ?: 304.0
     val direction = (options["direction"] as? Number)?.toInt() ?: 1
     val widthDots = (options["widthDots"] as? Number)?.toInt()
@@ -1089,6 +1089,21 @@ class Td404PrinterModule : Module() {
       "Td404Printer",
       "JOB-IDENTITY native_rev=$nativeRev gitSha=${optionsGitSha(options)} buildTime=${optionsBuildTime(options)} dryRun=$dryRun",
     )
+  }
+
+  /** Same limits as src/lib/printer/td404-job-params.ts. */
+  private fun clampTd404Density(value: Int): Int = value.coerceIn(0, 15)
+
+  private fun clampTd404Speed(value: Int): Int = value.coerceIn(1, 7)
+
+  private fun clampTd404GapMm(value: Double): Double {
+    val clamped = value.coerceIn(0.0, 20.0)
+    return Math.round(clamped * 100.0) / 100.0
+  }
+
+  private fun normalizeTd404Media(media: String?): String = when (media) {
+    "bline", "continuous" -> media
+    else -> "gap"
   }
 
   private fun formatGap(gapMm: Double): String = formatMm(gapMm)

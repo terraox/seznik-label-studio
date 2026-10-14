@@ -183,8 +183,8 @@ const kt = readFileSync(
 const count = (needle: string) => kt.split(needle).length - 1;
 assert.equal(count('"SPEED $speed\\r\\n" +'), 2, 'PNG and mono jobs write SPEED $speed');
 assert.equal(count('"DENSITY $density\\r\\n" +'), 2, 'PNG and mono jobs write DENSITY $density');
-assert.equal(count('val density = (options["density"] as? Number)?.toInt() ?: 10'), 2);
-assert.equal(count('val speed = (options["speed"] as? Number)?.toInt() ?: 3'), 2);
+assert.equal(count('val density = clampTd404Density((options["density"] as? Number)?.toInt() ?: 10)'), 2);
+assert.equal(count('val speed = clampTd404Speed((options["speed"] as? Number)?.toInt() ?: 3)'), 2);
 
 for (const [d, expected] of [[0, 'DENSITY 0\r\n'], [10, 'DENSITY 10\r\n'], [15, 'DENSITY 15\r\n']] as const) {
   const q = resolvePrintQuality({ darkness: d, speed: null, caps: td });

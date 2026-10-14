@@ -384,7 +384,7 @@ export function encodeConnectedPrinterJob(
       gapMm: spec.gapMm,
       copies: 1,
       density: options.density,
-      speed: options.speed ?? 6,
+      speed: options.speed,
       media: spec.mediaType,
       x: spec.xOffsetDots,
       y: spec.yOffsetDots,
@@ -406,7 +406,7 @@ export function encodeConnectedPrinterJob(
       spec.widthMm.toFixed(1), '×', spec.heightMm.toFixed(1), 'mm |',
       'gap:', spec.gapMm, 'mm | media:', spec.mediaType,
       '| xOffset:', spec.xOffsetDots, 'dots | yOffset:', spec.yOffsetDots, 'dots |',
-      'density:', options.density, '| speed:', options.speed ?? 6,
+      'density:', options.density, '| speed:', options.speed ?? 3,
     );
     return job;
   }

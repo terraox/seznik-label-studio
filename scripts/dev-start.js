@@ -10,7 +10,18 @@ const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
 const METRO_PORT = 8081;
-const useUsb = process.argv.includes('--usb');
+const forceLan = process.argv.includes('--lan');
+const clearCache = process.argv.includes('-c') || process.argv.includes('--clear');
+
+function hasAdbDevice() {
+  const result = spawnSync('adb', ['devices'], { encoding: 'utf8', shell: true });
+  if (result.status !== 0) return false;
+  return result.stdout.split('\n').some((line) => /\tdevice\s*$/.test(line.trim()));
+}
+
+/** USB + localhost avoids Wi‑Fi/firewall failures; auto when a phone is plugged in. */
+const useUsb =
+  process.argv.includes('--usb') || (!forceLan && hasAdbDevice());
 
 function lanIp() {
   for (const nets of Object.values(os.networkInterfaces())) {
@@ -92,6 +103,12 @@ function printConnectHelp(port) {
 freePort(METRO_PORT);
 if (useUsb) {
   runAdbReverse(METRO_PORT);
+  runAdbReverse(8083);
+} else {
+  console.warn(
+    '\n⚠ Wi‑Fi mode: phone and PC must be on the same network and Windows Firewall must allow Node on port 8081.\n' +
+      '   If connection fails, plug in USB and run: npm run start:usb\n',
+  );
 }
 
 printConnectHelp(METRO_PORT);
@@ -104,6 +121,12 @@ const expoArgs = [
   String(METRO_PORT),
   useUsb ? '--localhost' : '--lan',
 ];
+if (process.platform === 'win32') {
+  expoArgs.push('--max-workers', '2');
+}
+if (clearCache) {
+  expoArgs.push('-c');
+}
 
 const child = spawn('npx', expoArgs, {
   cwd: projectRoot,

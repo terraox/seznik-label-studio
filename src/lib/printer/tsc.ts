@@ -11,6 +11,7 @@ import {
   formatTsplSizeCommand,
   mediaOriginXMm,
 } from '@/lib/printer/print-spec';
+import { clampTd404Density, clampTd404GapMm, clampTd404Speed } from '@/lib/printer/td404-job-params';
 
 export type TscJobOptions = {
   widthMm: number;
@@ -18,7 +19,7 @@ export type TscJobOptions = {
   gapMm?: number;
   copies?: number;
   density?: number | null;
-  /** TSPL SPEED 1–6. Higher is faster feed. */
+  /** TSPL SPEED 1–7. Higher is faster feed. Default 3. */
   speed?: number | null;
   /** Dot offset for BITMAP x,y */
   x?: number;
@@ -68,15 +69,15 @@ function mediaCommand(media: TscJobOptions['media'], gapMm: number): string {
  * Calibration is REFERENCE (signed dots). BITMAP stays 0,0 so negatives do not clip.
  */
 export function encodeTscBitmapJob(bitmap: BitRaster, options: TscJobOptions): Uint8Array {
-  const gap = options.gapMm ?? 2;
-  const density =
-    options.density != null ? Math.min(15, Math.max(0, Math.round(options.density))) : 8;
-  const speed = options.speed != null ? Math.min(6, Math.max(1, Math.round(options.speed))) : 6;
+  const media = options.media ?? 'gap';
+  const gap = media === 'continuous' ? 0 : clampTd404GapMm(options.gapMm);
+  const density = clampTd404Density(options.density);
+  const speed = clampTd404Speed(options.speed);
   const x = options.x ?? 0;
   const y = options.y ?? 0;
 
   const sizeCmd = formatTsplSizeCommand(options.widthMm, options.heightMm);
-  const mediaCmd = mediaCommand(options.media ?? 'gap', gap);
+  const mediaCmd = mediaCommand(media, gap);
 
   const bitmapCmd = `BITMAP 0,0,${bitmap.bytesPerRow},${bitmap.height},0`;
   console.info(

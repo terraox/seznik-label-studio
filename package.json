@@ -108,6 +108,7 @@
     "postinstall": "patch-package && node ./scripts/generate-twemoji-assets.mjs",
     "start": "node ./scripts/dev-start.js",
     "start:usb": "node ./scripts/dev-start.js --usb",
+    "start:clear": "node ./scripts/dev-start.js --clear",
     "connect:usb": "adb reverse tcp:8081 tcp:8081 && adb reverse tcp:8083 tcp:8083",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
