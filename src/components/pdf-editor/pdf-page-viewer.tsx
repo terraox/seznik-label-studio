@@ -522,6 +522,15 @@ export function PdfPageViewer({
                 <View style={[styles.gridV, { left: '66.666%' }]} />
                 <View style={[styles.gridH, { top: '33.333%' }]} />
                 <View style={[styles.gridH, { top: '66.666%' }]} />
+                <View style={styles.cropBorder} />
+                <View style={[styles.corner, { top: -3, left: -3, borderTopWidth: 4, borderLeftWidth: 4 }]} />
+                <View style={[styles.corner, { top: -3, right: -3, borderTopWidth: 4, borderRightWidth: 4 }]} />
+                <View style={[styles.corner, { bottom: -3, left: -3, borderBottomWidth: 4, borderLeftWidth: 4 }]} />
+                <View style={[styles.corner, { bottom: -3, right: -3, borderBottomWidth: 4, borderRightWidth: 4 }]} />
+                <View style={[styles.edgeH, { top: -3 }]} />
+                <View style={[styles.edgeH, { bottom: -3 }]} />
+                <View style={[styles.edgeV, { left: -3 }]} />
+                <View style={[styles.edgeV, { right: -3 }]} />
               </Animated.View>
               <GestureDetector gesture={cropGesture}>
                 <View style={StyleSheet.absoluteFill} />
@@ -659,25 +668,47 @@ const styles = StyleSheet.create({
   placeholderText: { color: Palette.muted },
   mask: {
     position: 'absolute',
-    backgroundColor: 'rgba(0,0,0,0.62)',
+    backgroundColor: '#0A0A0A',
   },
   cropFrame: {
     position: 'absolute',
-    // No frame: the dimmed area outside is what marks the selection.
+  },
+  cropBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  corner: { position: 'absolute', width: 24, height: 24, borderColor: '#FFFFFF' },
+  edgeH: {
+    position: 'absolute',
+    alignSelf: 'center',
+    left: '50%',
+    marginLeft: -16,
+    width: 32,
+    height: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  edgeV: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -16,
+    width: 4,
+    height: 32,
+    backgroundColor: '#FFFFFF',
   },
   gridV: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     width: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.6)',
   },
   gridH: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.6)',
   },
   stampWrapper: {
     position: 'absolute',

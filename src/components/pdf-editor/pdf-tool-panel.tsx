@@ -54,6 +54,7 @@ export function PdfToolPanel({
 
 const styles = StyleSheet.create({
   wrap: {
+    flexShrink: 0,
     backgroundColor: '#FFFFFF',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E2E8F0',

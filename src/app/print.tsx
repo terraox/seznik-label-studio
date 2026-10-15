@@ -2093,7 +2093,7 @@ export default function PrintScreen() {
               onPress={() => setShowAdvanced((v) => !v)}
               style={({ pressed }) => [styles.advancedHeader, pressed && styles.pressed]}>
               <View style={styles.advancedHeaderLeft}>
-                <AppIcon name="slider.horizontal.3" tintColor="#475569" size={18} />
+                <AppIcon name="gearshape" tintColor="#475569" size={18} />
                 <Text style={styles.advancedHeaderTitle}>Advanced Settings</Text>
               </View>
               <View style={styles.advancedHeaderRight}>
@@ -2102,11 +2102,13 @@ export default function PrintScreen() {
                     ? 'Hide'
                     : `${orientation} · Darkness ${darkness == null ? 'Auto' : darkness}`}
                 </Text>
-                <AppIcon
-                  name={showAdvanced ? 'chevron.up' : 'chevron.down'}
-                  tintColor="#94A3B8"
-                  size={14}
-                />
+                <View style={styles.advancedChevron}>
+                  <AppIcon
+                    name={showAdvanced ? 'chevron.up' : 'chevron.down'}
+                    tintColor="#475569"
+                    size={16}
+                  />
+                </View>
               </View>
             </Pressable>
 
@@ -2224,12 +2226,6 @@ export default function PrintScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}>
-        <Pressable
-          onPress={() => router.push('/printing-settings')}
-          hitSlop={8}
-          style={({ pressed }) => [styles.gearBtn, pressed && styles.pressed]}>
-          <AppIcon name="gearshape.fill" tintColor="#FFFFFF" size={24} />
-        </Pressable>
         {/* Size picker — opens sheet to choose a different paper/label size. */}
         <Pressable
           disabled={printing || isPdfJob || ratTail143Job || cableFlagJob}
@@ -2249,66 +2245,6 @@ export default function PrintScreen() {
           </Text>
         </Pressable>
         {/* Print button — prints the active label at its selected/previewed dimensions */}
-        {__DEV__ ? (
-          <Pressable
-            disabled={printing}
-            hitSlop={6}
-            style={({ pressed }) => [styles.sizeBtn, pressed && styles.pressed]}
-            onPress={() => {
-              void (async () => {
-                try {
-                  const doc = displayDocument ?? previewDocument;
-                  if (!doc) return;
-                  const png = await captureRef(shotRef, printCaptureShotOptions);
-                  if (TD404_HEADLESS_SKIA_PRINT) {
-                    const timed = rasterizeDocumentToBitmapTimed(doc, jobDpi, {
-                      threshold: 160,
-                      bakeTd404Feed: true,
-                      edgeBorders: td404EdgeBorderOptions(jobDpi),
-                      shiftDots: td404ContentShiftDots(jobDpi, printOffsetMm),
-                    });
-                    const result = await printTd404MonoLabel({
-                      monoBytes: timed.result.mono1bppBuffer,
-                      widthDots: timed.result.widthDots,
-                      heightDots: timed.result.heightDots,
-                      bytesPerRow: timed.result.bytesPerRow,
-                      widthMm: doc.widthMm,
-                      heightMm: doc.heightMm,
-                      gapMm: gapLength,
-                      dpi: jobDpi,
-                      dryRun: true,
-                      gitSha: resolveGitSha(),
-                      buildTime: resolveBuildTime(),
-                    });
-                    const text = `path=headless ${result?.widthDots}x${result?.heightDots} jobBase64Chars=${result?.jobBase64?.length ?? 0}\n${result?.jobBase64 ?? ''}`;
-                    await FileSystem.writeAsStringAsync(`${FileSystem.documentDirectory}tspl-dry-run.txt`, text);
-                    console.info('[TSPL-DRY-RUN]', text.slice(0, 240));
-                    Alert.alert('TSPL dry-run', `Headless ${result?.widthDots}×${result?.heightDots}, ${result?.jobBase64?.length ?? 0} base64 chars. Not printed.`);
-                  } else {
-                    const result = await printTd404PngLabel({
-                      pngBase64: png,
-                      widthMm: doc.widthMm,
-                      heightMm: doc.heightMm,
-                      gapMm: gapLength,
-                      dpi: jobDpi,
-                      threshold: 160,
-                      dryRun: true,
-                      gitSha: resolveGitSha(),
-                      buildTime: resolveBuildTime(),
-                    });
-                    const text = `path=png ${result?.widthDots}x${result?.heightDots} jobBase64Chars=${result?.jobBase64?.length ?? 0}\n${result?.jobBase64 ?? ''}`;
-                    await FileSystem.writeAsStringAsync(`${FileSystem.documentDirectory}tspl-dry-run.txt`, text);
-                    console.info('[TSPL-DRY-RUN]', text.slice(0, 240));
-                    Alert.alert('TSPL dry-run', `PNG ${result?.widthDots ?? '?'}×${result?.heightDots ?? '?'}, ${result?.jobBase64?.length ?? 0} base64 chars. Not printed.`);
-                  }
-                } catch (err) {
-                  Alert.alert('TSPL dry-run failed', err instanceof Error ? err.message : String(err));
-                }
-              })();
-            }}>
-            <Text style={styles.sizeBtnText}>Dump</Text>
-          </Pressable>
-        ) : null}
         <Pressable
           disabled={printing}
           hitSlop={6}
@@ -2551,6 +2487,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  advancedChevron: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EEF2F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   advancedStatusText: {
     fontSize: 12,

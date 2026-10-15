@@ -286,12 +286,17 @@ export const PdfPrintPanel = forwardRef<
         </View>
 
         <Pressable onPress={() => setShowAdvanced((v) => !v)} style={[styles.section, styles.advHead]}>
-          <Text style={styles.advTitle}>Advanced</Text>
+          <View style={styles.advLeft}>
+            <AppIcon name="gearshape" size={18} tintColor="#475569" />
+            <Text style={styles.advTitle}>Advanced Settings</Text>
+          </View>
           <View style={styles.advRight}>
             <Text style={styles.advSummary} numberOfLines={1}>
               Darkness {darkness == null ? 'Auto' : darkness}
             </Text>
-            <AppIcon name={showAdvanced ? 'chevron.up' : 'chevron.down'} size={14} tintColor="#94A3B8" />
+            <View style={styles.advChevron}>
+              <AppIcon name={showAdvanced ? 'chevron.up' : 'chevron.down'} size={16} tintColor="#475569" />
+            </View>
           </View>
         </Pressable>
         {showAdvanced ? (
@@ -433,6 +438,15 @@ const styles = StyleSheet.create({
   hint: { color: Palette.muted, fontSize: 13 },
   err: { color: Palette.danger, fontSize: 12 },
   advHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  advLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  advChevron: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EEF2F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   advTitle: { ...Type.body, fontWeight: '600', color: Palette.ink },
   advRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   advSummary: { fontSize: 12, color: '#64748B', flexShrink: 1 },

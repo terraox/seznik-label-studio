@@ -623,7 +623,7 @@ export default function PdfEditorScreen() {
         </ScrollView>
       )}
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.two + 6 }]}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 8) + Spacing.two + 6 }]}>
         {step === 'print' && session ? (
           <View style={styles.printActions}>
             <Pressable
@@ -730,8 +730,8 @@ const styles = StyleSheet.create({
   stepLabelOn: { color: Palette.ink },
   stepLine: { flex: 1, height: 2, marginHorizontal: 8, backgroundColor: '#E2E8F0', borderRadius: 1 },
   stepLineOn: { backgroundColor: Palette.accent },
-  editColumn: { flex: 1 },
-  cropStage: { flex: 1, width: '100%', backgroundColor: '#111827' },
+  editColumn: { flex: 1, minHeight: 0 },
+  cropStage: { flex: 1, minHeight: 0, width: '100%', overflow: 'hidden', backgroundColor: '#111827' },
   previewArea: {
     backgroundColor: '#AEB4BC',
     alignItems: 'center',
@@ -757,7 +757,7 @@ const styles = StyleSheet.create({
   sizeBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
   printContent: { paddingBottom: 24 },
   printSettings: { paddingHorizontal: 12, paddingTop: 12 },
-  scroll: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24, gap: 12 },
   editContent: { paddingBottom: 24 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
@@ -788,6 +788,7 @@ const styles = StyleSheet.create({
   change: { fontSize: 14, fontWeight: '600', color: Palette.accent },
   previewSpinner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   bottomBar: {
+    flexShrink: 0,
     paddingHorizontal: 16,
     paddingTop: 10,
     backgroundColor: Palette.screen,
@@ -798,6 +799,7 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.accent,
     borderRadius: 26,
     minHeight: 52,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -806,6 +808,7 @@ const styles = StyleSheet.create({
   exportBtn: {
     flex: 1,
     minHeight: 52,
+    flexShrink: 0,
     borderRadius: 26,
     borderWidth: 1.5,
     borderColor: Palette.accent,
