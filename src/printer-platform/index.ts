@@ -15,8 +15,6 @@ import type { Dialect, KnownDevice, Route, TaggedDevice } from '@/printer-core';
 import { devDriver, DEV_DRIVER_ID } from '@/printer-dev';
 import { tejasDriver } from '@/printer-tejas';
 import { joshDriver } from '@/printer-josh';
-import { labelxDriver } from '@/printer-labelx';
-import { tezDriver } from '@/printer-tez';
 
 import { classicScanBackend } from './classic-scan';
 import { AsyncStorageDeviceMemory, AsyncStorageQueueStorage } from './storage';
@@ -29,7 +27,7 @@ export { ClassicScanBackend, classicScanBackend } from './classic-scan';
  * The brands with the narrowest, most distinctive name prefixes come first; the
  * generic SPP fallback will go last once it exists.
  */
-const CLAIM_SPECIFICITY = ['labelx', 'tejas', 'josh', 'tez', DEV_DRIVER_ID, 'generic-spp'];
+const CLAIM_SPECIFICITY = ['tejas', 'josh', DEV_DRIVER_ID, 'generic-spp'];
 
 export const deviceMemory = new AsyncStorageDeviceMemory();
 export const queueStorage = new AsyncStorageQueueStorage();
@@ -53,8 +51,6 @@ export function initPrinterPlatform(): void {
   registry.replace(devDriver);
   registry.replace(tejasDriver);
   registry.replace(joshDriver);
-  registry.replace(labelxDriver);
-  registry.replace(tezDriver);
 }
 
 export function isPrinterPlatformReady(): boolean {

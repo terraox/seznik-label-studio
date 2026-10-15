@@ -11,16 +11,6 @@ export async function debugLogPrinterBatteries(
   switch (model) {
     case 'josh':
       return;
-    case 'tez': {
-      const { debugLogTezBattery } = await import('tez-printer');
-      debugLogTezBattery();
-      break;
-    }
-    case 'labelx': {
-      const { debugLogLabelXBattery } = await import('labelx-printer');
-      await debugLogLabelXBattery();
-      break;
-    }
     case 'td404': {
       if (!deviceId) return;
       const { debugLogTd404RemoteBattery } = await import('td404-printer');

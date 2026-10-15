@@ -12,31 +12,11 @@ export type BatteryFetchContext = {
 
 /**
  * Battery of the connected printer (not the phone).
- * Tez and Label X use vendor SDKs; other bridges fall back to Android 13+ OS battery for that MAC.
+ * Josh uses its vendor SDK; other bridges fall back to Android 13+ OS battery for that MAC.
  */
 export async function fetchPrinterBatteryPercent(ctx: BatteryFetchContext): Promise<number | null> {
   if (!printerReportsBattery(ctx)) return null;
   if (Platform.OS !== 'android') return null;
-
-  if (ctx.sdkId === 'tez' || ctx.transport === 'tez-spp') {
-    try {
-      const { getTezBatteryLevel } = await import('tez-printer');
-      const level = normalizeBatteryPercent(await getTezBatteryLevel());
-      if (level != null) return level;
-    } catch {
-      // Fall through to the OS reading when the SDK query fails.
-    }
-  }
-
-  if (ctx.sdkId === 'labelx' || ctx.transport === 'labelx-spp') {
-    try {
-      const { getLabelXBatteryLevel } = await import('labelx-printer');
-      const level = normalizeBatteryPercent(await getLabelXBatteryLevel());
-      if (level != null) return level;
-    } catch {
-      // Fall through to the OS reading when the SDK query fails.
-    }
-  }
 
   if (ctx.sdkId === 'josh' || ctx.transport === 'josh-lpapi') {
     try {

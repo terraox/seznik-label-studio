@@ -616,13 +616,10 @@ class PrinterManager {
     }
   }
 
-  private getTez() {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('tez-printer') as typeof import('tez-printer');
-    } catch {
-      return null;
-    }
+  // Tez / Shakti and Label X SDKs were removed from the app.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getTez(): any {
+    return null;
   }
 
   private getDev() {
@@ -639,18 +636,9 @@ class PrinterManager {
     }
   }
 
-  private getLabelX() {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('../../../modules/labelx-printer/src/index') as typeof import('../../../modules/labelx-printer/src/index');
-    } catch {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('labelx-printer') as typeof import('../../../modules/labelx-printer/src/index');
-      } catch {
-        return null;
-      }
-    }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getLabelX(): any {
+    return null;
   }
 
   getCapabilities(): BluetoothCapabilities {
@@ -3092,7 +3080,7 @@ class PrinterManager {
 
     const tez = this.getTez();
     if (!tez?.isTezNativeAvailable()) {
-      throw new Error('Tez printer module is not available in this build. Install a development client that includes tez-printer.');
+      throw new Error('Tez / Shakti printers are no longer supported in this build.');
     }
 
     if (this.activeTransport === 'tez-spp' && tez.isTezConnected()) {
