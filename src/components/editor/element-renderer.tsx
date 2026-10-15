@@ -1,5 +1,5 @@
 import { computeArcTextLayout } from "@/lib/editor/arctext-layout";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Platform, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import Svg, {
@@ -326,6 +326,34 @@ function letterSpacingStyle(
   return { letterSpacing: spacing * scale };
 }
 
+/**
+ * Native lines are only trusted once the preview scale has stopped changing. While the canvas
+ * is still fitting, the box is laid out at a throw-away size, the text no longer fits and React
+ * Native breaks it mid-word; caching that would freeze the broken lines for good.
+ */
+function useSettledLineMemory(scale: number) {
+  const pendingLines = useRef<{ key: string; lines: string[] } | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (settleTimer.current != null) clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+      pendingLines.current = null;
+    },
+    [scale],
+  );
+  return (key: string, lines: string[]) => {
+    pendingLines.current = { key, lines };
+    if (settleTimer.current != null) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      settleTimer.current = null;
+      const pending = pendingLines.current;
+      pendingLines.current = null;
+      if (pending) rememberVisibleLines(pending.key, pending.lines);
+    }, 250);
+  };
+}
+
 function TextContent({
   element,
   scale,
@@ -375,6 +403,7 @@ function TextContent({
   const align = element.align === "spacing" ? "justify" : element.align;
   const swap = useReflowSwapStyles(liveReflowSv);
   const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
+  const rememberWhenSettled = useSettledLineMemory(scale);
   // Native underlines sit on the font descent and overlap between lines, so draw the bars at
   // the same offsets as print (em box centred in the line, bar just below the em).
   const hasDecoration = !!(element.underline || element.strikethrough);
@@ -463,7 +492,7 @@ function TextContent({
                   );
                 }
                 if (layoutWidthMm != null || !formatted.layoutKey) return;
-                rememberVisibleLines(
+                rememberWhenSettled(
                   formatted.layoutKey,
                   cleanNativeLines(
                     event.nativeEvent.lines.map((line) => line.text),
@@ -525,6 +554,7 @@ function DegreesContent({
   layoutHeightMm?: number;
   liveReflowSv?: SharedValue<boolean>;
 }) {
+  const rememberWhenSettled = useSettledLineMemory(scale);
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
     (s) => s.editor.highlightColumnName,
@@ -594,7 +624,7 @@ function DegreesContent({
             ? undefined
             : (event) => {
                 if (!formatted.layoutKey) return;
-                rememberVisibleLines(
+                rememberWhenSettled(
                   formatted.layoutKey,
                   cleanNativeLines(
                     event.nativeEvent.lines.map((line) => line.text),

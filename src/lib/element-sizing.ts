@@ -643,11 +643,13 @@ export function clampElementToLabel(
   const finalHeight = hasExplicitHeight ? Math.min(Math.max(minMm, rawHeight), bounds.height) : clamped.height;
   const heightMatches = !hasExplicitHeight || element.height === finalHeight;
 
+  // Opening a label must not nudge boxes: sub-0.01 mm differences are just roundMm noise.
+  const SAME_MM = 0.011;
   if (
-    element.left === finalLeft &&
-    element.top === finalTop &&
-    element.width === finalWidth &&
-    heightMatches
+    Math.abs(element.left - finalLeft) < SAME_MM &&
+    Math.abs(element.top - finalTop) < SAME_MM &&
+    Math.abs(element.width - finalWidth) < SAME_MM &&
+    (heightMatches || Math.abs((element as { height: number }).height - finalHeight) < SAME_MM)
   ) {
     return element;
   }

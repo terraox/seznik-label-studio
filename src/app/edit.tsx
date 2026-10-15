@@ -2574,6 +2574,15 @@ export default function EditScreen() {
         ) {
           (next as { height: number }).height = box.height;
         }
+        // Text that sizes itself from its lines never keeps a dragged-in height; a stale one
+        // is what made reopened boxes jump.
+        if (
+          (el.type === 'text' || el.type === 'degrees') &&
+          el.autoTextHeight !== false &&
+          el.autoWrapping !== 'Close'
+        ) {
+          delete (next as { height?: number }).height;
+        }
         return next;
       };
 
