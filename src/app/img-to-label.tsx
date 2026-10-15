@@ -1,7 +1,7 @@
 /**
  * Fit Image — pick a photo or PDF page, choose stock size (same as New Label
- * Setup), then open the existing `/edit` canvas. Crop and proportional fit
- * happen on that canvas; print uses the normal `/print` path.
+ * Setup), extract the label region from the original file, then open the
+ * existing `/edit` canvas. Image-only print uses that extract, not a ViewShot.
  */
 
 import { Image } from 'expo-image';
@@ -19,13 +19,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
+import { ImageCropScreen } from '@/components/editor/image-crop-screen';
 import { LabelSizeSetupSection } from '@/components/label-size-setup-section';
 import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
-import { applyFitLabelToEditor } from '@/lib/img-to-label-apply';
+import { FULL_CROP, type NormalizedCrop } from '@/lib/editor/image-crop-math';
+import { applyFitLabelToEditor, detectFitLabelCropFromUri } from '@/lib/img-to-label-apply';
 import { loadPdfLabelSource, rasterPdfLabelPage } from '@/lib/img-to-label-content';
+import { fitLabelRasterDpi } from '@/lib/img-to-label-document';
+import { FitLabelExtractError } from '@/lib/img-to-label-extract';
 import {
   clampLabelMm,
   validateLabelSize,
@@ -54,7 +58,19 @@ export default function ImgToLabelScreen() {
   const [labelUnit, setLabelUnit] = useState<LabelUnit>('mm');
   const [pageLoading, setPageLoading] = useState(false);
   const [opening, setOpening] = useState(false);
+  const [crop, setCrop] = useState<NormalizedCrop | null>(null);
+  const [cropCertain, setCropCertain] = useState(false);
+  const [showCrop, setShowCrop] = useState(false);
   const openingRef = useRef(false);
+
+  const detectCrop = useCallback(async (uri: string) => {
+    const detected = await detectFitLabelCropFromUri(uri);
+    setCrop(detected.crop);
+    setCropCertain(detected.certain);
+    if (detected.width && detected.height) {
+      setImagePixels({ width: detected.width, height: detected.height });
+    }
+  }, []);
 
   const pickImage = useCallback(async () => {
     try {
@@ -66,11 +82,15 @@ export default function ImgToLabelScreen() {
       setPdfPageIndex(0);
       setImageUri(asset.uri);
       setImagePixels({ width: asset.width, height: asset.height });
+      setCrop(null);
+      setCropCertain(false);
+      setShowCrop(false);
       setStep('size');
+      void detectCrop(asset.uri);
     } catch {
       Alert.alert('Error', 'Unable to load this image.\nPlease try another image.');
     }
-  }, [pickImageAsset]);
+  }, [detectCrop, pickImageAsset]);
 
   const pickPdf = useCallback(async () => {
     try {
@@ -86,12 +106,16 @@ export default function ImgToLabelScreen() {
       setPdfPageIndex(0);
       setImageUri(loaded.firstPage.uri);
       setImagePixels({ width: loaded.firstPage.width, height: loaded.firstPage.height });
+      setCrop(null);
+      setCropCertain(false);
+      setShowCrop(false);
       setStep('size');
+      void detectCrop(loaded.firstPage.uri);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to open this PDF.';
       Alert.alert('PDF', message);
     }
-  }, [pickDocumentWithSource]);
+  }, [detectCrop, pickDocumentWithSource]);
 
   const openPdfPage = useCallback(
     async (index: number) => {
@@ -103,6 +127,9 @@ export default function ImgToLabelScreen() {
         setPdfPageIndex(next);
         setImageUri(page.uri);
         setImagePixels({ width: page.width, height: page.height });
+        setCrop(null);
+        setCropCertain(false);
+        void detectCrop(page.uri);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to open that PDF page.';
         Alert.alert('PDF', message);
@@ -110,7 +137,7 @@ export default function ImgToLabelScreen() {
         setPageLoading(false);
       }
     },
-    [pdfPageCount, pdfUri],
+    [detectCrop, pdfPageCount, pdfUri],
   );
 
   const openOnCanvas = useCallback(async () => {
@@ -126,6 +153,11 @@ export default function ImgToLabelScreen() {
       return;
     }
 
+    if (!cropCertain) {
+      setShowCrop(true);
+      return;
+    }
+
     openingRef.current = true;
     setOpening(true);
     try {
@@ -136,11 +168,11 @@ export default function ImgToLabelScreen() {
         imageHeight: imagePixels.height,
         pdfUri,
         pdfPageIndex,
-        crop: null,
+        crop: crop ?? FULL_CROP,
         widthMm: size.widthMm,
         heightMm: size.heightMm,
         fitMode: 'contain',
-        outputDpi: getPrinterManager().getPrintDpi(),
+        outputDpi: fitLabelRasterDpi(getPrinterManager().getPrintDpi()),
         paperType: defaults.paperType,
       });
       const imageId = doc.elements.find((el) => el.type === 'image')?.id;
@@ -152,6 +184,12 @@ export default function ImgToLabelScreen() {
         },
       });
     } catch (error) {
+      if (error instanceof FitLabelExtractError || (error instanceof Error && error.name === 'FitLabelExtractError')) {
+        setCropCertain(false);
+        setShowCrop(true);
+        Alert.alert('Check the crop', 'The extracted region did not match the original. Adjust the crop frame, then open in the editor.');
+        return;
+      }
       const message =
         error instanceof Error ? error.message : 'Unable to open this image on the canvas.';
       Alert.alert('Fit Image', message);
@@ -160,6 +198,8 @@ export default function ImgToLabelScreen() {
       setOpening(false);
     }
   }, [
+    crop,
+    cropCertain,
     defaults.paperType,
     heightMm,
     imagePixels,
@@ -191,7 +231,7 @@ export default function ImgToLabelScreen() {
           <View style={styles.importCard}>
             <Text style={styles.importTitle}>Import Image or PDF</Text>
             <Text style={styles.importHint}>
-              Choose stock size next, then crop and fit on the editor canvas.
+              Choose stock size next. The original file stays unchanged; only the detected label region is placed on the canvas.
             </Text>
             <Pressable
               onPress={() => void pickImage()}
@@ -248,6 +288,11 @@ export default function ImgToLabelScreen() {
                       {sourceKind === 'pdf' ? 'Change PDF' : 'Change Image'}
                     </Text>
                   </Pressable>
+                  <Pressable
+                    onPress={() => setShowCrop(true)}
+                    style={({ pressed }) => [styles.changeBtn, pressed && styles.pressed]}>
+                    <Text style={styles.changeBtnText}>Adjust crop</Text>
+                  </Pressable>
                 </View>
               </View>
             ) : null}
@@ -295,6 +340,26 @@ export default function ImgToLabelScreen() {
 
       {imageSourceSheet}
       {documentSourceSheet}
+      {showCrop && imageUri ? (
+        <View style={styles.cropOverlay}>
+          <ImageCropScreen
+            sourceUri={imageUri}
+            sourceWidth={imagePixels?.width}
+            sourceHeight={imagePixels?.height}
+            initialCrop={crop ?? FULL_CROP}
+            commitMode="window"
+            onCancel={() => setShowCrop(false)}
+            onDone={(result) => {
+              setCrop(result.crop);
+              setCropCertain(true);
+              if (result.width > 0 && result.height > 0) {
+                setImagePixels({ width: result.width, height: result.height });
+              }
+              setShowCrop(false);
+            }}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -375,7 +440,8 @@ const styles = StyleSheet.create({
   pdfNavText: { fontSize: 13, fontWeight: '600', color: Palette.ink },
   pdfNavLabel: { fontSize: 13, fontWeight: '600', color: '#64748B' },
   pageSpinner: { marginTop: 4 },
-  changeRow: { alignItems: 'center' },
+  cropOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 20 },
+  changeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
   changeBtn: { paddingVertical: 6, paddingHorizontal: 10 },
   changeBtnText: { fontSize: 13, fontWeight: '600', color: Palette.accent },
   bottomBar: {

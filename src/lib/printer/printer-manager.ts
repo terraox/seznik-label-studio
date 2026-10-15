@@ -326,14 +326,37 @@ class PrinterManager {
   private batteryRefreshInFlight = false;
   private static readonly BATTERY_POLL_MS = 60_000;
   private static readonly BATTERY_REFRESH_MIN_MS = 30_000;
+  /** Consecutive native-down probes before reconcile clears a live store. */
+  private nativeUnhealthyStreak = 0;
+  private static readonly NATIVE_UNHEALTHY_CLEAR_STREAK = 3;
 
   private scheduleDebugBatteryLog(model: SeznikPrinterModelId, deviceId: string | null): void {
     if (!__DEV__) return;
+    // Josh already logs from native connect. A late dynamic import here
+    // Fast-Refresh remounts the app and used to kick a disconnect loop.
+    if (model === 'josh') return;
     setTimeout(() => {
       void import('@/lib/printer/printer-battery-debug')
         .then((m) => m.debugLogPrinterBatteries(model, deviceId))
         .catch(() => {});
     }, 800);
+  }
+
+  private transportForDriver(model: SeznikPrinterModelId): ActiveTransport {
+    switch (model) {
+      case 'td404':
+        return 'td404-spp';
+      case 'josh':
+        return 'josh-lpapi';
+      case 'dev':
+        return 'dev-spp';
+      case 'tez':
+        return 'tez-spp';
+      case 'labelx':
+        return 'labelx-spp';
+      default:
+        return null;
+    }
   }
 
   private decrementPrintQueue(): void {
@@ -424,6 +447,10 @@ class PrinterManager {
               const last = store.lastDeviceForBridge[bridge];
               if (last?.id && normalizePrinterMac(last.id) === mac) {
                 if (this.manualConnectMac && this.manualConnectMac !== mac) return;
+                if (this.isConnectionHealthy()) {
+                  this.reconcileConnectionState();
+                  return;
+                }
                 this.maybeAutoReconnect({ force: true });
               }
             }
@@ -1393,6 +1420,9 @@ class PrinterManager {
       if (!stillCurrent()) return;
       this.manualConnectMac = null;
       this.connectionState = 'connected';
+      this.connectAttemptStartedAtMs = 0;
+      const transport = this.transportForDriver(model);
+      if (transport) this.activeTransport = transport;
       const meta = this.connectionMetaFromActiveTransport();
       store.setConnectedDevice(deviceId, deviceName ?? store.deviceName ?? deviceId, {
         ...meta,
@@ -2797,24 +2827,11 @@ class PrinterManager {
   }
 
   private isLiveSessionForModel(model: SeznikPrinterModelId, deviceId: string): boolean {
-    if (!this.isConnectionHealthy()) return false;
+    if (!this.isModelConnected(model)) return false;
     const store = usePrinterStore.getState();
-    if (!store.deviceId) return false;
-    if (normalizePrinterMac(store.deviceId) !== normalizePrinterMac(deviceId)) return false;
-    switch (model) {
-      case 'td404':
-        return this.activeTransport === 'td404-spp';
-      case 'josh':
-        return this.activeTransport === 'josh-lpapi';
-      case 'dev':
-        return this.activeTransport === 'dev-spp';
-      case 'tez':
-        return this.activeTransport === 'tez-spp';
-      case 'labelx':
-        return this.activeTransport === 'labelx-spp';
-      default:
-        return false;
-    }
+    const known = store.deviceId ?? store.lastDeviceId;
+    if (!known) return true;
+    return normalizePrinterMac(known) === normalizePrinterMac(deviceId);
   }
 
   /** User tapped Disconnect — block every automatic reconnect until they connect again manually. */
@@ -2959,33 +2976,26 @@ class PrinterManager {
     if (this.activeTransport === 'ble') {
       return this.connectedDevice !== null && this.writableTarget !== null;
     }
-    const store = usePrinterStore.getState();
-    if (store.status !== 'connected' && store.status !== 'printing') {
-      return false;
-    }
-    // activeTransport is null — probe native modules to auto-restore when the app still expects a link.
+    // JS remount / Fast Refresh drops activeTransport while native is still up.
+    // Probe first — requiring store.status === connected raced persist hydrate and
+    // caused disconnect+reconnect loops (ACL_CONNECTED → force reconnect).
     if (this.getLabelX()?.isLabelXConnected?.()) {
-      console.info('[printer] isConnectionHealthy: auto-restoring labelx-spp');
       this.activeTransport = 'labelx-spp';
       return true;
     }
     if (this.getDev()?.isDevConnected?.()) {
-      console.info('[printer] isConnectionHealthy: auto-restoring dev-spp');
       this.activeTransport = 'dev-spp';
       return true;
     }
     if (this.getTd404()?.isTd404Connected?.()) {
-      console.info('[printer] isConnectionHealthy: auto-restoring td404-spp');
       this.activeTransport = 'td404-spp';
       return true;
     }
     if (this.getTez()?.isTezConnected?.()) {
-      console.info('[printer] isConnectionHealthy: auto-restoring tez-spp');
       this.activeTransport = 'tez-spp';
       return true;
     }
     if (this.getJosh()?.isJoshConnected?.()) {
-      console.info('[printer] isConnectionHealthy: auto-restoring josh-lpapi');
       this.activeTransport = 'josh-lpapi';
       return true;
     }
@@ -3109,6 +3119,7 @@ class PrinterManager {
     const storeLive = store.status === 'connected' || store.status === 'printing';
 
     if (healthy) {
+      this.nativeUnhealthyStreak = 0;
       this.connectionState = 'connected';
       this.connectAttemptStartedAtMs = 0;
       if (!storeLive) {
@@ -3134,12 +3145,17 @@ class PrinterManager {
     }
 
     if (storeLive || this.connectionState === 'connected' || this.connectionState === 'printing') {
+      this.nativeUnhealthyStreak += 1;
+      if (this.nativeUnhealthyStreak < PrinterManager.NATIVE_UNHEALTHY_CLEAR_STREAK) {
+        return this.connectionState;
+      }
       this.activeTransport = null;
       this.connectedDevice = null;
       this.writableTarget = null;
       this.connectionState = 'disconnected';
       this.autoReconnectSessionKey = null;
       this.connectAttemptStartedAtMs = 0;
+      this.nativeUnhealthyStreak = 0;
       this.stopBatteryPolling();
       store.clearConnection();
     } else if (this.connectionState !== 'error') {
@@ -4454,9 +4470,31 @@ class PrinterManager {
   }
 }
 
-let manager: PrinterManager | null = null;
-let appStateListenerSetup = false;
-let globalAutoReconnectTimer: ReturnType<typeof setInterval> | null = null;
+type PrinterManagerGlobals = {
+  __sezPrintPrinterManager?: PrinterManager | null;
+  __sezPrintAppStateListenerSetup?: boolean;
+  __sezPrintAutoReconnectTimer?: ReturnType<typeof setInterval> | null;
+};
+
+function printerManagerGlobals(): PrinterManagerGlobals {
+  return globalThis as PrinterManagerGlobals;
+}
+
+let manager: PrinterManager | null = printerManagerGlobals().__sezPrintPrinterManager ?? null;
+let appStateListenerSetup = printerManagerGlobals().__sezPrintAppStateListenerSetup === true;
+let globalAutoReconnectTimer: ReturnType<typeof setInterval> | null =
+  printerManagerGlobals().__sezPrintAutoReconnectTimer ?? null;
+
+if (manager) {
+  Object.setPrototypeOf(manager, PrinterManager.prototype);
+}
+
+function persistPrinterManagerSingleton(): void {
+  const g = printerManagerGlobals();
+  g.__sezPrintPrinterManager = manager;
+  g.__sezPrintAppStateListenerSetup = appStateListenerSetup;
+  g.__sezPrintAutoReconnectTimer = globalAutoReconnectTimer;
+}
 
 /**
  * Listen for app state changes to clean up stale BLE connections.
@@ -4497,6 +4535,7 @@ function setupAppStateListener() {
       manager?.maybeAutoReconnect();
     }, PrinterManager.AUTO_RECONNECT_MIN_INTERVAL_MS);
   }
+  persistPrinterManagerSingleton();
 }
 
 export function getPrinterManager(): PrinterManager {
@@ -4504,6 +4543,7 @@ export function getPrinterManager(): PrinterManager {
     manager = new PrinterManager();
     manager.setupAclListener();
     setupAppStateListener();
+    persistPrinterManagerSingleton();
   }
   return manager;
 }

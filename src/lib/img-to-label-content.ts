@@ -136,12 +136,26 @@ export async function cropPdfPageToPngUri(
   pageIndex: number,
   crop: NormalizedCrop,
   dpi: number,
-): Promise<{ uri: string; width: number; height: number; pageCount: number }> {
+): Promise<{
+  uri: string;
+  width: number;
+  height: number;
+  pageCount: number;
+  sourceWidth: number;
+  sourceHeight: number;
+}> {
   const target = fitLabelPdfCropTarget(uri, pageIndex, dpi);
   const page = await rasterPdfLabelPage(target.uri, target.pageIndex, target.dpi);
   const next = isFullSourceCrop(crop) ? FULL_CROP : crop;
   if (isFullSourceCrop(next)) {
-    return { uri: page.uri, width: page.width, height: page.height, pageCount: page.pageCount };
+    return {
+      uri: page.uri,
+      width: page.width,
+      height: page.height,
+      pageCount: page.pageCount,
+      sourceWidth: page.width,
+      sourceHeight: page.height,
+    };
   }
   const cropped = await applyImageCrop(page.uri, page.width, page.height, next, { format: 'png' });
   return {
@@ -149,5 +163,7 @@ export async function cropPdfPageToPngUri(
     width: cropped.width,
     height: cropped.height,
     pageCount: page.pageCount,
+    sourceWidth: page.width,
+    sourceHeight: page.height,
   };
 }

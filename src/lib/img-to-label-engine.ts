@@ -169,35 +169,24 @@ function blitGray(
   return { width, height, gray: out };
 }
 
-function bilinearGrayToSize(src: GrayRaster, width: number, height: number): GrayRaster {
+function nearestGrayToSize(src: GrayRaster, width: number, height: number): GrayRaster {
   const out = new Uint8Array(width * height);
   const srcW = src.width;
   const srcH = src.height;
   const gray = src.gray;
-  const xScale = width <= 1 || srcW <= 1 ? 0 : (srcW - 1) / (width - 1);
-  const yScale = height <= 1 || srcH <= 1 ? 0 : (srcH - 1) / (height - 1);
   for (let y = 0; y < height; y++) {
-    const fy = y * yScale;
-    const y0 = Math.min(srcH - 1, Math.floor(fy));
-    const y1 = Math.min(srcH - 1, y0 + 1);
-    const wy = fy - y0;
-    const row0 = y0 * srcW;
-    const row1 = y1 * srcW;
+    const sy = Math.min(srcH - 1, Math.floor((y * srcH) / height));
+    const srcRow = sy * srcW;
     const outRow = y * width;
     for (let x = 0; x < width; x++) {
-      const fx = x * xScale;
-      const x0 = Math.min(srcW - 1, Math.floor(fx));
-      const x1 = Math.min(srcW - 1, x0 + 1);
-      const wx = fx - x0;
-      const top = gray[row0 + x0] + (gray[row0 + x1] - gray[row0 + x0]) * wx;
-      const bot = gray[row1 + x0] + (gray[row1 + x1] - gray[row1 + x0]) * wx;
-      out[outRow + x] = Math.round(top + (bot - top) * wy);
+      const sx = Math.min(srcW - 1, Math.floor((x * srcW) / width));
+      out[outRow + x] = gray[srcRow + sx];
     }
   }
   return { width, height, gray: out };
 }
 
-/** Box-average when shrinking (keeps barcode bars), bilinear when growing. */
+/** Box-average when shrinking (keeps barcode bars). Nearest-neighbor when growing — bilinear blurs QR modules. */
 export function resampleGrayToSize(src: GrayRaster, destW: number, destH: number): GrayRaster {
   const width = Math.max(1, Math.round(destW));
   const height = Math.max(1, Math.round(destH));
@@ -205,7 +194,7 @@ export function resampleGrayToSize(src: GrayRaster, destW: number, destH: number
   if (width <= src.width && height <= src.height) {
     return downsampleGrayToSize(src, width, height);
   }
-  return bilinearGrayToSize(src, width, height);
+  return nearestGrayToSize(src, width, height);
 }
 
 /**

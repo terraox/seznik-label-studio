@@ -110,6 +110,18 @@ import { usePrinterStore, type PrintHistoryEntry } from '@/stores/printer-store'
 import { useSettingsStore } from '@/stores/settings-store';
 import { applyPaperType, defaultLabelSettings, resolveLabelSettings } from '@/lib/label-settings';
 import { loadAndRenderPdf, printPdfToThermal, type RenderedPdfPage } from '@/lib/pdf-printer';
+import { refitFitLabelDocument } from '@/lib/img-to-label-document';
+import { downscaleImageUriToMaxEdge } from '@/lib/editor/image-ingest-native';
+import {
+  buildFitLabelPrintPayload,
+  fitLabelDecodeMaxEdgePx,
+  fitLabelPrintImageElement,
+  fitLabelPrintSourceUri,
+  isFitLabelImageOnlyDocument,
+  type FitLabelPrintPayload,
+} from '@/lib/img-to-label-print';
+import { decodeGalleryImage } from '@/lib/printer/gallery-decode';
+import { grayToPngBase64 } from '@/lib/printer/escpos';
 
 import { fitLabelSize, printMediaSizeMm, type LabelSizeMm } from '@/lib/label-geometry';
 import {
@@ -703,6 +715,9 @@ export default function PrintScreen() {
       // Single Label Tag: crop leftmost 14×96 column (not full sheet SIZE).
       return extractJewelryFirstColumnDocument(frozen);
     }
+    if (isFitLabelImageOnlyDocument(previewDocument)) {
+      return refitFitLabelDocument(previewDocument, printSize.widthMm, printSize.heightMm);
+    }
     return applyPrintSize(previewDocument, printPreset, printSize);
   }, [
     previewDocument,
@@ -926,7 +941,7 @@ export default function PrintScreen() {
         jewelry: jewelryDieCutJob,
         caps: jobCaps,
       });
-      const { density: printDensity, threshold, speed: printSpeed, dither } = quality;
+      const { density: printDensity, threshold, speed: qualitySpeed, dither } = quality;
       const inkSteps = darknessSteps(darkness, jobCaps);
       // TD-404 at 0°: the saved offset, plus 1 mm right and 1 mm down, is drawn
       // into the elements. The border is a later layer and stays put. Rotated
@@ -934,26 +949,35 @@ export default function PrintScreen() {
       const bakeOffset = manager.usesTd404CommandSet && orientationDeg === 0;
       const offsetH = bakeOffset ? 0 : printOffsetMm.x;
       const offsetV = bakeOffset ? 0 : printOffsetMm.y;
+      const fitLabelJob =
+        (displayDocument ?? previewDocument) != null &&
+        isFitLabelImageOnlyDocument(displayDocument ?? previewDocument!);
+      // Device-confirmed: SPEED 1 keeps Fit Label barcode/QR modules from filling.
+      const printSpeed = fitLabelJob && speed == null ? 1 : qualitySpeed;
       console.info(
         `[print] Advanced params → density=${printDensity} speed=${printSpeed} threshold=${threshold} gap=${gapLength}mm offset=${printOffsetMm.x}x${printOffsetMm.y}mm (${bakeOffset ? 'bitmap' : 'REFERENCE'}) darknessUI=${darkness ?? 'Auto'} speedUI=${speed ?? 'Auto'} bridge=${jobBridge ?? 'none'} densityMode=${darkness == null ? 'auto' : 'manual'} speedMode=${speed == null ? 'auto' : 'manual'} inkSteps=${inkSteps}`,
       );
-
-      await loadInstalledFontsIntoRuntime().catch((err) => {
-        console.warn('[print] installed fonts failed to load', err);
-      });
-      await waitForNextPaint();
+      if (!fitLabelJob) {
+        await loadInstalledFontsIntoRuntime().catch((err) => {
+          console.warn('[print] installed fonts failed to load', err);
+        });
+        await waitForNextPaint();
+      }
 
       for (let page = 0; page < pageCount; page++) {
         const pageStart = Date.now();
         const sendCopies = copies;
+        const pageDoc = displayDocument ?? previewDocument;
+        const fitLabelExtract = pageDoc != null && isFitLabelImageOnlyDocument(pageDoc);
         if (pageCount > 1) {
           setPageIndex(page);
-          timer.start('pageWaitForPaint');
-          await waitForNextPaint();
-          timer.end('pageWaitForPaint');
+          if (!fitLabelExtract) {
+            timer.start('pageWaitForPaint');
+            await waitForNextPaint();
+            timer.end('pageWaitForPaint');
+          }
         }
 
-        const pageDoc = displayDocument ?? previewDocument;
         const td404HeadlessMono =
           manager.usesTd404CommandSet &&
           orientationDeg === 0 &&
@@ -969,6 +993,9 @@ export default function PrintScreen() {
         let rotatedBase64 = '';
         let connectionMs = 0;
         let captureMs = 0;
+        let fitLabelDecodeMs = 0;
+        let fitLabelRasterMs = 0;
+        let fitLabelMono: FitLabelPrintPayload | null = null;
         if (td404HeadlessMono) {
           const tConn0 = Date.now();
           const connectionResult = await manager.ensureConnected().catch((err) => {
@@ -979,6 +1006,93 @@ export default function PrintScreen() {
           if (connectionResult && 'error' in connectionResult) {
             throw connectionResult.error;
           }
+        } else if (fitLabelExtract && pageDoc) {
+          const tConn0 = Date.now();
+          const tCap0 = Date.now();
+          const [connectionResult, extracted] = await Promise.all([
+            manager.ensureConnected().catch((err) => {
+              return { error: err };
+            }).then((res) => {
+              connectionMs = Date.now() - tConn0;
+              return res;
+            }),
+            (async () => {
+              const imageEl = fitLabelPrintImageElement(pageDoc);
+              if (!imageEl) throw new Error('This Fit Label has no print image.');
+              const sourceUri = fitLabelPrintSourceUri(imageEl);
+              if (!sourceUri) throw new Error('This Fit Label is missing the original print image.');
+              await new Promise<void>((resolve) => setTimeout(resolve, 32));
+              const maxEdge = fitLabelDecodeMaxEdgePx(pageDoc.widthMm, pageDoc.heightMm, jobDpi);
+              const scaled = await downscaleImageUriToMaxEdge(sourceUri, maxEdge);
+              const tDecode0 = Date.now();
+              try {
+                const decoded = await decodeGalleryImage(scaled.uri);
+                const decodeMs = Date.now() - tDecode0;
+                const tRaster0 = Date.now();
+                const payload = buildFitLabelPrintPayload(decoded.gray, pageDoc, {
+                  dpi: jobDpi,
+                  threshold,
+                  orientationDeg,
+                });
+                return {
+                  payload,
+                  decodeMs,
+                  rasterMs: Date.now() - tRaster0,
+                  sourceWidth: decoded.sourceWidth,
+                  sourceHeight: decoded.sourceHeight,
+                  decodedWidth: decoded.normalizedWidth,
+                  decodedHeight: decoded.normalizedHeight,
+                };
+              } finally {
+                if (scaled.downscaled && scaled.uri !== sourceUri) {
+                  await FileSystem.deleteAsync(scaled.uri, { idempotent: true }).catch(() => undefined);
+                }
+              }
+            })(),
+          ]);
+          captureMs = Date.now() - tCap0;
+          captureResolvedAt = Date.now();
+          timer.end('capture+verify');
+          if (connectionResult && 'error' in connectionResult) {
+            throw connectionResult.error;
+          }
+          fitLabelMono = extracted.payload;
+          fitLabelDecodeMs = extracted.decodeMs;
+          fitLabelRasterMs = extracted.rasterMs;
+          if (!manager.usesTd404CommandSet) {
+            base64 = grayToPngBase64(extracted.payload.gray);
+            rotatedBase64 = base64;
+          }
+          console.info(
+            '[print] Fit Label extract (SIZE dots, BITMAP packed dots):',
+            `src ${extracted.sourceWidth}x${extracted.sourceHeight}`,
+            `| decoded ${extracted.decodedWidth}x${extracted.decodedHeight}`,
+            `| SIZE ${extracted.payload.sizeDotsW}x${extracted.payload.sizeDotsH}`,
+            `| BITMAP ${extracted.payload.widthDots}x${extracted.payload.heightDots} bytes/row=${extracted.payload.bytesPerRow}`,
+            `| gray ${extracted.payload.gray.width}x${extracted.payload.gray.height}`,
+            `| threshold=${threshold} density=${printDensity} speed=${printSpeed}`,
+            `| connection_ms=${connectionMs} decode_ms=${extracted.decodeMs} raster_ms=${extracted.rasterMs}`,
+          );
+          logPrintTrace('EDITOR_CAPTURE', {
+            userWidthMm: widthMm,
+            userHeightMm: heightMm,
+            paperWidthMm: paper.widthMm,
+            paperHeightMm: paper.heightMm,
+            captureTargetW: captureTarget.widthPx,
+            captureTargetH: captureTarget.heightPx,
+            pixelRatio: PixelRatio.get(),
+            pngBase64Chars: base64.length,
+            jobDpi,
+            connection_ms: connectionMs,
+            capture_ms: captureMs,
+            decode_ms: extracted.decodeMs,
+            raster_ms: extracted.rasterMs,
+            source_px: `${extracted.sourceWidth}x${extracted.sourceHeight}`,
+            decoded_px: `${extracted.decodedWidth}x${extracted.decodedHeight}`,
+            size_dots: `${extracted.payload.sizeDotsW}x${extracted.payload.sizeDotsH}`,
+            packed_dots: `${extracted.payload.widthDots}x${extracted.payload.heightDots}`,
+            note: 'Fit Label printUri extract; one JS decode then SIZE-dot box-average/nearest. ViewShot skipped. No native bilinear.',
+          });
         } else {
           const tConn0 = Date.now();
           const capturePacked = async () => {
@@ -1356,6 +1470,56 @@ export default function PrintScreen() {
                 gate_15ms: rasterizeMs + bitpackMs < 15 ? 'pass' : 'fail',
                 note: 'Production headless mono — canvas mm maps 1:1 to packed BITMAP dots (same as calibration/location harness).',
               });
+            } else if (fitLabelMono) {
+              const tNative0 = Date.now();
+              usedNative = await manager.printMonoLabelFast({
+                monoBytes: fitLabelMono.bits.data,
+                widthDots: fitLabelMono.widthDots,
+                heightDots: fitLabelMono.heightDots,
+                bytesPerRow: fitLabelMono.bytesPerRow,
+                widthMm: paper.widthMm,
+                heightMm: paper.heightMm,
+                gapMm: td404Job?.gapMm ?? gapLength,
+                copies: sendCopies,
+                density: td404Job?.density ?? printDensity,
+                speed: td404Job?.speed ?? printSpeed,
+                vOffsetMm: offsetV,
+                hOffsetMm: offsetH,
+                media: td404Job?.media ?? (wantsBline ? 'bline' : media),
+                dpi: jobDpi,
+              });
+              const nativeCallMs = Date.now() - tNative0;
+              if (!usedNative) {
+                throw new Error(
+                  'NATIVE_MONO_UNAVAILABLE: rebuild the Android binary so printMonoLabel is present.',
+                );
+              }
+              const monoTiming = manager.getLastTd404MonoLabelTiming();
+              const totalMs = Date.now() - pageStart;
+              console.info(
+                `[print] page ${page + 1} total: ${totalMs} ms | TD-404 printMonoLabel (Fit Label) writeMs=${monoTiming?.writeMs ?? '?'} bytesSent=${monoTiming?.bytesSent ?? '?'} connection_ms=${connectionMs} native_call_ms=${nativeCallMs}`,
+              );
+              logPrintTrace('PIPELINE', {
+                path: 'fit_label_mono',
+                connection_ms: connectionMs,
+                capture_ms: captureMs,
+                decode_ms: fitLabelDecodeMs,
+                raster_ms: fitLabelRasterMs,
+                native_call_ms: nativeCallMs,
+                transport_write_ms: monoTiming?.writeMs ?? null,
+                total_ms: totalMs,
+                buffer_bytes: monoTiming?.jobBytes ?? null,
+                width_mm: paper.widthMm,
+                height_mm: paper.heightMm,
+                width_dots: fitLabelMono.widthDots,
+                height_dots: fitLabelMono.heightDots,
+                size_dots: `${fitLabelMono.sizeDotsW}x${fitLabelMono.sizeDotsH}`,
+                bytes_per_row: fitLabelMono.bytesPerRow,
+                threshold,
+                density: printDensity,
+                speed: printSpeed,
+                note: 'Fit Label extract packed 1-bit BITMAP in printer dots. Shared resolvePrintQuality darkness/speed. No native bilinear.',
+              });
             } else {
               usedNative = await tryNativeSdkPngPrint({
                 pngBase64: rotatedBase64,
@@ -1416,8 +1580,12 @@ export default function PrintScreen() {
               }
             }
           } catch (err) {
-            if (td404HeadlessMono) {
-              console.warn('[print] TD-404 headless mono failed, falling back to ViewShot:', err);
+            if (td404HeadlessMono || fitLabelMono) {
+              console.warn('[print] TD-404 mono failed, falling back to PNG:', err);
+              if (!rotatedBase64 && fitLabelMono) {
+                base64 = grayToPngBase64(fitLabelMono.gray);
+                rotatedBase64 = base64;
+              }
               if (!rotatedBase64) {
                 await waitForNextPaint();
                 const captured = await captureRef(shotRef, printCaptureShotOptions);
@@ -1457,7 +1625,9 @@ export default function PrintScreen() {
 
         if (!td404HeadlessMono && !manager.isLabelX && !manager.isJosh && !manager.isTez && !manager.isDev && !usedNative) {
           timer.start('rasterize');
-          const bits = rasterizePngForPrint(rotatedBase64, {
+          const bits = fitLabelMono
+            ? fitLabelMono.bits
+            : rasterizePngForPrint(rotatedBase64, {
             // `paper` mm is already orientation-swapped to match rotatedBase64's
             // pixel dimensions; passing orientation:0 here would re-derive
             // unswapped dims and mismatch the already-rotated bitmap.

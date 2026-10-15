@@ -52,6 +52,8 @@ export type ImageElementState = {
   printUri?: string;
   workingWidthPx?: number;
   workingHeightPx?: number;
+  /** Fit Label extract: print this image from printUri, not a canvas screenshot. */
+  fitLabelSource?: boolean;
 };
 
 export type ClipartElementState = {

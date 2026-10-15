@@ -99,6 +99,36 @@ export function placeFitLabelImageMm(
   };
 }
 
+/** Re-place the Fit Label extract on a newly chosen stock so the crop fills that size. */
+export function refitFitLabelDocument(
+  doc: LabelDocument,
+  widthMm: number,
+  heightMm: number,
+): LabelDocument {
+  const size = clampLabelMm(widthMm, heightMm);
+  const image = doc.elements.find((el) => el.type === 'image' && el.fitLabelSource);
+  if (!image || image.type !== 'image') {
+    return { ...doc, widthMm: size.widthMm, heightMm: size.heightMm };
+  }
+  const fitMode: FitMode =
+    image.contentFit === 'cover' ? 'cover' : image.contentFit === 'fill' ? 'stretch' : 'contain';
+  const pxW = image.workingWidthPx && image.workingWidthPx > 0 ? image.workingWidthPx : 1000;
+  const aspect = image.originalAspect && image.originalAspect > 0 ? image.originalAspect : pxW / 1000;
+  const pxH =
+    image.workingHeightPx && image.workingHeightPx > 0
+      ? image.workingHeightPx
+      : Math.max(1, Math.round(pxW / aspect));
+  const placed = placeFitLabelImageMm(size.widthMm, size.heightMm, pxW, pxH, fitMode);
+  return {
+    ...doc,
+    widthMm: size.widthMm,
+    heightMm: size.heightMm,
+    elements: doc.elements.map((el) =>
+      el.id === image.id && el.type === 'image' ? { ...el, ...placed } : el,
+    ),
+  };
+}
+
 export function buildFitLabelDocument(params: {
   name?: string;
   widthMm: number;
@@ -135,8 +165,9 @@ export function buildFitLabelDocument(params: {
     originalAspect: params.ingested.originalAspect,
     workingWidthPx: params.ingested.workingWidthPx,
     workingHeightPx: params.ingested.workingHeightPx,
-    colorMode: 'B & W',
+    colorMode: 'Original',
     contentType: 'Local Image',
+    fitLabelSource: true,
   };
   return createLabelDocument({
     name: params.name ?? `Fit Label ${Math.round(size.widthMm)}×${Math.round(size.heightMm)}`,

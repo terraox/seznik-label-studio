@@ -23,6 +23,9 @@ type ImageCropScreenProps = {
   sourceUri: string;
   sourceWidth?: number;
   sourceHeight?: number;
+  initialCrop?: NormalizedCrop;
+  /** `window` returns the crop box only; Fit Label then extracts from the original file. */
+  commitMode?: 'file' | 'window';
   onCancel: () => void;
   onDone: (result: {
     uri: string;
@@ -36,6 +39,8 @@ export function ImageCropScreen({
   sourceUri,
   sourceWidth,
   sourceHeight,
+  initialCrop,
+  commitMode = 'file',
   onCancel,
   onDone,
 }: ImageCropScreenProps) {
@@ -82,6 +87,10 @@ export function ImageCropScreen({
     setSaving(true);
     try {
       const crop = canvasRef.current?.getCrop() ?? FULL_CROP;
+      if (commitMode === 'window') {
+        onDone({ uri: sourceUri, width: dims.width, height: dims.height, crop });
+        return;
+      }
       const cropped = await applyImageCrop(sourceUri, dims.width, dims.height, crop, {
         format: cropFormatFromUri(sourceUri),
       });
@@ -124,6 +133,7 @@ export function ImageCropScreen({
         sourceUri={sourceUri}
         sourceWidth={dims.width}
         sourceHeight={dims.height}
+        initialCrop={initialCrop}
         loading={loadingDims}
         style={styles.stage}
       />

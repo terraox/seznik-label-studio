@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   buildFitLabelDocument,
   placeFitLabelImageMm,
+  refitFitLabelDocument,
   type FitLabelIngestedImage,
 } from '@/lib/img-to-label-document';
 
@@ -70,6 +71,29 @@ test('buildFitLabelDocument stores the selected millimetre size', () => {
   if (el?.type === 'image') {
     assert.equal(el.printUri, 'file:///print.png');
     assert.equal(el.uri, 'file:///preview.jpg');
+    assert.equal(el.colorMode, 'Original');
+    assert.equal(el.fitLabelSource, true);
+  }
+});
+
+test('refitFitLabelDocument contain-fills a newly selected stock size', () => {
+  const doc = buildFitLabelDocument({
+    widthMm: 40,
+    heightMm: 30,
+    ingested: ingested(200, 100),
+    fitMode: 'contain',
+  });
+  const refit = refitFitLabelDocument(doc, 100, 150);
+  assert.equal(refit.widthMm, 100);
+  assert.equal(refit.heightMm, 150);
+  const el = refit.elements[0];
+  assert.equal(el?.type, 'image');
+  if (el?.type === 'image') {
+    assert.equal(el.contentFit, 'contain');
+    assert.ok(Math.abs(el.width - 100) < 1e-6);
+    assert.ok(Math.abs(el.height - 50) < 1e-6);
+    assert.ok(Math.abs(el.left) < 1e-6);
+    assert.ok(Math.abs(el.top - 50) < 1e-6);
   }
 });
 
