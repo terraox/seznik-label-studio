@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { AppIcon } from '@/components/app-icon';
 import { BORDER_LIBRARY } from '@/constants/border-library';
 import { borderBoxForCenterGap } from '@/lib/border-geometry';
 import type { BorderElementState } from '@/lib/label-document';
@@ -73,15 +72,14 @@ export function BorderPropertyPanel({
 
   return (
     <View style={styles.panel}>
-      <Pressable onPress={onChangeStyle} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+      <View style={styles.row}>
         <Text style={styles.rowLabel}>Border</Text>
         <View style={styles.rowRight}>
           <Text style={styles.rowValue} numberOfLines={1}>
             {styleName}
           </Text>
-          <AppIcon name="chevron.right" tintColor="#B8C0C8" size={14} weight="semibold" />
         </View>
-      </Pressable>
+      </View>
       <View style={styles.divider} />
       <View style={styles.block}>
         <View style={styles.blockHeader}>
@@ -129,9 +127,14 @@ export function BorderPropertyPanel({
           }}
         />
       </View>
-      <Pressable onPress={onRemove} style={({ pressed }) => [styles.removeBtn, pressed && styles.pressed]}>
-        <Text style={styles.removeText}>Remove border</Text>
-      </Pressable>
+      <View style={styles.actionRow}>
+        <Pressable onPress={onChangeStyle} style={({ pressed }) => [styles.replaceBtn, pressed && styles.pressed]}>
+          <Text style={styles.replaceText}>Replace border</Text>
+        </Pressable>
+        <Pressable onPress={onRemove} style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}>
+          <Text style={styles.removeText}>Cancel border</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -234,9 +237,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#2C3E50',
   },
-  removeBtn: {
+  actionRow: {
     marginHorizontal: 16,
     marginTop: 8,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  replaceBtn: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: ACCENT,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  replaceText: {
+    color: ACCENT,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  cancelBtn: {
+    flex: 1,
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: '#E25B5B',

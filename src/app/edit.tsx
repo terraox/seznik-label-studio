@@ -3770,20 +3770,12 @@ export default function EditScreen() {
       }
       case 'Border': {
         const border = docRef.current.elements.find((el) => el.type === 'border');
-        router.push({
-          pathname: '/border-library',
-          params: {
-            from: 'edit',
-            ...(border?.type === 'border'
-              ? {
-                  style: border.borderStyle,
-                  lineWidth: String(border.lineWidth),
-                  ...(border.edgeGapMm != null ? { edgeGap: String(border.edgeGapMm) } : {}),
-                  hasBorder: '1',
-                }
-              : {}),
-          },
-        });
+        // An existing border opens its settings (thickness, gap, replace, cancel), not the gallery.
+        if (border) {
+          handleSelect(border.id);
+          break;
+        }
+        router.push({ pathname: '/border-library', params: { from: 'edit' } });
         break;
       }
       case 'Excel':
