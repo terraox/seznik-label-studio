@@ -4,11 +4,6 @@ import { ActionSheet } from '@/components/ui/action-sheet';
 
 export type FileSourceChoice = 'local' | 'drive';
 
-export type FileSourceRequest = {
-  /** Replaces the "Google Drive" label, e.g. to mention Google Sheets. */
-  driveLabel?: string;
-};
-
 const PICKER_DELAY_MS = 280;
 
 /**
@@ -16,11 +11,10 @@ const PICKER_DELAY_MS = 280;
  * Render `fileSourceSheet` on the same screen.
  */
 export function useFileSourceSheet(): {
-  requestFileSource: (request?: FileSourceRequest) => Promise<FileSourceChoice | null>;
+  requestFileSource: () => Promise<FileSourceChoice | null>;
   fileSourceSheet: ReactNode;
 } {
   const [visible, setVisible] = useState(false);
-  const [driveLabel, setDriveLabel] = useState('Google Drive');
   const resolveRef = useRef<((value: FileSourceChoice | null) => void) | null>(null);
   const choiceRef = useRef<FileSourceChoice | null>(null);
 
@@ -30,9 +24,8 @@ export function useFileSourceSheet(): {
     resolve?.(value);
   }, []);
 
-  const requestFileSource = useCallback((request?: FileSourceRequest) => {
+  const requestFileSource = useCallback(() => {
     return new Promise<FileSourceChoice | null>((resolve) => {
-      setDriveLabel(request?.driveLabel ?? 'Google Drive');
       if (resolveRef.current) resolveRef.current(null);
       resolveRef.current = resolve;
       choiceRef.current = null;
@@ -61,7 +54,7 @@ export function useFileSourceSheet(): {
       onClose={closeSheet}
       items={[
         { label: 'This Device', onPress: () => choose('local') },
-        { label: driveLabel, onPress: () => choose('drive') },
+        { label: 'Google Drive', onPress: () => choose('drive') },
       ]}
     />
   );

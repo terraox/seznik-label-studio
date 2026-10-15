@@ -1,6 +1,6 @@
 import { AppIcon } from '@/components/app-icon';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -17,9 +17,9 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { editorBridge } from '@/constants/editor-bridge';
 import { cardShadow, Palette, Type } from '@/constants/ui';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
-import { withManualExportHint } from '@/lib/file-import/sheet-export-guidance';
 import { useExcelImportFlow, type ExcelImportSuccess } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
+import { useIncomingFileStore } from '@/stores/incoming-file-store';
 import { useDataStore, type ImportedExcelFile } from '@/stores/data-store';
 
 const TABS = ['All', 'Excel', 'PDF', 'CSV', 'Remote Data'] as const;
@@ -252,6 +252,29 @@ export default function DataFileScreen() {
     ]);
   };
 
+  // A spreadsheet sent to the app from Google Sheets / Drive / a file manager (Android share).
+  const incomingFile = useIncomingFileStore((s) => s.pending);
+  const clearIncomingFile = useIncomingFileStore((s) => s.clearPending);
+  useEffect(() => {
+    if (!incomingFile || importing) return;
+    clearIncomingFile();
+    setImporting(true);
+    void (async () => {
+      try {
+        const imported = await importExcelFromFile(incomingFile);
+        if (imported) await finishExcelImport(imported);
+      } catch (error) {
+        Alert.alert(
+          'Error',
+          error instanceof Error ? error.message : 'Unable to read this spreadsheet.',
+        );
+      } finally {
+        setImporting(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingFile, importing]);
+
   const handleImportFile = async () => {
     if (importing) return;
     setImporting(true);
@@ -294,9 +317,7 @@ export default function DataFileScreen() {
     } catch (error) {
       Alert.alert(
         'Error',
-        withManualExportHint(
-          error instanceof Error ? error.message : 'Unable to pick or parse the document.',
-        ),
+        error instanceof Error ? error.message : 'Unable to pick or parse the document.',
       );
     } finally {
       setImporting(false);

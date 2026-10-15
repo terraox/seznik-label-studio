@@ -72,6 +72,7 @@
     "jpeg-js": "^0.4.4",
     "labelx-printer": "file:./modules/labelx-printer",
     "local-file-picker": "file:modules/local-file-picker",
+    "share-target": "file:modules/share-target",
     "patch-package": "^8.0.1",
     "pdf-lib": "^1.17.1",
     "pdf-raster": "file:./modules/pdf-raster",
@@ -158,6 +159,9 @@
           "@expo/ui",
           "expo-glass-effect",
           "expo-speech-recognition"
+        ],
+        "buildFromSource": [
+          "expo-document-picker"
         ]
       }
     }

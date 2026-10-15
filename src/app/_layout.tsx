@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { Component, type ErrorInfo, type ReactNode, useCallback, useEffect, useState } from 'react';
@@ -11,10 +11,12 @@ import { AnimatedSplash } from '@/components/animated-splash';
 import { IosAlertHost } from '@/components/ui/ios-alert-host';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
+import { useIncomingSharedFile } from '@/lib/file-import/use-incoming-shared-file';
 import { startInstalledFontHydration } from '@/lib/fonts/runtime';
 import { hydrateUserClipartSvgs } from '@/lib/clipart/user-storage';
 import { migrateLegacyUserFiles } from '@/lib/user-files/migrate';
 import { useAuthStore } from '@/stores/auth-store';
+import { useIncomingFileStore } from '@/stores/incoming-file-store';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -74,6 +76,15 @@ function AppRoot() {
   const handleSplashDone = useCallback(() => setSplashDone(true), []);
   const authHydrated = useAuthStore((s) => s.hydrated);
   const signedIn = useAuthStore((s) => s.sessionPhone !== null);
+
+  // A spreadsheet shared to the app opens Data File once the app is ready and signed in.
+  useIncomingSharedFile();
+  const hasIncomingFile = useIncomingFileStore((s) => s.pending !== null);
+  useEffect(() => {
+    if (hasIncomingFile && appReady && authHydrated && signedIn) {
+      router.push('/data-file');
+    }
+  }, [hasIncomingFile, appReady, authHydrated, signedIn]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
