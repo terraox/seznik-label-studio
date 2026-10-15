@@ -470,7 +470,7 @@ export function ImagePropertyPanel({
               <SegmentRow
                 label="Content Fit"
                 options={['fill', 'contain', 'cover'] as const}
-                selected={state.contentFit ?? 'fill'}
+                selected={state.contentFit ?? 'contain'}
                 onSelect={(val) => patch({ contentFit: val })}
               />
               <Divider />
@@ -581,6 +581,7 @@ const styles = StyleSheet.create({
   bodyContent: {
     padding: 16,
     paddingBottom: 40,
+    gap: 14,
   },
   graySection: {
     backgroundColor: '#F9FAFB',
@@ -735,6 +736,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 44,
   },
   stepperRight: {
     flexDirection: 'row',

@@ -42,3 +42,21 @@ test('applyMonoToRgba thresholds a mid-gray pixel in place', () => {
   applyMonoToRgba(rgba, 2, 1, 128, 'B & W');
   assert.deepEqual([...rgba], [255, 255, 255, 255, 0, 0, 0, 255]);
 });
+
+test('anti-colour inverts the thresholded result', () => {
+  const rgba = Uint8Array.from([128, 128, 128, 255, 10, 10, 10, 255]);
+  applyMonoToRgba(rgba, 2, 1, 128, 'B & W', true);
+  assert.deepEqual([...rgba], [0, 0, 0, 255, 255, 255, 255, 255]);
+});
+
+test('anti-colour on Original inverts the colours and keeps alpha', () => {
+  const rgba = Uint8Array.from([10, 100, 250, 200]);
+  applyMonoToRgba(rgba, 1, 1, 128, 'Original', true);
+  assert.deepEqual([...rgba], [245, 155, 5, 200]);
+});
+
+test('Original without anti-colour leaves pixels alone', () => {
+  const rgba = Uint8Array.from([10, 100, 250, 200]);
+  applyMonoToRgba(rgba, 1, 1, 128, 'Original');
+  assert.deepEqual([...rgba], [10, 100, 250, 200]);
+});

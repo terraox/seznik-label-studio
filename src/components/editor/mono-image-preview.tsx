@@ -50,7 +50,7 @@ export function MonoImagePreview({
       setProcessed(null);
       return;
     }
-    if (mode === 'Original') {
+    if (mode === 'Original' && !antiColor) {
       setProcessed(source);
       return;
     }
@@ -68,7 +68,7 @@ export function MonoImagePreview({
       return;
     }
     const rgba = pixels instanceof Uint8Array ? new Uint8Array(pixels) : new Uint8Array(pixels as ArrayBuffer);
-    applyMonoToRgba(rgba, width, height, grayThreshold, mode);
+    applyMonoToRgba(rgba, width, height, grayThreshold, mode, antiColor);
     const next = Skia.Image.MakeImage(
       {
         width,
@@ -80,7 +80,7 @@ export function MonoImagePreview({
       width * 4,
     );
     setProcessed(next ?? source);
-  }, [source, mode, grayThreshold, uri]);
+  }, [source, mode, grayThreshold, uri, antiColor]);
 
   const w = Math.max(1, widthPx);
   const h = Math.max(1, heightPx);
@@ -94,7 +94,7 @@ export function MonoImagePreview({
     return list;
   }, [flipH, flipV]);
 
-  if (mode === 'Original' && !tile) {
+  if (mode === 'Original' && !tile && !antiColor) {
     return (
       <View style={[styles.fill, antiColor && styles.antiBg]}>
         <Image

@@ -77,21 +77,32 @@ export function binarizeLuminanceBuffer(
 
 const BAYER_4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
-/** In-place RGBA8888 threshold / ordered dither. Alpha is preserved. */
+/**
+ * In-place RGBA8888 threshold / ordered dither. Alpha is preserved.
+ * `invert` flips the result (anti-colour): ink becomes paper and paper becomes ink. With
+ * mode 'Original' it just inverts the colours.
+ */
 export function applyMonoToRgba(
   rgba: Uint8Array,
   width: number,
   height: number,
   threshold: number,
   mode: EditorColorMode,
+  invert = false,
 ): void {
-  if (mode === 'Original') return;
+  if (mode === 'Original' && !invert) return;
   const t = Number.isFinite(threshold) ? threshold : DEFAULT_GRAY_THRESHOLD;
   const w = Math.max(1, width | 0);
   const h = Math.max(1, height | 0);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
+      if (mode === 'Original') {
+        rgba[i] = 255 - rgba[i];
+        rgba[i + 1] = 255 - rgba[i + 1];
+        rgba[i + 2] = 255 - rgba[i + 2];
+        continue;
+      }
       const lum = Math.round(0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2]);
       let v: 0 | 255;
       if (mode === 'Halftone') {
@@ -100,10 +111,10 @@ export function applyMonoToRgba(
       } else {
         v = monoFromLuminance(lum, t);
       }
+      if (invert) v = v === 0 ? 255 : 0;
       rgba[i] = v;
       rgba[i + 1] = v;
       rgba[i + 2] = v;
     }
   }
 }
-

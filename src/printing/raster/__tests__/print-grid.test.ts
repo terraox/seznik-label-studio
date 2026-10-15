@@ -117,7 +117,15 @@ withElements.elements = [
 ] as unknown as LabelDocument['elements'];
 
 const knockouts = printGridKnockoutsMm(withElements);
-assert.equal(knockouts.length, 1, 'only printed, non-border elements knock the grid out');
+assert.equal(
+  knockouts.length,
+  1 + 4,
+  'printed elements knock the grid out; a border only adds its four frame strips',
+);
+assert.ok(
+  knockouts.every((k) => k.width * k.height < (40 * 30) / 4),
+  'no knockout spans the whole label, so the area inside a border keeps its grid',
+);
 
 const cut = render(withElements);
 const insideY = mmToDots(12.5, dpi);

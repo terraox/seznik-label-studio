@@ -18,17 +18,54 @@ export function printGridSpacingMm(doc: Pick<LabelDocument, 'settings'>): number
 }
 
 /**
- * Element boxes (mm) the grid stays out of, like the editor's design grid plates.
- * Borders are skipped: they frame the label, so knocking them out would erase the grid.
+ * The four strips of a border's frame (mm). Only these are covered, never the area inside:
+ * a border's box spans the whole label, so using the box would erase the grid it frames.
+ * The strip is a little wider than the stroke so ornate frames are covered too.
  */
-export function printGridKnockoutsMm(doc: Pick<LabelDocument, 'elements'>): GridRect[] {
-  const out: GridRect[] = [];
-  for (const el of doc.elements) {
-    if (el.visible === false || el.needPrinting === false || el.type === 'border') continue;
+export function borderRingRectsMm(el: {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  lineWidth?: number;
+}): GridRect[] {
+  const thickness = Math.min(3, Math.max(0.8, (el.lineWidth ?? 0.4) * 3));
+  const t = Math.min(thickness, el.width / 2, el.height / 2);
+  const innerH = Math.max(0, el.height - 2 * t);
+  return [
+    { left: el.left, top: el.top, width: el.width, height: t },
+    { left: el.left, top: el.top + el.height - t, width: el.width, height: t },
+    { left: el.left, top: el.top + t, width: t, height: innerH },
+    { left: el.left + el.width - t, top: el.top + t, width: t, height: innerH },
+  ];
+}
+
+/**
+ * The one list of areas elements cover on the grid, shared by the editor grid plates and the
+ * printed grid so "grid", "print grid" and both together always agree. A border covers only
+ * its frame strips. `includeNonPrinting` is for the editor, where such elements are still drawn.
+ */
+export function gridCoverRectsMm(
+  elements: LabelDocument['elements'],
+  options: { includeNonPrinting?: boolean } = {},
+): { id: string; rect: GridRect }[] {
+  const out: { id: string; rect: GridRect }[] = [];
+  for (const el of elements) {
+    if (el.visible === false) continue;
+    if (el.needPrinting === false && !options.includeNonPrinting) continue;
     const size = elementSizeMm(el);
-    out.push({ left: el.left, top: el.top, width: size.width, height: size.height });
+    if (el.type === 'border') {
+      for (const rect of borderRingRectsMm({ ...el, ...size })) out.push({ id: el.id, rect });
+      continue;
+    }
+    out.push({ id: el.id, rect: { left: el.left, top: el.top, width: size.width, height: size.height } });
   }
   return out;
+}
+
+/** Element areas (mm) the printed grid stays out of. */
+export function printGridKnockoutsMm(doc: Pick<LabelDocument, 'elements'>): GridRect[] {
+  return gridCoverRectsMm(doc.elements).map((item) => item.rect);
 }
 
 /** Line positions in mm, every `spacingMm` from the label's top-left, edges excluded. */
