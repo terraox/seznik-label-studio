@@ -46,6 +46,8 @@ export type TextDrawStyle = {
   fontSizeDots: number;
   bold?: boolean;
   italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
   family?: string;
   ink: number;
   /** Extra advance after each character, in dots. 0 leaves the face's natural spacing. */
@@ -132,6 +134,7 @@ type SkiaCanvas = {
     fastSample?: boolean,
   ) => void;
   save?: () => void;
+  skew?: (sx: number, sy: number) => void;
   restore?: () => void;
   translate?: (x: number, y: number) => void;
   rotate?: (degrees: number, px?: number, py?: number) => void;
@@ -225,6 +228,26 @@ function drawTextLineMixed(
   }
 }
 
+/** Underline / strikethrough bars, drawn as rects so they print on every backend. */
+function drawTextDecorations(
+  text: string,
+  x: number,
+  y: number,
+  style: TextDrawStyle,
+  width: number,
+  fill: (x: number, y: number, w: number, h: number, gray: number) => void,
+): void {
+  if ((!style.underline && !style.strikethrough) || !text || !(width > 0)) return;
+  const size = style.fontSizeDots;
+  const thick = Math.max(1, Math.round(size * (style.bold ? 0.09 : 0.065)));
+  const w = Math.max(1, Math.round(width));
+  const left = Math.round(x);
+  if (style.underline) fill(left, Math.round(y + size * 1.02), w, thick, style.ink);
+  if (style.strikethrough) fill(left, Math.round(y + size * 0.68 - thick / 2), w, thick, style.ink);
+}
+
+const ITALIC_SKEW = -0.2;
+
 function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: SkiaModule): RasterSurface {
   const { Skia, matchFont, PaintStyle, ColorType, AlphaType } = skiaMod;
   const surface = Skia.Surface.MakeOffscreen(widthDots, heightDots);
@@ -249,7 +272,7 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
         ...(style.family ? { fontFamily: style.family } : {}),
         fontSize: style.fontSizeDots,
         fontWeight: style.bold ? '600' : 'normal',
-        fontStyle: style.italic ? 'italic' : 'normal',
+        fontStyle: 'normal',
       });
       try {
         const { printTypeface } = require('./print-typeface') as {
@@ -380,7 +403,25 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
         italic: style.italic,
         backend: 'skia',
       });
-      drawTextLineMixed(text, x, y, style, segmentOps);
+      // The embedded print faces have no italic cut, so slant the line ourselves.
+      const slant = !!style.italic && typeof canvas.save === 'function' && typeof canvas.skew === 'function';
+      if (slant) {
+        canvas.save();
+        canvas.translate?.(x, y + style.fontSizeDots);
+        canvas.skew?.(ITALIC_SKEW, 0);
+        canvas.translate?.(-x, -(y + style.fontSizeDots));
+      }
+      try {
+        drawTextLineMixed(text, x, y, style, segmentOps);
+      } finally {
+        if (slant) canvas.restore?.();
+      }
+      drawTextDecorations(text, x, y, style, measureTextLineWidth(text, style, segmentOps), (rx, ry, rw, rh, g) => {
+        fillPaint.setColor(grayToColor(skiaMod, g));
+        fillPaint.setStyle(PaintStyle.Fill);
+        fillPaint.setAntiAlias(false);
+        canvas.drawRect(Skia.XYWHRect(rx, ry, rw, rh), fillPaint);
+      });
     },
     measureTextWidth(text, style) {
       return measureTextLineWidth(text, style, segmentOps);
@@ -632,6 +673,7 @@ function makeDotRasterSurface(dot: DotSurface): RasterSurface {
         backend: 'dot-buffer',
       });
       drawTextLineMixed(text, x, y, style, dotSegmentOps);
+      drawTextDecorations(text, x, y, style, measureTextLineWidth(text, style, dotSegmentOps), paintRect);
     },
     measureTextWidth(text, style) {
       return measureTextLineWidth(text, style, dotSegmentOps);

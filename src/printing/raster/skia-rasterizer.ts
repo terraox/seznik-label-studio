@@ -582,6 +582,8 @@ function drawText(
         fontSizeDots: em,
         bold: el.bold,
         italic: el.italic,
+        underline: el.underline,
+        strikethrough: el.strikethrough,
         family: resolvePrintFontFamily(line, el.fontFamily),
         ink,
         letterSpacingDots,
@@ -649,6 +651,8 @@ function drawBarcode(
       fontSizeDots: fontH,
       bold: el.bold,
       italic: el.italic,
+      underline: el.underline,
+      strikethrough: el.strikethrough,
       family: resolvePrintFontFamily(hri, el.fontFamily),
       ink,
     };

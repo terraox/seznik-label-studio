@@ -85,7 +85,7 @@ function paragraphStyle(skia: ShapedSkia, style: TextDrawStyle): Record<string, 
     letterSpacing: style.letterSpacingDots ?? 0,
     fontStyle: {
       weight: style.bold ? 600 : 400,
-      slant: style.italic ? 1 : 0,
+      slant: 0,
     },
   };
 }

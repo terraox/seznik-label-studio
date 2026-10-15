@@ -379,6 +379,41 @@ function TextContent({
   const align = element.align === "spacing" ? "justify" : element.align;
   const swap = useReflowSwapStyles(liveReflowSv);
   const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
+  // Native underlines sit on the font descent and overlap between lines, so draw the bars at
+  // the same offsets as print (em box centred in the line, bar just below the em).
+  const hasDecoration = !!(element.underline || element.strikethrough);
+  const [decoLines, setDecoLines] = useState<
+    { x: number; y: number; width: number; height: number; ascender: number }[]
+  >([]);
+  const [textOrigin, setTextOrigin] = useState({ x: 0, y: 0 });
+  const emPx = Math.max(1, style.fontSize);
+  const decoThick = Math.max(1, Math.round(emPx * (element.bold ? 0.09 : 0.065)));
+  const decoBars = hasDecoration
+    ? decoLines.flatMap((ln, idx) => {
+        if (ln.width <= 0) return [];
+        const top =
+          textOrigin.y + style.paddingVertical + ln.y + (ln.height - emPx) / 2;
+        const left = textOrigin.x + style.paddingHorizontal + ln.x;
+        const bars: { key: string; left: number; top: number; width: number }[] = [];
+        if (element.underline)
+          bars.push({ key: `u${idx}`, left, top: top + emPx * 1.02, width: ln.width });
+        if (element.strikethrough)
+          bars.push({
+            key: `s${idx}`,
+            left,
+            // Centre on the glyphs: a fixed distance above this line's own baseline.
+            top:
+              textOrigin.y +
+              style.paddingVertical +
+              ln.y +
+              (ln.ascender > 0 ? ln.ascender : (ln.height + emPx) / 2) -
+              emPx * 0.32 -
+              decoThick / 2,
+            width: ln.width,
+          });
+        return bars;
+      })
+    : [];
   return (
     <View
       style={[
@@ -401,20 +436,37 @@ function TextContent({
         allowFontScaling={false}
         style={[
           style,
+          hasDecoration ? { textDecorationLine: "none" as const } : null,
           styles.textFill,
           { textAlign: align },
           letterSpacingStyle(drawElement, raw),
           liveReflowSv ? swap.resting : null,
         ]}
+        onLayout={
+          hasDecoration
+            ? (e) => setTextOrigin({ x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y })
+            : undefined
+        }
         numberOfLines={formatted.numberOfLines}
         ellipsizeMode={
           "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
         }
         onTextLayout={
-          layoutWidthMm != null
+          layoutWidthMm != null && !hasDecoration
             ? undefined
             : (event) => {
-                if (!formatted.layoutKey) return;
+                if (hasDecoration) {
+                  setDecoLines(
+                    event.nativeEvent.lines.map((l) => ({
+                      x: l.x,
+                      y: l.y,
+                      width: l.width,
+                      height: l.height,
+                      ascender: l.ascender,
+                    })),
+                  );
+                }
+                if (layoutWidthMm != null || !formatted.layoutKey) return;
                 rememberVisibleLines(
                   formatted.layoutKey,
                   cleanNativeLines(
@@ -427,6 +479,20 @@ function TextContent({
       >
         {formatted.text}
       </RestingText>
+      {decoBars.map((bar) => (
+        <View
+          key={bar.key}
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: bar.left,
+            top: bar.top,
+            width: bar.width,
+            height: decoThick,
+            backgroundColor: style.color,
+          }}
+        />
+      ))}
       {liveReflowSv ? (
         <Animated.Text
           pointerEvents="none"
