@@ -115,6 +115,7 @@ import { DegreesPropertyPanel } from '@/components/editor/degrees-property-panel
 import { ArcTextPropertyPanel } from '@/components/editor/arctext-property-panel';
 import { BarcodePropertyPanel } from '@/components/editor/barcode-property-panel';
 import { ImagePropertyPanel, type ImagePropertyTab } from '@/components/editor/image-property-panel';
+import { ReferenceImagePanel } from '@/components/editor/reference-image-panel';
 import {
   ClipartPropertyPanel,
   type ClipartPropertyTab,
@@ -231,6 +232,7 @@ import {
   type ElementType,
   type LabelDocument,
   type LabelElement,
+  type LabelReferenceImage,
 } from '@/lib/label-document';
 import { isFontNameReady } from '@/lib/fonts/font-ready';
 import { resolveLabelSettings } from '@/lib/label-settings';
@@ -709,8 +711,10 @@ export default function EditScreen() {
   const [chromeStatus, setChromeStatus] = useState<string | null>(null);
   const chromeStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [panelOpen, setPanelOpen] = useState(() =>
-    Boolean(params.autoOpenPanel === 'true' && params.selectedElementId)
+    Boolean(params.autoOpenPanel === 'true' && params.selectedElementId),
   );
+  const [referenceSelected, setReferenceSelected] = useState(false);
+  const referenceSelectedRef = useRef(false);
 
   const historyRef = useRef(new EditorHistory(MAX_HISTORY));
   const [historyRev, setHistoryRev] = useState(0);
@@ -800,20 +804,22 @@ export default function EditScreen() {
   const panelMinForSplitSv = useSharedValue(panelMinForSplit);
   const bulkNavReserveSv = useSharedValue(bulkNavReservePx);
 
-  const topBarSelectionVisibleSv = useSharedValue(selectedIds.length > 0 ? 1 : 0);
-  const bottomPanelVisibleSv = useSharedValue(panelOpen && selectedIds.length > 0 ? 1 : 0);
+  const topBarSelectionVisibleSv = useSharedValue(0);
+  const bottomPanelVisibleSv = useSharedValue(
+    panelOpen && (selectedIds.length > 0 || referenceSelected) ? 1 : 0,
+  );
 
   useEffect(() => {
-    topBarSelectionVisibleSv.value = selectedIds.length > 0 ? 1 : 0;
-  }, [selectedIds.length, topBarSelectionVisibleSv]);
+    topBarSelectionVisibleSv.value = selectedIds.length > 0 || referenceSelected ? 1 : 0;
+  }, [selectedIds.length, referenceSelected, topBarSelectionVisibleSv]);
 
   useEffect(() => {
     safeModeSv.value = editorSettings.safeMode ? 1 : 0;
   }, [editorSettings.safeMode, safeModeSv]);
 
   useEffect(() => {
-    bottomPanelVisibleSv.value = panelOpen && selectedIds.length > 0 ? 1 : 0;
-  }, [panelOpen, selectedIds.length, bottomPanelVisibleSv]);
+    bottomPanelVisibleSv.value = panelOpen && (selectedIds.length > 0 || referenceSelected) ? 1 : 0;
+  }, [panelOpen, selectedIds.length, referenceSelected, bottomPanelVisibleSv]);
 
   useEffect(() => {
     activeSelectedIdSv.value = primaryId ?? (selectedIds.length === 1 ? selectedIds[0] : '');
@@ -1974,6 +1980,8 @@ export default function EditScreen() {
   ]);
 
   const handleDeselectAll = useCallback(() => {
+    referenceSelectedRef.current = false;
+    setReferenceSelected(false);
     selectedIdsRef.current = [];
     primaryIdRef.current = null;
     activeSelectedIdSv.value = '';
@@ -1993,6 +2001,32 @@ export default function EditScreen() {
     resizeHudVisibleSv,
     commitSelectedTableCell,
   ]);
+
+  const handleCanvasBackgroundTap = useCallback(() => {
+    if (referenceSelectedRef.current) {
+      referenceSelectedRef.current = false;
+      setReferenceSelected(false);
+      setPanelOpen(false);
+      bottomPanelVisibleSv.value = 0;
+      topBarSelectionVisibleSv.value = 0;
+      return;
+    }
+    if (docRef.current.referenceImage && selectedIdsRef.current.length === 0) {
+      referenceSelectedRef.current = true;
+      setReferenceSelected(true);
+      topBarSelectionVisibleSv.value = 1;
+      return;
+    }
+    handleDeselectAll();
+  }, [bottomPanelVisibleSv, handleDeselectAll, topBarSelectionVisibleSv]);
+
+  const patchReferenceImage = useCallback((updates: Partial<LabelReferenceImage>) => {
+    setDoc((prev) => {
+      if (!prev.referenceImage) return prev;
+      return { ...prev, referenceImage: { ...prev.referenceImage, ...updates } };
+    });
+    setDirty(true);
+  }, []);
 
   const toggleMultipleMode = useCallback(() => {
     const turningOn = !multipleMode;
@@ -2125,6 +2159,10 @@ export default function EditScreen() {
       const element = docRef.current.elements.find((el) => el.id === id);
       if (!element || element.needPrinting === false) return;
       if (!mountedRef.current) return;
+      if (referenceSelectedRef.current) {
+        referenceSelectedRef.current = false;
+        setReferenceSelected(false);
+      }
 
       if (element.type === 'border') {
         selectedIdsRef.current = [id];
@@ -2953,6 +2991,8 @@ export default function EditScreen() {
     setDirty(false);
     setSelectedIds([]);
     setPrimaryId(null);
+    referenceSelectedRef.current = false;
+    setReferenceSelected(false);
     setPanelOpen(false);
     historyRef.current.clear();
     bumpHistory();
@@ -3905,6 +3945,11 @@ export default function EditScreen() {
       <Pressable
         style={({ pressed }) => [styles.contextualBarBtn, pressed && styles.pressed]}
         onPress={() => {
+          if (referenceSelected && doc.referenceImage) {
+            bottomPanelVisibleSv.value = 1;
+            setPanelOpen(true);
+            return;
+          }
           if (selectedIds.length > 1) {
             setPanelOpen(true);
           } else if (primaryElement) {
@@ -4047,7 +4092,8 @@ export default function EditScreen() {
                     safeModeSv={safeModeSv}
                     onGroupResizeHandleBegin={prepareGroupResizeHandle}
                     onSelect={handleSelect}
-                    onDeselectAll={handleDeselectAll}
+                    referenceSelected={referenceSelected}
+                    onDeselectAll={handleCanvasBackgroundTap}
                     onOpenPanel={openPanelFor}
                     onEditText={beginTextEdit}
                     onQuickEdit={handleQuickEdit}
@@ -4717,13 +4763,17 @@ export default function EditScreen() {
               </Animated.View>
 
               <Animated.View style={[StyleSheet.absoluteFillObject, propertyPanelAnimatedStyle]}>
-                <ScrollView
-                  style={styles.sheetScroll}
-                  contentContainerStyle={{ paddingBottom: Math.max(Spacing.two, insets.bottom) }}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled">
-                  {activePanelContent}
-                </ScrollView>
+                {referenceSelected && doc.referenceImage ? (
+                  <ReferenceImagePanel image={doc.referenceImage} onChange={patchReferenceImage} />
+                ) : (
+                  <ScrollView
+                    style={styles.sheetScroll}
+                    contentContainerStyle={{ paddingBottom: Math.max(Spacing.two, insets.bottom) }}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled">
+                    {activePanelContent}
+                  </ScrollView>
+                )}
               </Animated.View>
             </Animated.View>
           </View>

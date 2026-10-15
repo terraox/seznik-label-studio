@@ -14,7 +14,7 @@ export type HomeTool = {
 
 export const HOME_TOOLS = {
   newLabel: { label: 'New Label', href: '/new-label', icon: 'add-circle-outline', group: 'create' },
-  scanLabel: { label: 'Scan Label', href: '/scan', icon: 'scan-outline', group: 'create' },
+  imageToLabel: { label: 'Upload label', href: '/image-to-label', icon: 'image-outline', group: 'create' },
   serialLabels: { label: 'Serial Labels', href: '/serial-label', icon: 'list-outline', group: 'create' },
   customSize: {
     label: 'Custom Size',
@@ -41,7 +41,7 @@ export type HomeToolId = keyof typeof HOME_TOOLS;
 export const CREATE_HERO_TOOL: HomeToolId = 'newLabel';
 
 /** "More ways to create" — 3-column ToolGrid. */
-export const CREATE_GRID_TOOLS: readonly HomeToolId[] = ['scanLabel', 'serialLabels', 'customSize'];
+export const CREATE_GRID_TOOLS: readonly HomeToolId[] = ['imageToLabel', 'serialLabels', 'customSize'];
 
 /** "Print from file" — 3-column ToolGrid. */
 export const FILE_TOOLS: readonly HomeToolId[] = ['excel', 'pdf', 'photo'];

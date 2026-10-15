@@ -23,6 +23,19 @@ export type TemplateBackground =
   | { type: 'color'; color: string }
   | { type: 'image'; uri: string };
 
+/**
+ * Uploaded label photo, stretched behind the canvas.
+ * A file name under `sezprint/images/`, never a URI and never base64.
+ * It prints only when `needPrinting` is set.
+ */
+export type LabelReferenceImage = {
+  fileName: string;
+  widthPx: number;
+  heightPx: number;
+  rotation?: number;
+  needPrinting?: boolean;
+};
+
 export type LabelOrientation = 0 | 90 | 180 | 270;
 export type PaperType = 'Receipt' | 'Label' | 'Cardstock' | 'Transparent' | 'Black mark';
 /** Physical stock outline. Printers still receive a rectangular BITMAP; this clips preview/capture ink. */
@@ -191,6 +204,8 @@ export type LabelDocument = {
   bulk?: BulkLabelSet;
   /** Per-label print/layout options (mirror mode, offsets, gap, etc.). */
   settings?: LabelSettings;
+  /** Visual guide behind the editor canvas. Absent on older labels. */
+  referenceImage?: LabelReferenceImage;
 };
 
 let idCounter = 0;

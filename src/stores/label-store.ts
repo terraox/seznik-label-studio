@@ -4,7 +4,12 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { migrateDocumentBorders } from '@/lib/border-geometry';
 import { cloneDocument, generateId, type LabelDocument } from '@/lib/label-document';
+import { migrateDocumentReferenceImage } from '@/lib/reference-image';
 import { cleanupDeletedLabel, persistLabelFile } from '@/lib/user-files/labels';
+
+function migrateStoredDocument(doc: LabelDocument): LabelDocument {
+  return migrateDocumentReferenceImage(migrateDocumentBorders(doc));
+}
 
 export type LabelGroup = {
   id: string;
@@ -75,8 +80,9 @@ export const useLabelStore = create<LabelStoreState>()(
 
       deleteDocument: (id) => {
         const remaining = get().documents.filter((d) => d.id !== id);
+        const cloud = get().cloudTemplates;
         set({ documents: remaining });
-        void cleanupDeletedLabel(id, remaining).catch(() => undefined);
+        void cleanupDeletedLabel(id, [...remaining, ...cloud]).catch(() => undefined);
       },
 
       duplicateDocument: (id, newName) => {
@@ -96,13 +102,13 @@ export const useLabelStore = create<LabelStoreState>()(
         const doc =
           get().documents.find((d) => d.id === id) ??
           get().cloudTemplates.find((d) => d.id === id);
-        return doc ? migrateDocumentBorders(doc) : undefined;
+        return doc ? migrateStoredDocument(doc) : undefined;
       },
 
       ensureLocalDocument: (id) => {
         const local = get().documents.find((d) => d.id === id);
         if (local) {
-          const migrated = migrateDocumentBorders(local);
+          const migrated = migrateStoredDocument(local);
           if (migrated !== local) {
             set((state) => ({
               documents: state.documents.map((d) => (d.id === id ? migrated : d)),
@@ -112,7 +118,7 @@ export const useLabelStore = create<LabelStoreState>()(
         }
         const cloud = get().cloudTemplates.find((d) => d.id === id);
         if (!cloud) return null;
-        const copy = migrateDocumentBorders(cloneDocument(cloud));
+        const copy = migrateStoredDocument(cloneDocument(cloud));
         copy.updatedAt = Date.now();
         set((state) => ({ documents: [copy, ...state.documents] }));
         void persistLabelFile(copy).catch(() => undefined);
@@ -171,8 +177,8 @@ export const useLabelStore = create<LabelStoreState>()(
       storage: createJSONStorage(() => AsyncStorage),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        const documents = state.documents.map(migrateDocumentBorders);
-        const cloudTemplates = state.cloudTemplates.map(migrateDocumentBorders);
+        const documents = state.documents.map(migrateStoredDocument);
+        const cloudTemplates = state.cloudTemplates.map(migrateStoredDocument);
         const changed =
           documents.some((doc, i) => doc !== state.documents[i]) ||
           cloudTemplates.some((doc, i) => doc !== state.cloudTemplates[i]);

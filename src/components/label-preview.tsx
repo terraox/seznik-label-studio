@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import * as FileSystem from 'expo-file-system/legacy';
 import { type ReactNode, useMemo, useState } from 'react';
 import { PixelRatio, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -15,6 +16,7 @@ import { printRulerEnabled } from '@/lib/print-ruler';
 import { dotsPerMm, rectMmToDots, td404BorderGapMm, td404BorderOuterDots } from '@/lib/printer/print-spec';
 import { borderCoversBitmap } from '@/printing/raster/print-border';
 import { canvasFillFromDocument, sortLayers, templateUsesDieCutBackground } from '@/lib/template-schema';
+import { referenceImageDisplayUri } from '@/lib/reference-image';
 
 /** Workspace chrome around the artboard — not part of template content. */
 export const LABEL_PAD_STAGE_COLOR = '#EFF2F7';
@@ -274,6 +276,32 @@ function LabelElements({
   );
 }
 
+function ReferencePhoto({
+  document,
+  hideNonPrinting,
+}: {
+  document: LabelDocument;
+  hideNonPrinting: boolean;
+}) {
+  const image = document.referenceImage;
+  if (!image) return null;
+  if (hideNonPrinting && image.needPrinting !== true) return null;
+  const uri = referenceImageDisplayUri(image.fileName, FileSystem.documentDirectory);
+  if (!uri) return null;
+  const rotation = image.rotation ?? 0;
+  return (
+    <Image
+      source={{ uri }}
+      style={[
+        StyleSheet.absoluteFillObject,
+        rotation ? { transform: [{ rotate: `${rotation}deg` }] } : null,
+      ]}
+      contentFit="fill"
+      pointerEvents="none"
+    />
+  );
+}
+
 function TemplateBackgroundImage({ document }: { document: LabelDocument }) {
   if (document.background?.type !== 'image') return null;
   return (
@@ -316,6 +344,7 @@ function LabelCanvas({
       style={style}
       showBorder={showBorder}>
       <TemplateBackgroundImage document={document} />
+      <ReferencePhoto document={document} hideNonPrinting={hideNonPrinting} />
       {fitted.scale > 0 ? (
         <>
           {hideNonPrinting || printDpi != null ? null : (

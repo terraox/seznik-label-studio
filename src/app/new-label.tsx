@@ -89,10 +89,10 @@ export default function NewLabelModal() {
               <AppIcon name="photo" tintColor="#FFFFFF" size={28} pointerEvents="none" />
             </CreationOption>
             <CreationOption
-              label="Scan Label"
+              label="Upload label"
               color="#F5A623"
-              onPress={() => router.replace('/scan')}>
-              <AppIcon name="qrcode.viewfinder" tintColor="#FFFFFF" size={30} pointerEvents="none" />
+              onPress={() => router.replace('/image-to-label')}>
+              <AppIcon name="photo.on.rectangle" tintColor="#FFFFFF" size={30} pointerEvents="none" />
             </CreationOption>
           </View>
         </View>

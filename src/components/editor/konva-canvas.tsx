@@ -1,5 +1,6 @@
 import React, { forwardRef, memo, useEffect, useMemo } from 'react';
 import { Image } from 'expo-image';
+import * as FileSystem from 'expo-file-system/legacy';
 import { StyleSheet, Text, View } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import Svg, { Ellipse, Line, Rect } from 'react-native-svg';
@@ -18,6 +19,7 @@ import { type LiveRulerBounds } from '@/components/canvas-rulers';
 import { CableFlagDieCutOverlay } from '@/components/cable-flag-outline';
 import { StockSilhouetteOverlay } from '@/components/stock-silhouette';
 import { type LabelDocument, type LabelElement, type MediaShape, elementSizeMm } from '@/lib/label-document';
+import { referenceImageDisplayUri } from '@/lib/reference-image';
 import { JEWELRY_DIECUT, JEWELRY_DIECUT_PREVIEW_SINGLE } from '@/constants/jewelry-diecut';
 import { isCableFlagDieCutDocument } from '@/constants/cable-flag-diecut';
 import { hasStockSilhouette } from '@/lib/stock-silhouette';
@@ -35,6 +37,8 @@ type KonvaCanvasProps = {
   pxPerMM: number;
   padZoom: number;
   selectedIds: string[];
+  /** Uploaded label photo is the current selection. */
+  referenceSelected?: boolean;
   selectionColor: string;
   /** Editor nested artboard fill. Print capture keeps document white. */
   surfaceColor?: string;
@@ -300,6 +304,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
     pxPerMM,
     padZoom,
     selectedIds,
+    referenceSelected = false,
     selectionColor,
     surfaceColor,
     showGrid = false,
@@ -622,6 +627,13 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
             </View>
           ) : null}
 
+          {doc.referenceImage ? (
+            <ReferenceGuide
+              fileName={doc.referenceImage.fileName}
+              rotation={doc.referenceImage.rotation ?? 0}
+            />
+          ) : null}
+
           {isCircle ? (
             <Svg width={w} height={h} style={StyleSheet.absoluteFillObject} pointerEvents="none">
               <Ellipse
@@ -712,6 +724,15 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
 
         <View pointerEvents="box-none" collapsable={false} style={[StyleSheet.absoluteFillObject, { overflow: 'hidden' }]}>
           <CanvasElementNodes elements={sortedElements} chrome={chrome} />
+          {referenceSelected ? (
+            <View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFillObject,
+                { borderWidth: 1.5, borderStyle: 'dashed', borderColor: selectionColor || '#48C3C7' },
+              ]}
+            />
+          ) : null}
         </View>
       </ViewShot>
       {mediaShapeGuide}
@@ -746,6 +767,23 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
     </View>
   );
 });
+
+/** Stretched behind every element. The parent artboard ignores touches, and this sits outside the element ViewShot. */
+function ReferenceGuide({ fileName, rotation }: { fileName: string; rotation: number }) {
+  const uri = referenceImageDisplayUri(fileName, FileSystem.documentDirectory);
+  if (!uri) return null;
+  return (
+    <Image
+      source={{ uri }}
+      style={[
+        StyleSheet.absoluteFillObject,
+        rotation ? { transform: [{ rotate: `${rotation}deg` }] } : null,
+      ]}
+      contentFit="fill"
+      pointerEvents="none"
+    />
+  );
+}
 
 const styles = StyleSheet.create({
   artboardLayer: {

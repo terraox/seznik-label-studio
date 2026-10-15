@@ -128,6 +128,7 @@ function collectUnsupportedHeadlessElements(doc: LabelDocument): { types: Set<st
 
 /** True when every layer can be drawn by the headless Skia/dot raster (no ViewShot needed). */
 export function canHeadlessRasterPrint(doc: LabelDocument): boolean {
+  if (doc.referenceImage?.needPrinting === true) return false;
   return collectUnsupportedHeadlessElements(doc).types.size === 0;
 }
 

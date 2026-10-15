@@ -13,7 +13,7 @@ import {
 
 const LEGACY_HOME_HREFS = [
   '/new-label',
-  '/scan',
+  '/image-to-label',
   '/excel-print',
   '/pdf',
   '/print-photo-modal',
