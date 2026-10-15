@@ -924,11 +924,11 @@ function QrcodeContent({
       ? formatDataSourceColumn(element.columnNameContent, showColumnName)
       : element.contentType === "Degrees"
         ? applySerialOffset(
-            element.content || "https://example.com",
+            element.content || "https://seznik.in",
             element.degreesOffset,
             1,
           )
-        : element.content || "https://example.com";
+        : element.content || "https://seznik.in";
   const color = element.antiColor
     ? "#FFFFFF"
     : inkColor(element.drawingColorIndex);

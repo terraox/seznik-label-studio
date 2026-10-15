@@ -274,7 +274,7 @@ export const SkiaQRCode = memo(function SkiaQRCode({
   const qrMatrix = useMemo(() => {
     if (encodeMode === 'QRCode') {
       return generateQrMatrix(
-        content || 'https://example.com',
+        content || 'https://seznik.in',
         (errorLevel as 'L' | 'M' | 'Q' | 'H') || 'M',
       );
     }

@@ -195,7 +195,7 @@ export default function CalibrationPrintScreen() {
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
-  const connected = status === 'connected';
+  const connected = status === 'connected' || status === 'printing';
 
   const [printing, setPrinting] = useState(false);
   const [selectedSizeIndex, setSelectedSizeIndex] = useState(0);

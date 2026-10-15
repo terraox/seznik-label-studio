@@ -674,7 +674,7 @@ function drawQr(
   const content =
     el.contentType === 'Data Source' && el.columnNameContent
       ? `{${el.columnNameContent}}`
-      : el.content || 'https://example.com';
+      : el.content || 'https://seznik.in';
   const qz = Math.max(0, parseInt(String(el.zoneSize), 10) || 0);
   const ink = inkValue(el.antiColor);
   const { x0, y0, w: boxW, h: boxH } = box;

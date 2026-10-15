@@ -1,4 +1,5 @@
 import { AppIcon } from '@/components/app-icon';
+import { EditableNumber } from '@/components/editable-number';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -60,6 +61,7 @@ function StepperRow({
   value,
   onMinus,
   onPlus,
+  onCommitValue,
   minusDisabled,
   plusDisabled,
   valueColor = Palette.accent,
@@ -69,6 +71,8 @@ function StepperRow({
   value: string;
   onMinus: () => void;
   onPlus: () => void;
+  /** When set, the value is tappable and can be typed with the keyboard. */
+  onCommitValue?: (next: number) => void;
   minusDisabled?: boolean;
   plusDisabled?: boolean;
   valueColor?: string;
@@ -88,7 +92,15 @@ function StepperRow({
           ]}>
           <Text style={[styles.stepGlyph, minusDisabled && styles.stepGlyphMuted]}>−</Text>
         </Pressable>
-        <Text style={[styles.stepValue, { color: valueColor }]}>{value}</Text>
+        {onCommitValue ? (
+          <EditableNumber
+            value={parseInt(value, 10) || 1}
+            onCommit={onCommitValue}
+            style={[styles.stepValue, { color: valueColor }]}
+          />
+        ) : (
+          <Text style={[styles.stepValue, { color: valueColor }]}>{value}</Text>
+        )}
         <Pressable
           disabled={plusDisabled}
           onPress={onPlus}
@@ -153,7 +165,7 @@ export default function PrintPhotoScreen() {
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
   const addHistoryEntry = usePrinterStore((s) => s.addHistoryEntry);
-  const connected = status === 'connected';
+  const connected = status === 'connected' || status === 'printing';
 
   const frame = getPhotoFrame(params.frameId);
   const isFrame = params.mode === 'frame' && !!frame;
@@ -639,6 +651,7 @@ export default function PrintPhotoScreen() {
             minusDisabled={copies <= 1}
             onMinus={() => setCopies((n) => Math.max(1, n - 1))}
             onPlus={() => setCopies((n) => n + 1)}
+            onCommitValue={setCopies}
           />
         </View>
 

@@ -244,7 +244,7 @@ function bitsToModules(bits: string): number[] {
 function encodeUpcA(input: string): number[] | null {
   const digits = input.replace(/\D/g, '');
   if (digits.length !== 11 && digits.length !== 12) return null;
-  const payload = digits.length === 11 ? `${digits}0` : digits;
+  const payload = digits.length === 11 ? `${digits}${eanChecksum(digits)}` : digits;
   let bits = '101';
   for (let i = 0; i < 6; i += 1) bits += UPC_A_LEFT[Number(payload[i])];
   bits += '01010';
@@ -253,14 +253,8 @@ function encodeUpcA(input: string): number[] | null {
   return bitsToModules(bits);
 }
 
-function invertPattern(bits: string): string {
-  return bits
-    .split('')
-    .map((bit) => (bit === '0' ? '1' : '0'))
-    .join('');
-}
-
-const UPC_A_LEFT_G = UPC_A_LEFT.map(invertPattern);
+/** EAN-13 "G" digits are the R (right-hand) patterns read backwards. */
+const UPC_A_LEFT_G = UPC_A_RIGHT.map((bits) => bits.split('').reverse().join(''));
 
 const EAN13_PARITY: Record<number, ('L' | 'G')[]> = {
   0: ['L', 'L', 'L', 'L', 'L', 'L'],
@@ -277,7 +271,7 @@ const EAN13_PARITY: Record<number, ('L' | 'G')[]> = {
 
 function eanChecksum(digits: string): number {
   let sum = 0;
-  for (let i = digits.length - 1, weight = 1; i >= 0; i -= 1, weight = weight === 1 ? 3 : 1) {
+  for (let i = digits.length - 1, weight = 3; i >= 0; i -= 1, weight = weight === 3 ? 1 : 3) {
     sum += Number(digits[i]) * weight;
   }
   return (10 - (sum % 10)) % 10;

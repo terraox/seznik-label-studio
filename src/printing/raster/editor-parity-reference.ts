@@ -74,7 +74,7 @@ function drawEditorQr(dot: DotSurface, el: Extract<LabelElement, { type: 'qrcode
   const content =
     el.contentType === 'Data Source' && el.columnNameContent
       ? `{${el.columnNameContent}}`
-      : el.content || 'https://example.com';
+      : el.content || 'https://seznik.in';
   if (el.encodeMode && el.encodeMode !== 'QRCode') return;
   const x0 = mmToDots(el.left, dpi);
   const y0 = mmToDots(el.top, dpi);

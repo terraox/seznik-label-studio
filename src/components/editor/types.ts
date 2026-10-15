@@ -161,7 +161,7 @@ export type QrcodeElementState = {
 
 export const DEFAULT_QRCODE_STATE: QrcodeElementState = {
   contentType: 'Manual',
-  content: '',
+  content: 'https://seznik.in',
   encodeMode: 'QRCode',
   errorLevel: 'L',
   zoneSize: '0',

@@ -3226,6 +3226,32 @@ export default function EditScreen() {
             return;
           }
         }
+        // A scan into a selected barcode / QR code updates its value instead of adding another.
+        const pickedId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+        const picked =
+          pickedId != null ? docRef.current.elements.find((el) => el.id === pickedId) : undefined;
+        if (kind === 'QRCode' && picked?.type === 'qrcode') {
+          patchElement(picked.id, {
+            contentType: 'Manual',
+            content: data,
+            encodeMode: encodeMode ?? picked.encodeMode ?? 'QRCode',
+          });
+          setQrcodeTab('Content');
+          setPanelOpen(true);
+          return;
+        }
+        if (kind === 'Barcode' && picked?.type === 'barcode') {
+          patchElement(picked.id, {
+            contentType: 'Manual',
+            content: data,
+            // CODE-128 is the scanner's fallback, so it must not overwrite a chosen symbology.
+            encodeMode:
+              encodeMode && encodeMode !== 'CODE-128' ? encodeMode : picked.encodeMode ?? 'CODE-128',
+          });
+          setBarcodeTab('Content');
+          setPanelOpen(true);
+          return;
+        }
         if (kind === 'QRCode') {
           addElement('qrcode', {
             contentType: 'Manual',

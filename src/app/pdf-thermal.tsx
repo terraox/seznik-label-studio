@@ -77,7 +77,7 @@ export default function PdfScreen() {
 
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
-  const connected = status === 'connected';
+  const connected = status === 'connected' || status === 'printing';
 
   // Modal & Printing State
   const [selectedPdf, setSelectedPdf] = useState<{ name: string; uri: string } | null>(null);

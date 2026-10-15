@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
+import { EditableNumber } from '@/components/editable-number';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -281,6 +282,7 @@ function StepperRow({
   valueColor,
   onMinus,
   onPlus,
+  onCommitValue,
   minusDisabled,
   plusDisabled,
   bordered,
@@ -288,6 +290,8 @@ function StepperRow({
   label: string;
   value: string;
   valueColor?: string;
+  /** When set, the value is tappable and can be typed with the keyboard. */
+  onCommitValue?: (next: number) => void;
   onMinus?: () => void;
   onPlus?: () => void;
   minusDisabled?: boolean;
@@ -309,7 +313,15 @@ function StepperRow({
           ]}>
           <Text style={[styles.stepperSymbol, minusDisabled && styles.stepperSymbolDisabled]}>−</Text>
         </Pressable>
-        <Text style={[styles.stepperValue, valueColor ? { color: valueColor } : null]}>{value}</Text>
+        {onCommitValue ? (
+          <EditableNumber
+            value={parseInt(value, 10) || 1}
+            onCommit={onCommitValue}
+            style={[styles.stepperValue, valueColor ? { color: valueColor } : null]}
+          />
+        ) : (
+          <Text style={[styles.stepperValue, valueColor ? { color: valueColor } : null]}>{value}</Text>
+        )}
         <Pressable
           disabled={plusDisabled}
           onPress={onPlus}
@@ -820,7 +832,12 @@ export default function PrintScreen() {
 
   // The Print preview renders the live vector document model via LabelPreview.
   // Hardware rasterization is executed on-demand during actual print dispatch.
-  const connected = status === 'connected';
+  // A job that reconnects first passes through 'connecting' / 'scanning'; the pill must not
+  // flash "Unconnected" while this screen is the one sending.
+  const connected =
+    status === 'connected' ||
+    status === 'printing' ||
+    (printing && (status === 'connecting' || status === 'scanning'));
   const footerHeight = 72 + insets.bottom;
 
   // Bound the preview to 42 % of the screen height so tall documents
@@ -1997,6 +2014,7 @@ export default function PrintScreen() {
               minusDisabled={copies <= 1}
               onMinus={() => setCopies((n) => Math.max(1, n - 1))}
               onPlus={() => setCopies((n) => n + 1)}
+              onCommitValue={setCopies}
               bordered
             />
 
