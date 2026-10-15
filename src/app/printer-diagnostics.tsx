@@ -37,9 +37,6 @@ import { usePrinterStore } from '@/stores/printer-store';
 function statusLook(state: string): { label: string; color: string; bg: string } {
   if (state === 'connected') return { label: 'Connected', color: '#18794A', bg: '#E8F6EE' };
   if (state === 'printing') return { label: 'Printing', color: '#0E7C8A', bg: '#E6F6F8' };
-  if (state === 'connecting' || state === 'reconnecting') {
-    return { label: 'Connecting', color: '#B45309', bg: '#FEF3C7' };
-  }
   if (state === 'error') return { label: 'Error', color: '#DC2626', bg: '#FEE2E2' };
   return { label: 'Not connected', color: '#9A3412', bg: '#FFF7ED' };
 }

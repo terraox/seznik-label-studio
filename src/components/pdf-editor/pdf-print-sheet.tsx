@@ -96,7 +96,6 @@ export const PdfPrintPanel = forwardRef<
   const printCalibration = usePrinterStore((s) => s.printCalibration);
   const setPrintCalibration = usePrinterStore((s) => s.setPrintCalibration);
   const live = status === 'connected' || status === 'printing';
-  const busy = status === 'scanning' || status === 'connecting';
 
   const qualityCaps = useMemo(
     () =>
@@ -205,7 +204,7 @@ export const PdfPrintPanel = forwardRef<
 
   return (
     <View style={styles.wrap}>
-      {!live && !busy ? (
+      {!live ? (
         <Pressable
           onPress={() => router.push('/printer-connect')}
           style={({ pressed }) => [styles.banner, pressed && styles.pressed]}>

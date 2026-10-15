@@ -512,22 +512,16 @@ export function LabelEditor({
                 styles.btStatusDot,
                 {
                   backgroundColor:
-                    printerStatus === 'connected' || printerStatus === 'printing'
-                      ? '#10B981'
-                      : printerStatus === 'connecting'
-                        ? '#3B82F6'
-                        : '#F59E0B',
+                    printerStatus === 'connected' || printerStatus === 'printing' ? '#10B981' : '#F59E0B',
                 },
               ]}
             />
             <Text style={styles.btStatusText} numberOfLines={1}>
               {printerStatus === 'connected' || printerStatus === 'printing'
                 ? `Connected: ${connectedDeviceName || 'Thermal Printer'}`
-                : printerStatus === 'connecting'
-                  ? 'Connecting to printer...'
-                  : connectedDeviceName
-                    ? `Disconnected (${connectedDeviceName})`
-                    : 'Printer Disconnected'}
+                : connectedDeviceName
+                  ? `Disconnected (${connectedDeviceName})`
+                  : 'Printer Disconnected'}
             </Text>
           </View>
           <View style={styles.btStatusRight}>

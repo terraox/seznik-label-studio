@@ -16,7 +16,6 @@ export function PrinterConnectionPill() {
   const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
   const model = (CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas).shortName;
   const live = status === 'connected' || status === 'printing';
-  const busy = status === 'connecting' || status === 'scanning';
 
   // One sync on mount. The home chip already polls while the app is open.
   useEffect(() => {
@@ -30,9 +29,9 @@ export function PrinterConnectionPill() {
       onPress={() => router.push('/printer-connect')}
       accessibilityRole="button"
       accessibilityLabel={live ? `Printer connected: ${deviceName ?? model}` : 'Printer not connected'}
-      style={({ pressed }) => [styles.pill, live && styles.pillOn, busy && styles.pillBusy, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.pill, live && styles.pillOn, pressed && styles.pressed]}>
       <Text numberOfLines={1} style={styles.text}>
-        {live ? `${model}: ${deviceName ?? 'Connected'}` : busy ? 'Connecting…' : `${model} · Unconnected`}
+        {live ? `${model}: ${deviceName ?? 'Connected'}` : `${model} · Unconnected`}
       </Text>
       <AppIcon name="link" tintColor="#FFFFFF" size={14} />
     </Pressable>
@@ -51,7 +50,6 @@ const styles = StyleSheet.create({
     maxWidth: 220,
   },
   pillOn: { backgroundColor: '#2E9E63' },
-  pillBusy: { backgroundColor: '#B45309' },
   text: { color: '#FFFFFF', ...Type.badge },
   pressed: { opacity: 0.65 },
 });

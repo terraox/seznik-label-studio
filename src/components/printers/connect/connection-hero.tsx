@@ -16,17 +16,11 @@ type ConnectionHeroProps = {
 
 export function ConnectionHero({ status, deviceName, modelName, modelId }: ConnectionHeroProps) {
   const connected = status === 'connected' || status === 'printing';
-  const busy = status === 'scanning' || status === 'connecting';
-  const title = connected
-    ? deviceName || modelName
-    : busy
-      ? status === 'scanning'
-        ? 'Looking nearby'
-        : 'Connecting'
-      : 'Ready to connect';
+  const scanning = status === 'scanning';
+  const title = connected ? deviceName || modelName : scanning ? 'Looking nearby' : 'Ready to connect';
   const detail = connected
     ? `${modelName} is ready to print`
-    : busy
+    : scanning
       ? 'Keep the printer on and close to the phone'
       : `Scan, then tap the ${modelName} in the list`;
 
@@ -39,7 +33,7 @@ export function ConnectionHero({ status, deviceName, modelName, modelId }: Conne
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.detail}>{detail}</Text>
       </View>
-      <View style={[styles.dot, connected ? styles.dotOn : busy ? styles.dotBusy : styles.dotOff]} />
+      <View style={[styles.dot, connected ? styles.dotOn : scanning ? styles.dotBusy : styles.dotOff]} />
     </View>
   );
 }

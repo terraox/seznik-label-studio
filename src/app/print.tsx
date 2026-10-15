@@ -1840,8 +1840,6 @@ export default function PrintScreen() {
           <Text numberOfLines={1} style={styles.connectionText}>
             {connected
               ? `${activeModelMeta.shortName}: ${deviceName ?? 'Connected'}`
-              : status === 'connecting'
-              ? 'Connecting…'
               : `${activeModelMeta.shortName} · Unconnected`}
           </Text>
           <AppIcon name="link" tintColor="#FFFFFF" size={14} />

@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
@@ -12,8 +12,8 @@ import { usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-
 
 const CHIP_FILL: Record<PrinterConnectionStatus, string> = {
   disconnected: HomeStatusColors.idle,
-  scanning: HomeStatusColors.busy,
-  connecting: HomeStatusColors.busy,
+  scanning: HomeStatusColors.idle,
+  connecting: HomeStatusColors.idle,
   connected: HomeStatusColors.ok,
   printing: HomeStatusColors.ok,
 };
@@ -45,8 +45,7 @@ export function StatusChip() {
   const modelName = (CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas).shortName;
 
   const live = status === 'connected' || status === 'printing';
-  const busy = status === 'scanning' || status === 'connecting';
-  const text = live ? deviceName || modelName : busy ? 'Connecting…' : 'Not connected';
+  const text = live ? deviceName || modelName : 'Not connected';
   const batteryLabel =
     showBattery && batteryPercent != null
       ? `${batteryPercent}%`
@@ -71,9 +70,7 @@ export function StatusChip() {
         { backgroundColor: CHIP_FILL[status] },
         pressed && styles.pressed,
       ]}>
-      {status === 'disconnected' ? (
-        <AppIcon name="link" tintColor="#FFFFFF" size={15} pointerEvents="none" />
-      ) : live && showBattery ? (
+      {live && showBattery ? (
         <PrinterBatteryLabel
           percent={batteryPercent}
           size={15}
@@ -84,7 +81,7 @@ export function StatusChip() {
       ) : live ? (
         <AppIcon name="printer" tintColor="#FFFFFF" size={15} pointerEvents="none" />
       ) : (
-        <View style={styles.dot} />
+        <AppIcon name="link" tintColor="#FFFFFF" size={15} pointerEvents="none" />
       )}
       <Text
         numberOfLines={1}
@@ -108,13 +105,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     overflow: 'hidden',
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
-    flexShrink: 0,
   },
   text: {
     flexShrink: 1,

@@ -34,7 +34,7 @@ export function LastConnectedPrinter({
 
   const displayName = deviceName?.trim() || modelName;
   const mac = normalizePrinterMac(deviceId);
-  const status = statusCopy({ connecting, nearby, scanning, autoConnectPaused });
+  const status = statusCopy({ nearby, scanning, autoConnectPaused });
 
   return (
     <View style={styles.wrap}>
@@ -80,24 +80,14 @@ export function LastConnectedPrinter({
 }
 
 function statusCopy({
-  connecting,
   nearby,
   scanning,
   autoConnectPaused,
 }: {
-  connecting: boolean;
   nearby: boolean;
   scanning: boolean;
   autoConnectPaused: boolean;
 }): { label: string; hint: string; dot: string; tone: string } {
-  if (connecting) {
-    return {
-      label: 'Connecting',
-      hint: 'Hold tight — pairing with your printer.',
-      dot: '#B45309',
-      tone: '#B45309',
-    };
-  }
   if (nearby) {
     return {
       label: 'In range',
