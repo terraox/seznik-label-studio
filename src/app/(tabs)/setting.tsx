@@ -19,7 +19,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple, cardShadow, Palette } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTranslation } from '@/lib/i18n';
-import { useAuthStore } from '@/stores/auth-store';
+// import { useAuthStore } from '@/stores/auth-store';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
 type IconName = AppIconName;
@@ -75,7 +75,7 @@ export default function SettingScreen() {
   const { width } = useWindowDimensions();
   const { t } = useTranslation();
   const startWalkthrough = useWalkthroughStore((s) => s.start);
-  const logout = useAuthStore((s) => s.logout);
+  // const logout = useAuthStore((s) => s.logout);
 
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
 
@@ -98,10 +98,11 @@ export default function SettingScreen() {
     );
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLogout = () => {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: logout },
+      { text: 'Log out', style: 'destructive', onPress: () => undefined },
     ]);
   };
 
@@ -202,6 +203,7 @@ export default function SettingScreen() {
             <SettingRow label={t('setting.aboutUs')} icon="info.circle" onPress={handleAbout} />
           </SettingGroup>
 
+          {/* Log out hidden while login is switched off.
           <SettingGroup>
             <SettingRow
               label="Log out"
@@ -209,6 +211,7 @@ export default function SettingScreen() {
               onPress={handleLogout}
             />
           </SettingGroup>
+          */}
         </View>
       </ScrollView>
     </View>
