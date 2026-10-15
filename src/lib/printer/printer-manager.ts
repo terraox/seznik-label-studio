@@ -19,11 +19,11 @@ import {
   bluetoothOffScanResult,
 } from '@/lib/printer/bluetooth-guard';
 import { assertJoshMonoBuffer, joshPackedPageDots } from '@/lib/printer/josh-mono-validate';
+import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
 import {
   JOSH_TEST_LABEL_EXTRA_H_MM,
   JOSH_BORDER_PAD_DOTS,
   joshEffectiveDpi,
-  joshGapTypeFromMedia,
 } from '@/lib/printer/josh-print';
 import {
   isLikelyTezName,
@@ -308,6 +308,7 @@ class PrinterManager {
   /** Last successful auto-reconnect per bridge+MAC — cleared when the link drops. */
   private autoReconnectSessionKey: string | null = null;
   private autoReconnectInFlight = false;
+  private autoReconnectPromise: Promise<boolean> | null = null;
   private reconnectEpoch = 0;
   /** Latest connectModel call. Older calls must not clear or overwrite a newer printer. */
   private connectGeneration = 0;
@@ -470,17 +471,22 @@ class PrinterManager {
    * Prevents stale LuckPrinter/LPAPI handles after brand switch.
    */
   private async disconnectAllBridges(): Promise<void> {
-    await this.getLabelX()?.disconnectLabelX().catch(() => {});
-    await this.getJosh()?.disconnectJosh().catch(() => {});
-    await this.getTez()?.disconnectTez().catch(() => {});
-    await this.getTd404()?.disconnectTd404().catch(() => {});
-    await this.getDev()?.disconnectDev().catch(() => {});
+    await this.disconnectForeignBridges(null);
+    await new Promise<void>((r) => setTimeout(r, 300));
+  }
+
+  /** Close every native SDK except `keep`. No settle delay — Josh resume must not pay 300ms. */
+  private async disconnectForeignBridges(keep: SeznikPrinterModelId | null): Promise<void> {
+    if (keep !== 'labelx') await this.getLabelX()?.disconnectLabelX().catch(() => {});
+    if (keep !== 'josh') await this.getJosh()?.disconnectJosh().catch(() => {});
+    if (keep !== 'tez') await this.getTez()?.disconnectTez().catch(() => {});
+    if (keep !== 'td404') await this.getTd404()?.disconnectTd404().catch(() => {});
+    if (keep !== 'dev') await this.getDev()?.disconnectDev().catch(() => {});
     if (this.connectedDevice) {
       await this.connectedDevice.cancelConnection().catch(() => {});
       this.connectedDevice = null;
       this.writableTarget = null;
     }
-    await new Promise<void>((r) => setTimeout(r, 300));
   }
 
   get transport(): ActiveTransport {
@@ -1416,6 +1422,7 @@ class PrinterManager {
       );
     }
     const connectEpoch = this.reconnectEpoch;
+    if (model === 'josh') this.getJosh();
     if (this.isLiveSessionForModel(model, deviceId)) {
       if (!stillCurrent()) return;
       this.manualConnectMac = null;
@@ -1436,8 +1443,13 @@ class PrinterManager {
     await this.stopScanAsync();
     if (!stillCurrent()) return;
 
-    // Drop whatever this bridge still holds (the previous printer) before opening the new one.
-    await this.disconnect({ forSwitch: true }).catch(() => {});
+    // Josh resume: keep the LPAPI session. Closing it forced a full Bluetooth
+    // open and made the first print after leaving the app feel stuck.
+    if (model === 'josh') {
+      await this.disconnectForeignBridges('josh').catch(() => {});
+    } else {
+      await this.disconnect({ forSwitch: true }).catch(() => {});
+    }
 
     if (!stillCurrent()) return;
     if (connectEpoch !== this.reconnectEpoch) {
@@ -2828,6 +2840,11 @@ class PrinterManager {
 
   private isLiveSessionForModel(model: SeznikPrinterModelId, deviceId: string): boolean {
     if (!this.isModelConnected(model)) return false;
+    if (model === 'josh') {
+      const liveMac = this.getJosh()?.getJoshState?.()?.macAddress;
+      if (!liveMac) return true;
+      return normalizePrinterMac(liveMac) === normalizePrinterMac(deviceId);
+    }
     const store = usePrinterStore.getState();
     const known = store.deviceId ?? store.lastDeviceId;
     if (!known) return true;
@@ -2906,19 +2923,27 @@ class PrinterManager {
 
     this.autoReconnectInFlight = true;
     this.lastAutoReconnectAttemptAt = now;
-    try {
-      console.info('[printer] app-wide auto-reconnect attempt', sessionKey);
-      const ok = await this.reconnectLastForConsumer(consumer);
-      if (ok) {
-        this.autoReconnectSessionKey = sessionKey;
-        this.autoReconnectSuppressed = false;
-        this.reconcileConnectionState();
+    let run: Promise<boolean> = Promise.resolve(false);
+    run = (async () => {
+      try {
+        console.info('[printer] app-wide auto-reconnect attempt', sessionKey);
+        const ok = await this.reconnectLastForConsumer(consumer);
+        if (ok) {
+          this.autoReconnectSessionKey = sessionKey;
+          this.autoReconnectSuppressed = false;
+          this.reconcileConnectionState();
+        }
+        return ok;
+      } catch (error) {
+        console.warn('[printer] app-wide auto-reconnect failed:', error);
+        return false;
+      } finally {
+        this.autoReconnectInFlight = false;
+        if (this.autoReconnectPromise === run) this.autoReconnectPromise = null;
       }
-    } catch (error) {
-      console.warn('[printer] app-wide auto-reconnect failed:', error);
-    } finally {
-      this.autoReconnectInFlight = false;
-    }
+    })();
+    this.autoReconnectPromise = run;
+    await run;
   }
 
   get isConnected(): boolean {
@@ -2955,6 +2980,14 @@ class PrinterManager {
    * Use this to avoid starting expensive data preparation when the connection is dead.
    */
   isConnectionHealthy(): boolean {
+    const store = usePrinterStore.getState();
+    if (
+      (store.selectedPrinterModel === 'josh' || store.sdkId === 'josh') &&
+      this.getJosh()?.isJoshConnected?.()
+    ) {
+      this.activeTransport = 'josh-lpapi';
+      return true;
+    }
     if (this.activeTransport === 'labelx-spp') {
       return Boolean(this.getLabelX()?.isLabelXConnected());
     }
@@ -3014,6 +3047,14 @@ class PrinterManager {
   async ensureConnected(): Promise<{ alreadyConnected: boolean; reconnectMs: number }> {
     if (this.isConnectionHealthy()) {
       return { alreadyConnected: true, reconnectMs: 0 };
+    }
+
+    if (this.autoReconnectPromise) {
+      const tWait = Date.now();
+      await this.autoReconnectPromise.catch(() => false);
+      if (this.isConnectionHealthy()) {
+        return { alreadyConnected: true, reconnectMs: Date.now() - tWait };
+      }
     }
 
     if (!this.isBluetoothEnabled()) {
@@ -4052,8 +4093,14 @@ class PrinterManager {
       try {
         const profile = this.getActivePrinterProfile();
         const dpi = joshEffectiveDpi(options.dpi ?? profile.dpi);
-        const gapType = joshGapTypeFromMedia(options.media ?? 'gap');
-        const gapLength = options.gapMm != null ? Math.max(0, options.gapMm) : 3;
+        const joshJob = resolveJoshJobParams({
+          density: options.density,
+          speed: options.speed,
+          gapMm: options.gapMm,
+          media: options.media ?? 'gap',
+        });
+        const gapType = joshJob.gapType;
+        const gapLength = joshJob.gapMm;
         // A page with border padding is JOSH_BORDER_PAD_DOTS wider than the label.
         // The job is widened by the same amount; the left edge and scale are unchanged.
         const basePage = joshPackedPageDots(options.widthMm, options.heightMm, dpi);
@@ -4071,7 +4118,9 @@ class PrinterManager {
           heightMm: options.heightMm,
           dpi,
         });
-        await this.ensureConnected();
+        if (!this.isConnectionHealthy()) {
+          await this.ensureConnected();
+        }
         const t0 = Date.now();
         const alignment = options.alignment ?? profile.alignment;
         const result = await josh.printJoshMonoLabel({
@@ -4082,8 +4131,8 @@ class PrinterManager {
           widthMm: jobWidthMm,
           heightMm: options.heightMm,
           copies: Math.max(1, Math.round(options.copies ?? 1)),
-          density: options.density != null ? options.density : -1,
-          speed: options.speed != null ? options.speed : -1,
+          density: joshJob.density,
+          speed: joshJob.speed,
           orientation: options.orientation ?? 0,
           gapType,
           gapLength,
@@ -4166,10 +4215,16 @@ class PrinterManager {
       try {
         const profile = this.getActivePrinterProfile();
         const dpi = joshEffectiveDpi(options.dpi ?? profile.dpi);
-        const gapType = joshGapTypeFromMedia(options.media ?? 'gap');
-        const gapLength = options.gapMm != null ? Math.max(0, options.gapMm) : 3;
+        const joshJob = resolveJoshJobParams({
+          density: options.density,
+          speed: options.speed,
+          gapMm: options.gapMm,
+          media: options.media ?? 'gap',
+        });
+        const gapType = joshJob.gapType;
+        const gapLength = joshJob.gapMm;
         console.info(
-          `[JOSH-PRINT-P1:PREFLIGHT] mm-locked PNG print: ${options.widthMm}x${options.heightMm}mm dpi=${dpi} gapType=${gapType} gap=${gapLength}mm density=${options.density ?? 'auto'} speed=${options.speed ?? 'auto'} offset=${options.hOffsetMm ?? 0}x${options.vOffsetMm ?? 0}`,
+          `[JOSH-PRINT-P1:PREFLIGHT] mm-locked PNG print: ${options.widthMm}x${options.heightMm}mm dpi=${dpi} gapType=${gapType} gap=${gapLength}mm density=${joshJob.density} speed=${joshJob.speed} offset=${options.hOffsetMm ?? 0}x${options.vOffsetMm ?? 0}`,
         );
         await this.ensureConnected();
         const t0 = Date.now();
@@ -4179,8 +4234,8 @@ class PrinterManager {
           widthMm: options.widthMm,
           heightMm: options.heightMm,
           copies: Math.max(1, Math.round(options.copies ?? 1)),
-          density: options.density != null ? options.density : -1,
-          speed: options.speed != null ? options.speed : -1,
+          density: joshJob.density,
+          speed: joshJob.speed,
           orientation: options.orientation ?? 0,
           gapType,
           gapLength,
@@ -4516,12 +4571,23 @@ function setupAppStateListener() {
         const elapsed = Date.now() - backgroundedAt;
         backgroundedAt = null;
         if (elapsed > BG_DISCONNECT_MS && manager?.isConnected) {
-          console.info(
-            '[printer] app was backgrounded for',
-            Math.round(elapsed / 1000),
-            's — disconnecting stale BLE/SPP',
-          );
-          void manager.disconnect().catch(() => {});
+          const transport = manager.transport;
+          // BLE GATT dies in the background. Josh LPAPI / TD-404 SPP should stay up —
+          // disconnect+reconnect here is what delayed the first print after leaving the app.
+          if (transport === 'ble') {
+            console.info(
+              '[printer] app was backgrounded for',
+              Math.round(elapsed / 1000),
+              's — disconnecting stale BLE',
+            );
+            void manager.disconnect().catch(() => {});
+          } else {
+            console.info(
+              '[printer] app was backgrounded for',
+              Math.round(elapsed / 1000),
+              `s — keeping ${transport ?? 'native'} session`,
+            );
+          }
         }
       }
       manager?.reconcileConnectionState();

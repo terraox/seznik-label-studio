@@ -3,9 +3,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   BRIDGE_QUALITY_CAPS,
+  JOSH_QUALITY_CAPS,
   TD404_QUALITY_CAPS,
   calibrationQualityWarning,
   clampToCap,
+  darknessSteps,
   formatScale,
   hasManualScale,
   isUntested,
@@ -26,9 +28,12 @@ import { packGrayToMono1bpp } from '@/printing/raster/bit-packer';
 // Capability table per bridge.
 const td = qualityCapsFor('td404-spp');
 assert.deepEqual(td.density, { min: 0, max: 15, step: 1, default: 10, label: 'Darkness' });
-assert.deepEqual(td.speed, { min: 1, max: 7, step: 1, default: 3, testedMax: 3, label: 'Speed' });
+assert.deepEqual(td.speed, { min: 1, max: 7, step: 1, default: 3, label: 'Speed' });
 assert.ok(hasManualScale(td));
-const others: BridgeId[] = ['ble', 'wifi', 'josh-lpapi', 'tez-spp', 'dev-spp', 'labelx-spp'];
+const josh = qualityCapsFor('josh-lpapi');
+assert.deepEqual(josh, JOSH_QUALITY_CAPS);
+assert.ok(hasManualScale(josh));
+const others: BridgeId[] = ['ble', 'wifi', 'tez-spp', 'dev-spp', 'labelx-spp'];
 for (const bridge of others) {
   assert.deepEqual(BRIDGE_QUALITY_CAPS[bridge], { density: 'legacy', speed: 'legacy' }, bridge);
   assert.ok(!hasManualScale(qualityCapsFor(bridge)), `${bridge} keeps legacy controls`);
@@ -40,6 +45,8 @@ assert.equal(resolveQualityBridge({ activeTransport: 'tez-spp', storeTransport: 
 assert.equal(resolveQualityBridge({ activeTransport: null, storeTransport: 'bluetooth-spp', sdkId: 'td404' }), 'td404-spp');
 assert.equal(resolveQualityBridge({ activeTransport: null, storeTransport: 'wifi', sdkId: 'td404' }), null);
 assert.equal(resolveQualityBridge({ activeTransport: null, storeTransport: 'tez-spp', sdkId: 'tez' }), null);
+assert.equal(resolveQualityBridge({ activeTransport: null, storeTransport: 'josh-lpapi', sdkId: 'josh' }), 'josh-lpapi');
+assert.equal(resolveQualityBridge({ activeTransport: 'josh-lpapi', storeTransport: 'josh-lpapi', sdkId: 'josh' }), 'josh-lpapi');
 
 // Clamping, including saved out-of-range values.
 const density = TD404_QUALITY_CAPS.density as QualityScale;
@@ -58,7 +65,7 @@ assert.equal(formatScale(10, density), 'Darkness 10 of 15');
 assert.equal(formatScale(3, speed), 'Speed 3 of 7');
 assert.equal(formatScale(null, speed), 'Speed Auto');
 assert.ok(!isUntested(3, speed));
-assert.ok(isUntested(4, speed));
+assert.ok(!isUntested(7, speed), 'TD-404 SPEED 1–7 is the SDK max');
 assert.ok(!isUntested(null, speed));
 assert.ok(!isUntested(15, density));
 
@@ -68,10 +75,10 @@ assert.equal(scaleValueText(10, density), '10 of 15');
 assert.equal(stepQuality(null, density, 1), 10);
 assert.equal(stepQuality(null, density, -1), 10);
 assert.equal(stepQuality(null, speed, 1), 3);
-assert.equal(stepQuality(15, density, 1), 15);
-assert.equal(stepQuality(0, density, -1), 0);
-assert.equal(stepQuality(1, speed, -1), 1);
-assert.equal(stepQuality(7, speed, 1), 7);
+assert.equal(stepQuality(15, density, 1), null);
+assert.equal(stepQuality(0, density, -1), null);
+assert.equal(stepQuality(1, speed, -1), null);
+assert.equal(stepQuality(7, speed, 1), null);
 assert.equal(stepQuality(3, speed, 1), 4);
 
 // Frozen copy of resolvePrintQuality before bridge caps existed.
@@ -128,6 +135,24 @@ for (const kind of jobKinds) {
 assert.equal(resolvePrintQuality({ darkness: null, speed: null, caps: td }).density, 10);
 assert.equal(resolvePrintQuality({ darkness: null, speed: null, caps: td }).speed, 3);
 assert.equal(resolvePrintQuality({ darkness: null, speed: null, dieCut: true, caps: td }).speed, 2);
+
+// Josh Auto matches the same defaults; Manual speed clamps to LPAPI 1–4.
+assert.equal(resolvePrintQuality({ darkness: null, speed: null, caps: josh }).density, 10);
+assert.equal(resolvePrintQuality({ darkness: null, speed: null, caps: josh }).speed, 3);
+assert.equal(resolvePrintQuality({ darkness: 5, speed: 8, caps: josh }).density, 5);
+assert.equal(resolvePrintQuality({ darkness: 5, speed: 8, caps: josh }).speed, 4);
+assert.equal(resolvePrintQuality({ darkness: 20, speed: 0, caps: josh }).density, 14);
+assert.equal(resolvePrintQuality({ darkness: 20, speed: 0, caps: josh }).speed, 1);
+assert.equal(darknessSteps(null, josh), 0);
+assert.equal(darknessSteps(5, josh), 0, 'Josh heat is LPAPI density, not a bitmap ink pass');
+assert.equal(darknessSteps(5, td), -5);
+const joshSpeed = JOSH_QUALITY_CAPS.speed as QualityScale;
+const joshDensity = JOSH_QUALITY_CAPS.density as QualityScale;
+assert.equal(stepQuality(null, joshSpeed, 1), 3);
+assert.equal(stepQuality(4, joshSpeed, 1), null);
+assert.equal(stepQuality(1, joshSpeed, -1), null);
+assert.equal(stepQuality(14, joshDensity, 1), null);
+assert.equal(stepQuality(0, joshDensity, -1), null);
 
 // TD-404 Manual: DENSITY follows darkness 0-15 and the bitmap follows too. Darkness 10
 // (the default) prints exactly like Auto; every step away moves the threshold.

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   PixelRatio,
   Pressable,
   ScrollView,
@@ -83,6 +84,7 @@ import {
   waitForNextPaint,
 } from '@/lib/printer/print-job';
 import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-manager';
+import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
 import { resolveTd404JobParams } from '@/lib/printer/td404-job-params';
 import {
   createPrintSpec,
@@ -100,7 +102,9 @@ import {
   assertHeadlessRasterDocument,
   canHeadlessRasterPrint,
   rasterizeDocumentToBitmapTimed,
+  type RasterBitmap,
 } from '@/printing/raster/skia-rasterizer';
+import { warmupPrintRasterSurface } from '@/printing/raster/skia-surface';
 import { TD404_HEADLESS_SKIA_PRINT } from '@/printing/raster/td404-headless-flag';
 import { loadInstalledFontsIntoRuntime } from '@/lib/fonts/runtime';
 import { ensurePrintTypefacesForDocument, missingPrintTypefaces } from '@/printing/raster/print-typeface';
@@ -401,6 +405,14 @@ export default function PrintScreen() {
     [printerTransport, printerSdkId, status],
   );
   const qualityCaps = useMemo(() => qualityCapsFor(qualityBridge), [qualityBridge]);
+  useEffect(() => {
+    if (qualityBridge !== 'josh-lpapi') return;
+    warmupPrintRasterSurface();
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') warmupPrintRasterSurface();
+    });
+    return () => sub.remove();
+  }, [qualityBridge]);
   const printCalibration = usePrinterStore((s) => s.printCalibration);
   const setPrintCalibration = usePrinterStore((s) => s.setPrintCalibration);
   // A fixed print-head/media-guide offset is a per-unit hardware trait, not
@@ -957,11 +969,50 @@ export default function PrintScreen() {
       console.info(
         `[print] Advanced params → density=${printDensity} speed=${printSpeed} threshold=${threshold} gap=${gapLength}mm offset=${printOffsetMm.x}x${printOffsetMm.y}mm (${bakeOffset ? 'bitmap' : 'REFERENCE'}) darknessUI=${darkness ?? 'Auto'} speedUI=${speed ?? 'Auto'} bridge=${jobBridge ?? 'none'} densityMode=${darkness == null ? 'auto' : 'manual'} speedMode=${speed == null ? 'auto' : 'manual'} inkSteps=${inkSteps}`,
       );
+      const pageDoc0 = displayDocument ?? previewDocument;
+      const joshHeadlessNow =
+        manager.isJosh &&
+        orientationDeg === 0 &&
+        pageDoc0 != null &&
+        canHeadlessRasterPrint(pageDoc0) &&
+        Math.abs(pageDoc0.widthMm - paper.widthMm) <= 0.2 &&
+        Math.abs(pageDoc0.heightMm - paper.heightMm) <= 0.2;
+      const joshRasterPromise: Promise<RasterBitmap | null> =
+        joshHeadlessNow && pageDoc0
+          ? (async () => {
+              try {
+                assertHeadlessRasterDocument(pageDoc0);
+                await ensurePrintTypefacesForDocument(pageDoc0);
+                if (missingPrintTypefaces(pageDoc0).length > 0) return null;
+                const t0 = Date.now();
+                const timed = rasterizeDocumentToBitmapTimed(
+                  pageDoc0,
+                  jobDpi,
+                  orientationDeg === 0
+                    ? joshHeadlessRasterOptions(jobDpi, printOffsetMm.x, printOffsetMm.y, {
+                        threshold,
+                        darknessSteps: inkSteps,
+                      })
+                    : { threshold, darknessSteps: inkSteps },
+                );
+                console.info(`[JOSH-MONO] raster ${Date.now() - t0} ms`);
+                return timed.result;
+              } catch (err) {
+                console.warn('[JOSH-MONO] early raster failed', err);
+                return null;
+              }
+            })()
+          : Promise.resolve(null);
+      const joshConnectPromise = manager.isJosh
+        ? manager.ensureConnected().catch((err) => ({ error: err }))
+        : Promise.resolve(null);
       if (!fitLabelJob) {
-        await loadInstalledFontsIntoRuntime().catch((err) => {
-          console.warn('[print] installed fonts failed to load', err);
-        });
-        await waitForNextPaint();
+        await Promise.all([
+          loadInstalledFontsIntoRuntime().catch((err) => {
+            console.warn('[print] installed fonts failed to load', err);
+          }),
+          manager.isJosh ? Promise.resolve() : waitForNextPaint(),
+        ]);
       }
 
       for (let page = 0; page < pageCount; page++) {
@@ -971,7 +1022,7 @@ export default function PrintScreen() {
         const fitLabelExtract = pageDoc != null && isFitLabelImageOnlyDocument(pageDoc);
         if (pageCount > 1) {
           setPageIndex(page);
-          if (!fitLabelExtract) {
+          if (!fitLabelExtract && !manager.isJosh) {
             timer.start('pageWaitForPaint');
             await waitForNextPaint();
             timer.end('pageWaitForPaint');
@@ -980,6 +1031,13 @@ export default function PrintScreen() {
 
         const td404HeadlessMono =
           manager.usesTd404CommandSet &&
+          orientationDeg === 0 &&
+          pageDoc != null &&
+          canHeadlessRasterPrint(pageDoc) &&
+          Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
+          Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
+        const joshHeadlessCandidate =
+          manager.isJosh &&
           orientationDeg === 0 &&
           pageDoc != null &&
           canHeadlessRasterPrint(pageDoc) &&
@@ -996,15 +1054,44 @@ export default function PrintScreen() {
         let fitLabelDecodeMs = 0;
         let fitLabelRasterMs = 0;
         let fitLabelMono: FitLabelPrintPayload | null = null;
-        if (td404HeadlessMono) {
+        let joshFacesReady = false;
+        let joshMonoBitmap: RasterBitmap | null = null;
+        if (td404HeadlessMono || joshHeadlessCandidate) {
           const tConn0 = Date.now();
-          const connectionResult = await manager.ensureConnected().catch((err) => {
-            return { error: err };
-          });
+          const [connectionResult, bitmap] = await Promise.all([
+            manager.isJosh ? joshConnectPromise : manager.ensureConnected().catch((err) => {
+              return { error: err };
+            }),
+            page === 0 ? joshRasterPromise : Promise.resolve(null),
+          ]);
           connectionMs = Date.now() - tConn0;
-          timer.end('capture+verify');
-          if (connectionResult && 'error' in connectionResult) {
-            throw connectionResult.error;
+          joshMonoBitmap = bitmap;
+          joshFacesReady = bitmap != null;
+          if (td404HeadlessMono || joshFacesReady) {
+            timer.end('capture+verify');
+            if (connectionResult && 'error' in connectionResult) {
+              throw connectionResult.error;
+            }
+          } else {
+            if (connectionResult && 'error' in connectionResult) {
+              throw connectionResult.error;
+            }
+            const tCap0 = Date.now();
+            const png = await captureRef(shotRef, printCaptureShotOptions).catch(async () => {
+              await waitForNextPaint();
+              return captureRef(shotRef, printCaptureShotOptions);
+            });
+            captureMs = Date.now() - tCap0;
+            captureResolvedAt = Date.now();
+            timer.end('capture+verify');
+            if (!png) {
+              throw new Error('Could not capture the label for printing.');
+            }
+            base64 = png;
+            rotatedBase64 = rotatePngBase64(
+              applyInkDarknessToPng(base64, inkSteps, threshold, pageDoc),
+              orientationDeg,
+            );
           }
         } else if (fitLabelExtract && pageDoc) {
           const tConn0 = Date.now();
@@ -1186,6 +1273,15 @@ export default function PrintScreen() {
               paperType,
             })
           : null;
+        const joshJob = manager.isJosh
+          ? resolveJoshJobParams({
+              density: printDensity,
+              speed: printSpeed,
+              gapMm: gapLength,
+              paperType,
+              media: wantsBline ? 'bline' : media,
+            })
+          : null;
 
         const artworkPhoto = Boolean(params.imageUri) && !params.labelId;
 
@@ -1242,12 +1338,6 @@ export default function PrintScreen() {
             `[TEZ-PRINT] page ${page + 1} total: ${Date.now() - pageStart} ms | Tez OEM PrintSDK path`,
           );
         } else if (manager.isJosh) {
-          const joshHeadlessMono =
-            orientationDeg === 0 &&
-            pageDoc != null &&
-            canHeadlessRasterPrint(pageDoc) &&
-            Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
-            Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
           const joshBakeOffset = orientationDeg === 0;
           const joshInkMm = joshInkOffsetMm(printOffsetMm.x, printOffsetMm.y);
           const joshInkRotatedMm = joshInkOffsetMm(offsetH, offsetV);
@@ -1256,35 +1346,11 @@ export default function PrintScreen() {
           );
           timer.start('transmit');
           try {
-            let joshFacesReady = false;
-            if (joshHeadlessMono && pageDoc) {
-              assertHeadlessRasterDocument(pageDoc);
-              await ensurePrintTypefacesForDocument(pageDoc);
-              const missingFaces = missingPrintTypefaces(pageDoc);
-              if (missingFaces.length > 0) {
-                console.warn(
-                  '[JOSH-MONO] print face missing, using ViewShot so the label matches the canvas:',
-                  missingFaces.join(', '),
-                );
-              } else {
-                joshFacesReady = true;
-              }
-            }
-            if (joshFacesReady && pageDoc) {
+            if (joshFacesReady && pageDoc && joshMonoBitmap) {
               console.info(
                 `[JOSH-MONO-P1] Headless dots print: page=${page + 1}/${pageCount}, size=${paper.widthMm}x${paper.heightMm}mm ink=${joshInkMm.x}x${joshInkMm.y}mm`,
               );
-              const timed = rasterizeDocumentToBitmapTimed(
-                pageDoc,
-                jobDpi,
-                joshBakeOffset
-                  ? joshHeadlessRasterOptions(jobDpi, printOffsetMm.x, printOffsetMm.y, {
-                      threshold,
-                      darknessSteps: inkSteps,
-                    })
-                  : { threshold, darknessSteps: inkSteps },
-              );
-              const bitmap = timed.result;
+              const bitmap = joshMonoBitmap;
               usedNative = await manager.printJoshMonoLabelFast({
                 monoBytes: bitmap.mono1bppBuffer,
                 widthDots: bitmap.widthDots,
@@ -1292,13 +1358,13 @@ export default function PrintScreen() {
                 bytesPerRow: bitmap.bytesPerRow,
                 widthMm: pageDoc.widthMm,
                 heightMm: pageDoc.heightMm,
-                gapMm: gapLength,
+                gapMm: joshJob?.gapMm ?? gapLength,
                 copies: sendCopies,
-                density: printDensity,
-                speed: printSpeed,
+                density: joshJob?.density ?? printDensity,
+                speed: joshJob?.speed ?? printSpeed,
                 hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
                 vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
-                media: wantsBline ? 'bline' : media,
+                media: joshJob?.media ?? (wantsBline ? 'bline' : media),
                 dpi: jobDpi,
               });
               if (!usedNative) {
@@ -1317,15 +1383,15 @@ export default function PrintScreen() {
                 pngBase64: rotatedBase64,
                 widthMm: paper.widthMm,
                 heightMm: paper.heightMm,
-                gapMm: gapLength,
+                gapMm: joshJob?.gapMm ?? gapLength,
                 copies: sendCopies,
-                density: printDensity,
-                speed: printSpeed,
+                density: joshJob?.density ?? printDensity,
+                speed: joshJob?.speed ?? printSpeed,
                 orientation: 0,
                 dpi: jobDpi,
                 hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
                 vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
-                media: wantsBline ? 'bline' : media,
+                media: joshJob?.media ?? (wantsBline ? 'bline' : media),
                 alignment: manager.getActivePrinterProfile().alignment,
               });
               usedNative = true;
@@ -1350,15 +1416,15 @@ export default function PrintScreen() {
                 pngBase64: rotatedBase64,
                 widthMm: paper.widthMm,
                 heightMm: paper.heightMm,
-                gapMm: gapLength,
+                gapMm: joshJob?.gapMm ?? gapLength,
                 copies: sendCopies,
-                density: printDensity,
-                speed: printSpeed,
+                density: joshJob?.density ?? printDensity,
+                speed: joshJob?.speed ?? printSpeed,
                 orientation: 0,
                 dpi: jobDpi,
                 hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
                 vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
-                media: wantsBline ? 'bline' : media,
+                media: joshJob?.media ?? (wantsBline ? 'bline' : media),
                 alignment: manager.getActivePrinterProfile().alignment,
               });
               usedNative = true;
@@ -2070,7 +2136,6 @@ export default function PrintScreen() {
                     value={speed}
                     onChange={setSpeed}
                     Stepper={BorderedStepperRow}
-                    untestedNote="not tested on TD-404"
                   />
                 ) : (
                   <StepperRow

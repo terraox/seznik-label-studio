@@ -48,8 +48,8 @@ export function QualityControl({
         value={scaleValueText(value, cap)}
         onMinus={() => onChange(stepQuality(value, cap, -1))}
         onPlus={() => onChange(stepQuality(value, cap, 1))}
-        minusDisabled={manual && value <= cap.min}
-        plusDisabled={manual && value >= cap.max}
+        minusDisabled={false}
+        plusDisabled={false}
       />
       {manual ? (
         <View style={[styles.footer, { paddingHorizontal: footerInset }]}>

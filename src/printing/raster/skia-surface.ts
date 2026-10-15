@@ -657,6 +657,15 @@ function makeDotRasterSurface(dot: DotSurface): RasterSurface {
   };
 }
 
+/** First MakeOffscreen on device is slow; call once when the Print screen opens. */
+export function warmupPrintRasterSurface(): void {
+  try {
+    makeOffscreenSurface(64, 64);
+  } catch {
+    // Print path creates its own surface.
+  }
+}
+
 export function makeOffscreenSurface(
   widthDots: number,
   heightDots: number,

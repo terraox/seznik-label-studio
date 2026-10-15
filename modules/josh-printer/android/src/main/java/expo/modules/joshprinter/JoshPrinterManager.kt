@@ -18,6 +18,7 @@ import com.dothantech.lpapi.LPAPI
 import com.dothantech.printer.IDzPrinter
 import com.dothantech.printer.IDzPrinter.AddressType
 import com.dothantech.printer.IDzPrinter.PrintParamName
+import com.dothantech.printer.IDzPrinter.PrintParamValue
 import com.dothantech.printer.IDzPrinter.PrintProgress
 import com.dothantech.printer.IDzPrinter.PrinterAddress
 import com.dothantech.printer.IDzPrinter.PrinterState
@@ -62,7 +63,15 @@ class JoshPrinterManager(private val context: Context) {
         private const val CONNECT_RETRY_DELAY_MS = 1_500L
         private const val CONNECT_MAX_ATTEMPTS = 2
         private const val PRINT_TIMEOUT_MS = 15_000L
-        private const val PRINT_SUBMIT_FALLBACK_MS = 800L
+        /**
+         * Drain a previous bulk (30× 25 mm ≈ 11 s at speed 3) before the next
+         * startJob. 10 s was too short — a follow-up job started mid-feed and
+         * the QR walked across die-cuts.
+         */
+        private const val PRINT_BUSY_WAIT_MS = 120_000L
+        private const val PRINT_BUSY_POLL_MS = 25L
+        /** Extra settle after each copy so the gap sensor can find the next notch. */
+        private const val COPY_GAP_SLACK_MS = 250L
         /** Narrow strip — fits 50×15 mm and top band of 25×25 mm. */
         const val TEST_LABEL_WIDTH_MM = 50.0
         const val TEST_LABEL_HEIGHT_MM = 15.0
@@ -147,6 +156,10 @@ class JoshPrinterManager(private val context: Context) {
     /** true only for a genuine PrintProgress.Success ACK from the printer hardware;
      *  false when DataEnded's 200ms no-ACK fallback completed the job instead. */
     private var lastPrintConfirmedByDevice = false
+    private var lastJobGapType = Int.MIN_VALUE
+    private var lastJobGapLength = Int.MIN_VALUE
+    private var lastJobDensity = Int.MIN_VALUE
+    private var lastJobSpeed = Int.MIN_VALUE
     private val jobIdCounter = AtomicInteger(0)
     private var printSubmitFallback: Runnable? = null
     private var printDataEndedFallback: Runnable? = null
@@ -491,19 +504,37 @@ class JoshPrinterManager(private val context: Context) {
             return false
         }
 
+        // App resume: reopen the last LPAPI socket instead of close+scan+open.
+        if (tryReopenLast(macAddress)) {
+            suppressNativeReconnect.set(false)
+            return true
+        }
+
         // Cancel any active Bluetooth discovery to avoid RFCOMM page collisions
         if (btAdapter.isDiscovering) {
             try { btAdapter.cancelDiscovery() } catch (_: Exception) {}
             try { Thread.sleep(150) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
         }
 
-        // Already connected to this device?
+        // Already connected to this device? PRINT_SUCCESS still has an open LPAPI
+        // session — closing it before the first job is what made submit feel stuck.
         val currentState = state.get()
-        if ((currentState == State.CONNECTED) &&
+        val sdkAlreadyOpen = try {
+            currentApi.isPrinterOpened
+        } catch (_: Exception) {
+            false
+        }
+        if (sdkAlreadyOpen &&
             connectedMacAddress != null &&
-            connectedMacAddress.equals(macAddress, ignoreCase = true)
+            connectedMacAddress.equals(macAddress, ignoreCase = true) &&
+            currentState != State.PRINT_FAILED &&
+            currentState != State.DISCONNECTED &&
+            currentState != State.IDLE
         ) {
-            Log.i(TAG, "[CONNECT] Already connected to $macAddress — no-op")
+            Log.i(TAG, "[CONNECT] Already connected to $macAddress (state=$currentState) — no-op")
+            if (currentState != State.CONNECTED && currentState != State.PRINTING) {
+                setState(State.CONNECTED)
+            }
             suppressNativeReconnect.set(false)
             return true
         }
@@ -530,12 +561,8 @@ class JoshPrinterManager(private val context: Context) {
         // and a later connect+disconnect was the only way to clear it.
         val previousMac = connectedMacAddress ?: lastConnectedAddress?.macAddress
         val switchingPrinter = previousMac != null && !previousMac.equals(macAddress, ignoreCase = true)
-        val sdkOpen = try {
-            currentApi.isPrinterOpened
-        } catch (_: Exception) {
-            false
-        }
-        if (switchingPrinter || sdkOpen || currentState == State.CONNECTED || connectedMacAddress != null) {
+        // Only close when switching printers. Same-MAC resume must not wait 1.2s on closePrinter.
+        if (switchingPrinter) {
             Log.i(TAG, "[JOSH-CONN-P2:PREPARE] Releasing previous printer ${previousMac ?: "unknown"} before $macAddress")
             try {
                 currentApi.closePrinter()
@@ -798,11 +825,42 @@ class JoshPrinterManager(private val context: Context) {
         connectedPrinterName = null
         connectedMacAddress = null
         connectingMacAddress = null
+        lastJobGapType = Int.MIN_VALUE
+        lastJobGapLength = Int.MIN_VALUE
+        lastJobDensity = Int.MIN_VALUE
+        lastJobSpeed = Int.MIN_VALUE
         isPrinting.set(false)
         isConnecting.set(false)
         setState(State.DISCONNECTED)
         suppressNativeReconnect.set(false)
         Log.i(TAG, "[DISCONNECT_DONE] Disconnected")
+    }
+
+    /** Restore the last LPAPI socket after the app returns from background. */
+    private fun tryReopenLast(macAddress: String): Boolean {
+        val currentApi = api ?: return false
+        val lastMac = connectedMacAddress ?: lastConnectedAddress?.macAddress ?: return false
+        if (!lastMac.equals(macAddress, ignoreCase = true)) return false
+        if (isConnected()) {
+            if (state.get() != State.CONNECTED && state.get() != State.PRINTING) {
+                setState(State.CONNECTED)
+            }
+            Log.i(TAG, "[CONNECT] session still open for $macAddress — skip reconnect")
+            return true
+        }
+        return try {
+            val ok = currentApi.reopenPrinterSync()
+            Log.i(TAG, "[CONNECT] reopenPrinterSync=$ok for $macAddress")
+            if (!ok || !isConnected()) return false
+            connectedMacAddress = lastMac
+            connectedPrinterName = lastConnectedAddress?.shownName ?: connectedPrinterName
+            connectedPrinterAddress = lastConnectedAddress ?: connectedPrinterAddress
+            setState(State.CONNECTED)
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "[CONNECT] reopenPrinterSync threw", e)
+            false
+        }
     }
 
     /**
@@ -1138,137 +1196,24 @@ class JoshPrinterManager(private val context: Context) {
                 "[$jobId] [JOSH-PRINT-P2:OFFSET] applied h=${hOffsetMm}mm (${hOffsetPx}px) v=${vOffsetMm}mm (${vOffsetPx}px)",
             )
 
-            lastPrintSuccess = false
-            lastPrintConfirmedByDevice = false
-            val latch = CountDownLatch(1)
-            printLatch = latch
-
-            val gapTypeValue = if (paramGapType >= 0) paramGapType else GAP_TYPE_LABEL
-            val gapLengthValue = gapMmTo01mm(if (paramGapLengthMm >= 0.0) paramGapLengthMm else LABEL_GAP_MM)
-            Log.i(TAG, "[$jobId] [JOSH-PRINT-P2:GAP] type=$gapTypeValue length=${paramGapLengthMm}mm → $gapLengthValue (0.01 mm)")
-            try {
-                currentApi.setPrintPageGapType(gapTypeValue)
-                currentApi.setPrintPageGapLength(gapLengthValue)
-            } catch (e: Exception) {
-                Log.w(TAG, "[$jobId] [JOSH-PRINT-P2:GAP] setPrintPageGap* threw (non-fatal)", e)
-            }
-
-            val printParams = Bundle().apply {
-                if (gapTypeValue >= 0) putInt(PrintParamName.GAP_TYPE, gapTypeValue)
-                if (gapLengthValue >= 0) putInt(PrintParamName.GAP_LENGTH, gapLengthValue)
-                if (paramDensity >= 0) putInt(PrintParamName.PRINT_DENSITY, paramDensity)
-                if (paramSpeed >= 0) putInt(PrintParamName.PRINT_SPEED, paramSpeed)
-                if (copies > 1) putInt(PrintParamName.PRINT_COPIES, copies)
-            }
-            val finalParams = if (printParams.isEmpty) null else printParams
-
-            // Offsets already baked into bitmap; keep startJob origin at 0 to avoid double-shift.
-            val xMm = 0.0
-            val yMm = 0.0
-
-            // Clear any stale LPAPI job (test prints and failed jobs leave state behind).
-            try {
-                currentApi.abortJob()
-            } catch (e: Exception) {
-                Log.w(TAG, "[$jobId] [JOSH-PRINT-P2:PREPARE] abortJob threw (non-fatal)", e)
-            }
-
-            // Strategy 1 (Primary — same mm-native path as the working test print):
-            // startJob(widthMm, heightMm) + drawBitmap(mm) + commitJob locks physical size.
-            var strategyUsed = 0
-            var submitted = submitMmJob(currentApi, bitmap, finalWidthMm, finalHeightMm, xMm, yMm, finalParams, alignment)
-            if (submitted) strategyUsed = 1
-            Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 1 (startJob+drawBitmap mm) submitted=$submitted")
-
-            // Strategy 2 (Fallback — startJob without extra params):
-            if (!submitted) {
-                Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 2 fallback to submitMmJob no-params")
-                submitted = submitMmJob(currentApi, bitmap, finalWidthMm, finalHeightMm, xMm, yMm, null, alignment)
-                if (submitted) strategyUsed = 2
-            }
-
-            // Strategy 3 (Fallback — direct printBitmap with params):
-            if (!submitted) {
-                submitted = try {
-                    currentApi.printBitmap(bitmap, finalParams)
-                } catch (e: Exception) {
-                    Log.w(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] currentApi.printBitmap threw", e)
-                    false
-                }
-                if (submitted) strategyUsed = 3
-                Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 3 (direct printBitmap) submitted=$submitted")
-            }
-
-            // Strategy 4 (Fallback — printBitmap null params):
-            if (!submitted) {
-                submitted = try {
-                    currentApi.printBitmap(bitmap, null)
-                } catch (e: Exception) {
-                    Log.w(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] printBitmap(null) threw", e)
-                    false
-                }
-                if (submitted) strategyUsed = 4
-                Log.i(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] Strategy 4 printBitmap(null) submitted=$submitted")
-            }
             val usedOffsetComposite = hOffsetPx != 0 || vOffsetPx != 0 || fitted.width != targetW || fitted.height != targetH
-
-            if (!submitted) {
-                Log.e(TAG, "[$jobId] [JOSH-PRINT-P3:SUBMIT] PRINT_REJECTED all print strategies were rejected")
-                printLatch = null
-                lastError = "JOSH_PRINT_FAILED: Print request rejected by printer SDK"
-                handlePrintFailed("Print request rejected by LPAPI SDK")
-                return null
-            }
-            val tSubmit = System.currentTimeMillis()
-
-            // printBitmap on some LPAPI firmware never emits PrintProgress — complete quickly after submit.
-            printSubmitFallback?.let { mainHandler.removeCallbacks(it) }
-            val submitFallback = Runnable {
-                if (printLatch != null && isPrinting.get() && !lastPrintSuccess) {
-                    Log.i(
-                        TAG,
-                        "[$jobId] [JOSH-PRINT-P4:SUBMIT-FALLBACK] printBitmap submitted without LPAPI progress; completing.",
-                    )
-                    lastPrintSuccess = true
-                    printLatch?.countDown()
-                    mainHandler.post { handlePrintSuccess() }
-                }
-            }
-            printSubmitFallback = submitFallback
-            mainHandler.postDelayed(submitFallback, PRINT_SUBMIT_FALLBACK_MS)
-
-            Log.i(TAG, "[$jobId] [JOSH-PRINT-P4:WAIT-HARDWARE] PRINT_SUBMITTED waiting for physical completion (timeout=${PRINT_TIMEOUT_MS}ms)")
-
-            // ── Wait for completion callback ───────────────────────────
-            val completed = try {
-                latch.await(PRINT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                false
-            }
-            printLatch = null
+            val submitResult = submitLabelBitmapAndWait(
+                currentApi,
+                jobId,
+                bitmap,
+                finalWidthMm,
+                finalHeightMm,
+                copies,
+                paramDensity,
+                paramSpeed,
+                paramGapType,
+                paramGapLengthMm,
+                alignment,
+                "JOSH-PRINT",
+            )
+            if (submitResult == null) return null
             val tDone = System.currentTimeMillis()
-
-            if (!completed) {
-                Log.e(TAG, "[$jobId] PRINT_TIMEOUT No callback within ${PRINT_TIMEOUT_MS}ms")
-                lastError = "JOSH_PRINT_TIMEOUT"
-                setState(State.PRINT_FAILED)
-                emitError("JOSH_PRINT_TIMEOUT", "Print timed out — printer may be unresponsive")
-                emitPrintProgress(jobId, "TIMEOUT", mapOf("timeoutMs" to PRINT_TIMEOUT_MS))
-
-                // Check connection after timeout
-                val postState = currentApi.printerState
-                if (postState == null || postState == PrinterState.Disconnected) {
-                    Log.w(TAG, "[$jobId] Connection lost after timeout")
-                    handleDisconnected()
-                }
-                return null
-            }
-
-            if (!lastPrintSuccess) {
-                Log.e(TAG, "[$jobId] PRINT_FAILED callback received")
-                return null
-            }
+            val strategyUsed = submitResult.strategyUsed
 
             // Recycle bitmap
             if (!bitmap.isRecycled) bitmap.recycle()
@@ -1282,8 +1227,8 @@ class JoshPrinterManager(private val context: Context) {
                 "targetH" to targetH,
                 "decodeMs" to (tDecode - t0),
                 "fitMs" to (tFit - tDecode),
-                "submitMs" to (tSubmit - tFit),
-                "waitMs" to (tDone - tSubmit),
+                "submitMs" to submitResult.submitMs,
+                "waitMs" to submitResult.waitMs,
                 "totalMs" to (tDone - t0),
                 "confirmedByDevice" to lastPrintConfirmedByDevice,
                 "debugAlignment" to alignment,
@@ -1381,7 +1326,8 @@ class JoshPrinterManager(private val context: Context) {
             val latch = CountDownLatch(1)
             printLatch = latch
 
-            currentApi.abortJob()
+            waitWhilePrinterBusy(currentApi, "JOSH-TEST")
+            abortStaleJobIfIdle(currentApi, "JOSH-TEST")
             Log.i(
                 TAG,
                 "[JOSH-PRINT-P2:TEST-DRAW] Starting test job (${TEST_LABEL_WIDTH_MM}x${TEST_LABEL_HEIGHT_MM}mm), text=\"$text\"",
@@ -1415,10 +1361,11 @@ class JoshPrinterManager(private val context: Context) {
                 yMm += lineStepMm
             }
             val committed = currentApi.commitJob()
-            Log.i(TAG, "[JOSH-PRINT-P3:TEST-SUBMIT] commitJob returned: $committed, awaiting physical hardware ACK")
+            Log.i(TAG, "[JOSH-PRINT-P3:TEST-SUBMIT] commitJob returned: $committed")
             if (!committed) {
                 return false
             }
+            finishSubmitWithoutDeviceAck("JOSH-TEST")
 
             val completed = try {
                 latch.await(15_000L, TimeUnit.MILLISECONDS)
@@ -1485,6 +1432,185 @@ class JoshPrinterManager(private val context: Context) {
         return page
     }
 
+    private data class LpapiSessionParams(
+        val gapTypeValue: Int,
+        val gapLengthValue: Int,
+        val density: Int,
+        val speed: Int,
+    )
+
+    /**
+     * Session LPAPI setters run before every job so Strategy 2/4 (commitJob /
+     * printBitmap with no Bundle) still keep gap, heat, and speed.
+     * Darkness/speed are clamped to IDzPrinter.PrintParamValue (0–14 / 0–4).
+     */
+    private fun applyLpapiJobSessionParams(
+        currentApi: LPAPI,
+        jobId: String,
+        paramGapType: Int,
+        paramGapLengthMm: Double,
+        paramDensity: Int,
+        paramSpeed: Int,
+        phase: String,
+        forceGap: Boolean = false,
+    ): LpapiSessionParams {
+        val gapTypeValue = if (paramGapType >= 0) paramGapType else GAP_TYPE_LABEL
+        val gapLengthValue = gapMmTo01mm(if (paramGapLengthMm >= 0.0) paramGapLengthMm else LABEL_GAP_MM)
+        val density = if (paramDensity >= 0) {
+            paramDensity.coerceIn(PrintParamValue.MIN_PRINT_DARKNESS, PrintParamValue.MAX_PRINT_DARKNESS)
+        } else {
+            -1
+        }
+        val speed = if (paramSpeed >= 0) {
+            // SDK min is 0 (stalls first label); jobs use 1–MAX.
+            paramSpeed.coerceIn(1, PrintParamValue.MAX_PRINT_SPEED)
+        } else {
+            -1
+        }
+        Log.i(
+            TAG,
+            "[$jobId] [$phase:GAP] type=$gapTypeValue length=${paramGapLengthMm}mm → $gapLengthValue (0.01 mm) force=$forceGap",
+        )
+        if (forceGap || gapTypeValue != lastJobGapType || gapLengthValue != lastJobGapLength) {
+            try {
+                currentApi.setPrintPageGapType(gapTypeValue)
+                currentApi.setPrintPageGapLength(gapLengthValue)
+                lastJobGapType = gapTypeValue
+                lastJobGapLength = gapLengthValue
+            } catch (e: Exception) {
+                Log.w(TAG, "[$jobId] [$phase:GAP] setPrintPageGap* threw (non-fatal)", e)
+            }
+        }
+        if (density >= 0 && density != lastJobDensity) {
+            try {
+                currentApi.setPrintDarkness(density)
+                lastJobDensity = density
+                Log.i(TAG, "[$jobId] [$phase:DENSITY] setPrintDarkness=$density (sdk ${PrintParamValue.MIN_PRINT_DARKNESS}-${PrintParamValue.MAX_PRINT_DARKNESS})")
+            } catch (e: Exception) {
+                Log.w(TAG, "[$jobId] [$phase:DENSITY] setPrintDarkness threw (non-fatal)", e)
+            }
+        }
+        if (speed >= 0 && speed != lastJobSpeed) {
+            try {
+                currentApi.setPrintSpeed(speed)
+                lastJobSpeed = speed
+                Log.i(TAG, "[$jobId] [$phase:SPEED] setPrintSpeed=$speed (sdk 1-${PrintParamValue.MAX_PRINT_SPEED})")
+            } catch (e: Exception) {
+                Log.w(TAG, "[$jobId] [$phase:SPEED] setPrintSpeed threw (non-fatal)", e)
+            }
+        }
+        return LpapiSessionParams(gapTypeValue, gapLengthValue, density, speed)
+    }
+
+    /** This LPAPI firmware does not ACK PrintProgress.Success — return as soon as commitJob accepts. */
+    private fun finishSubmitWithoutDeviceAck(jobId: String) {
+        lastPrintSuccess = true
+        lastPrintConfirmedByDevice = false
+        Log.i(TAG, "[$jobId] submit accepted without PrintProgress ACK")
+        printLatch?.countDown()
+        handlePrintSuccess()
+    }
+
+    private fun waitWhilePrinterBusy(
+        currentApi: LPAPI,
+        jobId: String,
+        timeoutMs: Long = PRINT_BUSY_WAIT_MS,
+    ) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val st = try {
+                currentApi.printerState
+            } catch (_: Exception) {
+                return
+            }
+            if (st != PrinterState.Printing && st != PrinterState.Working) return
+            Log.d(TAG, "[$jobId] hardware still $st — wait before next job")
+            try {
+                Thread.sleep(PRINT_BUSY_POLL_MS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
+        }
+        Log.w(TAG, "[$jobId] still busy after ${timeoutMs}ms — continuing")
+    }
+
+    /** Mechanical time to feed one label + gap at the job speed (inches/sec). */
+    private fun labelPitchMs(heightMm: Double, gapMm: Double, speed: Int): Long {
+        val pitchMm = heightMm + max(if (gapMm > 0.0) gapMm else LABEL_GAP_MM, 2.0)
+        val ips = if (speed > 0) speed.toDouble() else 3.0
+        val mmPerSec = (ips * 25.4).coerceAtLeast(20.0)
+        return ((pitchMm / mmPerSec) * 1000.0 + COPY_GAP_SLACK_MS).toLong().coerceIn(400L, 3_000L)
+    }
+
+    /**
+     * Wait until this copy has fed past the die-cut so the next startJob
+     * starts on the following label, not on leftover paper of the previous one.
+     */
+    private fun waitUntilPrinterCanAcceptNextLabel(
+        currentApi: LPAPI,
+        jobId: String,
+        heightMm: Double,
+        gapMm: Double,
+        speed: Int,
+    ) {
+        val pitchMs = labelPitchMs(heightMm, gapMm, speed)
+        val t0 = System.currentTimeMillis()
+        // Idle may be Connected or Connected2 — do not wait for a specific enum.
+        waitWhilePrinterBusy(currentApi, jobId, pitchMs + 8_000L)
+        val remain = pitchMs - (System.currentTimeMillis() - t0)
+        if (remain > 20L) {
+            try {
+                Thread.sleep(remain)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+        }
+        Log.i(TAG, "[$jobId] paced ${System.currentTimeMillis() - t0}ms for next copy (pitch=${pitchMs}ms)")
+    }
+
+    private fun submitMmJobWithFallbacks(
+        currentApi: LPAPI,
+        bitmap: Bitmap,
+        widthMm: Double,
+        heightMm: Double,
+        params: Bundle?,
+        alignment: String,
+    ): Int {
+        if (submitMmJob(currentApi, bitmap, widthMm, heightMm, 0.0, 0.0, params, alignment)) return 1
+        if (submitMmJob(currentApi, bitmap, widthMm, heightMm, 0.0, 0.0, null, alignment)) return 2
+        val withParams = try {
+            currentApi.printBitmap(bitmap, params)
+        } catch (_: Exception) {
+            false
+        }
+        if (withParams) return 3
+        val noParams = try {
+            currentApi.printBitmap(bitmap, null)
+        } catch (_: Exception) {
+            false
+        }
+        return if (noParams) 4 else 0
+    }
+
+    private fun abortStaleJobIfIdle(currentApi: LPAPI, jobId: String) {
+        val st = try {
+            currentApi.printerState
+        } catch (_: Exception) {
+            null
+        }
+        // abortJob on a live Connected session delays startJob of the first label.
+        if (st != PrinterState.Working) {
+            Log.d(TAG, "[$jobId] skip abortJob (state=$st)")
+            return
+        }
+        try {
+            currentApi.abortJob()
+        } catch (e: Exception) {
+            Log.w(TAG, "[$jobId] abortJob threw (non-fatal)", e)
+        }
+    }
+
     /** Keep the left `width` columns. Columns to the right are the byte-align pad. */
     private fun cropBitmapToWidth(source: Bitmap, width: Int): Bitmap {
         if (width <= 0 || source.width <= width) return source
@@ -1508,80 +1634,80 @@ class JoshPrinterManager(private val context: Context) {
         paramGapType: Int,
         paramGapLengthMm: Double,
         alignment: String,
+        phase: String = "JOSH-MONO",
     ): LabelSubmitTiming? {
         lastPrintSuccess = false
         lastPrintConfirmedByDevice = false
         val latch = CountDownLatch(1)
         printLatch = latch
 
-        val gapTypeValue = if (paramGapType >= 0) paramGapType else GAP_TYPE_LABEL
-        val gapLengthValue = gapMmTo01mm(if (paramGapLengthMm >= 0.0) paramGapLengthMm else LABEL_GAP_MM)
-        try {
-            currentApi.setPrintPageGapType(gapTypeValue)
-            currentApi.setPrintPageGapLength(gapLengthValue)
-        } catch (e: Exception) {
-            Log.w(TAG, "[$jobId] setPrintPageGap* threw (non-fatal)", e)
-        }
+        val copyCount = copies.coerceAtLeast(1)
+        val session = applyLpapiJobSessionParams(
+            currentApi,
+            jobId,
+            paramGapType,
+            paramGapLengthMm,
+            paramDensity,
+            paramSpeed,
+            phase,
+            forceGap = copyCount > 1,
+        )
 
+        // One startJob+commitJob per copy. PRINT_COPIES reprints the same raster
+        // without seeking the die-cut, so QR codes walk across labels in bulk.
         val printParams = Bundle().apply {
-            if (gapTypeValue >= 0) putInt(PrintParamName.GAP_TYPE, gapTypeValue)
-            if (gapLengthValue >= 0) putInt(PrintParamName.GAP_LENGTH, gapLengthValue)
-            if (paramDensity >= 0) putInt(PrintParamName.PRINT_DENSITY, paramDensity)
-            if (paramSpeed >= 0) putInt(PrintParamName.PRINT_SPEED, paramSpeed)
-            if (copies > 1) putInt(PrintParamName.PRINT_COPIES, copies)
+            if (session.gapTypeValue >= 0) putInt(PrintParamName.GAP_TYPE, session.gapTypeValue)
+            if (session.gapLengthValue >= 0) putInt(PrintParamName.GAP_LENGTH, session.gapLengthValue)
+            if (session.density >= 0) putInt(PrintParamName.PRINT_DENSITY, session.density)
+            if (session.speed >= 0) putInt(PrintParamName.PRINT_SPEED, session.speed)
         }
         val finalParams = if (printParams.isEmpty) null else printParams
-        val xMm = 0.0
-        val yMm = 0.0
 
-        try {
-            currentApi.abortJob()
-        } catch (e: Exception) {
-            Log.w(TAG, "[$jobId] abortJob threw (non-fatal)", e)
-        }
+        waitWhilePrinterBusy(currentApi, jobId)
+        abortStaleJobIfIdle(currentApi, jobId)
 
         val tSubmitStart = System.currentTimeMillis()
         var strategyUsed = 0
-        var submitted = submitMmJob(currentApi, bitmap, widthMm, heightMm, xMm, yMm, finalParams, alignment)
-        if (submitted) strategyUsed = 1
-        if (!submitted) {
-            submitted = submitMmJob(currentApi, bitmap, widthMm, heightMm, xMm, yMm, null, alignment)
-            if (submitted) strategyUsed = 2
-        }
-        if (!submitted) {
-            submitted = try {
-                currentApi.printBitmap(bitmap, finalParams)
-            } catch (e: Exception) {
-                false
+        for (copyIndex in 1..copyCount) {
+            if (copyIndex > 1) {
+                waitUntilPrinterCanAcceptNextLabel(
+                    currentApi,
+                    jobId,
+                    heightMm,
+                    paramGapLengthMm,
+                    session.speed,
+                )
             }
-            if (submitted) strategyUsed = 3
-        }
-        if (!submitted) {
-            submitted = try {
-                currentApi.printBitmap(bitmap, null)
-            } catch (e: Exception) {
-                false
+            val used = submitMmJobWithFallbacks(
+                currentApi,
+                bitmap,
+                widthMm,
+                heightMm,
+                finalParams,
+                alignment,
+            )
+            if (used == 0) {
+                printLatch = null
+                lastError = "JOSH_PRINT_FAILED: Print request rejected by LPAPI SDK (copy $copyIndex/$copyCount)"
+                handlePrintFailed("Print request rejected by LPAPI SDK")
+                return null
             }
-            if (submitted) strategyUsed = 4
-        }
-        if (!submitted) {
-            printLatch = null
-            lastError = "JOSH_PRINT_FAILED: Print request rejected by LPAPI SDK"
-            handlePrintFailed("Print request rejected by LPAPI SDK")
-            return null
+            strategyUsed = used
+            if (copyCount > 1) {
+                Log.i(TAG, "[$jobId] copy $copyIndex/$copyCount submitted strategy=$used")
+            }
         }
         val tSubmitEnd = System.currentTimeMillis()
-
-        printSubmitFallback?.let { mainHandler.removeCallbacks(it) }
-        val submitFallback = Runnable {
-            if (printLatch != null && isPrinting.get() && !lastPrintSuccess) {
-                lastPrintSuccess = true
-                printLatch?.countDown()
-                mainHandler.post { handlePrintSuccess() }
-            }
+        if (copyCount > 1) {
+            waitUntilPrinterCanAcceptNextLabel(
+                currentApi,
+                jobId,
+                heightMm,
+                paramGapLengthMm,
+                session.speed,
+            )
         }
-        printSubmitFallback = submitFallback
-        mainHandler.postDelayed(submitFallback, PRINT_SUBMIT_FALLBACK_MS)
+        finishSubmitWithoutDeviceAck(jobId)
 
         val completed = try {
             latch.await(PRINT_TIMEOUT_MS, TimeUnit.MILLISECONDS)

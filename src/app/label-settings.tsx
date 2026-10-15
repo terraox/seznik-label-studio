@@ -422,7 +422,6 @@ export default function LabelSettingsScreen() {
             value={clampToCap(settings.printSpeed, qualityCaps.speed).value}
             onChange={(next) => patchSettings({ printSpeed: next })}
             Stepper={SettingsStepperRow}
-            untestedNote="not tested on TD-404"
             footerInset={16}
           />
         ) : (

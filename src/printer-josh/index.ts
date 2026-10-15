@@ -61,7 +61,8 @@ export class JoshDriver implements PrinterDriver {
     dpi: 203,
     headWidthDots: 576,  // 72 mm × 8 dots/mm; update when per-model profile lands
     maxLabelHeightMm: 1000,
-    // JOSH LPAPI has native copy support in the print job params (copies field).
+    // Native module submits one startJob per copy and waits for the gap
+    // sensor — PRINT_COPIES on this firmware walks ink across die-cuts.
     nativeCopies: true,
     // printBitmap() blocks on a CountDownLatch released by the SDK's real
     // PrintProgress.Success hardware ACK — see RasterJob.confirmed below. A

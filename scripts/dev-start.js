@@ -128,10 +128,17 @@ if (clearCache) {
   expoArgs.push('-c');
 }
 
+const preload = path.join(projectRoot, 'scripts', 'preload-graceful-fs.js').replace(/\\/g, '/');
+const nodeOptions = [process.env.NODE_OPTIONS, `-r ${preload}`].filter(Boolean).join(' ');
+
 const child = spawn('npx', expoArgs, {
   cwd: projectRoot,
   stdio: 'inherit',
   shell: true,
+  env: {
+    ...process.env,
+    NODE_OPTIONS: nodeOptions,
+  },
 });
 
 child.on('exit', (code) => process.exit(code ?? 0));

@@ -25,8 +25,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { editorBridge } from '@/constants/editor-bridge';
+import { cloneLabelFromImage } from '@/lib/label-clone';
+import { clampLabelMm } from '@/lib/label-geometry';
 import { isScanEmptyError, payloadFromBarcodeResult, SCAN_CODE_TYPES } from '@/lib/scan-codes';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { useLabelStore } from '@/stores/label-store';
+import { useSettingsStore } from '@/stores/settings-store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SCAN_FRAME_SIZE = Math.min(Math.round(SCREEN_WIDTH * 0.72), 280);
@@ -72,12 +76,18 @@ export default function ScanScreen() {
   const isLabelClone = modeParam === 'labelClone';
   const returnToEdit = fromParam === 'edit';
   const screenTitle = isLabelClone ? 'Label Clone' : 'Scan';
+  const defaults = useSettingsStore((s) => s.defaults);
+  const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const [scannedResult, setScannedResult] = useState<{ type: string; data: string } | null>(null);
   const [manualModalVisible, setManualModalVisible] = useState(false);
   const [manualInput, setManualInput] = useState('');
   const [scanCooldown, setScanCooldown] = useState(false);
+  const [cloning, setCloning] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const cameraRef = useRef<CameraView>(null);
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
 
   // Animated laser scan bar
@@ -132,33 +142,58 @@ export default function ScanScreen() {
   };
 
   const processLabelCloneImage = async (uri: string, width: number, height: number) => {
+    if (cloning) return;
+    setCloning(true);
     try {
-      const results = await scanFromURLAsync(uri, SCAN_CODE_TYPES);
-      const payload = results.map(payloadFromBarcodeResult).find(Boolean);
-      if (payload) {
-        setScannedResult(payload);
+      const size = clampLabelMm(defaults.labelWidth || 50, defaults.labelHeight || 30);
+      const doc = await cloneLabelFromImage({
+        uri,
+        width,
+        height,
+        widthMm: size.widthMm,
+        heightMm: size.heightMm,
+        paperType: defaults.paperType,
+      });
+      if (doc) {
+        upsertDocument(doc);
+        router.replace({ pathname: '/edit', params: { labelId: doc.id } });
         return;
       }
-    } catch (error) {
-      if (!isScanEmptyError(error)) {
-        Alert.alert('Error', 'Unable to read this photo. Try another image, or import the label image directly.');
-        return;
-      }
-    }
-
-    Alert.alert(
-      'No Code Found',
-      'No QR code or barcode was detected in this photo. Import the photo as your label design instead?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Import Label Image',
-          onPress: () => {
-            void openLabelFromImage(uri, width, height);
+      Alert.alert(
+        'Could not rebuild this label',
+        'No readable text, QR, or barcode was found. Import the photo as your label design instead?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Import Label Image',
+            onPress: () => {
+              void openLabelFromImage(uri, width, height);
+            },
           },
-        },
-      ],
-    );
+        ],
+      );
+    } catch {
+      Alert.alert('Error', 'Unable to clone this photo. Try another image, or import the label image directly.');
+    } finally {
+      setCloning(false);
+    }
+  };
+
+  const handleCaptureLabel = async () => {
+    if (!isLabelClone || !cameraRef.current || capturing || cloning) return;
+    try {
+      setCapturing(true);
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 1,
+        skipProcessing: false,
+      });
+      if (!photo?.uri) return;
+      await processLabelCloneImage(photo.uri, photo.width ?? 0, photo.height ?? 0);
+    } catch {
+      Alert.alert('Capture Failed', 'Unable to take a photo. Please try again, or pick one from the gallery.');
+    } finally {
+      setCapturing(false);
+    }
   };
 
   const handleImportLabelFromImage = async () => {
@@ -277,7 +312,7 @@ export default function ScanScreen() {
           <Text style={styles.permissionHeading}>Camera Permission Needed</Text>
           <Text style={styles.permissionSub}>
             {isLabelClone
-              ? 'Please enable camera access so you can scan a label QR code or barcode to clone that design.'
+              ? 'Please enable camera access so you can photograph a label and clone its text, QR, barcode, and border.'
               : 'Please enable camera access so Sez Print can scan barcodes, QR codes, and label tags.'}
           </Text>
 
@@ -331,13 +366,17 @@ export default function ScanScreen() {
     <View style={styles.container}>
       {/* Real Camera View */}
       <CameraView
+        ref={cameraRef}
         style={StyleSheet.absoluteFillObject}
         facing="back"
         enableTorch={torch}
-        barcodeScannerSettings={{
-          barcodeTypes: SCAN_CODE_TYPES,
-        }}
-        onBarcodeScanned={scannedResult ? undefined : handleBarcodeScanned}
+        onCameraReady={() => setCameraReady(true)}
+        barcodeScannerSettings={
+          isLabelClone ? undefined : { barcodeTypes: SCAN_CODE_TYPES }
+        }
+        onBarcodeScanned={
+          isLabelClone || scannedResult ? undefined : handleBarcodeScanned
+        }
       />
 
       {/* Dark Mask Surrounding Scan Viewfinder */}
@@ -371,19 +410,33 @@ export default function ScanScreen() {
 
         {/* Bottom Dark Mask */}
         <View style={[styles.maskDark, styles.maskBottom]}>
+          {isLabelClone ? null : (
           <Pressable
             style={({ pressed }) => [styles.manualEntryBtn, pressed && styles.btnPressed]}
             onPress={() => setManualModalVisible(true)}>
             <Text style={styles.manualEntryText}>If not recognized, enter manually</Text>
           </Pressable>
+          )}
           {isLabelClone ? (
-            <Pressable
-              style={({ pressed }) => [styles.importLabelBtn, pressed && styles.btnPressed]}
-              onPress={() => {
-                void handleImportLabelFromImage();
-              }}>
-              <Text style={styles.importLabelBtnText}>Import Label from Image</Text>
-            </Pressable>
+            <>
+              <Pressable
+                onPress={() => void handleCaptureLabel()}
+                disabled={!cameraReady || capturing || cloning}
+                style={({ pressed }) => [styles.cloneShutter, pressed && styles.btnPressed]}>
+                {capturing || cloning ? (
+                  <ActivityIndicator color="#101419" />
+                ) : (
+                  <View style={styles.cloneShutterInner} />
+                )}
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.importLabelBtn, pressed && styles.btnPressed]}
+                onPress={() => {
+                  void handleImportLabelFromImage();
+                }}>
+                <Text style={styles.importLabelBtnText}>Import Label from Image</Text>
+              </Pressable>
+            </>
           ) : null}
         </View>
       </View>
@@ -491,6 +544,12 @@ export default function ScanScreen() {
         </View>
       </Modal>
       {imageSourceSheet}
+      {cloning ? (
+        <View style={styles.cloningOverlay} pointerEvents="auto">
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.cloningText}>Rebuilding label…</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -971,5 +1030,35 @@ const styles = StyleSheet.create({
   btnPressed: {
     opacity: 0.75,
     transform: [{ scale: 0.98 }],
+  },
+  cloneShutter: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  cloneShutterInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+  },
+  cloningOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    zIndex: 20,
+  },
+  cloningText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

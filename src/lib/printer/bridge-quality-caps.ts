@@ -1,7 +1,14 @@
 /**
- * Per-bridge darkness (TSPL DENSITY) and speed (TSPL SPEED) capability.
+ * Per-bridge darkness and speed capability, switched by the connected printer.
  * `'legacy'` keeps that bridge's existing controls and resolution untouched.
  */
+
+import {
+  JOSH_DENSITY_MAX,
+  JOSH_DENSITY_MIN,
+  JOSH_SPEED_MAX,
+  JOSH_SPEED_MIN,
+} from '@/lib/printer/josh-job-params';
 
 export type BridgeId =
   | 'td404-spp'
@@ -21,6 +28,11 @@ export type QualityScale = {
   /** Highest value confirmed on a device; above it the UI says "not tested". */
   testedMax?: number;
   label: string;
+  /**
+   * When false, Manual darkness only changes the SDK heat value (Josh LPAPI).
+   * TD-404 also shifts the bitmap threshold / ink steps.
+   */
+  bitmapInk?: boolean;
 };
 
 export type QualityCap = QualityScale | 'legacy';
@@ -37,14 +49,30 @@ const LEGACY: BridgeQualityCaps = { density: 'legacy', speed: 'legacy' };
  */
 export const TD404_QUALITY_CAPS: BridgeQualityCaps = {
   density: { min: 0, max: 15, step: 1, default: 10, label: 'Darkness' },
-  speed: { min: 1, max: 7, step: 1, default: 3, testedMax: 3, label: 'Speed' },
+  speed: { min: 1, max: 7, step: 1, default: 3, label: 'Speed' },
+};
+
+/**
+ * DothanTech LPAPI PrintParamValue: darkness 0–14, speed 0–4.
+ * Jobs use speed 1–4 (0 stalls the first label). Auto is density 10 / speed 3.
+ */
+export const JOSH_QUALITY_CAPS: BridgeQualityCaps = {
+  density: {
+    min: JOSH_DENSITY_MIN,
+    max: JOSH_DENSITY_MAX,
+    step: 1,
+    default: 10,
+    label: 'Darkness',
+    bitmapInk: false,
+  },
+  speed: { min: JOSH_SPEED_MIN, max: JOSH_SPEED_MAX, step: 1, default: 3, label: 'Speed' },
 };
 
 export const BRIDGE_QUALITY_CAPS: Record<BridgeId, BridgeQualityCaps> = {
   'td404-spp': TD404_QUALITY_CAPS,
   ble: LEGACY,
   wifi: LEGACY,
-  'josh-lpapi': LEGACY,
+  'josh-lpapi': JOSH_QUALITY_CAPS,
   'tez-spp': LEGACY,
   'dev-spp': LEGACY,
   'labelx-spp': LEGACY,
@@ -69,6 +97,7 @@ export function resolveQualityBridge(opts: {
 }): BridgeId | null {
   if (opts.activeTransport) return opts.activeTransport;
   if (opts.sdkId === 'td404' && opts.storeTransport === 'bluetooth-spp') return 'td404-spp';
+  if (opts.sdkId === 'josh') return 'josh-lpapi';
   return null;
 }
 
@@ -93,10 +122,15 @@ export function scaleValueText(value: number | null, cap: QualityScale): string 
   return value == null ? 'Auto' : `${value} of ${cap.max}`;
 }
 
-/** One stepper tap. From Auto either button enters Manual at the default. */
-export function stepQuality(value: number | null, cap: QualityScale, direction: 1 | -1): number {
+/**
+ * One stepper tap. From Auto either button enters Manual at the default.
+ * Past min/max wraps back to Auto so both printers can set Auto from the stepper.
+ */
+export function stepQuality(value: number | null, cap: QualityScale, direction: 1 | -1): number | null {
   if (value == null) return cap.default;
-  return clampToCap(value + direction * cap.step, cap).value ?? cap.default;
+  const next = value + direction * cap.step;
+  if (next < cap.min || next > cap.max) return null;
+  return clampToCap(next, cap).value ?? cap.default;
 }
 
 /**
@@ -115,9 +149,9 @@ export function calibrationQualityWarning(
   );
 }
 
-/** Manual darkness minus the scale default, for the bitmap darkness pass. 0 for Auto / legacy. */
+/** Manual darkness minus the scale default, for the bitmap darkness pass. 0 for Auto / legacy / Josh. */
 export function darknessSteps(darkness: number | null, caps: BridgeQualityCaps): number {
-  if (caps.density === 'legacy') return 0;
+  if (caps.density === 'legacy' || caps.density.bitmapInk === false) return 0;
   const value = clampToCap(darkness, caps.density).value;
   return value == null ? 0 : value - caps.density.default;
 }
