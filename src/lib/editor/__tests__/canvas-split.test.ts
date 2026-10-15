@@ -21,15 +21,13 @@ test('defaultCanvasSplitHeight reserves PANEL_DEFAULT_HEIGHT_PX (318px) for the 
   const viewportPx = 700;
   const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX); // 700 - 44 = 656
   const defaultH = defaultCanvasSplitHeight(viewportPx);
-  // Default canvas height should be usable - 318 = 656 - 318 = 338
   assert.equal(defaultH, usable - 318);
-  // The remaining sheet height is exactly 318px
   assert.equal(usable - defaultH, 318);
 });
 
 test('restoreCanvasSplitHeight with null ratio uses PANEL_DEFAULT_HEIGHT_PX', () => {
   const viewportPx = 700;
-  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX); // 656
+  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
   const restoredH = restoreCanvasSplitHeight({
     ratio: null,
     fullscreen: false,
@@ -69,8 +67,8 @@ test('restoreCanvasSplitHeight keeps a taller sheet when the saved ratio already
 
 test('canvasHeightAfterDrag allows dragging down to PANEL_MIN_HEIGHT_PX (48px sheet / toolbar row)', () => {
   const viewportPx = 700;
-  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX); // 656
-  const startCanvasPx = usable - 318; // 338
+  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
+  const startCanvasPx = usable - PANEL_DEFAULT_HEIGHT_PX;
   // User drags divider down by 500px (expanding canvas, shrinking sheet)
   const maxDragCanvasH = canvasHeightAfterDrag({
     startCanvasPx,
@@ -86,8 +84,8 @@ test('canvasHeightAfterDrag allows dragging down to PANEL_MIN_HEIGHT_PX (48px sh
 
 test('canvasHeightAfterDrag allows dragging up to fully cover canvas (0px canvas / full sheet)', () => {
   const viewportPx = 700;
-  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX); // 656
-  const startCanvasPx = usable - 318; // 338
+  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
+  const startCanvasPx = usable - PANEL_DEFAULT_HEIGHT_PX;
   // User drags divider all the way UP by 500px (expanding sheet to cover canvas completely)
   const minDragCanvasH = canvasHeightAfterDrag({
     startCanvasPx,

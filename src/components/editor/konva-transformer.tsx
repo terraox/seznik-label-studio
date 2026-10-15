@@ -837,6 +837,15 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       }
 
       const rotation = ((Math.round(rot) % 360) + 360) % 360;
+      if (rotation !== 0) {
+        const rad = (rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const halfDw = (next.width - start.width) / 2;
+        const halfDh = (next.height - start.height) / 2;
+        next.left = roundMm(next.left + halfDw * cos - halfDh * sin - halfDw);
+        next.top = roundMm(next.top + halfDw * sin + halfDh * cos - halfDh);
+      }
       logMultiTransformBox('commit', element.id, next.left, next.top, next.width, next.height);
 
       callbacksRef.current.onTransformEnd({
@@ -1573,12 +1582,18 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           }
           animW.value = Math.max(1, box.width * sxSv.value);
           animH.value = Math.max(1, liveHeightMm * sySv.value);
-          transX.value = 0;
-          transY.value = 0;
+          // The box rotates about its centre, so growing it moves the unrotated
+          // top-left. Shift it so the top-left corner stays put on screen.
+          const halfDw = (animW.value - originW) / 2;
+          const halfDh = (animH.value - originH) / 2;
+          const shiftX = halfDw * cos - halfDh * sin - halfDw;
+          const shiftY = halfDw * sin + halfDh * cos - halfDh;
+          transX.value = shiftX;
+          transY.value = shiftY;
 
           if (liveBounds) {
-            liveBounds.leftMm.value = box.left;
-            liveBounds.topMm.value = box.top;
+            liveBounds.leftMm.value = box.left + shiftX / sxSv.value;
+            liveBounds.topMm.value = box.top + shiftY / sySv.value;
             liveBounds.widthMm.value = box.width;
             liveBounds.heightMm.value = liveHeightMm;
             liveBounds.visible.value = true;
@@ -1588,8 +1603,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         })
         .onEnd(() => {
           'worklet';
-          transX.value = 0;
-          transY.value = 0;
           if (wrapTextOnWidthSv.value && handle === 'e') {
             runOnJS(releaseTextLiveJS)();
           }
@@ -1682,6 +1695,8 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       overflow: 'visible' as const,
       opacity: (element.opacity ?? 1) * liftSv.value,
       zIndex: zBoost + (element.zIndex ?? 1),
+      // Whole box turns, so the outline and handles follow the content.
+      transform: [{ rotate: `${animRot.value}deg` }],
     };
   });
 
@@ -1713,12 +1728,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   layoutHSv.value = layoutH;
 
   const contentRotateStyle = useAnimatedStyle(() => {
-    const rotate = { rotate: `${animRot.value}deg` };
     if (!liveScaleContent) {
       return {
         width: '100%' as const,
         height: '100%' as const,
-        transform: [rotate],
       };
     }
     const liveW = Math.max(1, animW.value);
@@ -1732,7 +1745,25 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       left: 0,
       top: 0,
       transformOrigin: 'top left' as const,
-      transform: [{ scaleX: liveW / baseW }, { scaleY: liveH / baseH }, rotate],
+      transform: [{ scaleX: liveW / baseW }, { scaleY: liveH / baseH }],
+    };
+  });
+
+  // Always call this hook. Borders and hidden elements return before the
+  // selection frame is drawn; skipping the hook here changes the hook count and crashes.
+  const selectionOverlayStyle = useAnimatedStyle(() => {
+    // In Multiple mode every selected member keeps its frame; keying on the touched id
+    // hid the others until React caught up with the new group size (blink on add).
+    const multiGroup = multipleModeSv.value || groupEligibleSv?.value === 1;
+    const touchId = activeSelectedIdSv?.value ?? '';
+    const showChrome = multiGroup
+      ? selectedSv.value
+      : touchId.length > 0
+        ? touchId === element.id
+        : selectedSv.value;
+    return {
+      opacity: showChrome ? 1 : 0,
+      pointerEvents: (showChrome ? 'box-none' : 'none') as 'box-none' | 'none',
     };
   });
 
@@ -1811,22 +1842,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   if (hidden) return null;
 
   const borderStrokeColor = selectionColor || CHROME_SELECTION_STROKE;
-
-  const selectionOverlayStyle = useAnimatedStyle(() => {
-    // In Multiple mode every selected member keeps its frame; keying on the touched id
-    // hid the others until React caught up with the new group size (blink on add).
-    const multiGroup = multipleModeSv.value || groupEligibleSv?.value === 1;
-    const touchId = activeSelectedIdSv?.value ?? '';
-    const showChrome = multiGroup
-      ? selectedSv.value
-      : touchId.length > 0
-        ? touchId === element.id
-        : selectedSv.value;
-    return {
-      opacity: showChrome ? 1 : 0,
-      pointerEvents: (showChrome ? 'box-none' : 'none') as 'box-none' | 'none',
-    };
-  });
 
   return (
     <Animated.View ref={containerRef} style={containerStyle} collapsable={false}>

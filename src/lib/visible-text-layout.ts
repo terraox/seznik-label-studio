@@ -34,7 +34,7 @@ function layoutFamily(opts: VisibleTextParams): string {
 }
 
 /** Same key the preview stores and the printer reads. */
-export function visibleTextKey(opts: VisibleTextParams): string {
+export function visibleTextKey(opts: VisibleTextParams, family: string = layoutFamily(opts)): string {
   return [
     opts.text,
     roundTenth(opts.fontSize),
@@ -44,7 +44,7 @@ export function visibleTextKey(opts: VisibleTextParams): string {
     roundTenth(opts.charSpacing ?? 0),
     opts.bold ? 1 : 0,
     opts.verticalDisplay ? 1 : 0,
-    layoutFamily(opts),
+    family,
   ].join('\u001f');
 }
 
@@ -93,9 +93,50 @@ export function useVisibleTextRevision(): number {
   );
 }
 
+type SkiaFontLike = { measureText: (sample: string) => { width: number } };
+type SkiaModuleLike = { matchFont?: (style: Record<string, unknown>) => SkiaFontLike };
+
+let skiaModule: SkiaModuleLike | null | undefined;
+const fontCache = new Map<string, SkiaFontLike | null>();
+const widthCache = new Map<string, number | null>();
+const WIDTH_CACHE_MAX = 4000;
+
+function loadSkia(): SkiaModuleLike | null {
+  if (skiaModule !== undefined) return skiaModule;
+  try {
+    skiaModule = require('@shopify/react-native-skia') as SkiaModuleLike;
+  } catch {
+    skiaModule = null;
+  }
+  return skiaModule;
+}
+
+function skiaFont(fontSizePt: number, bold: boolean, fontFamily?: string): SkiaFontLike | null {
+  const key = `${fontFamily ?? ''}|${fontSizePt}|${bold ? 1 : 0}`;
+  const hit = fontCache.get(key);
+  if (hit !== undefined) return hit;
+  let font: SkiaFontLike | null = null;
+  try {
+    const skia = loadSkia();
+    if (skia?.matchFont) {
+      font = skia.matchFont({
+        ...(fontFamily ? { fontFamily } : {}),
+        fontSize: fontSizePt,
+        fontWeight: bold ? '600' : '400',
+      });
+    }
+  } catch {
+    font = null;
+  }
+  fontCache.set(key, font);
+  return font;
+}
+
 /**
  * Width of `text` in the same face the editor Text uses.
  * Returns null when Skia is not available (unit tests).
+ * The font and each measured width are cached: a width drag re-wraps on every frame and the
+ * same words come back again and again.
  */
 function skiaWidthMm(
   text: string,
@@ -105,10 +146,25 @@ function skiaWidthMm(
   fontFamily?: string,
 ): number | null {
   if (!text) return 0;
+  const key = `${fontFamily ?? ''}|${fontSizePt}|${bold ? 1 : 0}|${charSpacingMm}|${text}`;
+  const hit = widthCache.get(key);
+  if (hit !== undefined) return hit;
+  const value = measureSkiaWidthMm(text, fontSizePt, charSpacingMm, bold, fontFamily);
+  if (widthCache.size >= WIDTH_CACHE_MAX) widthCache.clear();
+  widthCache.set(key, value);
+  return value;
+}
+
+function measureSkiaWidthMm(
+  text: string,
+  fontSizePt: number,
+  charSpacingMm: number,
+  bold: boolean,
+  fontFamily?: string,
+): number | null {
   try {
-    const skia = require('@shopify/react-native-skia') as {
-      matchFont?: (style: Record<string, unknown>) => { measureText: (sample: string) => { width: number } };
-    };
+    const skia = loadSkia();
+    if (!skia) return null;
     if (needsComplexTextShaping(text)) {
       const shaped = require('@/printing/raster/skia-shaped-text') as {
         measureShapedTextWidth: (
@@ -127,12 +183,8 @@ function skiaWidthMm(
       });
       if (width != null && width > 0) return width * (25.4 / 72);
     }
-    if (!skia.matchFont) return null;
-    const font = skia.matchFont({
-      ...(fontFamily ? { fontFamily } : {}),
-      fontSize: fontSizePt,
-      fontWeight: bold ? '600' : '400',
-    });
+    const font = skiaFont(fontSizePt, bold, fontFamily);
+    if (!font) return null;
     const px = font.measureText(text).width;
     if (!(px > 0)) return null;
     const spacingPx = ((charSpacingMm * 72) / 25.4) * text.length;
@@ -156,7 +208,11 @@ function lineWidthMm(
 
 /** Lines the preview shows and the printer must draw. */
 export function visibleWrappedLines(opts: VisibleTextParams): string[] {
-  const key = visibleTextKey(opts);
+  return wrappedLinesFor(opts, layoutFamily(opts));
+}
+
+function wrappedLinesFor(opts: VisibleTextParams, family: string): string[] {
+  const key = visibleTextKey(opts, family);
   const cached = remembered.get(key);
   if (cached) return cached;
   const inner = textWrapWidthMm(opts.widthMm, opts.fontSize, false);
@@ -164,7 +220,7 @@ export function visibleWrappedLines(opts: VisibleTextParams): string[] {
   const fontSize = opts.fontSize;
   const charSpacing = opts.charSpacing ?? 0;
   const bold = opts.bold ?? false;
-  const fontFamily = layoutFamily(opts) || undefined;
+  const fontFamily = family || undefined;
   return computeWrappedLines({
     text: opts.text,
     fontSize,
@@ -180,8 +236,9 @@ export function visibleWrappedLines(opts: VisibleTextParams): string[] {
 
 /** Frame height that keeps every wrapped line fully visible. */
 export function visibleTextHeightMm(opts: VisibleTextParams): number {
-  const lines = visibleWrappedLines(opts);
-  const lineH = textLineBoxHeightMm(opts.fontSize, opts.lineSpacing, layoutFamily(opts) || undefined, opts.text);
+  const family = layoutFamily(opts);
+  const lines = wrappedLinesFor(opts, family);
+  const lineH = textLineBoxHeightMm(opts.fontSize, opts.lineSpacing, family || undefined, opts.text);
   const pad = textVerticalPaddingMm(opts.fontSize);
   return Math.max(2.2, pad * 2 + lineH * Math.max(1, lines.length));
 }

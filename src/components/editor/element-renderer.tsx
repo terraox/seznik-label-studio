@@ -451,7 +451,8 @@ function TextContent({
               : align === "right"
                 ? "flex-end"
                 : "stretch",
-          overflow: "hidden",
+          // Text is never clipped (print does not clip). A frame a line short shows the line.
+          overflow: autoHeight ? "visible" : "hidden",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),

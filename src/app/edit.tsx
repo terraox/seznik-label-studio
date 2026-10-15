@@ -977,11 +977,15 @@ export default function EditScreen() {
   const layoutWidth = stageWidth > 0 ? stageWidth : initialStageWidth;
   // Phone workspace is constant. Label millimetres only change the inner artboard.
   const workspaceW = padInner.width > 1 ? padInner.width : Math.max(120, layoutWidth);
-  // Canonical base workspace: uses maximum viewport height so canvas elements are rendered
-  // at high resolution once. Sheet divider movement purely applies GPU transform (scale: s)
-  // without re-running fitEditorPadBoard or causing React reconciliation flicker.
+  // Fit the artboard to the visible canvas stage (above the resize divider). Using the
+  // whole split column height letterboxes the label with empty gray above and below.
+  // Divider drags still scale live on the UI thread; settled height refits pxPerMM here.
   const baseWorkspaceH =
-    splitViewportH > 0 ? splitViewportH : Math.max(Dimensions.get('window').height, 560) * 0.62;
+    canvasSplitH > 0
+      ? canvasSplitH
+      : splitViewportH > 0
+        ? splitViewportH
+        : Math.max(Dimensions.get('window').height, 560) * 0.62;
   const { canvasWidthPx, canvasHeightPx, pxPerMM, boardOffsetXPx, boardOffsetYPx, innerWidthPx, innerHeightPx } =
     useMemo(() => {
       const fitted = fitEditorPadBoard(doc.widthMm, doc.heightMm, workspaceW, baseWorkspaceH, RULER_SIZE);
@@ -994,7 +998,7 @@ export default function EditScreen() {
         innerWidthPx: Math.max(1, fitted.innerWidthPx),
         innerHeightPx: Math.max(1, fitted.innerHeightPx),
       };
-    }, [workspaceW, baseWorkspaceH, doc.widthMm, doc.heightMm]);
+    }, [workspaceW, baseWorkspaceH, doc.widthMm, doc.heightMm, canvasSplitH]);
 
   const committedScale = useMemo(() => {
     if (pxPerMM <= 0) return 1;
