@@ -51,6 +51,7 @@ export default function DrawingColorScreen() {
           gap: 12,
         }}>
         {DRAWING_COLORS.map((color, index) => {
+          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour
           const active = index === selectedIndex;
           return (
             <Pressable
@@ -59,7 +60,6 @@ export default function DrawingColorScreen() {
               style={[
                 styles.swatch,
                 { backgroundColor: color },
-                color === '#FFFFFF' && styles.swatchWhite,
                 active && styles.swatchActive,
               ]}>
               {active ? <Text style={styles.swatchCheck}>✓</Text> : null}

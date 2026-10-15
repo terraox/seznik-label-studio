@@ -57,7 +57,6 @@ import { ptToMm, type LabelElement } from "@/lib/label-document";
 import { dotsPerMm } from "@/lib/printer/print-spec";
 import { applySerialOffset } from "@/lib/serial-content";
 import {
-  charSpacingToLetterSpacing,
   measureTextWidthMm,
   computeWrappedLines,
   resolveDrawFontSizePt,
@@ -316,18 +315,15 @@ function useReflowSwapStyles(liveReflowSv?: SharedValue<boolean>) {
 
 function letterSpacingStyle(
   element: Pick<TextLayoutFields, "charSpacing" | "fontSize">,
-  text?: string,
+  text: string | undefined,
+  scale: number,
 ) {
   const spacing = element.charSpacing ?? 0;
   if (spacing <= 0) return null;
   if (text && needsComplexTextShaping(text)) return null;
-  return {
-    letterSpacing: charSpacingToLetterSpacing(
-      spacing,
-      element.fontSize,
-      Platform.OS,
-    ),
-  };
+  // RN takes letterSpacing in px on both platforms (Android converts to em itself), and the
+  // font size is ptToMm * scale, so the spacing must be mm * scale to match print.
+  return { letterSpacing: spacing * scale };
 }
 
 function TextContent({
@@ -439,7 +435,7 @@ function TextContent({
           hasDecoration ? { textDecorationLine: "none" as const } : null,
           styles.textFill,
           { textAlign: align },
-          letterSpacingStyle(drawElement, raw),
+          letterSpacingStyle(drawElement, raw, scale),
           liveReflowSv ? swap.resting : null,
         ]}
         onLayout={
@@ -502,7 +498,7 @@ function TextContent({
             styles.textFill,
             styles.liveReflowText,
             { textAlign: align },
-            letterSpacingStyle(element, raw),
+            letterSpacingStyle(element, raw, scale),
             swap.live,
           ]}
         >
@@ -586,7 +582,7 @@ function DegreesContent({
           style,
           styles.textFill,
           { textAlign: align },
-          letterSpacingStyle(drawElement, raw),
+          letterSpacingStyle(drawElement, raw, scale),
           liveReflowSv ? swap.resting : null,
         ]}
         numberOfLines={formatted.numberOfLines}
@@ -619,7 +615,7 @@ function DegreesContent({
             styles.textFill,
             styles.liveReflowText,
             { textAlign: align },
-            letterSpacingStyle(element, raw),
+            letterSpacingStyle(element, raw, scale),
             swap.live,
           ]}
         >
@@ -1396,7 +1392,7 @@ function TableContent({
                 ellipsizeMode="clip"
                 style={[
                   style,
-                  letterSpacingStyle(cell, flat),
+                  letterSpacingStyle(cell, flat, scale),
                   {
                     textAlign: align,
                     width: scaleX < 1 ? measuredPx : "100%",

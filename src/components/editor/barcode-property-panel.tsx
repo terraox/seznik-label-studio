@@ -260,6 +260,7 @@ function ColorRow({
       <Text style={styles.rowLabel}>Drawing Color</Text>
       <View style={styles.colorGroup}>
         {DRAWING_COLORS.map((color, index) => {
+          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour
           const active = index === selectedIndex;
           return (
             <Pressable
@@ -270,7 +271,6 @@ function ColorRow({
                 style={[
                   styles.colorDot,
                   { backgroundColor: color },
-                  color === '#FFFFFF' && styles.colorDotWhite,
                 ]}
               />
             </Pressable>

@@ -155,6 +155,8 @@ type SkiaPaint = {
 
 type SkiaFont = {
   measureText: (text: string) => { width: number };
+  getGlyphIDs?: (text: string) => number[];
+  getGlyphWidths?: (glyphIds: number[]) => number[];
 };
 
 type SkiaImage = {
@@ -302,14 +304,34 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
     return fontFor({ ...style, family: 'Inter_400Regular' });
   }
 
+  /** Pen advance of one character. measureText().width is ink bounds, which is ~0 for a space. */
+  function advanceOf(font: SkiaFont, ch: string): number {
+    try {
+      const ids = font.getGlyphIDs?.(ch);
+      const widths = ids && ids.length > 0 ? font.getGlyphWidths?.(ids) : undefined;
+      if (widths && widths.length > 0) {
+        let sum = 0;
+        for (let i = 0; i < widths.length; i++) sum += widths[i];
+        if (sum > 0) return sum;
+      }
+    } catch {
+      // fall through to the bounds width
+    }
+    return font.measureText(ch).width;
+  }
+
   function measurePlainSegment(text: string, style: TextDrawStyle): number {
     if (!text) return 0;
     if (needsComplexTextShaping(text)) {
       const shaped = measureShapedTextWidth(skiaMod, text, style);
       if (shaped != null) return shaped;
     }
-    const natural = fontForText(text, style).measureText(text).width;
-    return natural + (style.letterSpacingDots ?? 0) * text.length;
+    const font = fontForText(text, style);
+    const gap = style.letterSpacingDots ?? 0;
+    if (!gap) return font.measureText(text).width;
+    let total = 0;
+    for (let i = 0; i < text.length; i++) total += advanceOf(font, text.charAt(i)) + gap;
+    return total;
   }
 
   function drawPlainSegment(text: string, x: number, y: number, style: TextDrawStyle): void {
@@ -330,7 +352,7 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
       for (let i = 0; i < text.length; i++) {
         const ch = text.charAt(i);
         canvas.drawText(ch, cursor, y + style.fontSizeDots, fillPaint, font);
-        cursor += font.measureText(ch).width + gap;
+        cursor += advanceOf(font, ch) + gap;
       }
     }
     fillPaint.setAntiAlias(false);
