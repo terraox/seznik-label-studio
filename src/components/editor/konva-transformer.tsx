@@ -77,6 +77,7 @@ export type TransformStartKind = 'move' | 'resize';
 export type SelectSource = 'touch' | 'toggle';
 
 import { type ElementAnchorRect } from '@/lib/editor/quick-value';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export type KonvaTransformerProps = {
   element: LabelElement;
@@ -224,6 +225,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   snapMoveMm,
   safeModeSv,
 }: KonvaTransformerProps) {
+  useThemeRefresh();
   const pxPerMMSafe = pxPerMM > 0 && Number.isFinite(pxPerMM) ? pxPerMM : 1;
   const sx = pxPerMMSafe;
   const sy = pxPerMMSafe;
@@ -1829,7 +1831,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                   ...StyleSheet.absoluteFillObject,
                   borderWidth: 1.5,
                   borderStyle: 'dashed',
-                  borderColor: selectionColor || '#48C3C7',
+                  borderColor: selectionColor || '#48C3C7', // theme-fixed: canvas selection chrome
                 }}
               />
             ) : null}
@@ -1927,7 +1929,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
         {element.lockMovement ? (
           <View pointerEvents="none" style={styles.lockBadge}>
-            <AppIcon name="lock.fill" tintColor="#FFFFFF" size={9} />
+            <AppIcon name="lock.fill" tintColor="#FFFFFF" size={9} /* theme-fixed: lock badge */ />
           </View>
         ) : null}
       </Animated.View>
@@ -1975,6 +1977,7 @@ const EdgeResizeHandle = memo(function EdgeResizeHandle({
   position: HandlePosition;
   gesture: ReturnType<typeof Gesture.Pan>;
 }) {
+  useThemeRefresh();
   return (
     <GestureDetector gesture={gesture}>
       <View
@@ -1986,14 +1989,14 @@ const EdgeResizeHandle = memo(function EdgeResizeHandle({
             <Svg width={CHROME_HANDLE_ICON_SIZE} height={CHROME_HANDLE_ICON_SIZE} viewBox="-10 -10 20 20">
               <SvgPath
                 d="M -3 -5 L -8.5 0 L -3 5 L -3 1.5 L 3 1.5 L 3 5 L 8.5 0 L 3 -5 L 3 -1.5 L -3 -1.5 Z"
-                fill="#FFFFFF"
+                fill="#FFFFFF" // theme-fixed: handle icon
               />
             </Svg>
           ) : (
             <Svg width={CHROME_HANDLE_ICON_SIZE} height={CHROME_HANDLE_ICON_SIZE} viewBox="-10 -10 20 20">
               <SvgPath
                 d="M -5 -3 L 0 -8.5 L 5 -3 L 1.5 -3 L 1.5 3 L 5 3 L 0 8.5 L -5 3 L -1.5 3 L -1.5 -3 Z"
-                fill="#FFFFFF"
+                fill="#FFFFFF" // theme-fixed: handle icon
               />
             </Svg>
           )}
@@ -2003,7 +2006,7 @@ const EdgeResizeHandle = memo(function EdgeResizeHandle({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   fillContainer: {
     width: '100%',
     height: '100%',
@@ -2024,7 +2027,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
-    shadowColor: '#000',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.15,
     shadowRadius: 1.5,
@@ -2044,10 +2047,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     left: 4,
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    backgroundColor: 'rgba(15, 23, 42, 0.7)', // theme-fixed: light preview (lockBadge)
     borderRadius: 8,
     padding: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

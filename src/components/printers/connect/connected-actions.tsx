@@ -1,11 +1,12 @@
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import type { ConsumerPrinterId } from '@/constants/printer-models';
 import { Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow } from '@/constants/ui';
 
 import { PRINTER_PHOTOS } from './printer-family-cards';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type ConnectedActionsProps = {
   modelId: ConsumerPrinterId;
@@ -35,6 +36,7 @@ export function ConnectedActions({
   onDisconnect,
   onDiagnostics,
 }: ConnectedActionsProps) {
+  useThemeRefresh();
   return (
     <View style={styles.card}>
       <View style={styles.stage}>
@@ -53,7 +55,7 @@ export function ConnectedActions({
         onPress={onTest}
         disabled={testing}
         style={({ pressed }) => [styles.primary, testing && styles.disabled, pressed && styles.pressed]}>
-        {testing ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Print a test label</Text>}
+        {testing ? <ActivityIndicator color={C.onAccent} /> : <Text style={styles.primaryText}>Print a test label</Text>}
       </Pressable>
       {onMeasure ? (
         <Pressable
@@ -66,7 +68,7 @@ export function ConnectedActions({
             pressed && styles.pressed,
           ]}>
           {measuring ? (
-            <ActivityIndicator color={Palette.accent} />
+            <ActivityIndicator color={C.accent} />
           ) : (
             <Text style={styles.link}>Print label size</Text>
           )}
@@ -90,12 +92,12 @@ export function ConnectedActions({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#BBE5CD',
+    borderColor: c.border,
     padding: Spacing.three,
     gap: 8,
     alignItems: 'center',
@@ -105,30 +107,30 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 180,
     borderRadius: 16,
-    backgroundColor: '#050505',
+    backgroundColor: '#050505', // theme-fixed: black backdrop for the printer photo
     overflow: 'hidden',
     marginBottom: 4,
   },
   photo: { width: '100%', height: '100%' },
-  kicker: { fontSize: 13, fontWeight: '700', color: '#18794A', letterSpacing: 0.3 },
-  name: { fontSize: 20, fontWeight: '700', color: Palette.ink, textAlign: 'center' },
-  detail: { fontSize: 14, lineHeight: 20, color: Palette.muted, textAlign: 'center', marginBottom: 4 },
+  kicker: { fontSize: 13, fontWeight: '700', color: c.success, letterSpacing: 0.3 },
+  name: { fontSize: 20, fontWeight: '700', color: c.text, textAlign: 'center' },
+  detail: { fontSize: 14, lineHeight: 20, color: c.textMuted, textAlign: 'center', marginBottom: 4 },
   batteryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 4,
   },
-  batteryPrefix: { fontSize: 14, fontWeight: '600', color: Palette.muted },
+  batteryPrefix: { fontSize: 14, fontWeight: '600', color: c.textMuted },
   primary: {
     alignSelf: 'stretch',
     minHeight: 48,
     borderRadius: 12,
-    backgroundColor: '#18794A',
+    backgroundColor: c.successFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  primaryText: { color: c.onAccent, fontSize: 15, fontWeight: '700' },
   row: { alignSelf: 'stretch', flexDirection: 'row', gap: 8 },
   secondaryBtn: {
     flex: 1,
@@ -143,21 +145,21 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    backgroundColor: '#E8F6F8',
-    borderColor: '#B8E4EA',
+    backgroundColor: c.accentSoft,
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   disconnectBtn: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
+    backgroundColor: c.dangerSoft,
+    borderColor: c.dangerSoft,
   },
   diagnosticsBtn: {
-    backgroundColor: '#E8F6F8',
-    borderColor: '#B8E4EA',
+    backgroundColor: c.accentSoft,
+    borderColor: c.border,
   },
-  disconnect: { color: '#DC2626', fontSize: 14, fontWeight: '700' },
-  link: { color: Palette.accent, fontSize: 14, fontWeight: '700' },
+  disconnect: { color: c.danger, fontSize: 14, fontWeight: '700' },
+  link: { color: c.accent, fontSize: 14, fontWeight: '700' },
   disabled: { opacity: 0.7 },
   pressed: { opacity: 0.75 },
-});
+}));

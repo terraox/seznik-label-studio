@@ -1,4 +1,5 @@
 import { AppIcon } from '@/components/app-icon';
+import { C, useThemeRefresh } from '@/theme';
 
 export function batteryIconName(percent: number): string {
   if (percent <= 5) return 'battery.0';
@@ -9,9 +10,9 @@ export function batteryIconName(percent: number): string {
 }
 
 export function batteryTint(percent: number): string {
-  if (percent <= 10) return '#DC2626';
-  if (percent <= 25) return '#B45309';
-  return '#18794A';
+  if (percent <= 10) return C.danger;
+  if (percent <= 25) return C.warning;
+  return C.success;
 }
 
 export function BatteryLevelIcon({
@@ -23,6 +24,7 @@ export function BatteryLevelIcon({
   size?: number;
   tintColor?: string;
 }) {
+  useThemeRefresh();
   return (
     <AppIcon
       name={batteryIconName(percent)}

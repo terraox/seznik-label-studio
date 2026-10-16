@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import {
   formatScale,
@@ -8,6 +8,7 @@ import {
   stepQuality,
   type QualityScale,
 } from '@/lib/printer/bridge-quality-caps';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export type QualityStepperProps = {
   label: string;
@@ -39,6 +40,7 @@ export function QualityControl({
   /** Horizontal padding for the note row, to line up with the screen's stepper rows. */
   footerInset?: number;
 }) {
+  useThemeRefresh();
   const manual = value != null;
   const untested = isUntested(value, cap);
   return (
@@ -71,7 +73,7 @@ export function QualityControl({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -81,24 +83,24 @@ const styles = StyleSheet.create({
   },
   note: {
     flex: 1,
-    color: '#9CA3AF',
+    color: c.textMuted,
     fontSize: 12,
   },
   warn: {
-    color: '#F59E0B',
+    color: c.warning,
   },
   reset: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    backgroundColor: 'rgba(23, 166, 184, 0.15)',
+    backgroundColor: c.accentSoft,
   },
   resetText: {
-    color: '#06B6D4',
+    color: c.accent,
     fontSize: 12,
     fontWeight: '700',
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));

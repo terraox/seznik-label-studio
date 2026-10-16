@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
-
-const TEAL = '#3EC6D0';
+import { Text, View } from 'react-native';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export function KindTextGlyph({ active }: { active: boolean }) {
+  useThemeRefresh();
   return (
     <View style={[styles.box, active && styles.boxOn]}>
       <Text style={[styles.letter, active && styles.letterOn]}>T</Text>
@@ -11,7 +11,8 @@ export function KindTextGlyph({ active }: { active: boolean }) {
 }
 
 export function KindBarcodeGlyph({ active }: { active: boolean }) {
-  const color = active ? TEAL : '#8AA0AD';
+  useThemeRefresh();
+  const color = active ? C.accent : C.textMuted;
   return (
     <View style={[styles.box, active && styles.boxOn, styles.barcodeBox]}>
       {[2, 1, 3, 1, 2, 1, 3, 1, 2].map((w, i) => (
@@ -22,7 +23,8 @@ export function KindBarcodeGlyph({ active }: { active: boolean }) {
 }
 
 export function KindQrGlyph({ active }: { active: boolean }) {
-  const color = active ? TEAL : '#8AA0AD';
+  useThemeRefresh();
+  const color = active ? C.accent : C.textMuted;
   return (
     <View style={[styles.box, active && styles.boxOn, styles.qrBox]}>
       <View style={styles.qrGrid}>
@@ -41,6 +43,7 @@ export function KindQrGlyph({ active }: { active: boolean }) {
 }
 
 function Finder({ color }: { color: string }) {
+  useThemeRefresh();
   return (
     <View style={[styles.finder, { borderColor: color }]}>
       <View style={[styles.finderCore, { backgroundColor: color }]} />
@@ -48,7 +51,7 @@ function Finder({ color }: { color: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   box: {
     width: 34,
     height: 34,
@@ -59,15 +62,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   boxOn: {
-    borderColor: TEAL,
+    borderColor: c.accent,
   },
   letter: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#8AA0AD',
+    color: c.textMuted,
   },
   letterOn: {
-    color: TEAL,
+    color: c.accent,
   },
   barcodeBox: {
     flexDirection: 'row',
@@ -102,4 +105,4 @@ const styles = StyleSheet.create({
   finderCore: {
     flex: 1,
   },
-});
+}));

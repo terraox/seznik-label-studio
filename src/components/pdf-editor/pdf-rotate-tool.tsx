@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { PdfScopeSelector } from '@/components/pdf-editor/pdf-scope-selector';
-import { Palette } from '@/constants/ui';
+
 import { parsePageRange, type PageScope } from '@/lib/pdf-editor/session';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const ANGLES = [0, 90, 180, 270] as const;
 
@@ -16,6 +17,7 @@ export function PdfRotateTool({
   pageCount: number;
   onChange: (deg: number, scope: PageScope) => void;
 }) {
+  useThemeRefresh();
   const [scope, setScope] = useState<PageScope>({ mode: 'this' });
   const rangeError =
     scope.mode === 'range' ? parsePageRange(String(scope.start), String(scope.end), pageCount).error : undefined;
@@ -53,9 +55,9 @@ export function PdfRotateTool({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: { gap: 8 },
-  help: { fontSize: 12, color: Palette.muted },
+  help: { fontSize: 12, color: c.textMuted },
   row: { flexDirection: 'row', gap: 8 },
   btn: {
     flex: 1,
@@ -63,9 +65,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Palette.hairline,
+    borderColor: c.hairline,
   },
-  btnOn: { borderColor: Palette.accent, backgroundColor: '#E7F7F9' },
-  btnText: { fontSize: 14, color: Palette.ink, fontWeight: '600' },
-  btnTextOn: { color: Palette.accent },
-});
+  btnOn: { borderColor: c.accent, backgroundColor: c.accentSoft },
+  btnText: { fontSize: 14, color: c.text, fontWeight: '600' },
+  btnTextOn: { color: c.accent },
+}));

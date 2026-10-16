@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 
 import { BuyFromUsStrip } from '@/components/home/buy-from-us-strip';
 import { ContinueCard } from '@/components/home/continue-card';
@@ -13,18 +13,18 @@ import {
 import { SectionHeading } from '@/components/home/section-heading';
 import { ToolGrid } from '@/components/home/tool-grid';
 import { MaxContentWidth } from '@/constants/theme';
-import { HomeLayout, Palette } from '@/constants/ui';
+import { HomeLayout } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
-import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
 import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { SampleContinueCard } from '@/components/home/sample-continue-card';
-import { getHomeWalkthrough } from '@/lib/walkthrough/home-steps';
 import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export default function HomeScreen() {
+  useThemeRefresh();
   // Tab bar inset only — no extra bottom padding so content can fit one screen.
   const tabPad = useTabBarPadding(0);
   const documents = useLabelStore((s) => s.documents);
@@ -48,12 +48,10 @@ export default function HomeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const startWalkthrough = useWalkthroughStore((s) => s.start);
-  const stopWalkthrough = useWalkthroughStore((s) => s.stop);
-  const setTutorialSeen = useSettingsStore((s) => s.setTutorialSeen);
 
   useEffect(() => {
     setWalkthroughScroller((dy) =>
-      scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + dy), animated: true }),
+      scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + dy), animated: false }),
     );
     return () => setWalkthroughScroller(null);
   }, []);
@@ -73,13 +71,7 @@ export default function HomeScreen() {
     };
   }, [startWalkthrough]);
 
-  const steps = useMemo(() => getHomeWalkthrough(hasLabels), [hasLabels]);
   const tourActive = useWalkthroughStore((s) => s.active);
-
-  const finishWalkthrough = () => {
-    setTutorialSeen(true);
-    stopWalkthrough();
-  };
 
   return (
     <View style={styles.root}>
@@ -159,15 +151,14 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      <WalkthroughOverlay steps={steps} onFinish={finishWalkthrough} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
   },
   scroll: {
     flex: 1,
@@ -186,4 +177,4 @@ const styles = StyleSheet.create({
   section: {
     width: '100%',
   },
-});
+}));

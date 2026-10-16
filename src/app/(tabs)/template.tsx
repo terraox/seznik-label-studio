@@ -19,13 +19,14 @@ import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { ShareNodeIcon } from '@/components/home-icons';
 import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow, Palette } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
 import { JEWELRY_DIECUT } from '@/constants/jewelry-diecut';
 import { CABLE_FLAG_DIECUT, CABLE_FLAG_PREVIEW_SINGLE } from '@/constants/cable-flag-diecut';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { useLabelStore } from '@/stores/label-store';
 import { useTranslation } from '@/lib/i18n';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 interface CategoryGroup {
   header: string;
@@ -1574,6 +1575,7 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
   category: string;
   showCategory: boolean;
 }) {
+  useThemeRefresh();
   const [bannerSize, setBannerSize] = useState({ w: 0, h: 38 });
   const gradientId = `catalog-hdr-${id}`;
   return (
@@ -1593,8 +1595,8 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
           style={StyleSheet.absoluteFillObject}>
           <Defs>
             <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor="#1EB8C8" />
-              <Stop offset="1" stopColor="#2E78B8" />
+              <Stop offset="0" stopColor="#1EB8C8" /* theme-fixed: card banner gradient, white text */ />
+              <Stop offset="1" stopColor="#2E78B8" /* theme-fixed: card banner gradient, white text */ />
             </LinearGradient>
           </Defs>
           <SvgRect width={bannerSize.w} height={bannerSize.h} fill={`url(#${gradientId})`} />
@@ -1622,6 +1624,7 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
 
 /** Physical stock thumbnail — not the editor canvas. Tap the card to open the editor. */
 const TemplatePreview = memo(function TemplatePreview({ item }: { item: TemplateItem }) {
+  useThemeRefresh();
   const document = useMemo(
     () =>
       createIndustryTemplateDocument({
@@ -1648,6 +1651,7 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
   cardMaxWidth: number;
   onPress: (item: TemplateItem) => void;
 }) {
+  useThemeRefresh();
   return (
     <Pressable
       onPress={() => onPress(item)}
@@ -1668,15 +1672,16 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
       <TemplatePreview item={item} />
       <View style={styles.cardFooter}>
         <View style={styles.footerClock}>
-          <AppIcon name="clock" tintColor="#17A6B8" size={17} />
+          <AppIcon name="clock" tintColor={C.accent} size={17} />
         </View>
-        <ShareNodeIcon color="#17A6B8" size={20} />
+        <ShareNodeIcon color={C.accent} size={20} />
       </View>
     </Pressable>
   );
 });
 
 function TemplateLocalEmptyIllustration() {
+  useThemeRefresh();
   return (
     <View style={styles.localEmptyIllustration}>
       <View style={styles.localEmptyBoxBack} />
@@ -1702,6 +1707,7 @@ const INDUSTRY_CATEGORY_COUNT = CATEGORY_GROUPS.reduce(
 );
 
 export default function TemplateScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const tabPad = useTabBarPadding(Spacing.six);
   const router = useRouter();
@@ -1841,7 +1847,7 @@ export default function TemplateScreen() {
             <TextInput
               style={styles.searchInput}
               placeholder="Search Template"
-              placeholderTextColor="#8EA9C2"
+              placeholderTextColor="#8EA9C2" // theme-fixed: placeholder on the search pill
               value={searchQuery}
               onChangeText={setSearchQuery}
               autoCapitalize="none"
@@ -1856,7 +1862,7 @@ export default function TemplateScreen() {
               hitSlop={8}
               onPress={() => router.push('/scan')}
               style={({ pressed }) => [styles.iconBtn, pressed && styles.cardPressed]}>
-              <AppIcon name="qrcode.viewfinder" tintColor="#FFFFFF" size={21} />
+              <AppIcon name="qrcode.viewfinder" tintColor={C.onHeader} size={21} />
             </Pressable>
             <Pressable
               hitSlop={8}
@@ -1864,7 +1870,7 @@ export default function TemplateScreen() {
               style={({ pressed }) => [styles.iconBtn, pressed && styles.cardPressed]}>
               <AppIcon
                 name={sortNewestFirst ? 'arrow.down' : 'arrow.up'}
-                tintColor="#FFFFFF"
+                tintColor={C.onHeader}
                 size={19}
               />
             </Pressable>
@@ -1936,7 +1942,7 @@ export default function TemplateScreen() {
 
             {visibleCloudTemplates.length === 0 ? (
               <View style={styles.cloudEmptyCard}>
-                <AppIcon name="icloud.and.arrow.up" tintColor="#9EAFC0" size={30} />
+                <AppIcon name="icloud.and.arrow.up" tintColor={C.textMuted} size={30} />
                 <Text style={styles.cloudEmptyText}>
                   {searchQuery.trim()
                     ? 'No synced templates match your search.'
@@ -1959,10 +1965,10 @@ export default function TemplateScreen() {
                   <LabelPreview document={tpl} catalogStock />
                   <View style={styles.cardFooter}>
                     <Pressable hitSlop={10} onPress={() => handleEditCloudTemplate(tpl)}>
-                      <AppIcon name="square.and.pencil" tintColor={Palette.accent} size={19} />
+                      <AppIcon name="square.and.pencil" tintColor={C.accent} size={19} />
                     </Pressable>
                     <Pressable hitSlop={10} onPress={() => handleDeleteCloudTemplate(tpl)}>
-                      <AppIcon name="trash" tintColor="#DC2626" size={18} />
+                      <AppIcon name="trash" tintColor={C.danger} size={18} />
                     </Pressable>
                   </View>
                 </View>
@@ -2009,7 +2015,7 @@ export default function TemplateScreen() {
                   style={({ pressed }) => [styles.localNewGroupBtn, pressed && styles.cardPressed]}
                   onPress={() => setNewGroupVisible(true)}>
                   <View style={styles.localNewGroupIconWrap}>
-                    <AppIcon name="square.stack.3d.up.fill" tintColor="#FFFFFF" size={22} />
+                    <AppIcon name="square.stack.3d.up.fill" tintColor="#FFFFFF" size={22} /* theme-fixed: white icon on accent button */ />
                   </View>
                   <Text style={styles.localNewGroupText}>New Group</Text>
                 </Pressable>
@@ -2141,12 +2147,12 @@ export default function TemplateScreen() {
                         onPress={() =>
                           router.push({ pathname: '/print', params: { labelId: docItem.id } })
                         }>
-                        <AppIcon name="printer" tintColor="#606F7B" size={18} />
+                        <AppIcon name="printer" tintColor={C.textSecondary} size={18} />
                       </Pressable>
                       <Pressable
                         hitSlop={8}
                         onPress={() => handleDeleteLocal(docItem.id, docItem.name)}>
-                        <AppIcon name="trash" tintColor="#DC2626" size={18} />
+                        <AppIcon name="trash" tintColor={C.danger} size={18} />
                       </Pressable>
                     </View>
                   </Pressable>
@@ -2231,10 +2237,10 @@ export default function TemplateScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c, scheme) => ({
   root: {
     flex: 1,
-    backgroundColor: '#EFF2F7',
+    backgroundColor: c.bg,
     alignItems: 'center',
   },
   layoutShell: {
@@ -2242,7 +2248,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   header: {
-    backgroundColor: '#214668',
+    backgroundColor: c.header,
     paddingHorizontal: 12,
     paddingBottom: 2,
   },
@@ -2255,13 +2261,13 @@ const styles = StyleSheet.create({
   searchPill: {
     flex: 1,
     height: 36,
-    backgroundColor: '#3C6182',
+    backgroundColor: scheme === 'light' ? '#3C6182' : c.fillStrong, // theme-fixed: light keeps the navy search pill
     borderRadius: 18,
     justifyContent: 'center',
     paddingHorizontal: 14,
   },
   searchInput: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 14.5,
     fontWeight: '500',
     textAlign: 'center',
@@ -2293,12 +2299,12 @@ const styles = StyleSheet.create({
   },
   tabItemActive: {},
   tabText: {
-    color: '#9EAFC0',
+    color: c.textMuted,
     fontSize: 15,
     fontWeight: '500',
   },
   tabTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontWeight: '500',
   },
   tabIndicator: {
@@ -2306,7 +2312,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 3,
     width: 60,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 2,
   },
   body: {
@@ -2316,9 +2322,9 @@ const styles = StyleSheet.create({
   // Sidebar
   sidebar: {
     width: 104,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: c.fill,
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#E2E6EC',
+    borderRightColor: c.hairline,
   },
   sidebarScroll: {
     flex: 1,
@@ -2338,7 +2344,7 @@ const styles = StyleSheet.create({
   groupHeaderText: {
     fontSize: 13.5,
     fontWeight: '500',
-    color: '#214668',
+    color: c.brandInk,
     textAlign: 'center',
     includeFontPadding: false,
   },
@@ -2350,23 +2356,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   categoryItemActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   categoryItemText: {
     fontSize: 13.5,
     fontWeight: '500',
-    color: '#556473',
+    color: c.textSecondary,
     textAlign: 'center',
     includeFontPadding: false,
   },
   categoryItemTextActive: {
-    color: '#17A6B8',
+    color: c.accent,
     fontWeight: '600',
   },
   // Right Content Area
   contentArea: {
     flex: 1,
-    backgroundColor: '#EFF2F7',
+    backgroundColor: c.bg,
   },
   templatesScroll: {
     flex: 1,
@@ -2376,7 +2382,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   templateCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     overflow: 'hidden',
     ...cardShadow,
@@ -2385,7 +2391,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   cardHeaderBanner: {
-    backgroundColor: '#1EB8C8',
+    backgroundColor: c.accentFill,
     overflow: 'hidden',
     position: 'relative',
     flexDirection: 'row',
@@ -2400,12 +2406,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   bannerTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 14,
     fontWeight: '500',
   },
   bannerCategory: {
-    color: 'rgba(255,255,255,0.88)',
+    color: 'rgba(255,255,255,0.88)', // theme-fixed: white text on the banner gradient
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.4,
@@ -2413,20 +2419,20 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   bannerSubtitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '600',
     marginTop: 1,
   },
   bannerDimensions: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 14,
     fontWeight: '500',
     flexShrink: 0,
   },
   // Preview Canvas
   previewBox: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (previewBox)
     paddingHorizontal: 10,
     paddingVertical: 12,
     alignItems: 'center',
@@ -2439,8 +2445,8 @@ const styles = StyleSheet.create({
   rectOutline: {
     width: '100%',
     borderWidth: 1.5,
-    borderColor: '#1E293B',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1E293B', // theme-fixed: light preview (rectOutline)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (rectOutline)
   },
   dualStackedContainer: {
     width: '100%',
@@ -2457,11 +2463,11 @@ const styles = StyleSheet.create({
   macaroonFill: {
     width: '100%',
     height: 125,
-    backgroundColor: '#E4D8F3',
+    backgroundColor: '#E4D8F3', // theme-fixed: light preview (macaroonFill)
     borderRadius: 8,
   },
   cartoonBox: {
-    backgroundColor: '#FAD5DF',
+    backgroundColor: '#FAD5DF', // theme-fixed: light preview (cartoonBox)
     borderRadius: 8,
     margin: 4,
     height: 125,
@@ -2499,7 +2505,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: '18%',
     left: '20%',
-    color: '#FFFFFF',
+    color: '#FFFFFF', // theme-fixed: light preview (starOne)
     fontSize: 14,
     opacity: 0.9,
   },
@@ -2507,7 +2513,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '30%',
     right: '34%',
-    color: '#FFFFFF',
+    color: '#FFFFFF', // theme-fixed: light preview (starTwo)
     fontSize: 12,
     opacity: 0.9,
   },
@@ -2535,7 +2541,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: '#FFF0F5',
+    backgroundColor: '#FFF0F5', // theme-fixed: light preview (watercolorBox)
   },
   watercolorPink: {
     position: 'absolute',
@@ -2543,7 +2549,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#F7CCD9',
+    backgroundColor: '#F7CCD9', // theme-fixed: light preview (watercolorPink)
     opacity: 0.8,
   },
   watercolorYellow: {
@@ -2553,7 +2559,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FDE49E',
+    backgroundColor: '#FDE49E', // theme-fixed: light preview (watercolorYellow)
     opacity: 0.65,
   },
   watercolorPurple: {
@@ -2563,7 +2569,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#E5D0F5',
+    backgroundColor: '#E5D0F5', // theme-fixed: light preview (watercolorPurple)
     opacity: 0.7,
   },
   watercolorPeach: {
@@ -2573,7 +2579,7 @@ const styles = StyleSheet.create({
     width: 110,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#FCE0C8',
+    backgroundColor: '#FCE0C8', // theme-fixed: light preview (watercolorPeach)
     opacity: 0.6,
   },
   pillBorderContainer: {
@@ -2581,41 +2587,41 @@ const styles = StyleSheet.create({
     height: 85,
     borderRadius: 18,
     borderWidth: 2.2,
-    borderColor: '#4A2E1C',
+    borderColor: '#4A2E1C', // theme-fixed: light preview (pillBorderContainer)
     flexDirection: 'row',
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (pillBorderContainer)
   },
   pillGreenBlock: {
     width: '32%',
     height: '100%',
-    backgroundColor: '#9BD6A7',
+    backgroundColor: '#9BD6A7', // theme-fixed: light preview (pillGreenBlock)
     borderTopLeftRadius: 15,
     borderBottomLeftRadius: 15,
     borderRightWidth: 1.5,
-    borderRightColor: '#4A2E1C',
+    borderRightColor: '#4A2E1C', // theme-fixed: light preview (pillGreenBlock)
   },
   pillWhiteBlock: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (pillWhiteBlock)
   },
   transparentInnerBox: {
     width: '100%',
     height: 120,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (transparentInnerBox)
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (transparentInnerBox)
     borderRadius: 4,
   },
   circleBoxContainer: {
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (circleBoxContainer)
   },
   circleOutline: {
     borderWidth: 1.2,
-    borderColor: '#3D4A56',
+    borderColor: '#3D4A56', // theme-fixed: light preview (circleOutline)
     backgroundColor: 'transparent',
   },
   jewelryContainer: {
@@ -2633,9 +2639,9 @@ const styles = StyleSheet.create({
   },
   jewDumbellCapsule: {
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewDumbellCapsule)
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewDumbellCapsule)
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
@@ -2645,19 +2651,19 @@ const styles = StyleSheet.create({
     height: 10,
     borderTopWidth: 1.5,
     borderBottomWidth: 1.5,
-    borderColor: '#1E293B',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewDumbellBridge)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewDumbellBridge)
   },
   jewTinyBarcodeNum: {
     fontSize: 7,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (jewTinyBarcodeNum)
     marginTop: 2,
   },
   jewProductLine: {
     fontSize: 7.5,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (jewProductLine)
     textAlign: 'center',
     lineHeight: 10,
   },
@@ -2670,17 +2676,17 @@ const styles = StyleSheet.create({
   jewHangtagNotch: {
     width: 10,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewHangtagNotch)
     borderRightWidth: 0,
     borderTopLeftRadius: 6,
     borderBottomLeftRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewHangtagNotch)
   },
   jewHangtagBody: {
     flex: 1,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewHangtagBody)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewHangtagBody)
     paddingHorizontal: 8,
     paddingVertical: 6,
     alignItems: 'center',
@@ -2688,16 +2694,16 @@ const styles = StyleSheet.create({
   jewHangtagTitle: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (jewHangtagTitle)
     textTransform: 'lowercase',
   },
   jewHangtagSerration: {
     width: 8,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewHangtagSerration)
     borderLeftWidth: 0,
     borderStyle: 'dashed',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewHangtagSerration)
   },
   jewFlagRow: {
     width: '100%',
@@ -2714,9 +2720,9 @@ const styles = StyleSheet.create({
   },
   jewStackBox: {
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewStackBox)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewStackBox)
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2724,7 +2730,7 @@ const styles = StyleSheet.create({
   jewStackDash: {
     height: 1,
     borderWidth: 1,
-    borderColor: '#94A3B8',
+    borderColor: '#94A3B8', // theme-fixed: light preview (jewStackDash)
     borderStyle: 'dashed',
     marginVertical: 1,
   },
@@ -2732,29 +2738,29 @@ const styles = StyleSheet.create({
     width: 1,
     height: '100%',
     borderWidth: 1,
-    borderColor: '#94A3B8',
+    borderColor: '#94A3B8', // theme-fixed: light preview (jewStackDashVertical)
     borderStyle: 'dashed',
   },
   jewTailRight: {
     flex: 1,
     height: 16,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewTailRight)
     borderLeftWidth: 0,
     borderTopRightRadius: 4,
     borderBottomRightRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewTailRight)
     marginTop: 28,
   },
   jewTailLeft: {
     flex: 1,
     height: 16,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewTailLeft)
     borderRightWidth: 0,
     borderTopLeftRadius: 4,
     borderBottomLeftRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewTailLeft)
     marginTop: 28,
   },
   jewHorizontalPair: {
@@ -2762,18 +2768,18 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     width: 130,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewHorizontalPair)
     borderRadius: 6,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewHorizontalPair)
   },
   jewYellowBox: {
     height: 52,
-    borderColor: '#262626',
+    borderColor: '#262626', // theme-fixed: light preview (jewYellowBox)
   },
   jewYellowDash: {
     width: 1,
-    backgroundColor: '#262626',
+    backgroundColor: '#262626', // theme-fixed: light preview (jewYellowDash)
   },
   jewPatternBox: {
     position: 'relative',
@@ -2792,9 +2798,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 10,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewSampleTailFlap)
     borderRadius: 2,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewSampleTailFlap)
   },
   jewHolesRow: {
     width: '100%',
@@ -2806,9 +2812,9 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 58,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewHoleBox)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewHoleBox)
     position: 'relative',
   },
   jewPunchHole: {
@@ -2817,8 +2823,8 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     borderWidth: 1.2,
-    borderColor: '#1E293B',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewPunchHole)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewPunchHole)
   },
   jewTabsRow: {
     width: '100%',
@@ -2835,11 +2841,11 @@ const styles = StyleSheet.create({
     width: 22,
     height: 14,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewTabFlap)
     borderBottomWidth: 0,
     borderTopLeftRadius: 3,
     borderTopRightRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewTabFlap)
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2848,16 +2854,16 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     borderWidth: 1,
-    borderColor: '#1E293B',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewPunchHoleSmall)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewPunchHoleSmall)
   },
   jewTabBody: {
     width: '100%',
     height: 52,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (jewTabBody)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewTabBody)
   },
   jewBarDumbellRow: {
     width: '100%',
@@ -2870,17 +2876,17 @@ const styles = StyleSheet.create({
     width: 110,
     height: 48,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (jewBarCapsule)
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewBarCapsule)
   },
   jewBarConnector: {
     width: 28,
     height: 8,
     borderTopWidth: 1.2,
     borderBottomWidth: 1.2,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (jewBarConnector)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewBarConnector)
   },
   jewRatTailRow: {
     width: '100%',
@@ -2892,9 +2898,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (jewRatTailHead)
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewRatTailHead)
     overflow: 'hidden',
     paddingVertical: 4,
     paddingHorizontal: 6,
@@ -2906,7 +2912,7 @@ const styles = StyleSheet.create({
   jewRatTailBarcodeNum: {
     fontSize: 6.5,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (jewRatTailBarcodeNum)
     marginTop: 1,
   },
   jewRatTailTextCol: {
@@ -2915,27 +2921,27 @@ const styles = StyleSheet.create({
   jewRatTailLine: {
     fontSize: 7.5,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (jewRatTailLine)
     lineHeight: 10,
   },
   jewRatTailStrip: {
     flex: 1,
     height: 12,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (jewRatTailStrip)
     borderLeftWidth: 0,
     borderTopRightRadius: 6,
     borderBottomRightRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (jewRatTailStrip)
   },
 
   // --- SUPERMARKET STYLES ---
   smktLabelCard: {
     width: '100%',
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (smktLabelCard)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (smktLabelCard)
     padding: 8,
     overflow: 'hidden',
   },
@@ -2949,26 +2955,26 @@ const styles = StyleSheet.create({
   smktTitleBold: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktTitleBold)
     lineHeight: 14,
     marginBottom: 4,
   },
   smktMetaText: {
     fontSize: 8,
     fontWeight: '600',
-    color: '#374151',
+    color: '#374151', // theme-fixed: light preview (smktMetaText)
     lineHeight: 11,
   },
   smktBarcodeNum: {
     fontSize: 7,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktBarcodeNum)
     textAlign: 'center',
     marginTop: 2,
   },
   smktClearanceBox: {
     width: 72,
-    backgroundColor: '#F7E329',
+    backgroundColor: '#F7E329', // theme-fixed: light preview (smktClearanceBox)
     borderRadius: 4,
     padding: 6,
     alignItems: 'center',
@@ -2977,26 +2983,26 @@ const styles = StyleSheet.create({
   smktClearanceTitle: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktClearanceTitle)
     marginBottom: 2,
   },
   smktPriceHuge: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktPriceHuge)
     lineHeight: 24,
   },
   smktWasText: {
     fontSize: 8,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktWasText)
     marginTop: 2,
   },
   smktStrike: {
     textDecorationLine: 'line-through',
   },
   smktOrangeBand: {
-    backgroundColor: '#F97316',
+    backgroundColor: '#F97316', // theme-fixed: light preview (smktOrangeBand)
     marginTop: 6,
     marginHorizontal: -8,
     marginBottom: -8,
@@ -3005,7 +3011,7 @@ const styles = StyleSheet.create({
   smktOrangeProduct: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktOrangeProduct)
     marginBottom: 4,
   },
   smktOrangePriceRow: {
@@ -3016,23 +3022,23 @@ const styles = StyleSheet.create({
   smktOrangeUnitLabel: {
     fontSize: 7,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktOrangeUnitLabel)
   },
   smktOrangeUnitPrice: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktOrangeUnitPrice)
   },
   smktOrangeMainPrice: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktOrangeMainPrice)
   },
   smktYellowBandRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F4F16A',
+    backgroundColor: '#F4F16A', // theme-fixed: light preview (smktYellowBandRow)
     marginHorizontal: -8,
     paddingHorizontal: 8,
     paddingVertical: 5,
@@ -3040,17 +3046,17 @@ const styles = StyleSheet.create({
   smktWhoopsText: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktWhoopsText)
   },
   smktWasInline: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktWasInline)
   },
   smktNowPrice: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktNowPrice)
   },
   smktMeatTopRow: {
     flexDirection: 'row',
@@ -3060,13 +3066,13 @@ const styles = StyleSheet.create({
   smktMeatTitle: {
     fontSize: 9,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktMeatTitle)
     lineHeight: 11,
   },
   smktMeatUnit: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktMeatUnit)
   },
   smktMeatMidRow: {
     flexDirection: 'row',
@@ -3075,7 +3081,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   smktYellowPricePill: {
-    backgroundColor: '#F7E329',
+    backgroundColor: '#F7E329', // theme-fixed: light preview (smktYellowPricePill)
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 2,
@@ -3083,7 +3089,7 @@ const styles = StyleSheet.create({
   smktYellowPriceText: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktYellowPriceText)
   },
   smktMeatBottomRow: {
     flexDirection: 'row',
@@ -3094,11 +3100,11 @@ const styles = StyleSheet.create({
   smktTinyMeta: {
     fontSize: 7,
     fontWeight: '600',
-    color: '#374151',
+    color: '#374151', // theme-fixed: light preview (smktTinyMeta)
   },
   smktYellowTopBar: {
     height: 8,
-    backgroundColor: '#F7E329',
+    backgroundColor: '#F7E329', // theme-fixed: light preview (smktYellowTopBar)
     marginHorizontal: -8,
     marginTop: -8,
     marginBottom: 6,
@@ -3112,7 +3118,7 @@ const styles = StyleSheet.create({
   smktRetailLabel: {
     fontSize: 7,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktRetailLabel)
     textAlign: 'center',
     lineHeight: 9,
   },
@@ -3123,25 +3129,25 @@ const styles = StyleSheet.create({
   smktSupPriceMain: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktSupPriceMain)
     lineHeight: 30,
   },
   smktSupPriceCents: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktSupPriceCents)
     marginTop: 2,
   },
   smktDescLine: {
     fontSize: 7.5,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktDescLine)
     marginBottom: 1,
   },
   smktDescSub: {
     fontSize: 7,
     fontWeight: '600',
-    color: '#374151',
+    color: '#374151', // theme-fixed: light preview (smktDescSub)
     marginBottom: 4,
   },
   smktTwoColorTop: {
@@ -3150,18 +3156,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#E5E7EB', // theme-fixed: light preview (smktTwoColorTop)
   },
   smktMangoTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktMangoTitle)
   },
   smktTwoColorBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F7E329',
+    backgroundColor: '#F7E329', // theme-fixed: light preview (smktTwoColorBottom)
     marginHorizontal: -8,
     marginBottom: -8,
     paddingHorizontal: 8,
@@ -3170,21 +3176,21 @@ const styles = StyleSheet.create({
   smktSaleLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktSaleLabel)
   },
   smktSalePrice: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktSalePrice)
   },
   smktFullYellowCard: {
-    backgroundColor: '#F7E329',
+    backgroundColor: '#F7E329', // theme-fixed: light preview (smktFullYellowCard)
     padding: 0,
   },
   smktMilkSegment: {
     padding: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#D4C820',
+    borderBottomColor: '#D4C820', // theme-fixed: light preview (smktMilkSegment)
   },
   smktMilkSegmentBottom: {
     borderBottomWidth: 0,
@@ -3192,12 +3198,12 @@ const styles = StyleSheet.create({
   smktMilkBrand: {
     fontSize: 10,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktMilkBrand)
   },
   smktMilkDesc: {
     fontSize: 7.5,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktMilkDesc)
     marginVertical: 2,
   },
   smktMilkPriceRow: {
@@ -3208,23 +3214,23 @@ const styles = StyleSheet.create({
   smktMilkPrice: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktMilkPrice)
   },
   smktRedOuter: {
     width: '100%',
-    backgroundColor: '#DC2626',
+    backgroundColor: '#DC2626', // theme-fixed: light preview (smktRedOuter)
     borderRadius: 8,
     padding: 8,
   },
   smktReducedTitle: {
     fontSize: 12,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: '#FFFFFF', // theme-fixed: light preview (smktReducedTitle)
     textAlign: 'center',
     marginBottom: 6,
   },
   smktRedInner: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (smktRedInner)
     borderRadius: 6,
     padding: 8,
     alignItems: 'center',
@@ -3242,12 +3248,12 @@ const styles = StyleSheet.create({
   smktNowRedLabel: {
     fontSize: 10,
     fontWeight: '900',
-    color: '#DC2626',
+    color: '#DC2626', // theme-fixed: light preview (smktNowRedLabel)
   },
   smktNowRedPrice: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktNowRedPrice)
   },
   smktBbqGrid: {
     flexDirection: 'row',
@@ -3256,28 +3262,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   smktBlueProductBlock: {
-    backgroundColor: '#3D91C0',
+    backgroundColor: '#3D91C0', // theme-fixed: light preview (smktBlueProductBlock)
     padding: 6,
     marginBottom: 2,
   },
   smktBbqTitle: {
     fontSize: 8,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktBbqTitle)
     lineHeight: 10,
   },
   smktBbqTitleSmall: {
     fontSize: 7,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktBbqTitleSmall)
     lineHeight: 9,
   },
   smktBbqSub: {
     fontSize: 6.5,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktBbqSub)
     marginTop: 2,
-    backgroundColor: '#5BA3CC',
+    backgroundColor: '#5BA3CC', // theme-fixed: light preview (smktBbqSub)
     paddingVertical: 1,
   },
   smktBbqBarcodeRow: {
@@ -3290,13 +3296,13 @@ const styles = StyleSheet.create({
   smktUnitOz: {
     fontSize: 7,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktUnitOz)
     textAlign: 'center',
     lineHeight: 9,
   },
   smktBbqPriceCol: {
     width: 52,
-    backgroundColor: '#E0DC45',
+    backgroundColor: '#E0DC45', // theme-fixed: light preview (smktBbqPriceCol)
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
@@ -3304,16 +3310,16 @@ const styles = StyleSheet.create({
   smktRupeeSmall: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktRupeeSmall)
   },
   smktBbqBigPrice: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktBbqBigPrice)
     lineHeight: 18,
   },
   smktGreenHeader: {
-    backgroundColor: '#8CC63F',
+    backgroundColor: '#8CC63F', // theme-fixed: light preview (smktGreenHeader)
     marginHorizontal: -8,
     marginTop: -8,
     padding: 8,
@@ -3322,7 +3328,7 @@ const styles = StyleSheet.create({
   smktGreenTitle: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktGreenTitle)
   },
   smktWipesBody: {
     flexDirection: 'row',
@@ -3334,7 +3340,7 @@ const styles = StyleSheet.create({
   smktBullet: {
     fontSize: 7,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktBullet)
     lineHeight: 10,
   },
   smktWipesPriceCol: {
@@ -3345,23 +3351,23 @@ const styles = StyleSheet.create({
   smktWipesPrice: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktWipesPrice)
   },
   smktTalkerCard: {
     width: '100%',
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (smktTalkerCard)
     borderRadius: 6,
     overflow: 'hidden',
   },
   smktTalkerWhite: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (smktTalkerWhite)
     padding: 8,
   },
   smktTalkerProduct: {
     fontSize: 10,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktTalkerProduct)
     marginBottom: 6,
   },
   smktTalkerWhiteRow: {
@@ -3372,31 +3378,31 @@ const styles = StyleSheet.create({
   smktTalkerPrice: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktTalkerPrice)
   },
   smktTalkerYellow: {
-    backgroundColor: '#F7E329',
+    backgroundColor: '#F7E329', // theme-fixed: light preview (smktTalkerYellow)
     padding: 8,
     borderTopWidth: 2,
-    borderTopColor: '#DC2626',
+    borderTopColor: '#DC2626', // theme-fixed: light preview (smktTalkerYellow)
   },
   smktTalkerPromo: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktTalkerPromo)
     textAlign: 'center',
   },
   smktTalkerSave: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktTalkerSave)
     textAlign: 'center',
     marginVertical: 4,
   },
   smktTalkerSplit: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#111827',
+    borderTopColor: '#111827', // theme-fixed: light preview (smktTalkerSplit)
     paddingTop: 4,
   },
   smktTalkerSplitCol: {
@@ -3404,18 +3410,18 @@ const styles = StyleSheet.create({
   },
   smktTalkerSplitDivider: {
     width: 1,
-    backgroundColor: '#111827',
+    backgroundColor: '#111827', // theme-fixed: light preview (smktTalkerSplitDivider)
     marginHorizontal: 4,
   },
   smktTalkerRed: {
-    backgroundColor: '#DC2626',
+    backgroundColor: '#DC2626', // theme-fixed: light preview (smktTalkerRed)
     paddingVertical: 10,
     alignItems: 'center',
   },
   smktTalkerSale: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#F7E329',
+    color: '#F7E329', // theme-fixed: light preview (smktTalkerSale)
     textTransform: 'lowercase',
   },
   smktWideShelfRow: {
@@ -3428,7 +3434,7 @@ const styles = StyleSheet.create({
   smktWideProduct: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktWideProduct)
     marginBottom: 4,
   },
   smktWideRight: {
@@ -3436,7 +3442,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   smktYouPayBar: {
-    backgroundColor: '#46ACC2',
+    backgroundColor: '#46ACC2', // theme-fixed: light preview (smktYouPayBar)
     width: '100%',
     paddingVertical: 2,
     alignItems: 'center',
@@ -3445,12 +3451,12 @@ const styles = StyleSheet.create({
   smktYouPayText: {
     fontSize: 7,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: '#FFFFFF', // theme-fixed: light preview (smktYouPayText)
   },
   smktWidePrice: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktWidePrice)
     marginTop: 2,
   },
   smktWideBbqRow: {
@@ -3463,13 +3469,13 @@ const styles = StyleSheet.create({
   smktUnitOzWide: {
     fontSize: 7,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktUnitOzWide)
     alignSelf: 'center',
     marginHorizontal: 4,
   },
   smktBbqPriceColWide: {
     width: 48,
-    backgroundColor: '#E0DC45',
+    backgroundColor: '#E0DC45', // theme-fixed: light preview (smktBbqPriceColWide)
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3483,14 +3489,14 @@ const styles = StyleSheet.create({
   smktEverydayTitle: {
     fontSize: 11,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktEverydayTitle)
     lineHeight: 13,
   },
   smktEverydayRight: {
     width: 80,
   },
   smktYouPayBox: {
-    backgroundColor: '#46ACC2',
+    backgroundColor: '#46ACC2', // theme-fixed: light preview (smktYouPayBox)
     padding: 6,
     alignItems: 'center',
     borderRadius: 2,
@@ -3498,17 +3504,17 @@ const styles = StyleSheet.create({
   smktYouPaySmall: {
     fontSize: 7,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktYouPaySmall)
   },
   smktEverydayPrice: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktEverydayPrice)
   },
   smktEverydayDesc: {
     fontSize: 6.5,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (smktEverydayDesc)
     marginTop: 4,
     textAlign: 'center',
   },
@@ -3518,9 +3524,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 72,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (foodBakedBox)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (foodBakedBox)
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
@@ -3528,7 +3534,7 @@ const styles = StyleSheet.create({
   foodBakedText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (foodBakedText)
     textAlign: 'center',
   },
   foodPriceOuter: {
@@ -3539,9 +3545,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 110,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (foodPriceInner)
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (foodPriceInner)
     flexDirection: 'row',
     overflow: 'hidden',
     padding: 8,
@@ -3555,7 +3561,7 @@ const styles = StyleSheet.create({
   foodBarcodeNum: {
     fontSize: 7.5,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (foodBarcodeNum)
     marginTop: 4,
     textAlign: 'center',
   },
@@ -3574,36 +3580,36 @@ const styles = StyleSheet.create({
   foodRotatedLine: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (foodRotatedLine)
     lineHeight: 12,
   },
   foodRotatedPrice: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (foodRotatedPrice)
     marginTop: 4,
   },
   foodImportedCard: {
     width: '100%',
     minHeight: 140,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (foodImportedCard)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (foodImportedCard)
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   foodImportedTitle: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (foodImportedTitle)
     marginBottom: 8,
     letterSpacing: 0.3,
   },
   foodImportedLine: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (foodImportedLine)
     lineHeight: 14,
     marginBottom: 2,
   },
@@ -3611,9 +3617,9 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 130,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (foodIngredientsCard)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (foodIngredientsCard)
     paddingHorizontal: 14,
     paddingVertical: 14,
     alignItems: 'center',
@@ -3622,13 +3628,13 @@ const styles = StyleSheet.create({
   foodIngredientsHeading: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (foodIngredientsHeading)
     marginBottom: 8,
   },
   foodIngredientsItem: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (foodIngredientsItem)
     lineHeight: 16,
     textAlign: 'center',
   },
@@ -3637,9 +3643,9 @@ const styles = StyleSheet.create({
   applElectricalCard: {
     width: '100%',
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (applElectricalCard)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (applElectricalCard)
     paddingHorizontal: 14,
     paddingVertical: 12,
     alignItems: 'center',
@@ -3648,21 +3654,21 @@ const styles = StyleSheet.create({
   applCompanyName: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (applCompanyName)
     textAlign: 'center',
     marginBottom: 4,
   },
   applPhoneLine: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (applPhoneLine)
     textAlign: 'center',
     marginBottom: 2,
   },
   applBarcodeNum: {
     fontSize: 8,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (applBarcodeNum)
     marginTop: 4,
     letterSpacing: 0.5,
   },
@@ -3672,9 +3678,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 72,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (storageHomeBox)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (storageHomeBox)
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -3683,16 +3689,16 @@ const styles = StyleSheet.create({
   storageHomeText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (storageHomeText)
     textAlign: 'center',
   },
   storageCabinetBox: {
     width: '100%',
     minHeight: 100,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (storageCabinetBox)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (storageCabinetBox)
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
@@ -3701,7 +3707,7 @@ const styles = StyleSheet.create({
   storageCabinetText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (storageCabinetText)
     textAlign: 'center',
     marginVertical: 4,
   },
@@ -3715,28 +3721,28 @@ const styles = StyleSheet.create({
   storageOrnamentLine: {
     flex: 1,
     height: 1.2,
-    backgroundColor: '#111827',
+    backgroundColor: '#111827', // theme-fixed: light preview (storageOrnamentLine)
   },
   storageOrnamentHeart: {
     fontSize: 10,
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (storageOrnamentHeart)
     marginHorizontal: 8,
   },
   storageVanillaFrame: {
     width: '100%',
     borderWidth: 1.2,
-    borderColor: '#D1D5DB',
+    borderColor: '#D1D5DB', // theme-fixed: light preview (storageVanillaFrame)
     borderRadius: 4,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F3F4F6', // theme-fixed: light preview (storageVanillaFrame)
     padding: 8,
   },
   storageVanillaInner: {
     width: '100%',
     minHeight: 90,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (storageVanillaInner)
     borderRadius: 2,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (storageVanillaInner)
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -3745,14 +3751,14 @@ const styles = StyleSheet.create({
   storageVanillaLine: {
     fontSize: 18,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (storageVanillaLine)
     textAlign: 'center',
     lineHeight: 22,
   },
 
   // --- FILE LABEL STYLES ---
   filePreviewBox: {
-    backgroundColor: '#F0F2F6',
+    backgroundColor: '#F0F2F6', // theme-fixed: light preview (filePreviewBox)
     minHeight: 96,
   },
   fileOctPreviewBox: {
@@ -3762,7 +3768,7 @@ const styles = StyleSheet.create({
   fileAddressBadge: {
     width: '88%',
     maxWidth: 320,
-    backgroundColor: '#39D353',
+    backgroundColor: '#39D353', // theme-fixed: light preview (fileAddressBadge)
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -3779,13 +3785,13 @@ const styles = StyleSheet.create({
   fileCautionDash: {
     width: 5,
     height: 2,
-    backgroundColor: '#111827',
+    backgroundColor: '#111827', // theme-fixed: light preview (fileCautionDash)
     transform: [{ skewX: '-18deg' }],
   },
   fileAddressText: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (fileAddressText)
     letterSpacing: 0.2,
     marginVertical: 4,
     textAlign: 'center',
@@ -3795,30 +3801,30 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     height: 54,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1F2937', // theme-fixed: light preview (fileCabinetLabel)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (fileCabinetLabel)
     alignItems: 'center',
     justifyContent: 'center',
   },
   fileCabinetText: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (fileCabinetText)
   },
   fileFolderLabel: {
     width: '92%',
     maxWidth: 360,
     height: 78,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1F2937', // theme-fixed: light preview (fileFolderLabel)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (fileFolderLabel)
     alignItems: 'center',
     justifyContent: 'center',
   },
   fileFolderText: {
     fontSize: 18,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (fileFolderText)
   },
   fileOctWrap: {
     width: '86%',
@@ -3838,9 +3844,9 @@ const styles = StyleSheet.create({
     width: '100%',
     flex: 1,
     borderWidth: 1,
-    borderColor: '#111827',
+    borderColor: '#111827', // theme-fixed: light preview (fileOctInnerCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (fileOctInnerCard)
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
@@ -3850,7 +3856,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 22,
     height: 22,
-    backgroundColor: '#F0F2F6',
+    backgroundColor: '#F0F2F6', // theme-fixed: light preview (fileOctCorner)
     transform: [{ rotate: '45deg' }],
   },
   fileOctCornerTL: {
@@ -3872,13 +3878,13 @@ const styles = StyleSheet.create({
   fileOctLinePrimary: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (fileOctLinePrimary)
     textAlign: 'center',
   },
   fileOctLineSecondary: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (fileOctLineSecondary)
     textAlign: 'center',
   },
   fileDashedDivider: {
@@ -3886,7 +3892,7 @@ const styles = StyleSheet.create({
     height: 1,
     borderBottomWidth: 1,
     borderStyle: 'dashed',
-    borderColor: '#9CA3AF',
+    borderColor: '#9CA3AF', // theme-fixed: light preview (fileDashedDivider)
     marginVertical: 3,
   },
   fileVisitorBadge: {
@@ -3894,29 +3900,29 @@ const styles = StyleSheet.create({
     maxWidth: 280,
     aspectRatio: 96.8 / 54,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1F2937', // theme-fixed: light preview (fileVisitorBadge)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (fileVisitorBadge)
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   fileVisitorHeading: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (fileVisitorHeading)
     textAlign: 'center',
     letterSpacing: 0.4,
   },
   fileVisitorName: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (fileVisitorName)
     textAlign: 'center',
     marginTop: 5,
   },
   fileVisitorCompany: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (fileVisitorCompany)
     textAlign: 'center',
     marginTop: 2,
   },
@@ -3929,7 +3935,7 @@ const styles = StyleSheet.create({
   fileVisitorMeta: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (fileVisitorMeta)
   },
 
   // --- ASSET TAG STYLES ---
@@ -3937,9 +3943,9 @@ const styles = StyleSheet.create({
     width: '92%',
     maxWidth: 340,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (assetTagCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (assetTagCard)
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -3948,21 +3954,21 @@ const styles = StyleSheet.create({
   assetTagPropertyLine: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetTagPropertyLine)
     textAlign: 'center',
     lineHeight: 13,
   },
   assetTagHeading: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetTagHeading)
     textAlign: 'center',
     marginTop: 6,
   },
   assetTagNumber: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetTagNumber)
     textAlign: 'center',
     marginTop: 2,
   },
@@ -3970,9 +3976,9 @@ const styles = StyleSheet.create({
     width: '92%',
     maxWidth: 360,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (assetTagWideCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (assetTagWideCard)
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -3989,7 +3995,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 40,
     borderWidth: 5,
-    borderColor: '#111827',
+    borderColor: '#111827', // theme-fixed: light preview (assetWaveLogoShape)
     borderTopLeftRadius: 18,
     borderBottomRightRadius: 18,
     borderTopRightRadius: 3,
@@ -4004,20 +4010,20 @@ const styles = StyleSheet.create({
   assetCompanyName: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetCompanyName)
     textAlign: 'right',
   },
   assetCompanyLine: {
     fontSize: 8.5,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetCompanyLine)
     textAlign: 'right',
     marginTop: 2,
   },
   assetBarcodeNum: {
     fontSize: 8,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetBarcodeNum)
     textAlign: 'right',
     marginTop: 3,
   },
@@ -4025,16 +4031,16 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 340,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (assetHarkCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (assetHarkCard)
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
   assetHarkBanner: {
     width: '100%',
-    backgroundColor: '#247331',
+    backgroundColor: '#247331', // theme-fixed: light preview (assetHarkBanner)
     borderRadius: 2,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -4043,14 +4049,14 @@ const styles = StyleSheet.create({
   assetHarkBannerText: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetHarkBannerText)
     textAlign: 'center',
     lineHeight: 13,
   },
   assetHarkBarcodeNum: {
     fontSize: 8,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetHarkBarcodeNum)
     marginTop: 6,
     textAlign: 'center',
   },
@@ -4058,16 +4064,16 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 340,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (assetHarkFormCard)
     borderRadius: 4,
-    backgroundColor: '#247331',
+    backgroundColor: '#247331', // theme-fixed: light preview (assetHarkFormCard)
     paddingHorizontal: 10,
     paddingVertical: 10,
   },
   assetHarkFormTitle: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetHarkFormTitle)
     textAlign: 'center',
     marginBottom: 8,
     lineHeight: 12,
@@ -4082,26 +4088,26 @@ const styles = StyleSheet.create({
     width: 62,
     fontSize: 7.5,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetHarkLabel)
   },
   assetHarkValueBox: {
     flex: 1,
     minWidth: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (assetHarkValueBox)
     borderWidth: 1,
-    borderColor: '#111827',
+    borderColor: '#111827', // theme-fixed: light preview (assetHarkValueBox)
     paddingHorizontal: 4,
     paddingVertical: 2,
   },
   assetHarkValue: {
     fontSize: 7,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetHarkValue)
   },
   assetHarkSummary: {
     fontSize: 6,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (assetHarkSummary)
     marginTop: 6,
     textAlign: 'center',
   },
@@ -4110,19 +4116,19 @@ const styles = StyleSheet.create({
   schoolNamePrimary: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (schoolNamePrimary)
     textAlign: 'center',
   },
   schoolClassLine: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (schoolClassLine)
     textAlign: 'center',
   },
   schoolNameSecondary: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (schoolNameSecondary)
     textAlign: 'center',
   },
 
@@ -4131,9 +4137,9 @@ const styles = StyleSheet.create({
     width: '92%',
     maxWidth: 340,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (materialSmallCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (materialSmallCard)
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -4141,13 +4147,13 @@ const styles = StyleSheet.create({
   materialNutText: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (materialNutText)
     textAlign: 'center',
   },
   materialBarcodeNum: {
     fontSize: 8,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (materialBarcodeNum)
     marginTop: 5,
     textAlign: 'center',
   },
@@ -4155,13 +4161,13 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 320,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (materialLockNutCard)
     borderRadius: 4,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (materialLockNutCard)
   },
   materialLockNutHeader: {
-    backgroundColor: '#214668',
+    backgroundColor: '#214668', // theme-fixed: light preview (materialLockNutHeader)
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -4169,7 +4175,7 @@ const styles = StyleSheet.create({
   materialLockNutTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: '#FFFFFF', // theme-fixed: light preview (materialLockNutTitle)
     textAlign: 'center',
   },
   materialLockNutBody: {
@@ -4185,30 +4191,30 @@ const styles = StyleSheet.create({
   materialLockNutLine: {
     fontSize: 8.5,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (materialLockNutLine)
     lineHeight: 12,
     marginBottom: 2,
   },
   materialScrewTitle: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (materialScrewTitle)
     textAlign: 'center',
   },
   materialSpecCard: {
     width: '90%',
     maxWidth: 340,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (materialSpecCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (materialSpecCard)
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   materialSpecTitle: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (materialSpecTitle)
     marginBottom: 8,
   },
   materialSpecRow: {
@@ -4217,12 +4223,12 @@ const styles = StyleSheet.create({
   materialSpecText: {
     fontSize: 9.5,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (materialSpecText)
     marginBottom: 2,
   },
   materialSpecUnderline: {
     height: 1.2,
-    backgroundColor: '#111827',
+    backgroundColor: '#111827', // theme-fixed: light preview (materialSpecUnderline)
     width: '100%',
   },
 
@@ -4231,9 +4237,9 @@ const styles = StyleSheet.create({
     width: '92%',
     maxWidth: 360,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (rackLabelCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (rackLabelCard)
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -4248,13 +4254,13 @@ const styles = StyleSheet.create({
   rackLabelTitle: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (rackLabelTitle)
     textAlign: 'center',
   },
   rackLabelCode: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (rackLabelCode)
     textAlign: 'center',
     letterSpacing: 0.5,
   },
@@ -4262,9 +4268,9 @@ const styles = StyleSheet.create({
     width: '92%',
     maxWidth: 360,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (rackLabelWideCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (rackLabelWideCard)
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -4278,7 +4284,7 @@ const styles = StyleSheet.create({
   rackLabelIsleText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (rackLabelIsleText)
     marginTop: 8,
   },
   rackArrowDownWrap: {
@@ -4291,7 +4297,7 @@ const styles = StyleSheet.create({
     width: 3,
     height: 34,
     borderWidth: 2,
-    borderColor: '#111827',
+    borderColor: '#111827', // theme-fixed: light preview (rackArrowDownStem)
     borderRadius: 1,
     backgroundColor: 'transparent',
   },
@@ -4303,7 +4309,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 12,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#111827',
+    borderTopColor: '#111827', // theme-fixed: light preview (rackArrowDownHead)
     marginTop: -2,
   },
   rackArrowRightWrap: {
@@ -4317,7 +4323,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 3,
     borderWidth: 2,
-    borderColor: '#111827',
+    borderColor: '#111827', // theme-fixed: light preview (rackArrowRightStem)
     borderRadius: 1,
     backgroundColor: 'transparent',
   },
@@ -4329,7 +4335,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 12,
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
-    borderLeftColor: '#111827',
+    borderLeftColor: '#111827', // theme-fixed: light preview (rackArrowRightHead)
     marginLeft: -2,
   },
 
@@ -4338,9 +4344,9 @@ const styles = StyleSheet.create({
     width: '88%',
     maxWidth: 300,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (labCameoCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (labCameoCard)
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -4348,13 +4354,13 @@ const styles = StyleSheet.create({
   labCameoTitle: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (labCameoTitle)
     textAlign: 'center',
   },
   labCameoLine: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (labCameoLine)
     textAlign: 'center',
     lineHeight: 14,
   },
@@ -4362,9 +4368,9 @@ const styles = StyleSheet.create({
     width: '88%',
     maxWidth: 280,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (labMicroscopeCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (labMicroscopeCard)
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -4372,7 +4378,7 @@ const styles = StyleSheet.create({
   labMicroscopeCode: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (labMicroscopeCode)
     letterSpacing: 1.2,
     marginTop: 4,
     marginBottom: 6,
@@ -4380,7 +4386,7 @@ const styles = StyleSheet.create({
   labMicroscopeMeta: {
     fontSize: 8.5,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (labMicroscopeMeta)
     alignSelf: 'flex-start',
     lineHeight: 12,
     width: '100%',
@@ -4389,9 +4395,9 @@ const styles = StyleSheet.create({
     width: '92%',
     maxWidth: 340,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (labPathologyCard)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (labPathologyCard)
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -4415,7 +4421,7 @@ const styles = StyleSheet.create({
   labPathologyLabel: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (labPathologyLabel)
   },
   labPathologyField: {
     flex: 1,
@@ -4424,12 +4430,12 @@ const styles = StyleSheet.create({
   labPathologyPlaceholder: {
     fontSize: 8,
     fontWeight: '500',
-    color: '#111827',
+    color: '#111827', // theme-fixed: light preview (labPathologyPlaceholder)
     marginBottom: 1,
   },
   labPathologyUnderline: {
     height: 1.2,
-    backgroundColor: '#111827',
+    backgroundColor: '#111827', // theme-fixed: light preview (labPathologyUnderline)
     width: '100%',
   },
 
@@ -4437,15 +4443,15 @@ const styles = StyleSheet.create({
   cableYellowContainer: {
     width: '100%',
     height: 125,
-    backgroundColor: '#F7E329',
+    backgroundColor: '#F7E329', // theme-fixed: light preview (cableYellowContainer)
     flexDirection: 'row',
     borderWidth: 1.5,
-    borderColor: '#262626',
+    borderColor: '#262626', // theme-fixed: light preview (cableYellowContainer)
   },
   cableYellowCol: {
     flex: 1,
     height: '100%',
-    borderColor: '#262626',
+    borderColor: '#262626', // theme-fixed: light preview (cableYellowCol)
   },
   cableThinP0Container: {
     width: '100%',
@@ -4457,9 +4463,9 @@ const styles = StyleSheet.create({
     width: 120,
     height: 26,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (cableThinP0Head)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableThinP0Head)
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -4467,18 +4473,18 @@ const styles = StyleSheet.create({
     width: 1,
     height: '100%',
     borderWidth: 1,
-    borderColor: '#94A3B8',
+    borderColor: '#94A3B8', // theme-fixed: light preview (cableThinP0DashedLine)
     borderStyle: 'dashed',
   },
   cableThinP0Tail: {
     flex: 1,
     height: 12,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (cableThinP0Tail)
     borderLeftWidth: 0,
     borderTopRightRadius: 3,
     borderBottomRightRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableThinP0Tail)
   },
   cable301Container: {
     width: '100%',
@@ -4490,34 +4496,34 @@ const styles = StyleSheet.create({
     width: 105,
     height: 70,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (cable301Head)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cable301Head)
     overflow: 'hidden',
   },
   cable301TopHalf: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cable301TopHalf)
   },
   cable301DashedDivider: {
     height: 1,
     borderWidth: 1,
-    borderColor: '#94A3B8',
+    borderColor: '#94A3B8', // theme-fixed: light preview (cable301DashedDivider)
     borderStyle: 'dashed',
   },
   cable301BottomHalf: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cable301BottomHalf)
   },
   cable301Tail: {
     flex: 1,
     height: 16,
     borderWidth: 1.2,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (cable301Tail)
     borderLeftWidth: 0,
     borderTopRightRadius: 4,
     borderBottomRightRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cable301Tail)
     marginTop: 10,
   },
   cable428Container: {
@@ -4530,9 +4536,9 @@ const styles = StyleSheet.create({
     width: 140,
     height: 86,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cable428Head)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cable428Head)
     overflow: 'hidden',
   },
   cable428Top: {
@@ -4544,12 +4550,12 @@ const styles = StyleSheet.create({
   cable428TopTitle: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cable428TopTitle)
   },
   cable428TopSub: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cable428TopSub)
   },
   cable428Bottom: {
     flex: 1.1,
@@ -4560,24 +4566,24 @@ const styles = StyleSheet.create({
   cable428BottomText: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cable428BottomText)
     lineHeight: 11.5,
   },
   cable428Tail: {
     flex: 1,
     height: 18,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cable428Tail)
     borderLeftWidth: 0,
     borderTopRightRadius: 4,
     borderBottomRightRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cable428Tail)
     marginBottom: 6,
   },
   cableDashedLine: {
     height: 1,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableDashedLine)
     borderStyle: 'dashed',
   },
   cableTallDualContainer: {
@@ -4594,11 +4600,11 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 145,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTallTagHead)
     borderTopLeftRadius: 6,
     borderTopRightRadius: 6,
     borderBottomRightRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableTallTagHead)
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -4606,18 +4612,18 @@ const styles = StyleSheet.create({
     width: 1,
     height: '100%',
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTallVerticalDash)
     borderStyle: 'dashed',
   },
   cableTallTagTail: {
     width: 36,
     height: 110,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTallTagTail)
     borderTopWidth: 0,
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableTallTagTail)
   },
   cableD38Container: {
     width: '100%',
@@ -4639,31 +4645,31 @@ const styles = StyleSheet.create({
     width: 105,
     height: 58,
     borderWidth: 1.2,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableD38TagHead)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableD38TagHead)
     overflow: 'hidden',
   },
   cableD38TopTail: {
     flex: 1,
     height: 14,
     borderWidth: 1.2,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableD38TopTail)
     borderLeftWidth: 0,
     borderTopRightRadius: 3,
     borderBottomRightRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableD38TopTail)
     marginTop: 6,
   },
   cableD38BottomTail: {
     flex: 1,
     height: 14,
     borderWidth: 1.2,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableD38BottomTail)
     borderRightWidth: 0,
     borderTopLeftRadius: 3,
     borderBottomLeftRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableD38BottomTail)
     marginBottom: 6,
   },
   cableD38TextHalf: {
@@ -4675,16 +4681,16 @@ const styles = StyleSheet.create({
   cableD38SmallText: {
     fontSize: 7.5,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cableD38SmallText)
     lineHeight: 9.5,
   },
   cableGp60Container: {
     width: '100%',
     height: 165,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableGp60Container)
     borderRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableGp60Container)
     flexDirection: 'row',
     paddingVertical: 8,
   },
@@ -4698,19 +4704,19 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1.2,
-    borderColor: '#1E293B',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableGp60Hole)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableGp60Hole)
     marginBottom: 4,
   },
   cableGp60Code: {
     fontSize: 10.5,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cableGp60Code)
   },
   cableGp60Title: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cableGp60Title)
     marginTop: 2,
     marginBottom: 4,
   },
@@ -4720,20 +4726,20 @@ const styles = StyleSheet.create({
   cableGp60Sub: {
     fontSize: 7.5,
     fontWeight: '500',
-    color: '#1E293B',
+    color: '#1E293B', // theme-fixed: light preview (cableGp60Sub)
     lineHeight: 9.5,
   },
   cableGp60Emp: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cableGp60Emp)
     marginTop: 6,
   },
   cableGp60Divider: {
     width: 1,
     height: '100%',
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableGp60Divider)
     borderStyle: 'dashed',
   },
   cableHb38Container: {
@@ -4746,7 +4752,7 @@ const styles = StyleSheet.create({
   cableHb38Tail: {
     width: 95,
     height: 18,
-    backgroundColor: '#DE2626',
+    backgroundColor: '#DE2626', // theme-fixed: light preview (cableHb38Tail)
     borderTopLeftRadius: 4,
     borderBottomLeftRadius: 4,
     marginBottom: 6,
@@ -4754,7 +4760,7 @@ const styles = StyleSheet.create({
   cableHb38Head: {
     width: 100,
     height: 66,
-    backgroundColor: '#DE2626',
+    backgroundColor: '#DE2626', // theme-fixed: light preview (cableHb38Head)
     borderTopRightRadius: 4,
     borderBottomRightRadius: 4,
     overflow: 'hidden',
@@ -4765,7 +4771,7 @@ const styles = StyleSheet.create({
   cableHb38WhiteDash: {
     height: 1,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: '#FFFFFF', // theme-fixed: light preview (cableHb38WhiteDash)
     borderStyle: 'dashed',
   },
   cableLf45Container: {
@@ -4782,19 +4788,19 @@ const styles = StyleSheet.create({
     width: 100,
     height: 32,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableLf45Box)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableLf45Box)
   },
   cableLf45Tail: {
     flex: 1,
     height: 18,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableLf45Tail)
     borderLeftWidth: 0,
     borderTopRightRadius: 3,
     borderBottomRightRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableLf45Tail)
     marginBottom: 6,
   },
   cableLf64Container: {
@@ -4807,9 +4813,9 @@ const styles = StyleSheet.create({
     width: 130,
     height: 70,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableLf64Head)
     borderRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableLf64Head)
     overflow: 'hidden',
   },
   cableLf64Half: {
@@ -4819,11 +4825,11 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 16,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableLf64Tail)
     borderLeftWidth: 0,
     borderTopRightRadius: 3,
     borderBottomRightRadius: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableLf64Tail)
     marginTop: 10,
   },
   cableTStyleContainer: {
@@ -4834,27 +4840,27 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 52,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTStyleTopBox)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableTStyleTopBox)
     marginBottom: 2,
   },
   cableTStyleMiddleBox: {
     width: '100%',
     height: 52,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTStyleMiddleBox)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableTStyleMiddleBox)
   },
   cableTStyleTail: {
     width: 34,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTStyleTail)
     borderTopWidth: 0,
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableTStyleTail)
   },
   cablePStyleBarcodeContainer: {
     width: '100%',
@@ -4866,9 +4872,9 @@ const styles = StyleSheet.create({
     width: 95,
     height: 86,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cablePStyleBarcodeHead)
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cablePStyleBarcodeHead)
     overflow: 'hidden',
   },
   cablePStyleBarcodeTop: {
@@ -4880,7 +4886,7 @@ const styles = StyleSheet.create({
   cableBarcodeNumber: {
     fontSize: 7.5,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cableBarcodeNumber)
     marginTop: 1,
   },
   cablePStyleBarcodeBottom: {
@@ -4893,13 +4899,13 @@ const styles = StyleSheet.create({
   cableUsbText: {
     fontSize: 6.5,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cableUsbText)
     lineHeight: 7.5,
   },
   cableLogoText: {
     fontSize: 9.5,
     fontWeight: '900',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cableLogoText)
   },
   cableTrashWrap: {
     alignItems: 'center',
@@ -4907,18 +4913,18 @@ const styles = StyleSheet.create({
   cableTrashUnderline: {
     width: 10,
     height: 1.5,
-    backgroundColor: '#111827',
+    backgroundColor: '#111827', // theme-fixed: light preview (cableTrashUnderline)
     marginTop: 1,
   },
   cablePStyleBarcodeTail: {
     flex: 1,
     height: 18,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cablePStyleBarcodeTail)
     borderLeftWidth: 0,
     borderTopRightRadius: 6,
     borderBottomRightRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cablePStyleBarcodeTail)
     marginBottom: 6,
   },
   cablePanel23Container: {
@@ -4931,9 +4937,9 @@ const styles = StyleSheet.create({
     width: 120,
     height: 86,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cablePanel23Head)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cablePanel23Head)
     overflow: 'hidden',
   },
   cablePanel23Top: {
@@ -4944,22 +4950,22 @@ const styles = StyleSheet.create({
   cablePanel23Text: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cablePanel23Text)
     lineHeight: 13,
   },
   cablePanel23Bottom: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cablePanel23Bottom)
   },
   cablePanel23Tail: {
     flex: 1,
     height: 18,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cablePanel23Tail)
     borderLeftWidth: 0,
     borderTopRightRadius: 6,
     borderBottomRightRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cablePanel23Tail)
     marginTop: 10,
   },
   cableTStyleBarcodeContainer: {
@@ -4970,23 +4976,23 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 48,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTStyleTextHead)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableTStyleTextHead)
     justifyContent: 'center',
     alignItems: 'center',
   },
   cableTStyleBigText: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cableTStyleBigText)
     lineHeight: 14,
   },
   cableTStyleDashedDivider: {
     width: '90%',
     height: 1,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTStyleDashedDivider)
     borderStyle: 'dashed',
     marginVertical: 2,
   },
@@ -4994,9 +5000,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 52,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTStyleBarcodeMiddle)
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableTStyleBarcodeMiddle)
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 2,
@@ -5004,7 +5010,7 @@ const styles = StyleSheet.create({
   cableTStyleBarcodeNumber: {
     fontSize: 9,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (cableTStyleBarcodeNumber)
     letterSpacing: 1.2,
     marginTop: 2,
   },
@@ -5012,11 +5018,11 @@ const styles = StyleSheet.create({
     width: 32,
     height: 75,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (cableTStyleBarcodeTail)
     borderTopWidth: 0,
     borderBottomLeftRadius: 6,
     borderBottomRightRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (cableTStyleBarcodeTail)
   },
 
   // --- OTHER SPECIFIC STYLES ---
@@ -5024,9 +5030,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 120,
     borderWidth: 1.2,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2E8F0', // theme-fixed: light preview (other5RowsContainer)
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (other5RowsContainer)
   },
   other5RowsItem: {
     flex: 1,
@@ -5036,16 +5042,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 1,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#CBD5E1', // theme-fixed: light preview (otherRowDashed)
     borderStyle: 'dashed',
   },
   other15x25Box: {
     width: 140,
     height: 250,
     borderWidth: 2,
-    borderColor: '#0F172A',
+    borderColor: '#0F172A', // theme-fixed: light preview (other15x25Box)
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (other15x25Box)
     position: 'relative',
   },
   cornerAccent: {
@@ -5053,7 +5059,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderWidth: 1,
-    borderColor: '#94A3B8',
+    borderColor: '#94A3B8', // theme-fixed: light preview (cornerAccent)
   },
   other50x14Container: {
     width: '100%',
@@ -5070,10 +5076,10 @@ const styles = StyleSheet.create({
   otherInnerRoundedCard: {
     width: '100%',
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (otherInnerRoundedCard)
     borderRadius: 8,
     padding: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (otherInnerRoundedCard)
   },
   otherFormRow: {
     flexDirection: 'row',
@@ -5083,16 +5089,16 @@ const styles = StyleSheet.create({
   otherFormLabel: {
     fontSize: 12.5,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherFormLabel)
   },
   otherFormSubText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#1E293B', // theme-fixed: light preview (otherFormSubText)
   },
   otherSolidDivider: {
     height: 1.5,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1E293B', // theme-fixed: light preview (otherSolidDivider)
     marginVertical: 6,
   },
   otherUnderlineField: {
@@ -5103,17 +5109,17 @@ const styles = StyleSheet.create({
   otherFieldZh: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherFieldZh)
   },
   otherFieldEn: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#334155',
+    color: '#334155', // theme-fixed: light preview (otherFieldEn)
   },
   otherFullUnderline: {
     flex: 1,
     height: 1.2,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1E293B', // theme-fixed: light preview (otherFullUnderline)
     marginLeft: 6,
     marginBottom: 2,
   },
@@ -5125,12 +5131,12 @@ const styles = StyleSheet.create({
   otherFieldHeading: {
     fontSize: 11.5,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherFieldHeading)
   },
   otherFlexUnderline: {
     flex: 1,
     height: 1.2,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1E293B', // theme-fixed: light preview (otherFlexUnderline)
     marginLeft: 4,
     marginBottom: 2,
   },
@@ -5147,18 +5153,18 @@ const styles = StyleSheet.create({
   otherSubLabel: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#475569',
+    color: '#475569', // theme-fixed: light preview (otherSubLabel)
   },
   otherLargeUnit: {
     fontSize: 18,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherLargeUnit)
   },
   otherGridCard: {
     width: '100%',
     borderWidth: 1.5,
-    borderColor: '#1E293B',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1E293B', // theme-fixed: light preview (otherGridCard)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (otherGridCard)
   },
   otherGridRowThree: {
     flexDirection: 'row',
@@ -5170,17 +5176,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 9.5,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherGridCellText)
     textAlign: 'center',
   },
   otherGridVerticalLine: {
     width: 1.2,
     height: '100%',
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1E293B', // theme-fixed: light preview (otherGridVerticalLine)
   },
   otherGridHorizontalLine: {
     height: 1.2,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1E293B', // theme-fixed: light preview (otherGridHorizontalLine)
   },
   otherGridRowSingle: {
     paddingVertical: 8,
@@ -5194,19 +5200,19 @@ const styles = StyleSheet.create({
   otherLargeFieldText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherLargeFieldText)
   },
   otherCenterTitle: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherCenterTitle)
     textAlign: 'center',
     marginBottom: 6,
   },
   otherCenterSubDate: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherCenterSubDate)
     textAlign: 'center',
     marginBottom: 2,
   },
@@ -5218,38 +5224,38 @@ const styles = StyleSheet.create({
   otherQrRuleTitle: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherQrRuleTitle)
     marginTop: 6,
   },
   otherQrRuleText: {
     fontSize: 8.5,
     fontWeight: '600',
-    color: '#334155',
+    color: '#334155', // theme-fixed: light preview (otherQrRuleText)
     lineHeight: 11,
   },
   otherBorderBadge: {
     borderWidth: 1.2,
-    borderColor: '#1E293B',
+    borderColor: '#1E293B', // theme-fixed: light preview (otherBorderBadge)
     paddingHorizontal: 4,
     paddingVertical: 1,
   },
   otherTinyText: {
     fontSize: 8,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherTinyText)
   },
   otherDisclaimerText: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherDisclaimerText)
     textAlign: 'center',
     marginTop: 8,
   },
   otherTableCard: {
     width: '100%',
     borderWidth: 1.5,
-    borderColor: '#1E293B',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1E293B', // theme-fixed: light preview (otherTableCard)
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (otherTableCard)
   },
   otherTableRow: {
     flexDirection: 'row',
@@ -5259,10 +5265,10 @@ const styles = StyleSheet.create({
     width: 65,
     fontSize: 10.5,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherTableHeadingCol)
     textAlign: 'center',
     borderRightWidth: 1.2,
-    borderRightColor: '#1E293B',
+    borderRightColor: '#1E293B', // theme-fixed: light preview (otherTableHeadingCol)
     lineHeight: 28,
   },
   otherTableValueCol: {
@@ -5271,7 +5277,7 @@ const styles = StyleSheet.create({
   otherDisclaimerSmall: {
     fontSize: 8,
     fontWeight: '600',
-    color: '#334155',
+    color: '#334155', // theme-fixed: light preview (otherDisclaimerSmall)
     marginTop: 6,
     lineHeight: 10,
   },
@@ -5288,19 +5294,19 @@ const styles = StyleSheet.create({
   otherBarcodeText: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherBarcodeText)
     letterSpacing: 1,
   },
   otherPriceText: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#000000',
+    color: '#000000', // theme-fixed: light preview (otherPriceText)
     marginTop: 2,
   },
 
   // Card Footer
   cardFooter: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -5319,13 +5325,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyText: {
-    color: '#8A97A4',
+    color: c.textMuted,
     fontSize: 14,
   },
   cloudContent: {
     flex: 1,
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     alignItems: 'center',
     paddingHorizontal: 28,
     paddingTop: 48,
@@ -5335,13 +5341,13 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
   cloudLoginText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -5351,14 +5357,14 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     borderWidth: 1.5,
-    borderColor: Palette.accent,
-    backgroundColor: '#FFFFFF',
+    borderColor: c.accent,
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
   },
   cloudPublicText: {
-    color: Palette.accent,
+    color: c.accent,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -5367,7 +5373,7 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     fontSize: 14,
     lineHeight: 22,
-    color: '#8A97A4',
+    color: c.textMuted,
     textAlign: 'left',
   },
   localNewGroupBtn: {
@@ -5379,7 +5385,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 10,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
@@ -5387,7 +5393,7 @@ const styles = StyleSheet.create({
   localNewGroupText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#556473',
+    color: c.textSecondary,
     textAlign: 'center',
   },
   localEmptyWrap: {
@@ -5398,7 +5404,7 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   localEmptyText: {
-    color: '#8E97A1',
+    color: c.textMuted,
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',
@@ -5414,7 +5420,7 @@ const styles = StyleSheet.create({
     bottom: 18,
     width: 110,
     height: 62,
-    backgroundColor: '#B8DDF5',
+    backgroundColor: '#B8DDF5', // theme-fixed: light preview (localEmptyBoxBack)
     borderRadius: 4,
   },
   localEmptyBoxFront: {
@@ -5422,9 +5428,9 @@ const styles = StyleSheet.create({
     bottom: 18,
     width: 110,
     height: 62,
-    backgroundColor: '#9ECAE8',
+    backgroundColor: '#9ECAE8', // theme-fixed: light preview (localEmptyBoxFront)
     borderTopWidth: 2,
-    borderTopColor: '#7FB8DC',
+    borderTopColor: '#7FB8DC', // theme-fixed: light preview (localEmptyBoxFront)
     borderRadius: 4,
   },
   localEmptyFlapLeft: {
@@ -5433,7 +5439,7 @@ const styles = StyleSheet.create({
     left: 28,
     width: 52,
     height: 28,
-    backgroundColor: '#C5E4F7',
+    backgroundColor: '#C5E4F7', // theme-fixed: light preview (localEmptyFlapLeft)
     transform: [{ skewX: '-24deg' }],
     borderTopLeftRadius: 3,
   },
@@ -5443,7 +5449,7 @@ const styles = StyleSheet.create({
     right: 28,
     width: 52,
     height: 28,
-    backgroundColor: '#C5E4F7',
+    backgroundColor: '#C5E4F7', // theme-fixed: light preview (localEmptyFlapRight)
     transform: [{ skewX: '24deg' }],
     borderTopRightRadius: 3,
   },
@@ -5462,7 +5468,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#8EC5E8',
+    backgroundColor: '#8EC5E8', // theme-fixed: light preview (localEmptyPlaneBody)
   },
   localEmptyPlaneWing: {
     position: 'absolute',
@@ -5475,7 +5481,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 14,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#8EC5E8',
+    borderBottomColor: '#8EC5E8', // theme-fixed: light preview (localEmptyPlaneWing)
   },
   localEmptyTrail: {
     position: 'absolute',
@@ -5489,16 +5495,16 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#8EC5E8',
+    backgroundColor: '#8EC5E8', // theme-fixed: light preview (localEmptyTrailDot)
   },
   localPreviewWrap: {
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#F7F9FC',
+    backgroundColor: '#F7F9FC', // theme-fixed: light preview (localPreviewWrap)
   },
   localCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 14,
@@ -5518,7 +5524,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     padding: 14,
     marginBottom: 18,
@@ -5528,12 +5534,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cloudAvatarText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 18,
     fontWeight: '500',
   },
@@ -5543,34 +5549,34 @@ const styles = StyleSheet.create({
   cloudProfileName: {
     fontSize: 15.5,
     fontWeight: '600',
-    color: '#1E293B',
+    color: c.text,
   },
   cloudProfileEmail: {
     fontSize: 12.5,
-    color: '#94A3B8',
+    color: c.textMuted,
     marginTop: 1,
   },
   cloudSignOutBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: c.dangerSoft,
   },
   cloudSignOutText: {
-    color: '#DC2626',
+    color: c.danger,
     fontSize: 13,
     fontWeight: '600',
   },
   cloudSectionTitle: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#8A97A4',
+    color: c.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 10,
   },
   cloudEmptyCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     padding: 24,
     alignItems: 'center',
@@ -5578,14 +5584,14 @@ const styles = StyleSheet.create({
     ...cardShadow,
   },
   cloudEmptyText: {
-    color: '#94A3B8',
+    color: c.textMuted,
     fontSize: 13.5,
     lineHeight: 19,
     textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: c.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
@@ -5593,26 +5599,26 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     padding: 22,
   },
   modalHeading: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#1E293B',
+    color: c.text,
     marginBottom: 16,
     textAlign: 'center',
   },
   modalInput: {
     height: 48,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     fontSize: 15,
-    color: '#1E293B',
-    backgroundColor: '#F8FAFC',
+    color: c.text,
+    backgroundColor: c.fill,
     marginBottom: 16,
   },
   modalActionRow: {
@@ -5627,19 +5633,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalCancelBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
   },
   modalSaveBtn: {
-    backgroundColor: '#17A6B8',
+    backgroundColor: c.accentFill,
   },
   modalCancelText: {
-    color: '#64748B',
+    color: c.textSecondary,
     fontSize: 15,
     fontWeight: '500',
   },
   modalSaveText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 15,
     fontWeight: '600',
   },
-});
+}));

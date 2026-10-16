@@ -1,7 +1,7 @@
 import { ScrollView, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
-import { Palette } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export type PdfToolId = 'crop' | 'rotate' | 'sharpness' | 'watermark' | 'color';
 
@@ -24,6 +24,7 @@ export function PdfToolPanel({
   children: React.ReactNode;
   disabled?: boolean;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.wrap}>
       <View style={styles.grid}>
@@ -35,7 +36,7 @@ export function PdfToolPanel({
               disabled={disabled}
               onPress={() => onChange(t.id)}
               style={[styles.tool, isActive && styles.toolOn, disabled && styles.toolOff]}>
-              <AppIcon name={t.icon} size={20} tintColor={isActive ? Palette.accent : '#475569'} />
+              <AppIcon name={t.icon} size={20} tintColor={isActive ? C.accent : C.textSecondary} />
               <Text style={[styles.toolText, isActive && styles.toolTextOn]} numberOfLines={1}>
                 {t.label}
               </Text>
@@ -52,12 +53,12 @@ export function PdfToolPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: {
     flexShrink: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: c.hairline,
     paddingTop: 10,
     paddingBottom: 8,
     gap: 8,
@@ -74,8 +75,8 @@ const styles = StyleSheet.create({
     minHeight: 58,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: c.hairline,
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
@@ -83,14 +84,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   toolOn: {
-    borderColor: Palette.accent,
-    backgroundColor: '#EEF2FF',
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
   },
   toolOff: { opacity: 0.4 },
-  toolText: { fontSize: 13, fontWeight: '600', color: '#475569' },
-  toolTextOn: { color: Palette.accent },
+  toolText: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
+  toolTextOn: { color: c.accent },
   body: {
     maxHeight: 240,
     paddingHorizontal: 12,
   },
-});
+}));

@@ -4,8 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type HelpPane = 'tutorials' | 'guides';
 
@@ -84,6 +85,7 @@ const GUIDES = [
 ];
 
 export default function HelpScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const tabPad = useTabBarPadding(Spacing.four);
   const [pane, setPane] = useState<HelpPane>('tutorials');
@@ -142,7 +144,7 @@ export default function HelpScreen() {
                     </View>
                     <AppIcon
                       name={open ? 'arrowtriangle.up.fill' : 'arrowtriangle.down.fill'}
-                      tintColor={Palette.muted}
+                      tintColor={C.textMuted}
                       size={14}
                     />
                   </View>
@@ -151,7 +153,7 @@ export default function HelpScreen() {
                       {tutorial.steps.map((step, stepIndex) => (
                         <View key={step} style={styles.step}>
                           <View style={styles.stepDot}>
-                            <AppIcon name={tutorial.icon} tintColor={Palette.accent} size={14} />
+                            <AppIcon name={tutorial.icon} tintColor={C.accent} size={14} />
                           </View>
                           <Text style={styles.stepText}>
                             <Text style={styles.stepNo}>{stepIndex + 1}. </Text>
@@ -180,7 +182,7 @@ export default function HelpScreen() {
                     <Text style={styles.guideTitle}>{guide.title}</Text>
                     <AppIcon
                       name={open ? 'arrowtriangle.up.fill' : 'arrowtriangle.down.fill'}
-                      tintColor={Palette.muted}
+                      tintColor={C.textMuted}
                       size={14}
                     />
                   </View>
@@ -195,30 +197,30 @@ export default function HelpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     alignItems: 'center',
   },
   header: {
     width: '100%',
     maxWidth: MaxContentWidth,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.three,
     paddingBottom: 12,
     justifyContent: 'flex-end',
   },
   headerKicker: {
-    color: 'rgba(255,255,255,0.62)',
+    color: 'rgba(255,255,255,0.62)', // theme-fixed: white text on the dark banner
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 22,
     fontWeight: '700',
     letterSpacing: -0.4,
@@ -237,7 +239,7 @@ const styles = StyleSheet.create({
   },
   switcher: {
     flexDirection: 'row',
-    backgroundColor: '#E3E8EE',
+    backgroundColor: c.fillStrong,
     borderRadius: 14,
     padding: 4,
     gap: 4,
@@ -249,16 +251,16 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
   switchItemActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     ...cardShadow,
   },
   switchLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: Palette.muted,
+    color: c.textMuted,
   },
   switchLabelActive: {
-    color: Palette.ink,
+    color: c.text,
   },
   stack: {
     gap: 10,
@@ -266,11 +268,11 @@ const styles = StyleSheet.create({
   lead: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#5C6B78',
+    color: c.textSecondary,
     marginBottom: 4,
   },
   lesson: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 18,
     padding: 14,
     gap: 12,
@@ -278,7 +280,7 @@ const styles = StyleSheet.create({
   },
   lessonOpen: {
     borderWidth: 1,
-    borderColor: '#B7E3E8',
+    borderColor: c.border,
   },
   lessonTop: {
     flexDirection: 'row',
@@ -289,12 +291,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     alignItems: 'center',
     justifyContent: 'center',
   },
   lessonIndexText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -307,23 +309,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-    color: '#0E7C8A',
+    color: c.accentInk,
   },
   lessonTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
   },
   lessonSummary: {
     fontSize: 13,
     lineHeight: 18,
-    color: Palette.muted,
+    color: c.textMuted,
   },
   steps: {
     gap: 10,
     paddingTop: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E3E8EE',
+    borderTopColor: c.hairline,
   },
   step: {
     flexDirection: 'row',
@@ -334,7 +336,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 9,
-    backgroundColor: '#E7F6F8',
+    backgroundColor: c.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -342,15 +344,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 20,
-    color: Palette.ink,
+    color: c.text,
     paddingTop: 3,
   },
   stepNo: {
     fontWeight: '700',
-    color: Palette.header,
+    color: c.brandInk,
   },
   guide: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     padding: 14,
     gap: 8,
@@ -366,11 +368,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
   },
   guideBody: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#4B5563',
+    color: c.textSecondary,
   },
-});
+}));

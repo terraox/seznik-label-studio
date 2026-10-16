@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { PdfScopeSelector } from '@/components/pdf-editor/pdf-scope-selector';
-import { Palette } from '@/constants/ui';
+
 import { parsePageRange, type PageScope, type PdfColorMode } from '@/lib/pdf-editor/session';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const MODES: { id: PdfColorMode; label: string; help: string }[] = [
   { id: 'Original', label: 'Original', help: 'Keep the PDF colors.' },
@@ -20,6 +21,7 @@ export function PdfColorTool({
   pageCount: number;
   onChange: (mode: PdfColorMode, scope: PageScope) => void;
 }) {
+  useThemeRefresh();
   const [scope, setScope] = useState<PageScope>({ mode: pageCount < 2 ? 'this' : 'all' });
   const help = MODES.find((mode) => mode.id === value)?.help;
   const rangeError =
@@ -58,7 +60,7 @@ export function PdfColorTool({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: { gap: 8 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   btn: {
@@ -66,10 +68,10 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Palette.hairline,
+    borderColor: c.hairline,
   },
-  btnOn: { borderColor: Palette.accent, backgroundColor: '#E7F7F9' },
-  btnText: { fontSize: 13, color: Palette.actionText },
-  btnTextOn: { color: Palette.accent, fontWeight: '700' },
-  help: { fontSize: 12, color: Palette.muted },
-});
+  btnOn: { borderColor: c.accent, backgroundColor: c.accentSoft },
+  btnText: { fontSize: 13, color: c.textSecondary },
+  btnTextOn: { color: c.accent, fontWeight: '700' },
+  help: { fontSize: 12, color: c.textMuted },
+}));

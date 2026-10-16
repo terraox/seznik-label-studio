@@ -1,14 +1,16 @@
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { HOME_TOOLS } from '@/components/home/home-tools';
-import { androidRipple, cardShadow, HomeLayout, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow, HomeLayout } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 /**
  * WePrint-style New Label glyph: outline back sheet (navy) + filled front sheet
  * (teal) with a white plus. Sits directly on the white hero card — no colored tile.
  */
 function NewLabelHeroArt({ size = 52 }: { size?: number }) {
+  useThemeRefresh();
   const scale = size / 52;
   const sheet = 36 * scale;
   const radius = 6 * scale;
@@ -28,7 +30,7 @@ function NewLabelHeroArt({ size = 52 }: { size?: number }) {
           height: sheet,
           borderRadius: radius,
           borderWidth: stroke,
-          borderColor: Palette.header,
+          borderColor: C.brandInk,
         }}
       />
       {/* Front sheet — teal fill, offset bottom-left */}
@@ -40,7 +42,7 @@ function NewLabelHeroArt({ size = 52 }: { size?: number }) {
           width: sheet,
           height: sheet,
           borderRadius: radius,
-          backgroundColor: Palette.accent,
+          backgroundColor: C.accentFill,
           alignItems: 'center',
           justifyContent: 'center',
         }}>
@@ -51,7 +53,7 @@ function NewLabelHeroArt({ size = 52 }: { size?: number }) {
               width: plus,
               height: plusStroke,
               borderRadius: plusStroke / 2,
-              backgroundColor: '#FFFFFF',
+              backgroundColor: '#FFFFFF', // theme-fixed: white plus on the hero
             }}
           />
           <View
@@ -60,7 +62,7 @@ function NewLabelHeroArt({ size = 52 }: { size?: number }) {
               width: plusStroke,
               height: plus,
               borderRadius: plusStroke / 2,
-              backgroundColor: '#FFFFFF',
+              backgroundColor: '#FFFFFF', // theme-fixed: white plus on the hero
             }}
           />
         </View>
@@ -75,6 +77,7 @@ export function HeroCard({
   /** Slightly shorter description when the user already has labels. */
   compact?: boolean;
 }) {
+  useThemeRefresh();
   const router = useRouter();
   const tool = HOME_TOOLS.newLabel;
 
@@ -106,7 +109,7 @@ export function HeroCard({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -115,7 +118,7 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 18,
     borderRadius: 12,
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     ...cardShadow,
   },
   art: {
@@ -132,12 +135,12 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   title: {
-    color: Palette.ink,
+    color: c.text,
     fontSize: 17,
     fontWeight: '600',
   },
   detail: {
-    color: Palette.muted,
+    color: c.textMuted,
     fontSize: 13,
     fontWeight: '400',
     lineHeight: 18,
@@ -145,4 +148,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
   },
-});
+}));

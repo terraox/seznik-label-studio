@@ -9,21 +9,24 @@ import {
   type ShapeElementState,
   type ShapePropertyTab,
 } from '@/components/editor/types';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-const ACCENT = '#48C3C7';
 const TABS: ShapePropertyTab[] = ['Regular', 'Position', 'Style'];
 
 const FIGURE_SHAPES: FigureShape[] = ['rectangle', 'roundedRectangle', 'oval', 'circle'];
 
 function Divider() {
+  useThemeRefresh();
   return <View style={styles.divider} />;
 }
 
 function SectionGap() {
+  useThemeRefresh();
   return <View style={styles.sectionGap} />;
 }
 
 function GraySection({ children }: { children: ReactNode }) {
+  useThemeRefresh();
   return <View style={styles.graySection}>{children}</View>;
 }
 
@@ -38,6 +41,7 @@ function SegmentRow<T extends string>({
   selected: T;
   onSelect: (value: T) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.block}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -71,6 +75,7 @@ function StepperRow({
   onMinus?: () => void;
   onPlus?: () => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.stepperRow}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -96,15 +101,16 @@ function ToggleRow({
   value: boolean;
   onValueChange: (next: boolean) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.toggleRow}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: '#D1D5DB', true: ACCENT }}
-        thumbColor="#FFFFFF"
-        ios_backgroundColor="#D1D5DB"
+        trackColor={{ false: C.border, true: C.accent }}
+        thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+        ios_backgroundColor={C.border}
       />
     </View>
   );
@@ -117,12 +123,13 @@ function ColorRow({
   selectedIndex: number;
   onSelect: (index: number) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.colorRow}>
       <Text style={styles.rowLabel}>Drawing Color</Text>
       <View style={styles.colorGroup}>
         {DRAWING_COLORS.map((color, index) => {
-          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour
+          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour // theme-fixed: ink value, not UI
           const active = index === selectedIndex;
           return (
             <Pressable
@@ -144,7 +151,8 @@ function ColorRow({
 }
 
 function FigureShapePreview({ shape, active }: { shape: FigureShape; active?: boolean }) {
-  const borderColor = active ? '#FFFFFF' : '#556473';
+  useThemeRefresh();
+  const borderColor = active ? C.onAccent : C.textSecondary;
   const common = {
     borderWidth: 2,
     borderColor,
@@ -170,6 +178,7 @@ function FigureShapeRow({
   selected: FigureShape;
   onSelect: (shape: FigureShape) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.figureShapeBlock}>
       <Text style={styles.rowLabel}>Figure Shape</Text>
@@ -191,6 +200,7 @@ function FigureShapeRow({
 }
 
 function PanelNote({ children }: { children: string }) {
+  useThemeRefresh();
   return <Text style={styles.note}>{children}</Text>;
 }
 
@@ -201,6 +211,7 @@ function DimensionSteppers({
   state: ShapeElementState;
   patch: (updates: Partial<ShapeElementState>) => void;
 }) {
+  useThemeRefresh();
   return (
     <>
       <StepperRow
@@ -241,6 +252,7 @@ function StyleSection({
   state: ShapeElementState;
   patch: (updates: Partial<ShapeElementState>) => void;
 }) {
+  useThemeRefresh();
   const showRoundRadius = state.figureShape === 'roundedRectangle';
 
   return (
@@ -289,6 +301,7 @@ export function ShapePropertyPanel({
   labelHeightMm,
   elementHeightMm,
 }: ShapePropertyPanelProps) {
+  useThemeRefresh();
   const styleSection = <StyleSection state={state} patch={patch} />;
 
   return (
@@ -367,49 +380,49 @@ export function ShapePropertyPanel({
   );
 }
 
-const styles = StyleSheet.create({
-  panel: { flex: 1, backgroundColor: '#FFFFFF' },
-  tabScroll: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E4E8ED' },
+const styles = themedStyles((c) => ({
+  panel: { flex: 1, backgroundColor: c.surface },
+  tabScroll: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.hairline },
   tabContent: { paddingHorizontal: 8 },
   tabItem: { paddingHorizontal: 22, paddingTop: 10, alignItems: 'center' },
-  tabText: { fontSize: 14, color: '#7E8B98', fontWeight: '500' },
-  tabTextActive: { color: ACCENT, fontWeight: '600' },
+  tabText: { fontSize: 14, color: c.textMuted, fontWeight: '500' },
+  tabTextActive: { color: c.accent, fontWeight: '600' },
   tabIndicator: {
     marginTop: 8,
     width: '100%',
     minWidth: 36,
     height: 3,
     borderRadius: 2,
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
   },
   tabSpacer: { marginTop: 8, height: 3 },
-  body: { flex: 1, backgroundColor: '#FFFFFF' },
+  body: { flex: 1, backgroundColor: c.surface },
   bodyContent: { paddingBottom: 24 },
   block: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
   rowLabel: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#2C3E50',
+    color: c.textSecondary,
     lineHeight: 20,
     includeFontPadding: false,
     ...Platform.select({ android: { textAlignVertical: 'center' as const }, default: {} }),
   },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#E4E8ED', marginLeft: 16 },
-  sectionGap: { height: 8, backgroundColor: '#EEF1F5' },
-  graySection: { backgroundColor: '#EEF1F5' },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 16 },
+  sectionGap: { height: 8, backgroundColor: c.fillStrong },
+  graySection: { backgroundColor: c.fillStrong },
   segmentRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   segmentChip: {
     flex: 1,
     minHeight: 34,
     borderRadius: 8,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  segmentChipActive: { backgroundColor: ACCENT },
-  segmentText: { fontSize: 12, fontWeight: '600', color: '#556473', textAlign: 'center' },
-  segmentTextActive: { color: '#FFFFFF' },
+  segmentChipActive: { backgroundColor: c.accent },
+  segmentText: { fontSize: 12, fontWeight: '600', color: c.textSecondary, textAlign: 'center' },
+  segmentTextActive: { color: c.onAccent },
   stepperRow: {
     minHeight: 52,
     paddingHorizontal: 16,
@@ -424,14 +437,14 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperCircleActive: { borderColor: ACCENT, backgroundColor: ACCENT },
-  stepperSymbol: { fontSize: 18, lineHeight: 20, color: '#64748B', fontWeight: '500' },
-  stepperSymbolActive: { color: '#FFFFFF' },
-  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: ACCENT },
+  stepperCircleActive: { borderColor: c.accent, backgroundColor: c.accent },
+  stepperSymbol: { fontSize: 18, lineHeight: 20, color: c.textSecondary, fontWeight: '500' },
+  stepperSymbolActive: { color: c.onAccent },
+  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: c.accent },
   toggleRow: {
     minHeight: 52,
     paddingHorizontal: 16,
@@ -454,11 +467,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  figureShapeBtnActive: { backgroundColor: ACCENT },
+  figureShapeBtnActive: { backgroundColor: c.accent },
   shapeRect: { width: 24, height: 16, borderRadius: 1 },
   shapeRoundedRect: { width: 24, height: 16 },
   shapeOval: { width: 26, height: 16, borderRadius: 8 },
@@ -473,10 +486,10 @@ const styles = StyleSheet.create({
   },
   colorGroup: { flexDirection: 'row', gap: 8 },
   colorOuter: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  colorOuterActive: { borderWidth: 2, borderColor: ACCENT },
+  colorOuterActive: { borderWidth: 2, borderColor: c.accent },
   colorDot: { width: 20, height: 20, borderRadius: 10 },
-  colorDotWhite: { borderWidth: 1, borderColor: '#CBD5E1' },
-  note: { marginTop: 8, marginHorizontal: 16, fontSize: 13, lineHeight: 20, color: '#8A97A4' },
+  colorDotWhite: { borderWidth: 1, borderColor: c.border },
+  note: { marginTop: 8, marginHorizontal: 16, fontSize: 13, lineHeight: 20, color: c.textMuted },
   positionWrap: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 16, gap: 16 },
   padColumn: { alignItems: 'center', gap: 6 },
   padMiddleRow: { flexDirection: 'row', gap: 6 },
@@ -484,18 +497,18 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 6,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  padCenter: { backgroundColor: '#E8ECF1' },
+  padCenter: { backgroundColor: c.fillStrong },
   alignGrid: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   gridBtn: {
     width: '22%',
     minWidth: 44,
     height: 44,
     borderRadius: 6,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -504,9 +517,9 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 6,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pressed: { opacity: 0.65 },
-});
+}));

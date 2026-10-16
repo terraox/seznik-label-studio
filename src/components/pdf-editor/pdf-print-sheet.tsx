@@ -4,13 +4,14 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { QualityControl, type QualityStepperProps } from '@/components/quality-control';
-import { cardShadow, Palette, Type } from '@/constants/ui';
+import { cardShadow, Type } from '@/constants/ui';
 import { defaultLabelSettings } from '@/lib/label-settings';
 import type { PdfPrintOptions } from '@/lib/pdf-editor/print';
 import { parseCustomPageList, parsePageRange, type PdfPrintSelection } from '@/lib/pdf-editor/session';
 import { clampToCap, qualityCapsFor, resolveQualityBridge } from '@/lib/printer/bridge-quality-caps';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore } from '@/stores/printer-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type Mode = PdfPrintSelection['mode'];
 
@@ -36,6 +37,7 @@ function SettingRow({
   last?: boolean;
   valueColor?: string;
 }) {
+  useThemeRefresh();
   return (
     <View style={[styles.stepperRow, !last && styles.stepperRowBorder]}>
       <Text style={styles.stepperLabel}>{label}</Text>
@@ -70,6 +72,7 @@ function SettingRow({
 
 /** Same stepper, with a bottom border; QualityControl renders this one. */
 function BorderedSettingRow(props: QualityStepperProps) {
+  useThemeRefresh();
   return <SettingRow {...props} />;
 }
 
@@ -88,6 +91,7 @@ export const PdfPrintPanel = forwardRef<
     onPrint: (selection: PdfPrintSelection, options: PdfPrintOptions) => void;
   }
 >(function PdfPrintPanel({ pageCount, currentPage, printing, progress, outputLabel, onPrint }, ref) {
+  useThemeRefresh();
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
   const printerDeviceId = usePrinterStore((s) => s.deviceId ?? s.lastDeviceId);
@@ -208,7 +212,7 @@ export const PdfPrintPanel = forwardRef<
         <Pressable
           onPress={() => router.push('/printer-connect')}
           style={({ pressed }) => [styles.banner, pressed && styles.pressed]}>
-          <AppIcon name="link" size={16} tintColor="#B91C1C" />
+          <AppIcon name="link" size={16} tintColor={C.danger} />
           <View style={styles.bannerText}>
             <Text style={styles.bannerTitle}>Printer not connected</Text>
             <Text style={styles.bannerSub}>Tap to connect your printer before printing.</Text>
@@ -221,7 +225,7 @@ export const PdfPrintPanel = forwardRef<
         <SettingRow
           label="Number of Copies"
           value={String(copies)}
-          valueColor={Palette.accent}
+          valueColor={C.accent}
           minusDisabled={printing || copies <= 1}
           plusDisabled={printing || copies >= 99}
           onMinus={() => setCopies((n) => Math.max(1, n - 1))}
@@ -275,7 +279,7 @@ export const PdfPrintPanel = forwardRef<
               value={custom}
               onChangeText={setCustom}
               placeholder="1, 3, 5"
-              placeholderTextColor={Palette.muted}
+              placeholderTextColor={C.textMuted}
               style={styles.custom}
               editable={!printing}
               autoCapitalize="none"
@@ -287,7 +291,7 @@ export const PdfPrintPanel = forwardRef<
 
         <Pressable onPress={() => setShowAdvanced((v) => !v)} style={[styles.section, styles.advHead]}>
           <View style={styles.advLeft}>
-            <AppIcon name="gearshape" size={18} tintColor="#475569" />
+            <AppIcon name="gearshape" size={18} tintColor={C.textSecondary} />
             <Text style={styles.advTitle}>Advanced Settings</Text>
           </View>
           <View style={styles.advRight}>
@@ -295,7 +299,7 @@ export const PdfPrintPanel = forwardRef<
               Darkness {darkness == null ? 'Auto' : darkness}
             </Text>
             <View style={styles.advChevron}>
-              <AppIcon name={showAdvanced ? 'chevron.up' : 'chevron.down'} size={16} tintColor="#475569" />
+              <AppIcon name={showAdvanced ? 'chevron.up' : 'chevron.down'} size={16} tintColor={C.textSecondary} />
             </View>
           </View>
         </Pressable>
@@ -367,26 +371,26 @@ export const PdfPrintPanel = forwardRef<
   );
 });
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: { gap: 10 },
   pressed: { opacity: 0.65 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
+    backgroundColor: c.dangerSoft,
+    borderColor: c.dangerSoft,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   bannerText: { flex: 1, gap: 1 },
-  bannerTitle: { fontSize: 14, fontWeight: '700', color: '#991B1B' },
-  bannerSub: { fontSize: 12, color: '#B91C1C' },
-  bannerAction: { fontSize: 14, fontWeight: '700', color: Palette.danger },
+  bannerTitle: { fontSize: 14, fontWeight: '700', color: c.danger },
+  bannerSub: { fontSize: 12, color: c.danger },
+  bannerAction: { fontSize: 14, fontWeight: '700', color: c.danger },
   card: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 4,
@@ -395,65 +399,65 @@ const styles = StyleSheet.create({
   section: {
     paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ECEEF1',
+    borderTopColor: c.hairline,
     gap: 8,
   },
-  groupLabel: { ...Type.bodyMedium, color: Palette.ink },
-  groupHint: { fontWeight: '400', color: '#64748B', fontSize: 12 },
+  groupLabel: { ...Type.bodyMedium, color: c.text },
+  groupHint: { fontWeight: '400', color: c.textSecondary, fontSize: 12 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#D5DAE0',
-    backgroundColor: '#FFFFFF',
+    borderColor: c.border,
+    backgroundColor: c.surface,
   },
-  chipOn: { backgroundColor: Palette.accent, borderColor: Palette.accent },
-  chipText: { fontSize: 13, fontWeight: '600', color: Palette.actionText },
-  chipTextOn: { color: '#FFFFFF' },
-  sub: { fontSize: 12, color: '#64748B' },
+  chipOn: { backgroundColor: c.accentFill, borderColor: c.accent },
+  chipText: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
+  chipTextOn: { color: c.onAccent },
+  sub: { fontSize: 12, color: c.textSecondary },
   rangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: {
     width: 64,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 8,
     textAlign: 'center',
-    color: Palette.ink,
-    backgroundColor: '#FFFFFF',
+    color: c.text,
+    backgroundColor: c.surface,
   },
   custom: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: Palette.ink,
-    backgroundColor: '#FFFFFF',
+    color: c.text,
+    backgroundColor: c.surface,
   },
-  to: { color: Palette.muted },
-  hint: { color: Palette.muted, fontSize: 13 },
-  err: { color: Palette.danger, fontSize: 12 },
+  to: { color: c.textMuted },
+  hint: { color: c.textMuted, fontSize: 13 },
+  err: { color: c.danger, fontSize: 12 },
   advHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   advLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   advChevron: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  advTitle: { ...Type.body, fontWeight: '600', color: Palette.ink },
+  advTitle: { ...Type.body, fontWeight: '600', color: c.text },
   advRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
-  advSummary: { fontSize: 12, color: '#64748B', flexShrink: 1 },
+  advSummary: { fontSize: 12, color: c.textSecondary, flexShrink: 1 },
   advBody: {
     paddingBottom: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ECEEF1',
+    borderTopColor: c.hairline,
   },
   stepperRow: {
     flexDirection: 'row',
@@ -462,22 +466,22 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingVertical: 10,
   },
-  stepperRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ECEEF1' },
-  stepperLabel: { ...Type.body, color: Palette.ink, flex: 1, paddingRight: 8 },
+  stepperRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.hairline },
+  stepperLabel: { ...Type.body, color: c.text, flex: 1, paddingRight: 8 },
   stepperControls: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   stepperCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperCircleDisabled: { borderColor: Palette.disabled },
-  stepperSymbol: { fontSize: 18, fontWeight: '400', color: Palette.accent, lineHeight: 20 },
-  stepperSymbolDisabled: { color: Palette.disabled },
-  stepperValue: { ...Type.bodyMedium, color: Palette.ink, minWidth: 68, textAlign: 'center' },
-  note: { fontSize: 12, color: '#94A3B8', textAlign: 'center' },
-  progress: { textAlign: 'center', color: Palette.muted },
-});
+  stepperCircleDisabled: { borderColor: c.border },
+  stepperSymbol: { fontSize: 18, fontWeight: '400', color: c.accent, lineHeight: 20 },
+  stepperSymbolDisabled: { color: c.textDisabled },
+  stepperValue: { ...Type.bodyMedium, color: c.text, minWidth: 68, textAlign: 'center' },
+  note: { fontSize: 12, color: c.textMuted, textAlign: 'center' },
+  progress: { textAlign: 'center', color: c.textMuted },
+}));

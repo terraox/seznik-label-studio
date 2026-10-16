@@ -1,13 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import Svg, { Circle, Line } from 'react-native-svg';
-
-const TEAL = '#17A6B8';
-const GRAY = '#7E8B98';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 /**
  * Overlapping rectangles with a '+' inside for "New Label"
  */
-export function NewLabelIcon({ color = TEAL, size = 26 }: { color?: string; size?: number }) {
+export function NewLabelIcon({ color = C.accent, size = 26 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   const scale = size / 26;
   const boxW = 16 * scale;
   const boxH = 16 * scale;
@@ -40,7 +39,7 @@ export function NewLabelIcon({ color = TEAL, size = 26 }: { color?: string; size
           borderRadius: radius,
           borderWidth: stroke,
           borderColor: color,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: '#FFFFFF', // theme-fixed: icon illustration
           alignItems: 'center',
           justifyContent: 'center',
         }}>
@@ -73,7 +72,8 @@ export function NewLabelIcon({ color = TEAL, size = 26 }: { color?: string; size
 /**
  * 4-quadrant scan icon with vertical scanner rays in bottom-right for "Scan Label"
  */
-export function ScanLabelIcon({ color = TEAL, size = 26 }: { color?: string; size?: number }) {
+export function ScanLabelIcon({ color = C.accent, size = 26 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   const scale = size / 26;
   const quadSize = 11 * scale;
   const stroke = 2 * scale;
@@ -163,13 +163,14 @@ export function ScanLabelIcon({ color = TEAL, size = 26 }: { color?: string; siz
  */
 export function DocBadgeIcon({
   badge,
-  color = GRAY,
+  color = C.textMuted,
   size = 34,
 }: {
   badge: string;
   color?: string;
   size?: number;
 }) {
+  useThemeRefresh();
   const scale = size / 34;
   const docW = 26 * scale;
   const docH = 32 * scale;
@@ -210,7 +211,7 @@ export function DocBadgeIcon({
           borderLeftWidth: stroke,
           borderBottomWidth: stroke,
           borderColor: color,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: '#FFFFFF', // theme-fixed: icon illustration
           borderBottomLeftRadius: 3 * scale,
         }}
       />
@@ -244,7 +245,8 @@ export function DocBadgeIcon({
 /**
  * Landscape / Photo icon for "Print Photo"
  */
-export function PrintPhotoIcon({ color = TEAL, size = 32 }: { color?: string; size?: number }) {
+export function PrintPhotoIcon({ color = C.accent, size = 32 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   const scale = size / 32;
   const stroke = 2 * scale;
   const frameW = 28 * scale;
@@ -308,7 +310,8 @@ export function PrintPhotoIcon({ color = TEAL, size = 32 }: { color?: string; si
 /**
  * 4-corner brackets with "C" — Label Clone (scan a label QR / barcode).
  */
-export function LabelCloneIcon({ color = TEAL, size = 32 }: { color?: string; size?: number }) {
+export function LabelCloneIcon({ color = C.accent, size = 32 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   const scale = size / 32;
   const cornerSize = 8 * scale;
   const stroke = 2 * scale;
@@ -395,7 +398,8 @@ export function LabelCloneIcon({ color = TEAL, size = 32 }: { color?: string; si
 }
 
 /** Two side-by-side panels — 2ups Label home tile. */
-export function TwoUpsLabelIcon({ color = TEAL, size = 32 }: { color?: string; size?: number }) {
+export function TwoUpsLabelIcon({ color = C.accent, size = 32 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   const scale = size / 32;
   const panelW = 11 * scale;
   const panelH = 18 * scale;
@@ -439,7 +443,8 @@ export function TwoUpsLabelIcon({ color = TEAL, size = 32 }: { color?: string; s
 /**
  * 3-node graph icon for Share
  */
-export function ShareNodeIcon({ color = TEAL, size = 24 }: { color?: string; size?: number }) {
+export function ShareNodeIcon({ color = C.accent, size = 24 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Line
@@ -472,7 +477,8 @@ export function ShareNodeIcon({ color = TEAL, size = 24 }: { color?: string; siz
 /**
  * Film strip / photographic frame icon for "Use frame"
  */
-export function UseFrameIcon({ color = '#214668', size = 36 }: { color?: string; size?: number }) {
+export function UseFrameIcon({ color = '#214668', size = 36 }: { color?: string; size?: number }) { // theme-fixed: icon default colour
+  useThemeRefresh();
   const scale = size / 36;
   const w = 24 * scale;
   const h = 34 * scale;
@@ -536,7 +542,8 @@ export function UseFrameIcon({ color = '#214668', size = 36 }: { color?: string;
 /**
  * Overlapping card with plus icon for "Print directly"
  */
-export function PrintDirectlyIcon({ color = '#17A6B8', size = 36 }: { color?: string; size?: number }) {
+export function PrintDirectlyIcon({ color = '#17A6B8', size = 36 }: { color?: string; size?: number }) { // theme-fixed: icon default colour
+  useThemeRefresh();
   const scale = size / 36;
   const cardW = 20 * scale;
   const cardH = 26 * scale;
@@ -584,7 +591,7 @@ export function PrintDirectlyIcon({ color = '#17A6B8', size = 36 }: { color?: st
               position: 'absolute',
               width: 10 * scale,
               height: 2.5 * scale,
-              backgroundColor: '#FFFFFF',
+              backgroundColor: '#FFFFFF', // theme-fixed: icon illustration
               borderRadius: 1,
             }}
           />
@@ -593,7 +600,7 @@ export function PrintDirectlyIcon({ color = '#17A6B8', size = 36 }: { color?: st
               position: 'absolute',
               width: 2.5 * scale,
               height: 10 * scale,
-              backgroundColor: '#FFFFFF',
+              backgroundColor: '#FFFFFF', // theme-fixed: icon illustration
               borderRadius: 1,
             }}
           />
@@ -603,7 +610,8 @@ export function PrintDirectlyIcon({ color = '#17A6B8', size = 36 }: { color?: st
   );
 }
 
-export function ShippingLabelIcon({ color = TEAL, size = 30 }: { color?: string; size?: number }) {
+export function ShippingLabelIcon({ color = C.accent, size = 30 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   const scale = size / 30;
   const stroke = 2 * scale;
   return (
@@ -615,7 +623,7 @@ export function ShippingLabelIcon({ color = TEAL, size = 30 }: { color?: string;
           borderRadius: 3 * scale,
           borderWidth: stroke,
           borderColor: color,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: '#FFFFFF', // theme-fixed: icon illustration
         }}
       />
       <View
@@ -652,7 +660,8 @@ export function ShippingLabelIcon({ color = TEAL, size = 30 }: { color?: string;
   );
 }
 
-export function CustomizeIcon({ color = TEAL, size = 30 }: { color?: string; size?: number }) {
+export function CustomizeIcon({ color = C.accent, size = 30 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   const scale = size / 30;
   const stroke = 2 * scale;
   return (
@@ -674,7 +683,7 @@ export function CustomizeIcon({ color = TEAL, size = 30 }: { color?: string; siz
           borderRadius: 2 * scale,
           borderWidth: stroke,
           borderColor: color,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: '#FFFFFF', // theme-fixed: icon illustration
           bottom: 4 * scale,
           right: 4 * scale,
         }}
@@ -686,7 +695,8 @@ export function CustomizeIcon({ color = TEAL, size = 30 }: { color?: string; siz
 /**
  * Diamond shape with a tag strap below for "Jewellery Label"
  */
-export function JewelleryLabelIcon({ color = TEAL, size = 30 }: { color?: string; size?: number }) {
+export function JewelleryLabelIcon({ color = C.accent, size = 30 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   const scale = size / 30;
   const diamondSize = 14 * scale;
   const strapW = 3 * scale;
@@ -736,7 +746,8 @@ export function JewelleryLabelIcon({ color = TEAL, size = 30 }: { color?: string
 /**
  * Photo frame with a small arrow-to-label symbol for "Img to Label"
  */
-export function ImgToLabelIcon({ color = TEAL, size = 30 }: { color?: string; size?: number }) {
+export function ImgToLabelIcon({ color = C.accent, size = 30 }: { color?: string; size?: number }) {
+  useThemeRefresh();
   const scale = size / 30;
   const frameW = 20 * scale;
   const frameH = 16 * scale;
@@ -805,7 +816,7 @@ export function ImgToLabelIcon({ color = TEAL, size = 30 }: { color?: string; si
             borderRadius: 2 * scale,
             borderWidth: stroke,
             borderColor: color,
-            backgroundColor: '#FFFFFF',
+            backgroundColor: '#FFFFFF', // theme-fixed: icon illustration
             alignItems: 'center',
             justifyContent: 'center',
           }}>
@@ -837,8 +848,8 @@ export function ImgToLabelIcon({ color = TEAL, size = 30 }: { color?: string; si
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   iconBox: {
     position: 'relative',
   },
-});
+}));

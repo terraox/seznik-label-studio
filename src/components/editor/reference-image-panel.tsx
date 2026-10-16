@@ -1,9 +1,9 @@
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, Switch, Text, View } from 'react-native';
 
 import { normalizeRotation } from '@/components/editor/types';
 import type { LabelReferenceImage } from '@/lib/label-document';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-const ACCENT = '#48C3C7';
 const ROTATIONS = [0, 90, 180, 270] as const;
 
 type ReferenceImagePanelProps = {
@@ -12,6 +12,7 @@ type ReferenceImagePanelProps = {
 };
 
 export function ReferenceImagePanel({ image, onChange }: ReferenceImagePanelProps) {
+  useThemeRefresh();
   const rotation = normalizeRotation(image.rotation ?? 0);
   const cardinal = ROTATIONS.find((angle) => angle === rotation);
 
@@ -40,40 +41,40 @@ export function ReferenceImagePanel({ image, onChange }: ReferenceImagePanelProp
         <Switch
           value={image.needPrinting === true}
           onValueChange={(needPrinting) => onChange({ needPrinting })}
-          trackColor={{ false: '#D1D5DB', true: ACCENT }}
-          thumbColor="#FFFFFF"
-          ios_backgroundColor="#D1D5DB"
+          trackColor={{ false: C.border, true: C.accent }}
+          thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+          ios_backgroundColor={C.border}
         />
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   panel: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
     gap: 10,
   },
-  title: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  label: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  hint: { fontSize: 12, color: '#6B7280', lineHeight: 16 },
+  title: { fontSize: 15, fontWeight: '700', color: c.text },
+  label: { fontSize: 14, fontWeight: '600', color: c.text },
+  hint: { fontSize: 12, color: c.textSecondary, lineHeight: 16 },
   row: { flexDirection: 'row', gap: 8 },
   chip: {
     flex: 1,
     minHeight: 36,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: c.hairline,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
   },
-  chipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
-  chipText: { fontSize: 14, fontWeight: '600', color: '#475569' },
-  chipTextActive: { color: '#FFFFFF' },
+  chipActive: { backgroundColor: c.accent, borderColor: c.accent },
+  chipText: { fontSize: 14, fontWeight: '600', color: c.textSecondary },
+  chipTextActive: { color: c.onAccent },
   printRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
   printText: { flex: 1, gap: 2 },
-});
+}));

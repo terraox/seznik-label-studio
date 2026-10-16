@@ -1,6 +1,8 @@
 import React from 'react';
 import Svg, { Circle, Line, Path, Rect, Text } from 'react-native-svg';
 
+import { C, useThemeRefresh } from '@/theme';
+
 export interface ToolMenuIconProps {
   name: string;
   size?: number;
@@ -8,15 +10,16 @@ export interface ToolMenuIconProps {
   accentColor?: string;
 }
 
-const DEFAULT_COLOR = '#64748B';
-const DEFAULT_ACCENT = '#06B6D4';
 
 export function ToolMenuIcon({
   name,
   size = 32,
-  color = DEFAULT_COLOR,
-  accentColor = DEFAULT_ACCENT,
+  color: colorProp,
+  accentColor: accentColorProp,
 }: ToolMenuIconProps) {
+  useThemeRefresh();
+  const color = colorProp ?? C.textSecondary;
+  const accentColor = accentColorProp ?? C.accent;
   switch (name) {
     case 'Text':
       return (
@@ -233,7 +236,7 @@ export function ToolMenuIcon({
 export function TopToolbarIcon({
   name,
   size = 22,
-  color = DEFAULT_COLOR,
+  color: colorProp,
   active = false,
 }: {
   name: string;
@@ -241,7 +244,9 @@ export function TopToolbarIcon({
   color?: string;
   active?: boolean;
 }) {
-  const c = active ? DEFAULT_ACCENT : color;
+  useThemeRefresh();
+  const color = colorProp ?? C.textSecondary;
+  const c = active ? C.accent : color;
   switch (name) {
     case 'Label':
       return (
@@ -260,7 +265,7 @@ export function TopToolbarIcon({
       return (
         <Svg width={size} height={size} viewBox="0 0 24 24">
           <Rect x="3" y="3" width="18" height="18" rx="3.5" stroke={c} strokeWidth="1.8" fill="none" />
-          <Path d="M 7 12 L 10.5 15.5 L 17 8.5" stroke={active ? DEFAULT_ACCENT : c} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <Path d="M 7 12 L 10.5 15.5 L 17 8.5" stroke={active ? C.accent : c} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </Svg>
       );
 

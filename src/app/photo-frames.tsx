@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
@@ -15,9 +14,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PhotoFramePreview } from '@/components/photo-frame-preview';
 import { PHOTO_FRAMES } from '@/constants/photo-frames';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { Palette, cardShadow } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export default function PhotoFramesScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [query, setQuery] = useState('');
@@ -43,19 +44,19 @@ export default function PhotoFramesScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+          <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
         </Pressable>
 
         <View style={styles.searchPill}>
           <TextInput
             style={styles.searchInput}
             placeholder="Search Template"
-            placeholderTextColor="#8EA9C2"
+            placeholderTextColor={C.textMuted}
             value={query}
             onChangeText={setQuery}
             returnKeyType="search"
           />
-          <AppIcon name="magnifyingglass" tintColor="#214668" size={16} />
+          <AppIcon name="magnifyingglass" tintColor={C.brandInk} size={16} />
         </View>
       </View>
 
@@ -103,10 +104,10 @@ export default function PhotoFramesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#EFF2F7' },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bg },
   header: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -118,7 +119,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -128,17 +129,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '400',
-    color: Palette.ink,
+    color: c.text,
     paddingVertical: 0,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     overflow: 'hidden',
     ...cardShadow,
   },
   cardHeader: {
-    backgroundColor: '#20A4B8',
+    backgroundColor: c.accentFill,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -148,17 +149,17 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     flex: 1,
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 14,
     fontWeight: '500',
   },
   cardDims: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 14,
     fontWeight: '500',
   },
   previewWrap: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (previewWrap)
     paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -168,9 +169,9 @@ const styles = StyleSheet.create({
   empty: {
     marginTop: 40,
     textAlign: 'center',
-    color: Palette.muted,
+    color: c.textMuted,
     fontSize: 14,
     fontWeight: '400',
   },
   pressed: { opacity: 0.85 },
-});
+}));

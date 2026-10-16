@@ -1,32 +1,14 @@
-import { useMemo, useRef, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type TextInput as TextInputType,
-} from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Palette } from '@/constants/ui';
-import {
-  fromMm,
-  LABEL_SIZE_PRESETS,
-  matchingPresetId,
-  MAX_LABEL_MM,
-  MIN_LABEL_MM,
-  parseSizeInput,
-  toMm,
-  validateLabelSize,
-  type LabelUnit,
-} from '@/lib/label-geometry';
+import { LabelDimensionModal } from '@/components/label-dimension-modal';
+import { LABEL_SETUP_PRESETS } from '@/components/label-size-setup-section';
 
-const UNITS: LabelUnit[] = ['mm', 'cm', 'in'];
+import { fromMm, MAX_LABEL_MM, MIN_LABEL_MM, type LabelUnit } from '@/lib/label-geometry';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
-function formatField(mm: number, unit: LabelUnit): string {
+function formatDimension(mm: number, unit: LabelUnit): string {
   const v = fromMm(mm, unit);
-  if (unit === 'in') return String(Math.round(v * 100) / 100);
   if (unit === 'cm') return String(Math.round(v * 10) / 10);
   return String(Math.round(v * 100) / 100);
 }
@@ -37,175 +19,127 @@ type LabelSizeEditorProps = {
   onChange: (widthMm: number, heightMm: number) => void;
 };
 
+/**
+ * Common sizes in a fixed grid, then Width and Height rows that open the same dimension popup
+ * as New label (the unit is chosen inside that popup).
+ */
 export function LabelSizeEditor({ widthMm, heightMm, onChange }: LabelSizeEditorProps) {
+  useThemeRefresh();
   const [unit, setUnit] = useState<LabelUnit>('mm');
-  const [widthText, setWidthText] = useState(() => formatField(widthMm, 'mm'));
-  const [heightText, setHeightText] = useState(() => formatField(heightMm, 'mm'));
-  const presetId = matchingPresetId(widthMm, heightMm);
-  const scrollRef = useRef<ScrollView>(null);
-  const widthRef = useRef<TextInputType>(null);
-  const heightRef = useRef<TextInputType>(null);
-
-  const error = useMemo(() => {
-    const w = parseSizeInput(widthText);
-    const h = parseSizeInput(heightText);
-    if (w == null || h == null) return 'Enter a valid width and height.';
-    return validateLabelSize(toMm(w, unit), toMm(h, unit));
-  }, [widthText, heightText, unit]);
-
-  const applyMm = (nextW: number, nextH: number) => {
-    onChange(nextW, nextH);
-    setWidthText(formatField(nextW, unit));
-    setHeightText(formatField(nextH, unit));
-  };
-
-  const applyFromInputs = (nextWidthText: string, nextHeightText: string, nextUnit: LabelUnit) => {
-    const w = parseSizeInput(nextWidthText);
-    const h = parseSizeInput(nextHeightText);
-    if (w == null || h == null) return;
-    const width = toMm(w, nextUnit);
-    const height = toMm(h, nextUnit);
-    if (validateLabelSize(width, height)) return;
-    onChange(width, height);
-  };
-
-  const switchUnit = (next: LabelUnit) => {
-    setUnit(next);
-    setWidthText(formatField(widthMm, next));
-    setHeightText(formatField(heightMm, next));
-  };
-
-  const scrollInputsIntoView = () => {
-    // Keep width/height fields above the keyboard inside modal/sheet parents.
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    });
-  };
+  const [widthModalVisible, setWidthModalVisible] = useState(false);
+  const [heightModalVisible, setHeightModalVisible] = useState(false);
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={styles.scroll}
-      contentContainerStyle={styles.root}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-      bounces={false}>
-      <View style={styles.unitRow}>
-        {UNITS.map((item) => (
-          <Pressable
-            key={item}
-            onPress={() => switchUnit(item)}
-            style={[styles.unitChip, unit === item && styles.unitChipOn]}>
-            <Text style={[styles.unitChipText, unit === item && styles.unitChipTextOn]}>{item}</Text>
-          </Pressable>
-        ))}
+    <View style={styles.root}>
+      <View style={styles.presetGrid}>
+        {LABEL_SETUP_PRESETS.map((preset) => {
+          const on = Math.abs(widthMm - preset.width) < 0.1 && Math.abs(heightMm - preset.height) < 0.1;
+          return (
+            <Pressable
+              key={preset.label}
+              onPress={() => onChange(preset.width, preset.height)}
+              style={[styles.presetChip, on && styles.presetChipOn]}>
+              <Text style={[styles.presetText, on && styles.presetTextOn]} numberOfLines={1}>
+                {preset.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.presetRow}
-        keyboardShouldPersistTaps="handled">
-        {LABEL_SIZE_PRESETS.map((preset) => (
-          <Pressable
-            key={preset.id}
-            onPress={() => applyMm(preset.widthMm, preset.heightMm)}
-            style={[styles.presetChip, presetId === preset.id && styles.presetChipOn]}>
-            <Text style={[styles.presetText, presetId === preset.id && styles.presetTextOn]}>
-              {preset.label}
-            </Text>
-          </Pressable>
-        ))}
+      <View style={styles.groupCard}>
         <Pressable
-          onPress={() => {
-            setWidthText(formatField(widthMm, unit));
-            setHeightText(formatField(heightMm, unit));
-          }}
-          style={[styles.presetChip, presetId === 'custom' && styles.presetChipOn]}>
-          <Text style={[styles.presetText, presetId === 'custom' && styles.presetTextOn]}>Custom</Text>
+          onPress={() => setWidthModalVisible(true)}
+          style={({ pressed }) => [styles.groupRow, pressed && styles.pressed]}>
+          <Text style={styles.fieldLabel}>Width</Text>
+          <View style={styles.valueWrap}>
+            <Text style={styles.valueText}>
+              {formatDimension(widthMm, unit)} {unit}
+            </Text>
+            <Text style={styles.chevron}>›</Text>
+          </View>
         </Pressable>
-      </ScrollView>
-
-      <View style={styles.inputs}>
-        <View style={styles.inputCol}>
-          <Text style={styles.inputLabel}>Width ({unit})</Text>
-          <TextInput
-            ref={widthRef}
-            style={[styles.input, error ? styles.inputError : null]}
-            keyboardType="decimal-pad"
-            value={widthText}
-            onFocus={scrollInputsIntoView}
-            onChangeText={(text) => {
-              setWidthText(text);
-              applyFromInputs(text, heightText, unit);
-            }}
-          />
-        </View>
-        <Text style={styles.times}>×</Text>
-        <View style={styles.inputCol}>
-          <Text style={styles.inputLabel}>Height ({unit})</Text>
-          <TextInput
-            ref={heightRef}
-            style={[styles.input, error ? styles.inputError : null]}
-            keyboardType="decimal-pad"
-            value={heightText}
-            onFocus={scrollInputsIntoView}
-            onChangeText={(text) => {
-              setHeightText(text);
-              applyFromInputs(widthText, text, unit);
-            }}
-          />
-        </View>
+        <View style={styles.divider} />
+        <Pressable
+          onPress={() => setHeightModalVisible(true)}
+          style={({ pressed }) => [styles.groupRow, pressed && styles.pressed]}>
+          <Text style={styles.fieldLabel}>Height</Text>
+          <View style={styles.valueWrap}>
+            <Text style={styles.valueText}>
+              {formatDimension(heightMm, unit)} {unit}
+            </Text>
+            <Text style={styles.chevron}>›</Text>
+          </View>
+        </Pressable>
       </View>
-      {error ? (
-        <Text style={styles.error}>{error}</Text>
-      ) : (
-        <Text style={styles.bounds}>
-          Allowed range: {MIN_LABEL_MM}–{MAX_LABEL_MM} mm
-        </Text>
-      )}
-    </ScrollView>
+
+      <Text style={styles.bounds}>
+        Allowed range: {MIN_LABEL_MM}–{MAX_LABEL_MM} mm
+      </Text>
+
+      <LabelDimensionModal
+        visible={widthModalVisible}
+        title="Set width"
+        axis="width"
+        valueMm={widthMm}
+        otherMm={heightMm}
+        unit={unit}
+        onUnitChange={setUnit}
+        onClose={() => setWidthModalVisible(false)}
+        onConfirm={(mm) => onChange(mm, heightMm)}
+      />
+      <LabelDimensionModal
+        visible={heightModalVisible}
+        title="Set height"
+        axis="height"
+        valueMm={heightMm}
+        otherMm={widthMm}
+        unit={unit}
+        onUnitChange={setUnit}
+        onClose={() => setHeightModalVisible(false)}
+        onConfirm={(mm) => onChange(widthMm, mm)}
+      />
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: { flexGrow: 0 },
-  root: { gap: 12, paddingBottom: 8 },
-  unitRow: { flexDirection: 'row', gap: 8 },
-  unitChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#EEF2F6',
-  },
-  unitChipOn: { backgroundColor: Palette.accent },
-  unitChipText: { fontSize: 13, fontWeight: '500', color: Palette.ink },
-  unitChipTextOn: { color: '#FFFFFF' },
-  presetRow: { gap: 8, paddingVertical: 4 },
+const styles = themedStyles((c) => ({
+  root: { gap: 12 },
+  presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   presetChip: {
-    paddingHorizontal: 10,
+    width: '31.5%',
+    minHeight: 40,
+    paddingHorizontal: 6,
     paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-  },
-  presetChipOn: { backgroundColor: '#D7F1F5' },
-  presetText: { fontSize: 12, color: Palette.ink },
-  presetTextOn: { fontWeight: '600', color: Palette.accent },
-  inputs: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  inputCol: { flex: 1 },
-  inputLabel: { fontSize: 12, color: '#64748B', marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    backgroundColor: '#F8FAFC',
-    color: Palette.ink,
+    backgroundColor: c.fill,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  inputError: { borderColor: '#DC2626' },
-  times: { fontSize: 18, color: '#94A3B8', paddingBottom: 10 },
-  error: { fontSize: 12, color: '#DC2626' },
-  bounds: { fontSize: 12, color: '#94A3B8' },
-});
+  presetChipOn: { backgroundColor: c.accentSoft, borderColor: c.accent },
+  presetText: { fontSize: 12, fontWeight: '600', color: c.textSecondary, textAlign: 'center' },
+  presetTextOn: { color: c.accent },
+  groupCard: {
+    backgroundColor: c.surface,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: c.hairline,
+  },
+  groupRow: {
+    paddingHorizontal: 14,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 14 },
+  fieldLabel: { color: c.text, fontSize: 15, fontWeight: '500' },
+  valueWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  valueText: { color: c.textSecondary, fontSize: 14 },
+  chevron: { color: c.textMuted, fontSize: 22, fontWeight: '300' },
+  bounds: { fontSize: 12, color: c.textMuted },
+  pressed: { opacity: 0.7 },
+}));

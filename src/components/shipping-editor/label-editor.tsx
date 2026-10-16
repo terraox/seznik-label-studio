@@ -52,6 +52,7 @@ import {
 } from '@/lib/printer/print-job';
 import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-manager';
 import { usePrinterStore } from '@/stores/printer-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type LabelEditorProps = {
   initialTemplate?: ShippingTemplate;
@@ -64,6 +65,7 @@ export function LabelEditor({
   initialOrderData = DEFAULT_SHIPPING_ORDER_DATA,
   onSaveTemplate,
 }: LabelEditorProps) {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -349,7 +351,7 @@ export function LabelEditor({
             style={[styles.toolBtn, showSafeZone && styles.toolBtnActive]}>
             <AppIcon
               name="square.dashed"
-              tintColor={showSafeZone ? '#2563EB' : '#64748B'}
+              tintColor={showSafeZone ? C.link : C.textSecondary}
               size={16}
             />
             <Text style={[styles.toolBtnText, showSafeZone && styles.toolBtnTextActive]}>
@@ -363,7 +365,7 @@ export function LabelEditor({
             style={[styles.toolBtn, showGrid && styles.toolBtnActive]}>
             <AppIcon
               name="square.grid.3x3"
-              tintColor={showGrid ? '#2563EB' : '#64748B'}
+              tintColor={showGrid ? C.link : C.textSecondary}
               size={16}
             />
             <Text style={[styles.toolBtnText, showGrid && styles.toolBtnTextActive]}>Grid</Text>
@@ -386,7 +388,7 @@ export function LabelEditor({
 
           {/* Reset Template */}
           <Pressable onPress={handleResetToTemplate} style={styles.toolBtn}>
-            <AppIcon name="arrow.counterclockwise" tintColor="#DC2626" size={16} />
+            <AppIcon name="arrow.counterclockwise" tintColor={C.danger} size={16} />
           </Pressable>
         </View>
       </View>
@@ -420,7 +422,7 @@ export function LabelEditor({
           zIndex: -999,
           opacity: 1,
           pointerEvents: 'none',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: '#FFFFFF', // theme-fixed: print capture surface
           overflow: 'hidden',
         }}>
         <ViewShot
@@ -432,7 +434,7 @@ export function LabelEditor({
           style={{
             width: activePrintGeometry.widthDots,
             height: activePrintGeometry.heightDots,
-            backgroundColor: '#FFFFFF',
+            backgroundColor: '#FFFFFF', // theme-fixed: print capture surface
           }}>
           <ShippingLabelCanvas
             template={template}
@@ -454,7 +456,7 @@ export function LabelEditor({
               Field: {selectedField.label || selectedField.id}
             </Text>
             <Pressable onPress={() => setSelectedFieldId(null)} hitSlop={10}>
-              <AppIcon name="xmark" tintColor="#64748B" size={14} />
+              <AppIcon name="xmark" tintColor={C.textSecondary} size={14} />
             </Pressable>
           </View>
 
@@ -512,7 +514,7 @@ export function LabelEditor({
                 styles.btStatusDot,
                 {
                   backgroundColor:
-                    printerStatus === 'connected' || printerStatus === 'printing' ? '#10B981' : '#F59E0B',
+                    printerStatus === 'connected' || printerStatus === 'printing' ? C.success : C.warning,
                 },
               ]}
             />
@@ -528,7 +530,7 @@ export function LabelEditor({
             <Text style={styles.btStatusAction}>
               {printerStatus === 'connected' || printerStatus === 'printing' ? 'Change' : 'Connect'}
             </Text>
-            <AppIcon name="chevron.right" tintColor="#64748B" size={12} />
+            <AppIcon name="chevron.right" tintColor={C.textSecondary} size={12} />
           </View>
         </Pressable>
 
@@ -536,7 +538,7 @@ export function LabelEditor({
           <Pressable
             onPress={() => setDataModalVisible(true)}
             style={({ pressed }) => [styles.secBtn, pressed && styles.pressed]}>
-            <AppIcon name="person.crop.circle" tintColor="#0F172A" size={16} />
+            <AppIcon name="person.crop.circle" tintColor={C.text} size={16} />
             <Text style={styles.secBtnText}>Order Data</Text>
           </Pressable>
 
@@ -545,10 +547,10 @@ export function LabelEditor({
             disabled={exportingPdf}
             style={({ pressed }) => [styles.secBtn, pressed && styles.pressed]}>
             {exportingPdf ? (
-              <ActivityIndicator size="small" color="#0F172A" />
+              <ActivityIndicator size="small" color={C.text} />
             ) : (
               <>
-                <AppIcon name="arrow.down.doc" tintColor="#0F172A" size={16} />
+                <AppIcon name="arrow.down.doc" tintColor={C.text} size={16} />
                 <Text style={styles.secBtnText}>Export PDF</Text>
               </>
             )}
@@ -559,10 +561,10 @@ export function LabelEditor({
             disabled={printing}
             style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}>
             {printing ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color="#FFFFFF" /* theme-fixed: on blue button */ />
             ) : (
               <>
-                <AppIcon name="printer.fill" tintColor="#FFFFFF" size={16} />
+                <AppIcon name="printer.fill" tintColor="#FFFFFF" size={16} /* theme-fixed: on blue button */ />
                 <Text style={styles.primaryBtnText}>Print Label</Text>
               </>
             )}
@@ -582,7 +584,7 @@ export function LabelEditor({
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Edit Order Data</Text>
               <Pressable onPress={() => setDataModalVisible(false)} hitSlop={12}>
-                <AppIcon name="xmark" tintColor="#64748B" size={16} />
+                <AppIcon name="xmark" tintColor={C.textSecondary} size={16} />
               </Pressable>
             </View>
 
@@ -638,6 +640,7 @@ function DataFieldRow({
   onChange: (text: string) => void;
   multiline?: boolean;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.dataRow}>
       <Text style={styles.dataLabel}>{label}</Text>
@@ -651,18 +654,18 @@ function DataFieldRow({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
   },
   topBar: {
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: c.hairline,
   },
   toolRow: {
     flexDirection: 'row',
@@ -677,25 +680,25 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
   },
   toolBtnActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: c.accentSoft,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: c.border,
   },
   toolBtnText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#475569',
+    color: c.textSecondary,
   },
   toolBtnTextActive: {
-    color: '#2563EB',
+    color: c.link,
   },
   zoomGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     borderRadius: 6,
     paddingHorizontal: 4,
   },
@@ -706,12 +709,12 @@ const styles = StyleSheet.create({
   zoomText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#334155',
+    color: c.textSecondary,
   },
   zoomLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#475569',
+    color: c.textSecondary,
     minWidth: 32,
     textAlign: 'center',
   },
@@ -724,9 +727,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   inspector: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: c.hairline,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
@@ -739,7 +742,7 @@ const styles = StyleSheet.create({
   inspectorTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
   },
   inspectorRow: {
     flexDirection: 'row',
@@ -749,7 +752,7 @@ const styles = StyleSheet.create({
   },
   inspectorLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: c.textSecondary,
   },
   stepperGroup: {
     flexDirection: 'row',
@@ -759,31 +762,31 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 4,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperGlyph: {
     fontSize: 10,
-    color: '#334155',
+    color: c.textSecondary,
   },
   inputBox: {
     marginTop: 4,
   },
   inspectorInput: {
     height: 32,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 6,
     paddingHorizontal: 8,
     fontSize: 12,
     marginTop: 4,
   },
   bottomContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: c.hairline,
   },
   btStatusBar: {
     flexDirection: 'row',
@@ -791,9 +794,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: c.hairline,
   },
   btStatusLeft: {
     flexDirection: 'row',
@@ -809,7 +812,7 @@ const styles = StyleSheet.create({
   btStatusText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#334155',
+    color: c.textSecondary,
     flex: 1,
   },
   btStatusRight: {
@@ -820,7 +823,7 @@ const styles = StyleSheet.create({
   btStatusAction: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#2563EB',
+    color: c.link,
   },
   bottomBar: {
     flexDirection: 'row',
@@ -833,7 +836,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 8,
@@ -841,7 +844,7 @@ const styles = StyleSheet.create({
   secBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
   },
   primaryBtn: {
     flex: 1,
@@ -849,25 +852,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#2563EB', // theme-fixed: blue print button, white text
     paddingVertical: 10,
     borderRadius: 8,
   },
   primaryBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: c.scrim,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 18,
@@ -882,7 +885,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
   },
   dataRow: {
     marginBottom: 12,
@@ -890,20 +893,20 @@ const styles = StyleSheet.create({
   dataLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
+    color: c.textSecondary,
     marginBottom: 4,
   },
   dataInput: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
     fontSize: 13,
-    color: '#0F172A',
+    color: c.text,
   },
   pressed: {
     opacity: 0.75,
   },
-});
+}));

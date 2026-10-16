@@ -1,24 +1,26 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import { CONSUMER_PRINTERS } from '@/constants/printer-models';
-import { androidRipple, HomeLayout, HomeStatusColors } from '@/constants/ui';
+import { androidRipple, HomeLayout, HomeStatusColors } from '@/constants/ui'; // theme-fixed: status fills keep white text readable in both themes
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const CHIP_FILL: Record<PrinterConnectionStatus, string> = {
-  disconnected: HomeStatusColors.idle,
-  scanning: HomeStatusColors.idle,
-  connecting: HomeStatusColors.idle,
-  connected: HomeStatusColors.ok,
-  printing: HomeStatusColors.ok,
+  disconnected: HomeStatusColors.idle, // theme-fixed: status fills keep white text readable in both themes
+  scanning: HomeStatusColors.idle, // theme-fixed: status fills keep white text readable in both themes
+  connecting: HomeStatusColors.idle, // theme-fixed: status fills keep white text readable in both themes
+  connected: HomeStatusColors.ok, // theme-fixed: status fills keep white text readable in both themes
+  printing: HomeStatusColors.ok, // theme-fixed: status fills keep white text readable in both themes
 };
 
 export function StatusChip() {
+  useThemeRefresh();
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
@@ -79,9 +81,9 @@ export function StatusChip() {
           unknownText="—"
         />
       ) : live ? (
-        <AppIcon name="printer" tintColor="#FFFFFF" size={15} pointerEvents="none" />
+        <AppIcon name="printer" tintColor={C.onAccent} size={15} pointerEvents="none" />
       ) : (
-        <AppIcon name="link" tintColor="#FFFFFF" size={15} pointerEvents="none" />
+        <AppIcon name="link" tintColor="#FFFFFF" size={15} pointerEvents="none" /* theme-fixed: white icon on status fill */ />
       )}
       <Text
         numberOfLines={1}
@@ -94,7 +96,7 @@ export function StatusChip() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -109,11 +111,11 @@ const styles = StyleSheet.create({
   text: {
     flexShrink: 1,
     minWidth: 0,
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13.5,
     fontWeight: '600',
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));

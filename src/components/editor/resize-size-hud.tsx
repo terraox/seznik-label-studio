@@ -1,5 +1,5 @@
 import { memo, useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import {
   runOnJS,
   useAnimatedReaction,
@@ -8,7 +8,7 @@ import {
 } from 'react-native-reanimated';
 
 import type { LiveRulerBounds } from '@/components/canvas-rulers';
-import { Palette } from '@/constants/ui';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const HUD_THROTTLE_MS = 80;
 
@@ -25,6 +25,7 @@ export const ResizeSizeHud = memo(function ResizeSizeHud({
   visibleSv: SharedValue<number>;
   statusText?: string | null;
 }) {
+  useThemeRefresh();
   const [text, setText] = useState<string | null>(null);
   const lastAtSv = useSharedValue(0);
 
@@ -75,21 +76,21 @@ export const ResizeSizeHud = memo(function ResizeSizeHud({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   host: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   pill: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   text: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
-});
+}));

@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { ToolIcon } from '@/components/home/tool-icon';
 import { HOME_TOOLS, type HomeToolId } from '@/components/home/home-tools';
-import { androidRipple, cardShadow, HomeLayout, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow, HomeLayout } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export function ToolTile({
   id,
@@ -12,6 +13,7 @@ export function ToolTile({
   id: HomeToolId;
   minHeight?: number;
 }) {
+  useThemeRefresh();
   const router = useRouter();
   const tool = HOME_TOOLS[id];
 
@@ -23,7 +25,7 @@ export function ToolTile({
         accessibilityRole="button"
         accessibilityLabel={tool.label}
         style={({ pressed }) => [styles.inner, { minHeight }, pressed && styles.pressed]}>
-        <ToolIcon id={id} color={Palette.accent} />
+        <ToolIcon id={id} color={C.accent} />
         <Text
           numberOfLines={2}
           maxFontSizeMultiplier={HomeLayout.labelMaxFontScale}
@@ -35,13 +37,13 @@ export function ToolTile({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   outer: {
     flex: 1,
     minWidth: 0,
   },
   inner: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -53,10 +55,10 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '500',
-    color: Palette.ink,
+    color: c.text,
     textAlign: 'center',
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));

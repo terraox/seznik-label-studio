@@ -10,13 +10,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import {
+  SIGNATURE_INK,
+  denormalizeStrokes,
+  pointsToPath,
+  type SignatureStroke,
+} from '@/components/editor/signature-preview';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-export type SignaturePoint = { x: number; y: number };
-
-export type SignatureStroke = {
-  points: SignaturePoint[];
-  strokeWidth: number;
-};
+export type { SignaturePoint, SignatureStroke } from '@/components/editor/signature-preview';
+export { SignaturePreview } from '@/components/editor/signature-preview';
 
 type SignatureDrawingBoardProps = {
   onCancel: () => void;
@@ -26,15 +29,6 @@ type SignatureDrawingBoardProps = {
 
 const BRUSH_WIDTHS = [2.5, 3.5, 4.5, 5.5, 6.5, 7.5];
 const BRUSH_DOT_SIZES = [8, 10, 12, 14, 16, 18];
-const STROKE_COLOR = '#111827';
-const BLUE = '#3498DB';
-const RED = '#E5484D';
-
-function pointsToPath(points: SignaturePoint[]) {
-  if (points.length === 0) return '';
-  const [first, ...rest] = points;
-  return `M ${first.x} ${first.y}${rest.map((point) => ` L ${point.x} ${point.y}`).join('')}`;
-}
 
 function cloneStrokes(strokes: SignatureStroke[]) {
   return strokes.map((stroke) => ({
@@ -55,21 +49,12 @@ function normalizeStrokes(strokes: SignatureStroke[], width: number, height: num
   }));
 }
 
-function denormalizeStrokes(strokes: SignatureStroke[], width: number, height: number): SignatureStroke[] {
-  return strokes.map((stroke) => ({
-    strokeWidth: stroke.strokeWidth * width,
-    points: stroke.points.map((point) => ({
-      x: point.x * width,
-      y: point.y * height,
-    })),
-  }));
-}
-
 export function SignatureDrawingBoard({
   onCancel,
   onConfirm,
   initialStrokes = [],
 }: SignatureDrawingBoardProps) {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const modalWidth = Math.min(screenWidth - 24, screenWidth);
@@ -170,7 +155,7 @@ export function SignatureDrawingBoard({
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
               <AppIcon
                 name="arrow.uturn.backward"
-                tintColor={strokes.length === 0 ? '#B8C0C8' : BLUE}
+                tintColor={strokes.length === 0 ? C.textDisabled : C.link}
                 size={22}
               />
             </Pressable>
@@ -183,7 +168,7 @@ export function SignatureDrawingBoard({
               style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
               <AppIcon
                 name="arrow.uturn.forward"
-                tintColor={redoStack.length === 0 ? '#B8C0C8' : BLUE}
+                tintColor={redoStack.length === 0 ? C.textDisabled : C.link}
                 size={22}
               />
             </Pressable>
@@ -205,7 +190,7 @@ export function SignatureDrawingBoard({
                         width: size,
                         height: size,
                         borderRadius: size / 2,
-                        backgroundColor: active ? RED : BLUE,
+                        backgroundColor: active ? C.danger : C.link,
                       },
                     ]}
                   />
@@ -222,7 +207,7 @@ export function SignatureDrawingBoard({
                 <Path
                   key={`stroke-${index}`}
                   d={pointsToPath(stroke.points)}
-                  stroke={STROKE_COLOR}
+                  stroke={SIGNATURE_INK}
                   strokeWidth={stroke.strokeWidth}
                   fill="none"
                   strokeLinecap="round"
@@ -251,65 +236,7 @@ export function SignatureDrawingBoard({
   );
 }
 
-type SignaturePreviewProps = {
-  strokes: SignatureStroke[];
-  width: number;
-  height: number;
-  color?: string;
-};
-
-export function SignaturePreview({
-  strokes,
-  width,
-  height,
-  color = STROKE_COLOR,
-}: SignaturePreviewProps) {
-  const pixelStrokes = useMemo(
-    () => denormalizeStrokes(strokes, width, height),
-    [height, strokes, width],
-  );
-
-  if (pixelStrokes.length === 0) {
-    return (
-      <View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFillObject,
-          {
-            borderWidth: 1,
-            borderStyle: 'dashed',
-            borderColor: '#CBD5E1',
-            backgroundColor: 'rgba(248,250,252,0.6)',
-          },
-        ]}
-      />
-    );
-  }
-
-  return (
-    <Svg
-      width="100%"
-      height="100%"
-      viewBox={`0 0 ${width} ${height}`}
-      style={StyleSheet.absoluteFillObject}
-      pointerEvents="none"
-      preserveAspectRatio="none">
-      {pixelStrokes.map((stroke, index) => (
-        <Path
-          key={`preview-stroke-${index}`}
-          d={pointsToPath(stroke.points)}
-          stroke={color}
-          strokeWidth={stroke.strokeWidth}
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ))}
-    </Svg>
-  );
-}
-
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -318,7 +245,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
   },
   stack: {
     zIndex: 61,
@@ -326,7 +253,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     width: '100%',
     paddingTop: 14,
@@ -350,7 +277,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '500',
-    color: '#7E8B98',
+    color: c.textMuted,
   },
   brushRow: {
     flexDirection: 'row',
@@ -366,13 +293,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   brushDot: {
-    backgroundColor: BLUE,
+    backgroundColor: c.link,
   },
   canvas: {
     alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (canvas)
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E4E8ED',
+    borderColor: '#E4E8ED', // theme-fixed: light preview (canvas)
   },
   footerRow: {
     flexDirection: 'row',
@@ -382,21 +309,21 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 52,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelText: {
     fontSize: 16,
     fontWeight: '600',
-    color: BLUE,
+    color: c.link,
   },
   confirmText: {
     fontSize: 16,
     fontWeight: '600',
-    color: RED,
+    color: c.danger,
   },
   pressed: {
     opacity: 0.68,
   },
-});
+}));

@@ -1,9 +1,8 @@
 import { useMemo, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
-
-const ACCENT = '#48C3C7';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export function GrayThresholdSlider({
   value,
@@ -19,6 +18,7 @@ export function GrayThresholdSlider({
   max?: number;
   step?: number;
 }) {
+  useThemeRefresh();
   const widthRef = useRef(1);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -67,7 +67,7 @@ export function GrayThresholdSlider({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   sliderBlock: {
     height: 28,
     justifyContent: 'center',
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   sliderTrack: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
     position: 'relative',
   },
   sliderFill: {
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     borderRadius: 2,
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
   },
   sliderThumb: {
     position: 'absolute',
@@ -93,8 +93,8 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 2,
-    borderColor: ACCENT,
+    borderColor: c.accent,
   },
-});
+}));

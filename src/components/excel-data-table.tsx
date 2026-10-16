@@ -1,6 +1,5 @@
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-
-import { Palette } from '@/constants/ui';
+import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const COL_MIN_WIDTH = 112;
 
@@ -10,6 +9,7 @@ type ExcelDataTableProps = {
 };
 
 export function ExcelDataTable({ columns, rows }: ExcelDataTableProps) {
+  useThemeRefresh();
   const { width: windowWidth } = useWindowDimensions();
   const fitWidth = Math.max(windowWidth - 24, 280);
   const colWidth = Math.max(COL_MIN_WIDTH, Math.floor(fitWidth / Math.max(columns.length, 1)));
@@ -56,12 +56,12 @@ export function ExcelDataTable({ columns, rows }: ExcelDataTableProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   vertical: { flex: 1 },
   verticalContent: { flexGrow: 1 },
   row: { flexDirection: 'row' },
-  headerRow: { backgroundColor: '#FFFFFF' },
-  altRow: { backgroundColor: '#F3F5F8' },
+  headerRow: { backgroundColor: c.surface },
+  altRow: { backgroundColor: c.fill },
   cell: {
     minHeight: 52,
     paddingHorizontal: 10,
@@ -72,15 +72,15 @@ const styles = StyleSheet.create({
   headerText: {
     fontSize: 14,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
     textAlign: 'center',
   },
   cellText: {
     fontSize: 13,
-    color: Palette.ink,
+    color: c.text,
     lineHeight: 18,
     textAlign: 'center',
   },
   emptyRow: { paddingVertical: 28, paddingHorizontal: 16, alignItems: 'center' },
-  emptyText: { fontSize: 14, color: Palette.muted },
-});
+  emptyText: { fontSize: 14, color: c.textMuted },
+}));

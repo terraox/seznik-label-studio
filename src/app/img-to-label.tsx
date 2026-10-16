@@ -22,7 +22,7 @@ import { AppIcon } from '@/components/app-icon';
 import { ImageCropScreen } from '@/components/editor/image-crop-screen';
 import { LabelSizeSetupSection } from '@/components/label-size-setup-section';
 import { Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { FULL_CROP, type NormalizedCrop } from '@/lib/editor/image-crop-math';
@@ -37,10 +37,12 @@ import {
 } from '@/lib/label-geometry';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { useSettingsStore } from '@/stores/settings-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type Step = 'import' | 'size';
 
 export default function ImgToLabelScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const defaults = useSettingsStore((s) => s.defaults);
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
@@ -236,14 +238,14 @@ export default function ImgToLabelScreen() {
             <Pressable
               onPress={() => void pickImage()}
               style={({ pressed }) => [styles.importArea, pressed && styles.pressed]}>
-              <AppIcon name="photo.on.rectangle" tintColor={Palette.accent} size={36} />
+              <AppIcon name="photo.on.rectangle" tintColor={C.accent} size={36} />
               <Text style={styles.importText}>Select image</Text>
               <Text style={styles.importSub}>PNG, JPG, JPEG</Text>
             </Pressable>
             <Pressable
               onPress={() => void pickPdf()}
               style={({ pressed }) => [styles.importArea, styles.importAreaSecond, pressed && styles.pressed]}>
-              <AppIcon name="doc.text" tintColor={Palette.accent} size={32} />
+              <AppIcon name="doc.text" tintColor={C.accent} size={32} />
               <Text style={styles.importText}>Select PDF</Text>
               <Text style={styles.importSub}>One page becomes one label on the canvas</Text>
             </Pressable>
@@ -278,7 +280,7 @@ export default function ImgToLabelScreen() {
                   </View>
                 ) : null}
                 {pageLoading ? (
-                  <ActivityIndicator color={Palette.accent} style={styles.pageSpinner} />
+                  <ActivityIndicator color={C.accent} style={styles.pageSpinner} />
                 ) : null}
                 <View style={styles.changeRow}>
                   <Pressable
@@ -330,7 +332,7 @@ export default function ImgToLabelScreen() {
               pressed && !opening && styles.pressed,
             ]}>
             {opening ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color="#FFFFFF" size="small" /* theme-fixed: on accent button */ />
             ) : (
               <Text style={styles.newButtonText}>Open in Editor</Text>
             )}
@@ -364,21 +366,21 @@ export default function ImgToLabelScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Palette.screen },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bg },
   header: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingBottom: 12,
   },
   backBtn: { width: 36, alignItems: 'flex-start' },
-  backChevron: { color: '#FFFFFF', fontSize: 32, fontWeight: '300', lineHeight: 36 },
+  backChevron: { color: c.onAccent, fontSize: 32, fontWeight: '300', lineHeight: 36 },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 17,
     fontWeight: '500',
   },
@@ -386,44 +388,44 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, gap: 12 },
   importCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     gap: 12,
   },
-  importTitle: { fontSize: 16, fontWeight: '600', color: Palette.ink },
-  importHint: { fontSize: 13, color: '#64748B', lineHeight: 18 },
+  importTitle: { fontSize: 16, fontWeight: '600', color: c.text },
+  importHint: { fontSize: 13, color: c.textSecondary, lineHeight: 18 },
   importArea: {
     minHeight: 120,
     borderRadius: 12,
-    backgroundColor: '#F4F6F9',
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     borderWidth: 2,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     borderStyle: 'dashed',
   },
   importAreaSecond: { minHeight: 108 },
-  importText: { fontSize: 15, fontWeight: '500', color: Palette.ink },
-  importSub: { fontSize: 12, color: '#94A3B8' },
+  importText: { fontSize: 15, fontWeight: '500', color: c.text },
+  importSub: { fontSize: 12, color: c.textMuted },
   thumbCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     gap: 8,
   },
   thumb: {
     width: '100%',
     height: 140,
     borderRadius: 8,
-    backgroundColor: '#F4F6F9',
+    backgroundColor: c.fill,
   },
-  thumbMeta: { fontSize: 12, color: '#64748B', textAlign: 'center' },
+  thumbMeta: { fontSize: 12, color: c.textSecondary, textAlign: 'center' },
   pdfNavRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -434,31 +436,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: c.hairline,
+    backgroundColor: c.fill,
   },
-  pdfNavText: { fontSize: 13, fontWeight: '600', color: Palette.ink },
-  pdfNavLabel: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  pdfNavText: { fontSize: 13, fontWeight: '600', color: c.text },
+  pdfNavLabel: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
   pageSpinner: { marginTop: 4 },
   cropOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 20 },
   changeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
   changeBtn: { paddingVertical: 6, paddingHorizontal: 10 },
-  changeBtnText: { fontSize: 13, fontWeight: '600', color: Palette.accent },
+  changeBtnText: { fontSize: 13, fontWeight: '600', color: c.accent },
   bottomBar: {
     paddingHorizontal: 16,
     paddingTop: 10,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: c.hairline,
   },
   newButton: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 12,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   newButtonDisabled: { opacity: 0.5 },
-  newButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  newButtonText: { color: c.onAccent, fontSize: 16, fontWeight: '600' },
   pressed: { opacity: 0.72 },
-});
+}));

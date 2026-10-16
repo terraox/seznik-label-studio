@@ -1,7 +1,7 @@
 import * as Linking from 'expo-linking';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, AppState, Platform, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -20,7 +20,7 @@ import {
   type ConsumerPrinterId,
 } from '@/constants/printer-models';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { isBluetoothOffError } from '@/lib/printer/bluetooth-guard';
 import { bridgeDisplayLabel, defaultBridgeForConsumer } from '@/lib/printer/printer-bridge';
 import { getAmbiguousModelCandidates } from '@/lib/printer/printer-heuristics';
@@ -33,6 +33,7 @@ import {
 } from '@/lib/printer/printer-manager';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { normalizePrinterMac, usePrinterStore } from '@/stores/printer-store';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const ANDROID_BLUETOOTH_SETTINGS = 'android.settings.BLUETOOTH_SETTINGS';
 
@@ -115,6 +116,7 @@ function badgeFor(device: DiscoveredPrinter): DeviceBadge | null {
 }
 
 export default function PrinterConnectScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -596,11 +598,11 @@ export default function PrinterConnectScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Palette.screen, alignItems: 'center' },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bg, alignItems: 'center' },
   scroll: { flex: 1, width: '100%' },
   content: { alignItems: 'center', paddingHorizontal: Spacing.three, paddingTop: Spacing.three },
   inner: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.three },
-  warn: { color: '#B45309', fontSize: 13, lineHeight: 18 },
-  settingsLink: { color: Palette.accent, fontSize: 14, fontWeight: '700', textAlign: 'center' },
-});
+  warn: { color: c.warning, fontSize: 13, lineHeight: 18 },
+  settingsLink: { color: c.accent, fontSize: 14, fontWeight: '700', textAlign: 'center' },
+}));

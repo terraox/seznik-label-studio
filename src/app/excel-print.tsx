@@ -5,7 +5,6 @@ import {
   Alert,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -13,16 +12,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LabelSizeSetupSection } from '@/components/label-size-setup-section';
 import { Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
 import { clampLabelMm, validateLabelSize, type LabelUnit } from '@/lib/label-geometry';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore } from '@/stores/data-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 /**
  * Dashboard Print Excel: label size, then the file picker, then column mapping.
  */
 export default function ExcelPrintScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const addExcelFile = useDataStore((s) => s.addExcelFile);
   const { importExcel, excelImportModal, documentSourceSheet } = useExcelImportFlow();
@@ -115,7 +116,7 @@ export default function ExcelPrintScreen() {
             pressed && !picking && styles.pressed,
           ]}>
           {picking ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={C.onAccent} />
           ) : (
             <Text style={styles.continueText}>Continue</Text>
           )}
@@ -128,21 +129,21 @@ export default function ExcelPrintScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Palette.screen },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bg },
   header: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingBottom: 12,
   },
   backBtn: { width: 36, alignItems: 'flex-start' },
-  backChevron: { color: '#FFFFFF', fontSize: 32, fontWeight: '300', lineHeight: 36 },
+  backChevron: { color: c.onAccent, fontSize: 32, fontWeight: '300', lineHeight: 36 },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 17,
     fontWeight: '500',
   },
@@ -156,15 +157,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 16,
     paddingTop: 10,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
   },
   continueBtn: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
   continueBtnDisabled: { opacity: 0.7 },
-  continueText: { color: '#FFFFFF', fontSize: 17, fontWeight: '500' },
+  continueText: { color: c.onAccent, fontSize: 17, fontWeight: '500' },
   pressed: { opacity: 0.75 },
-});
+}));

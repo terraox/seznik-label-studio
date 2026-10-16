@@ -1,8 +1,8 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type ScanCtaProps = {
   modelName: string;
@@ -31,6 +31,7 @@ export function ScanCta({
   onScan,
   onOpenSettings,
 }: ScanCtaProps) {
+  useThemeRefresh();
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Find {modelName}</Text>
@@ -45,9 +46,9 @@ export function ScanCta({
           pressed && !disabled && styles.pressed,
         ]}>
         {scanning ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color={C.onAccent} />
         ) : (
-          <AppIcon name="antenna.radiowaves.left.and.right" tintColor="#FFFFFF" size={18} />
+          <AppIcon name="antenna.radiowaves.left.and.right" tintColor={C.onAccent} size={18} />
         )}
         <Text style={styles.buttonText}>{scanning ? `Scanning for ${modelName}…` : 'Scan for printers'}</Text>
       </Pressable>
@@ -64,17 +65,17 @@ export function ScanCta({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     padding: Spacing.three,
     gap: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
   },
-  title: { fontSize: 17, fontWeight: '700', color: Palette.ink },
-  body: { fontSize: 14, lineHeight: 20, color: Palette.muted },
+  title: { fontSize: 17, fontWeight: '700', color: c.text },
+  body: { fontSize: 14, lineHeight: 20, color: c.textMuted },
   button: {
     minHeight: 48,
     borderRadius: 12,
@@ -83,10 +84,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
   },
-  buttonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  buttonText: { color: c.onAccent, fontSize: 15, fontWeight: '700' },
   secondary: { minHeight: 40, alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { color: Palette.accent, fontSize: 14, fontWeight: '700' },
-  warn: { color: '#B45309', fontSize: 13, lineHeight: 18 },
+  secondaryText: { color: c.accent, fontSize: 14, fontWeight: '700' },
+  warn: { color: c.warning, fontSize: 13, lineHeight: 18 },
   disabled: { opacity: 0.55 },
   pressed: { opacity: 0.75 },
-});
+}));

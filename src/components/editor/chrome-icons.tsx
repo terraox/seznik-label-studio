@@ -1,9 +1,11 @@
 import Svg, { Path } from 'react-native-svg';
+import { C, useThemeRefresh } from '@/theme';
 
 const SHIELD = 'M12 2.5 L19.5 5.4 V11 C19.5 15.9 16.4 19.8 12 21.5 C7.6 19.8 4.5 15.9 4.5 11 V5.4 Z';
 
 /** Shield: filled with a check when on, empty outline when off. */
 export function SafeModeIcon({ active, color, size = 18 }: { active: boolean; color: string; size?: number }) {
+  useThemeRefresh();
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -17,7 +19,7 @@ export function SafeModeIcon({ active, color, size = 18 }: { active: boolean; co
         <Path
           d="M8.4 11.8 L11 14.4 L15.8 9.4"
           fill="none"
-          stroke="#FFFFFF"
+          stroke={C.onAccent}
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -30,7 +32,8 @@ export function SafeModeIcon({ active, color, size = 18 }: { active: boolean; co
 /** Printed sheet with a grid: filled with white rules when on, outline when off. */
 /** Calibration ruler: tick marks when on, plain ruler when off. */
 export function PrintRulerIcon({ active, color, size = 18 }: { active: boolean; color: string; size?: number }) {
-  const ink = active ? '#FFFFFF' : color;
+  useThemeRefresh();
+  const ink = active ? '#FFFFFF' : color; // theme-fixed: white on active accent
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -51,7 +54,8 @@ export function PrintRulerIcon({ active, color, size = 18 }: { active: boolean; 
 }
 
 export function PrintGridIcon({ active, color, size = 18 }: { active: boolean; color: string; size?: number }) {
-  const rule = active ? '#FFFFFF' : color;
+  useThemeRefresh();
+  const rule = active ? '#FFFFFF' : color; // theme-fixed: white on active accent
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path

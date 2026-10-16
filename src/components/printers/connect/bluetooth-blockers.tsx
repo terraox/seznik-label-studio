@@ -2,7 +2,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Spacing } from '@/constants/theme';
-import { Palette, accentStrong, cardShadow } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type BluetoothBlockersProps = {
   canScan: boolean;
@@ -19,6 +20,7 @@ export function BluetoothBlockers({
   settingsLabel,
   onOpenSettings,
 }: BluetoothBlockersProps) {
+  useThemeRefresh();
   if (canScan && bluetoothOn) return null;
 
   const off = canScan && !bluetoothOn;
@@ -26,7 +28,7 @@ export function BluetoothBlockers({
   return (
     <View style={styles.card}>
       <View style={styles.iconWrap}>
-        <Ionicons name={off ? 'bluetooth' : 'alert-circle-outline'} size={28} color={accentStrong} />
+        <Ionicons name={off ? 'bluetooth' : 'alert-circle-outline'} size={28} color={C.accentInk} />
         {off ? <View style={styles.slash} /> : null}
       </View>
       <Text style={styles.title}>{off ? 'Bluetooth is off' : 'Bluetooth scan unavailable'}</Text>
@@ -63,13 +65,14 @@ export function BluetoothOffDialog({
   onOpenSettings,
   onClose,
 }: BluetoothOffDialogProps) {
+  useThemeRefresh();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={styles.dialog}>
           <View style={styles.iconWrap}>
-            <Ionicons name="bluetooth" size={28} color={accentStrong} />
+            <Ionicons name="bluetooth" size={28} color={C.accentInk} />
             <View style={styles.slash} />
           </View>
           <Text style={styles.title}>Bluetooth is off</Text>
@@ -88,12 +91,12 @@ export function BluetoothOffDialog({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   card: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.four,
     alignItems: 'center',
@@ -108,12 +111,12 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backgroundColor: c.scrim,
   },
   dialog: {
     width: '100%',
     maxWidth: 320,
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 20,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
@@ -126,7 +129,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#E6F6F8',
+    backgroundColor: c.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -136,43 +139,43 @@ const styles = StyleSheet.create({
     width: 2,
     height: 34,
     borderRadius: 1,
-    backgroundColor: accentStrong,
+    backgroundColor: c.accentStrong,
     transform: [{ rotate: '42deg' }],
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
     textAlign: 'center',
   },
   body: {
     fontSize: 15,
     lineHeight: 21,
-    color: Palette.muted,
+    color: c.textMuted,
     textAlign: 'center',
   },
   code: {
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
   },
   button: {
     alignSelf: 'stretch',
     marginTop: 8,
     minHeight: 48,
     borderRadius: 12,
-    backgroundColor: accentStrong,
+    backgroundColor: c.accentStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.three,
   },
-  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  buttonText: { color: c.onAccent, fontSize: 16, fontWeight: '700' },
   dismiss: {
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.three,
   },
-  dismissText: { color: Palette.muted, fontSize: 15, fontWeight: '600' },
+  dismissText: { color: c.textMuted, fontSize: 15, fontWeight: '600' },
   pressed: { opacity: 0.85 },
-});
+}));

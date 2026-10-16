@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import {
@@ -7,7 +7,8 @@ import {
   type ConsumerPrinterId,
 } from '@/constants/printer-models';
 import { Spacing } from '@/constants/theme';
-import { cardShadow, Palette } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export const PRINTER_PHOTOS: Record<ConsumerPrinterId, number> = {
   tejas: require('../../../../assets/images/printer_tejas.png'),
@@ -21,6 +22,7 @@ type PrinterFamilyCardsProps = {
 };
 
 export function PrinterFamilyCards({ selectedId, onSelect }: PrinterFamilyCardsProps) {
+  useThemeRefresh();
   const selected = CONSUMER_PRINTER_LIST.find((printer) => printer.id === selectedId) ?? CONSUMER_PRINTER_LIST[0];
 
   return (
@@ -50,6 +52,7 @@ function FamilyCard({
   selected: boolean;
   onPress: () => void;
 }) {
+  useThemeRefresh();
   return (
     <Pressable
       onPress={onPress}
@@ -60,7 +63,7 @@ function FamilyCard({
         <Image source={PRINTER_PHOTOS[printer.id]} style={styles.photo} resizeMode="contain" />
         {selected ? (
           <View style={[styles.check, { backgroundColor: printer.accent }]}>
-            <AppIcon name="checkmark" tintColor="#FFFFFF" size={11} />
+            <AppIcon name="checkmark" tintColor={C.onAccent} size={11} />
           </View>
         ) : null}
       </View>
@@ -69,15 +72,15 @@ function FamilyCard({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 20,
     padding: Spacing.three,
     gap: 12,
     ...cardShadow,
   },
-  heading: { fontSize: 18, fontWeight: '700', color: Palette.ink },
+  heading: { fontSize: 18, fontWeight: '700', color: c.text },
   row: { flexDirection: 'row', gap: 10 },
   card: {
     flex: 1,
@@ -90,7 +93,7 @@ const styles = StyleSheet.create({
   stage: {
     height: 112,
     borderRadius: 14,
-    backgroundColor: '#050505',
+    backgroundColor: '#050505', // theme-fixed: black backdrop for the printer photo
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -106,7 +109,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: { textAlign: 'center', fontSize: 14, fontWeight: '700', color: Palette.ink },
-  note: { fontSize: 13, lineHeight: 18, color: Palette.muted },
+  name: { textAlign: 'center', fontSize: 14, fontWeight: '700', color: c.text },
+  note: { fontSize: 13, lineHeight: 18, color: c.textMuted },
   pressed: { opacity: 0.8 },
-});
+}));

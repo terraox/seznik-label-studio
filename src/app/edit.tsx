@@ -208,7 +208,7 @@ import {
 import { editorBridge, barcodeEncodeModeForScanType, isBorderRemoval, isQrScanType } from '@/constants/editor-bridge';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow, Palette, Type } from '@/constants/ui';
+import { androidRipple, cardShadow, Type } from '@/constants/ui';
 import {
   applyGeometryToAllLabels,
   applyGeometryToThisLabel,
@@ -277,6 +277,7 @@ import {
   snapBoxToGuides,
   type SnapGuide,
 } from '@/lib/editor/engine';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type IconName = AppIconName;
 
@@ -414,6 +415,7 @@ function hasPropertyPanel(type: ElementType) {
  */
 const KeepAlivePanelSlot = memo(
   function KeepAlivePanelSlot({ visible, children }: { visible: boolean; children: ReactNode }) {
+    useThemeRefresh();
     return <View style={visible ? null : panelSlotHidden}>{children}</View>;
   },
   (prev, next) => !prev.visible && !next.visible,
@@ -430,13 +432,14 @@ function HeaderAction({
   label: string;
   onPress?: () => void;
 }) {
+  useThemeRefresh();
   return (
     <Pressable
       onPress={onPress}
       hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
       android_ripple={androidRipple}
       style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}>
-      <AppIcon name={icon} tintColor="#FFFFFF" size={20} />
+      <AppIcon name={icon} tintColor="#FFFFFF" size={20} /* theme-fixed: white icon on a coloured button */ />
       <Text numberOfLines={1} style={styles.headerActionLabel}>
         {label}
       </Text>
@@ -457,7 +460,8 @@ function ToolbarItem({
   disabled?: boolean;
   onPress?: () => void;
 }) {
-  const color = disabled ? '#CBD5E1' : active ? '#06B6D4' : '#64748B';
+  useThemeRefresh();
+  const color = disabled ? C.textDisabled : active ? C.accent : C.textSecondary;
   return (
     <Pressable
       disabled={disabled}
@@ -487,6 +491,7 @@ function ToolItem({
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }) {
+  useThemeRefresh();
   return (
     <Pressable
       onPress={onPress}
@@ -562,10 +567,8 @@ function paletteDefaultSizeMm(
   }
 }
 
-
-
-
 export default function EditScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     labelId?: string;
@@ -584,6 +587,9 @@ export default function EditScreen() {
 
   const defaults = useSettingsStore((s) => s.defaults);
   const editorSettings = useSettingsStore((s) => s.editor);
+  // The mm scale along the top and left edges; off frees that space for the canvas.
+  const showRulers = editorSettings.showRulers !== false;
+  const rulerSize = showRulers ? RULER_SIZE : 0;
   const patchEditor = useSettingsStore((s) => s.patchEditor);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const savedDocuments = useLabelStore((s) => s.documents);
@@ -986,7 +992,7 @@ export default function EditScreen() {
         : Math.max(Dimensions.get('window').height, 560) * 0.62;
   const { canvasWidthPx, canvasHeightPx, pxPerMM, boardOffsetXPx, boardOffsetYPx, innerWidthPx, innerHeightPx } =
     useMemo(() => {
-      const fitted = fitEditorPadBoard(doc.widthMm, doc.heightMm, workspaceW, baseWorkspaceH, RULER_SIZE);
+      const fitted = fitEditorPadBoard(doc.widthMm, doc.heightMm, workspaceW, baseWorkspaceH, rulerSize);
       return {
         canvasWidthPx: Math.max(1, fitted.widthPx),
         canvasHeightPx: Math.max(1, fitted.heightPx),
@@ -996,18 +1002,18 @@ export default function EditScreen() {
         innerWidthPx: Math.max(1, fitted.innerWidthPx),
         innerHeightPx: Math.max(1, fitted.innerHeightPx),
       };
-    }, [workspaceW, baseWorkspaceH, doc.widthMm, doc.heightMm, canvasSplitH]);
+    }, [workspaceW, baseWorkspaceH, doc.widthMm, doc.heightMm, canvasSplitH, rulerSize]);
 
   const committedScale = useMemo(() => {
     if (pxPerMM <= 0) return 1;
-    const liveInnerH = Math.max(32, canvasSplitH - RULER_SIZE - STAGE_PADDING_PX * 2);
-    const liveInnerW = Math.max(32, workspaceW - RULER_SIZE - STAGE_PADDING_PX * 2);
+    const liveInnerH = Math.max(32, canvasSplitH - rulerSize - STAGE_PADDING_PX * 2);
+    const liveInnerW = Math.max(32, workspaceW - rulerSize - STAGE_PADDING_PX * 2);
     const livePxPerMM = Math.min(
       liveInnerW / (doc.widthMm > 0 ? doc.widthMm : 1),
       liveInnerH / (doc.heightMm > 0 ? doc.heightMm : 1),
     );
     return livePxPerMM / pxPerMM;
-  }, [canvasSplitH, workspaceW, doc.widthMm, doc.heightMm, pxPerMM]);
+  }, [canvasSplitH, workspaceW, doc.widthMm, doc.heightMm, pxPerMM, rulerSize]);
 
   const writeEditorView = useCallback(
     (zoom: number, panX: number, panY: number) => {
@@ -1021,13 +1027,13 @@ export default function EditScreen() {
         viewHeightPx: canvasSplitH,
         innerWidthPx,
         innerHeightPx,
-        rulerSizePx: RULER_SIZE,
+        rulerSizePx: rulerSize,
         boardOffsetXPx,
         boardOffsetYPx,
         workspacePaddingBottomPx: EDITOR_WORKSPACE_PAD_BOTTOM_PX,
       });
     },
-    [pxPerMM, committedScale, workspaceW, canvasSplitH, innerWidthPx, innerHeightPx, boardOffsetXPx, boardOffsetYPx],
+    [pxPerMM, committedScale, workspaceW, canvasSplitH, innerWidthPx, innerHeightPx, boardOffsetXPx, boardOffsetYPx, rulerSize],
   );
 
   useEffect(() => {
@@ -1077,8 +1083,8 @@ export default function EditScreen() {
 
   const canvasAssemblyAnimatedStyle = useAnimatedStyle(() => {
     const liveH = canvasHeightSv.value;
-    const liveInnerH = Math.max(32, liveH - RULER_SIZE - STAGE_PADDING_PX * 2);
-    const liveInnerW = Math.max(32, workspaceWSv.value - RULER_SIZE - STAGE_PADDING_PX * 2);
+    const liveInnerH = Math.max(32, liveH - rulerSize - STAGE_PADDING_PX * 2);
+    const liveInnerW = Math.max(32, workspaceWSv.value - rulerSize - STAGE_PADDING_PX * 2);
     const wMm = docWidthMmSv.value > 0 ? docWidthMmSv.value : 1;
     const hMm = docHeightMmSv.value > 0 ? docHeightMmSv.value : 1;
     const livePxPerMM = Math.min(liveInnerW / wMm, liveInnerH / hMm);
@@ -1115,7 +1121,6 @@ export default function EditScreen() {
   const publishSnapGuides = useCallback((next: SnapGuide[]) => {
     setSnapGuides((prev) => (guidesEqual(prev, next) ? prev : next));
   }, []);
-
 
   const persistSplit = useCallback(
     (canvasPx: number, fullscreen: boolean) => {
@@ -1329,9 +1334,9 @@ export default function EditScreen() {
       pxPerMM,
       canvasWidthPx || 1,
       canvasHeightPx || 1,
-      RULER_SIZE,
+      rulerSize,
     );
-  }, [overlapRegionsMm, pxPerMM, canvasWidthPx, canvasHeightPx]);
+  }, [overlapRegionsMm, pxPerMM, canvasWidthPx, canvasHeightPx, rulerSize]);
   const docRef = useRef(doc);
   docRef.current = doc;
   dirtyRef.current = dirty;
@@ -2800,7 +2805,6 @@ export default function EditScreen() {
     ],
   );
 
-
   const setLockOnSelection = useCallback(
     (locked: boolean) => {
       if (selectedIds.length === 0) return;
@@ -3895,7 +3899,7 @@ export default function EditScreen() {
         hitSlop={12}
         accessibilityRole="button"
         accessibilityLabel="Delete selected element">
-        <AppIcon name="trash" tintColor="#FFFFFF" size={18} />
+        <AppIcon name="trash" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on the dark contextual bar */ />
       </Pressable>
       <View style={styles.contextualBarDivider} />
       <Pressable
@@ -3904,7 +3908,7 @@ export default function EditScreen() {
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Rotate selected element 90 degrees">
-        <AppIcon name="arrow.clockwise" tintColor="#FFFFFF" size={18} />
+        <AppIcon name="arrow.clockwise" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on the dark contextual bar */ />
       </Pressable>
       <View style={styles.contextualBarDivider} />
       <Pressable
@@ -3913,7 +3917,7 @@ export default function EditScreen() {
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Duplicate selected element">
-        <AppIcon name="square.on.square" tintColor="#FFFFFF" size={18} />
+        <AppIcon name="square.on.square" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on the dark contextual bar */ />
       </Pressable>
       <View style={styles.contextualBarDivider} />
       <Pressable
@@ -3928,7 +3932,7 @@ export default function EditScreen() {
         }>
         <AppIcon
           name={selectedElements.every((el) => el.lockMovement) ? 'lock.open' : 'lock'}
-          tintColor="#FFFFFF"
+          tintColor="#FFFFFF" // theme-fixed: white icon on the dark contextual bar
           size={18}
         />
       </Pressable>
@@ -3950,7 +3954,7 @@ export default function EditScreen() {
         hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Element properties">
-        <AppIcon name="slider.horizontal.3" tintColor="#FFFFFF" size={18} />
+        <AppIcon name="slider.horizontal.3" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on the dark contextual bar */ />
       </Pressable>
     </View>
   );
@@ -3986,8 +3990,8 @@ export default function EditScreen() {
             style={[
               styles.rulerFrame,
               {
-                width: RULER_SIZE + innerWidthPx,
-                height: RULER_SIZE + innerHeightPx,
+                width: rulerSize + innerWidthPx,
+                height: rulerSize + innerHeightPx,
               },
             ]}>
             <Animated.View
@@ -3997,8 +4001,8 @@ export default function EditScreen() {
                 {
                   left: boardOffsetXPx,
                   top: boardOffsetYPx,
-                  width: RULER_SIZE + (canvasWidthPx || 1),
-                  height: RULER_SIZE + (canvasHeightPx || 1),
+                  width: rulerSize + (canvasWidthPx || 1),
+                  height: rulerSize + (canvasHeightPx || 1),
                 },
                 (doc.mediaShape === 'circle' || doc.mediaShape === 'ellipse') && {
                   backgroundColor: 'transparent',
@@ -4006,6 +4010,7 @@ export default function EditScreen() {
                   elevation: 0,
                 },
               ]}>
+              {showRulers ? (
               <View style={styles.rulerTopRow}>
                 <RulerCorner />
                 <HorizontalRuler
@@ -4024,7 +4029,9 @@ export default function EditScreen() {
                   liveBounds={liveRulerBounds}
                 />
               </View>
+              ) : null}
               <View style={styles.rulerBodyRow}>
+                {showRulers ? (
                 <VerticalRuler
                   trackHeightPx={canvasHeightPx || 1}
                   originPx={0}
@@ -4040,6 +4047,7 @@ export default function EditScreen() {
                   }
                   liveBounds={liveRulerBounds}
                 />
+                ) : null}
                 <View
                   style={[
                     styles.artboardSlot,
@@ -4399,7 +4407,7 @@ export default function EditScreen() {
             }}
             hitSlop={12}
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-            <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+            <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
           </Pressable>
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.headerTitle}>
             {doc.name}
@@ -4475,7 +4483,28 @@ export default function EditScreen() {
                 ]}>
                 <SafeModeIcon
                   active={editorSettings.safeMode}
-                  color={editorSettings.safeMode ? Palette.accent : Palette.muted}
+                  color={editorSettings.safeMode ? C.accent : C.textMuted}
+                />
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  patchEditor({ showRulers: !showRulers });
+                  flashChromeStatus(showRulers ? 'Ruler hidden' : 'Ruler shown');
+                }}
+                hitSlop={10}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: showRulers }}
+                accessibilityLabel="Show ruler"
+                style={({ pressed }) => [
+                  styles.splitMaxBtn,
+                  showRulers && styles.canvasChromeBtnActive,
+                  pressed && styles.pressed,
+                ]}>
+                <PrintRulerIcon
+                  active={showRulers}
+                  color={showRulers ? C.accent : C.textMuted}
+                  size={18}
                 />
               </Pressable>
 
@@ -4493,7 +4522,7 @@ export default function EditScreen() {
                 ]}>
                 <PrintGridIcon
                   active={printGridOn}
-                  color={printGridOn ? Palette.accent : Palette.muted}
+                  color={printGridOn ? C.accent : C.textMuted}
                   size={16}
                 />
                 <Text
@@ -4517,7 +4546,7 @@ export default function EditScreen() {
                 ]}>
                 <PrintRulerIcon
                   active={printRulerOn}
-                  color={printRulerOn ? Palette.accent : Palette.muted}
+                  color={printRulerOn ? C.accent : C.textMuted}
                   size={16}
                 />
                 <Text
@@ -4546,7 +4575,7 @@ export default function EditScreen() {
                 ]}>
                 <AppIcon
                   name={gridShown ? 'square.grid.2x2.fill' : 'square.grid.2x2'}
-                  tintColor={gridShown ? Palette.accent : Palette.muted}
+                  tintColor={gridShown ? C.accent : C.textMuted}
                   size={18}
                 />
               </Pressable>
@@ -4563,7 +4592,7 @@ export default function EditScreen() {
                       ? 'arrow.down.right.and.arrow.up.left'
                       : 'arrow.up.left.and.arrow.down.right'
                   }
-                  tintColor={Palette.accent}
+                  tintColor={C.accent}
                   size={18}
                 />
               </Pressable>
@@ -4733,7 +4762,7 @@ export default function EditScreen() {
                     onPress={closePanel}
                     hitSlop={10}
                     style={({ pressed }) => [styles.panelCloseBtn, pressed && styles.pressed]}>
-                    <AppIcon name="xmark" tintColor={Palette.muted} size={16} />
+                    <AppIcon name="xmark" tintColor={C.textMuted} size={16} />
                   </Pressable>
                 </Animated.View>
               </View>
@@ -4779,7 +4808,7 @@ export default function EditScreen() {
               multiline
               autoFocus
               placeholder="Type text…"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={C.textMuted}
               returnKeyType="done"
             />
             <Pressable
@@ -4897,7 +4926,7 @@ export default function EditScreen() {
                     key={saved.id}
                     onPress={() => openDocument(saved)}
                     style={({ pressed }) => [styles.openRow, pressed && styles.pressed]}>
-                    <AppIcon name="doc.text" tintColor={Palette.accent} size={18} />
+                    <AppIcon name="doc.text" tintColor={C.accent} size={18} />
                     <View style={styles.openRowInfo}>
                       <Text numberOfLines={1} style={styles.openRowName}>
                         {saved.name}
@@ -4946,7 +4975,7 @@ export default function EditScreen() {
       {imageIngesting ? (
         <View style={styles.imageIngestOverlay} pointerEvents="auto">
           <View style={styles.imageIngestCard}>
-            <ActivityIndicator color={Palette.accent} />
+            <ActivityIndicator color={C.accent} />
             <Text style={styles.imageIngestText}>Placing photo…</Text>
           </View>
         </View>
@@ -4967,31 +4996,31 @@ export default function EditScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     alignItems: 'center',
   },
   imageIngestOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+    backgroundColor: c.scrim,
     zIndex: 50,
   },
   imageIngestCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 10,
   },
   imageIngestText: {
     ...Type.action,
-    color: Palette.ink,
+    color: c.text,
   },
   body: {
     flex: 1,
@@ -5006,20 +5035,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     zIndex: 40,
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: c.warningSoft,
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
   overlapBannerText: {
-    color: '#92400E',
+    color: c.onWarningSoft,
     fontSize: 12,
     fontWeight: '600',
   },
   header: {
     width: '100%',
     maxWidth: MaxContentWidth,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     paddingHorizontal: Spacing.two,
     paddingBottom: Spacing.two + 2,
     flexDirection: 'row',
@@ -5040,7 +5069,7 @@ const styles = StyleSheet.create({
     paddingRight: 2,
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '500',
     flex: 1,
@@ -5061,7 +5090,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   headerActionLabel: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 10,
     fontWeight: '500',
     letterSpacing: 0.1,
@@ -5083,9 +5112,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 88,
     flexShrink: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: c.hairline,
   },
   subToolbarChromeScroll: {
     flexGrow: 0,
@@ -5097,13 +5126,13 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.one,
   },
   bulkMissingBanner: {
-    color: '#B45309',
+    color: c.warning,
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
     paddingHorizontal: Spacing.three,
     paddingVertical: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   contextualToolbarHost: {
     position: 'relative',
@@ -5141,11 +5170,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    backgroundColor: 'rgba(23, 166, 184, 0.15)',
+    backgroundColor: c.accentSoft,
     marginRight: 6,
   },
   fitZoomBtnText: {
-    color: '#06B6D4',
+    color: c.accent,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -5156,7 +5185,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   canvasChromeBtnActive: {
-    backgroundColor: 'rgba(23, 166, 184, 0.15)',
+    backgroundColor: c.accentSoft,
   },
   printGridBtn: {
     minWidth: 52,
@@ -5167,20 +5196,20 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   printGridBtnText: {
-    color: Palette.muted,
+    color: c.textMuted,
     fontSize: 9,
     fontWeight: '700',
   },
   printGridBtnTextOn: {
-    color: Palette.accent,
+    color: c.accent,
   },
   dimText: {
-    color: Palette.muted,
+    color: c.textMuted,
     ...Type.caption,
     fontSize: 13,
   },
   sizeHint: {
-    color: Palette.accent,
+    color: c.accent,
     fontSize: 11,
     fontWeight: '500',
   },
@@ -5190,13 +5219,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     paddingHorizontal: 6,
     paddingVertical: 4,
     gap: 10,
     elevation: 2,
-    shadowColor: '#0B1F33',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -5211,18 +5240,18 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   upsPagerChevron: {
-    color: Palette.ink,
+    color: c.text,
     fontSize: 22,
     fontWeight: '400',
     lineHeight: 24,
   },
   upsPagerChevronDisabled: {
-    color: '#94A3B8',
+    color: c.textMuted,
   },
   upsPagerText: {
     minWidth: 36,
     textAlign: 'center',
-    color: '#64748B',
+    color: c.textSecondary,
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.2,
@@ -5231,18 +5260,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
   },
   upsTabBtnActive: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   upsTabText: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#64748B',
+    color: c.textSecondary,
   },
   upsTabTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   stage: {
     width: '100%',
@@ -5278,8 +5307,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     flexDirection: 'column',
     overflow: 'visible',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#0B1F33',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (flushCanvasAssembly)
+    shadowColor: '#0B1F33', // theme-fixed: light preview (flushCanvasAssembly)
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
@@ -5288,10 +5317,10 @@ const styles = StyleSheet.create({
   artboardSlot: {
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (artboardSlot)
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2E8F0', // theme-fixed: light preview (artboardSlot)
   },
   rulerTopRow: {
     flexDirection: 'row',
@@ -5305,7 +5334,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyHint: {
-    color: '#B7C2CE',
+    color: c.textDisabled,
     fontSize: 13,
   },
   selectionOutline: {
@@ -5328,7 +5357,7 @@ const styles = StyleSheet.create({
     height: 10,
     borderRightWidth: 2.5,
     borderBottomWidth: 2.5,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
   },
   rotateHandle: {
     position: 'absolute',
@@ -5337,11 +5366,11 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 6,
-    shadowColor: '#000',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.25,
     shadowRadius: 2,
@@ -5354,12 +5383,12 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#64748B',
+    backgroundColor: '#64748B', // theme-fixed: lock badge over the canvas
     alignItems: 'center',
     justifyContent: 'center',
   },
   sheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopLeftRadius: Spacing.four,
     borderTopRightRadius: Spacing.four,
     overflow: 'hidden',
@@ -5367,17 +5396,17 @@ const styles = StyleSheet.create({
   },
   pinnedToolbar: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   toolGridRevealWindow: {
     width: '100%',
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   staticPaletteContainer: {
     width: '100%',
     height: 270,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   sheetScroll: {
     flex: 1,
@@ -5392,7 +5421,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
@@ -5406,8 +5435,8 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: c.hairline,
+    backgroundColor: c.surface,
   },
   toolbarItem: {
     flex: 1,
@@ -5419,18 +5448,18 @@ const styles = StyleSheet.create({
   },
   toolbarDivider: {
     borderLeftWidth: 1,
-    borderLeftColor: Palette.hairline,
+    borderLeftColor: c.hairline,
   },
   toolbarLabel: {
     fontSize: 11,
     fontWeight: '400',
-    color: '#64748B',
+    color: c.textSecondary,
     textAlign: 'center',
   },
   toolsContainer: {
     width: '100%',
     paddingVertical: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   toolRow: {
     flexDirection: 'row',
@@ -5454,7 +5483,7 @@ const styles = StyleSheet.create({
   toolLabel: {
     fontSize: 12,
     fontWeight: '400',
-    color: '#475569',
+    color: c.textSecondary,
     textAlign: 'center',
   },
   pressed: {
@@ -5467,38 +5496,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderTopColor: c.border,
+    backgroundColor: c.surface,
   },
   textEditInput: {
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    color: '#1E293B',
-    backgroundColor: '#F8FAFC',
+    color: c.text,
+    backgroundColor: c.fill,
   },
   textEditDoneBtn: {
     height: 44,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#17A6B8',
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   textEditDoneText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 15,
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
@@ -5506,10 +5535,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 290,
     alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: '#000000',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.18,
     shadowRadius: 16,
@@ -5524,29 +5553,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D1D1D6',
+    borderBottomColor: c.border,
   },
   modalHeading: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#000000',
+    color: c.text,
     textAlign: 'center',
     lineHeight: 22,
   },
   modalInput: {
     height: 36,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C6C6C8',
+    borderColor: c.border,
     borderRadius: 7,
     paddingHorizontal: 10,
     fontSize: 14,
-    color: '#000000',
-    backgroundColor: '#FFFFFF',
+    color: c.text,
+    backgroundColor: c.surface,
     marginTop: 12,
   },
   openModalFooter: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#D1D1D6',
+    borderTopColor: c.border,
     height: 45,
   },
   openModalCloseBtn: {
@@ -5556,12 +5585,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   openModalCloseText: {
-    color: '#007AFF',
+    color: c.link,
     fontSize: 17,
     fontWeight: '400',
   },
   openModalDoneText: {
-    color: '#007AFF',
+    color: c.link,
     fontSize: 17,
     fontWeight: '600',
   },
@@ -5575,7 +5604,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#EAECEF',
+    borderBottomColor: c.hairline,
   },
   openRowInfo: {
     flex: 1,
@@ -5583,16 +5612,16 @@ const styles = StyleSheet.create({
   openRowName: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#1E293B',
+    color: c.text,
   },
   openRowMeta: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: c.textMuted,
     marginTop: 1,
   },
   openEmptyText: {
     textAlign: 'center',
-    color: '#94A3B8',
+    color: c.textMuted,
     fontSize: 14,
     paddingVertical: 20,
   },
@@ -5603,12 +5632,12 @@ const styles = StyleSheet.create({
   contextualTopBar: {
     width: '100%',
     height: 44,
-    backgroundColor: '#374151',
+    backgroundColor: '#374151', // theme-fixed: dark contextual bar in both themes
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0, 0, 0, 0.25)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.25)', // theme-fixed: dark contextual bar in both themes
   },
   contextualBarBtn: {
     flex: 1,
@@ -5619,6 +5648,6 @@ const styles = StyleSheet.create({
   contextualBarDivider: {
     width: StyleSheet.hairlineWidth,
     height: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', // theme-fixed: divider on the dark contextual bar
   },
-});
+}));

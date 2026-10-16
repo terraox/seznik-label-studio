@@ -2,8 +2,9 @@ import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { LabelDimensionModal } from '@/components/label-dimension-modal';
-import { Palette } from '@/constants/ui';
+
 import { fromMm, type LabelUnit } from '@/lib/label-geometry';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export const LABEL_SETUP_PRESETS = [
   { label: '50 × 25', width: 50, height: 25 },
@@ -55,6 +56,7 @@ export function LabelSizeSetupSection({
   onUnitChange,
   preview,
 }: LabelSizeSetupSectionProps) {
+  useThemeRefresh();
   const [widthModalVisible, setWidthModalVisible] = useState(false);
   const [heightModalVisible, setHeightModalVisible] = useState(false);
 
@@ -187,9 +189,9 @@ export function LabelSizeSetupSection({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c, scheme) => ({
   previewPad: {
-    backgroundColor: '#D5DCE4',
+    backgroundColor: scheme === 'light' ? '#D5DCE4' : c.canvasArea, // theme-fixed: light keeps its grey stage around the white label
     borderRadius: 10,
     minHeight: 140,
     paddingVertical: 28,
@@ -204,13 +206,13 @@ const styles = StyleSheet.create({
     flex: 1,
     maxWidth: 120,
     minHeight: 48,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (previewCell)
     borderRadius: 4,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C8D0D8',
+    borderColor: '#C8D0D8', // theme-fixed: light preview (previewCell)
   },
   previewHint: {
-    color: '#64748B',
+    color: c.textSecondary,
     fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
@@ -219,16 +221,16 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginLeft: 2,
   },
   presetFormatCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 8,
@@ -236,7 +238,7 @@ const styles = StyleSheet.create({
   presetFormatTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
@@ -250,28 +252,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
   },
   presetFormatPillLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
   },
   presetFormatTimes: {
     fontSize: 18,
     fontWeight: '500',
-    color: '#94A3B8',
+    color: c.textMuted,
   },
   presetFormatUnit: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: c.textSecondary,
   },
   presetFormatHint: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: c.textMuted,
     textAlign: 'center',
     lineHeight: 16,
   },
@@ -286,33 +288,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     justifyContent: 'center',
     alignItems: 'center',
   },
   presetChipActive: {
-    backgroundColor: '#EEF2FF',
-    borderColor: Palette.accent,
+    backgroundColor: c.accentSoft,
+    borderColor: c.accent,
   },
   presetChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
+    color: c.textSecondary,
     lineHeight: 16,
     textAlign: 'center',
   },
   presetChipTextActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '600',
   },
   groupCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
   },
   groupRow: {
     paddingHorizontal: 14,
@@ -324,12 +326,12 @@ const styles = StyleSheet.create({
   },
   groupDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.hairline,
     marginLeft: 14,
   },
   cardPressed: { opacity: 0.88 },
-  fieldLabel: { color: Palette.ink, fontSize: 15, fontWeight: '500', flexShrink: 1 },
+  fieldLabel: { color: c.text, fontSize: 15, fontWeight: '500', flexShrink: 1 },
   fieldValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
-  fieldValueText: { color: '#64748B', fontSize: 14, fontWeight: '400', maxWidth: 160 },
-  chevronRight: { color: '#94A3B8', fontSize: 22, fontWeight: '300' },
-});
+  fieldValueText: { color: c.textSecondary, fontSize: 14, fontWeight: '400', maxWidth: 160 },
+  chevronRight: { color: c.textMuted, fontSize: 22, fontWeight: '300' },
+}));

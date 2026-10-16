@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Switch, Text, View } from 'react-native';
 
 import { IosAlertInput, IosAlertModal } from '@/components/ui/ios-alert-modal';
-import { Palette } from '@/constants/ui';
+
 import type { ExcelParseOptions } from '@/lib/excel-rows';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type ExcelImportOptionsModalProps = {
   visible: boolean;
@@ -18,6 +19,7 @@ export function ExcelImportOptionsModal({
   onCancel,
   onConfirm,
 }: ExcelImportOptionsModalProps) {
+  useThemeRefresh();
   const [hasHeaderRow, setHasHeaderRow] = useState(true);
   const [startRowText, setStartRowText] = useState('2');
   const [startEdited, setStartEdited] = useState(false);
@@ -76,7 +78,7 @@ export function ExcelImportOptionsModal({
         <Switch
           value={hasHeaderRow}
           onValueChange={setHeader}
-          trackColor={{ false: '#E3E6EA', true: Palette.accent }}
+          trackColor={{ false: C.hairline, true: C.accent }}
         />
       </View>
       <Text style={styles.fieldLabel}>Start from row</Text>
@@ -93,7 +95,7 @@ export function ExcelImportOptionsModal({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -105,12 +107,12 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     lineHeight: 20,
-    color: '#1C1C1E',
+    color: c.text,
   },
   fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8E8E93',
+    color: c.textMuted,
     marginBottom: 6,
   },
-});
+}));

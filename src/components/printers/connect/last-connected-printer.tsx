@@ -1,9 +1,10 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';
-import { accentStrong, androidRipple, cardShadow, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow } from '@/constants/ui';
 import { normalizePrinterMac } from '@/stores/printer-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type LastConnectedPrinterProps = {
   modelName: string;
@@ -30,6 +31,7 @@ export function LastConnectedPrinter({
   autoConnectPaused,
   onConnect,
 }: LastConnectedPrinterProps) {
+  useThemeRefresh();
   if (!visible) return null;
 
   const displayName = deviceName?.trim() || modelName;
@@ -41,7 +43,7 @@ export function LastConnectedPrinter({
       <Text style={styles.section}>Quick reconnect</Text>
       <View style={styles.card}>
         <View style={styles.iconBadge}>
-          <AppIcon name="printer" tintColor="#FFFFFF" size={20} />
+          <AppIcon name="printer" tintColor={C.onAccent} size={20} />
         </View>
 
         <View style={styles.copy}>
@@ -68,7 +70,7 @@ export function LastConnectedPrinter({
             pressed && !connecting && styles.pressed,
           ]}>
           {connecting ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <ActivityIndicator color={C.onAccent} size="small" />
           ) : (
             <Text style={styles.connectText}>Connect</Text>
           )}
@@ -94,8 +96,8 @@ function statusCopy({
       hint: autoConnectPaused
         ? 'You disconnected earlier. Tap Connect when you want to link again.'
         : 'Stays linked automatically when this printer is on.',
-      dot: '#18794A',
-      tone: '#18794A',
+      dot: C.success,
+      tone: C.success,
     };
   }
   if (scanning) {
@@ -104,8 +106,8 @@ function statusCopy({
       hint: autoConnectPaused
         ? 'Searching… tap Connect as soon as your printer appears.'
         : 'Searching — we connect when your printer shows up.',
-      dot: '#B45309',
-      tone: '#B45309',
+      dot: C.warning,
+      tone: C.warning,
     };
   }
   return {
@@ -113,17 +115,17 @@ function statusCopy({
     hint: autoConnectPaused
       ? 'Power on the printer, then tap Connect.'
       : 'Power on the printer — linking happens in the background.',
-    dot: '#94A3B8',
-    tone: Palette.muted,
+    dot: C.textMuted,
+    tone: C.textMuted,
   };
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: { gap: 8 },
   section: {
     fontSize: 12,
     fontWeight: '700',
-    color: Palette.muted,
+    color: c.textMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     paddingHorizontal: 2,
@@ -132,10 +134,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
     ...cardShadow,
@@ -144,13 +146,13 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     alignItems: 'center',
     justifyContent: 'center',
   },
   copy: { flex: 1, gap: 2, minWidth: 0 },
-  name: { fontSize: 16, fontWeight: '700', color: Palette.ink },
-  meta: { fontSize: 12, color: '#64748B', fontVariant: ['tabular-nums'] },
+  name: { fontSize: 16, fontWeight: '700', color: c.text },
+  meta: { fontSize: 12, color: c.textSecondary, fontVariant: ['tabular-nums'] },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -168,18 +170,18 @@ const styles = StyleSheet.create({
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 11, fontWeight: '700' },
-  bridge: { fontSize: 11, color: Palette.muted, flexShrink: 1 },
+  bridge: { fontSize: 11, color: c.textMuted, flexShrink: 1 },
   connectBtn: {
     minWidth: 88,
     minHeight: 40,
     paddingHorizontal: 14,
     borderRadius: 10,
-    backgroundColor: accentStrong,
+    backgroundColor: c.accentStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   connectBtnBusy: { opacity: 0.9 },
-  connectText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  hint: { fontSize: 12, lineHeight: 17, color: Palette.muted, paddingHorizontal: 4 },
+  connectText: { color: c.onAccent, fontSize: 14, fontWeight: '700' },
+  hint: { fontSize: 12, lineHeight: 17, color: c.textMuted, paddingHorizontal: 4 },
   pressed: { opacity: 0.92 },
-});
+}));

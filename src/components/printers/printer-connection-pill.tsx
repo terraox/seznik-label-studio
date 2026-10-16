@@ -1,15 +1,17 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { CONSUMER_PRINTERS } from '@/constants/printer-models';
-import { Palette, Type } from '@/constants/ui';
+import { Type } from '@/constants/ui';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore } from '@/stores/printer-store';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 /** Header pill: red when no printer is connected, green with its name when connected. Same as the Print screen. */
 export function PrinterConnectionPill() {
+  useThemeRefresh();
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -33,23 +35,23 @@ export function PrinterConnectionPill() {
       <Text numberOfLines={1} style={styles.text}>
         {live ? `${model}: ${deviceName ?? 'Connected'}` : `${model} · Unconnected`}
       </Text>
-      <AppIcon name="link" tintColor="#FFFFFF" size={14} />
+      <AppIcon name="link" tintColor="#FFFFFF" size={14} /* theme-fixed: white icon on status fill */ />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Palette.danger,
+    backgroundColor: c.dangerFill,
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
     maxWidth: 220,
   },
-  pillOn: { backgroundColor: '#2E9E63' },
-  text: { color: '#FFFFFF', ...Type.badge },
+  pillOn: { backgroundColor: c.successFill },
+  text: { color: c.onAccent, ...Type.badge },
   pressed: { opacity: 0.65 },
-});
+}));

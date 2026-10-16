@@ -11,9 +11,11 @@ import {
 } from 'react-native';
 
 import { LabelSizeEditor } from '@/components/label-size-editor';
-import { Palette } from '@/constants/ui';
+import { IosAlertModal } from '@/components/ui/ios-alert-modal';
+
 import { clampLabelMm, validateLabelSize } from '@/lib/label-geometry';
 import { stockSizePromptCopy, type StockSizeHandling } from '@/lib/stock-size';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 type LabelSizeDialogProps = {
   visible: boolean;
@@ -26,14 +28,9 @@ type LabelSizeDialogProps = {
   onApply: (widthMm: number, heightMm: number, mode: StockSizeHandling) => void;
 };
 
-const MODES: { id: StockSizeHandling; title: string; hint: string }[] = [
-  { id: 'keep', title: 'Keep as-is', hint: 'Elements keep their size and only move onto the new stock.' },
-  { id: 'scale', title: 'Scale', hint: 'Elements resize in proportion to the new label.' },
-];
-
 /**
- * Label size popup. Size fields and the keep/scale choice live in one sheet, so changing the
- * stock is a single Apply instead of Done followed by a system alert.
+ * Label size popup. Apply opens a separate iOS-style alert that asks how existing elements
+ * should follow the new size (keep as-is or scale).
  */
 export function LabelSizeDialog({
   visible,
@@ -43,15 +40,16 @@ export function LabelSizeDialog({
   onCancel,
   onApply,
 }: LabelSizeDialogProps) {
+  useThemeRefresh();
   const [draftW, setDraftW] = useState(widthMm);
   const [draftH, setDraftH] = useState(heightMm);
-  const [mode, setMode] = useState<StockSizeHandling>('keep');
+  const [pending, setPending] = useState<{ widthMm: number; heightMm: number } | null>(null);
 
   useEffect(() => {
     if (!visible) return;
     setDraftW(widthMm);
     setDraftH(heightMm);
-    setMode('keep');
+    setPending(null);
   }, [visible, widthMm, heightMm]);
 
   const size = clampLabelMm(draftW, draftH);
@@ -61,7 +59,8 @@ export function LabelSizeDialog({
   const copy = stockSizePromptCopy(isBulk);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <>
+    <Modal visible={visible && !pending} transparent animationType="fade" onRequestClose={onCancel}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
@@ -89,35 +88,6 @@ export function LabelSizeDialog({
                   setDraftH(h);
                 }}
               />
-
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>
-                  {isBulk ? 'Existing elements, every label' : 'Existing elements'}
-                </Text>
-                <View style={styles.segment}>
-                  {MODES.map((option) => {
-                    const on = option.id === mode;
-                    return (
-                      <Pressable
-                        key={option.id}
-                        onPress={() => setMode(option.id)}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: on }}
-                        style={({ pressed }) => [
-                          styles.segmentBtn,
-                          on && styles.segmentBtnOn,
-                          pressed && styles.pressed,
-                        ]}>
-                        <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{option.title}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Text style={styles.hint}>
-                  {MODES.find((option) => option.id === mode)?.hint}
-                  {isBulk ? ` ${copy.message}` : ''}
-                </Text>
-              </View>
             </View>
 
             <View style={styles.footer}>
@@ -128,7 +98,7 @@ export function LabelSizeDialog({
               </Pressable>
               <Pressable
                 disabled={!canApply}
-                onPress={() => onApply(size.widthMm, size.heightMm, mode)}
+                onPress={() => setPending({ widthMm: size.widthMm, heightMm: size.heightMm })}
                 style={({ pressed }) => [
                   styles.btn,
                   styles.btnPrimary,
@@ -142,13 +112,33 @@ export function LabelSizeDialog({
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
+
+    <IosAlertModal
+      visible={visible && pending != null}
+      title={copy.title}
+      message={copy.message}
+      onClose={() => setPending(null)}
+      buttons={[
+        {
+          text: 'Keep as-is',
+          onPress: () => pending && onApply(pending.widthMm, pending.heightMm, 'keep'),
+        },
+        {
+          text: 'Scale proportionally',
+          bold: true,
+          onPress: () => pending && onApply(pending.widthMm, pending.heightMm, 'scale'),
+        },
+        { text: 'Cancel', style: 'cancel', onPress: () => setPending(null) },
+      ]}
+    />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(20, 30, 42, 0.5)',
+    backgroundColor: c.scrim,
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
@@ -157,10 +147,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 380,
     alignSelf: 'center',
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 18,
     overflow: 'hidden',
-    shadowColor: '#000000',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.22,
     shadowRadius: 24,
@@ -170,27 +160,13 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingHorizontal: 20,
     paddingBottom: 14,
-    backgroundColor: Palette.cardTop,
+    backgroundColor: c.fill,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Palette.hairline,
+    borderBottomColor: c.hairline,
   },
-  title: { fontSize: 18, fontWeight: '700', color: Palette.ink },
-  current: { marginTop: 2, fontSize: 13, color: Palette.muted },
+  title: { fontSize: 18, fontWeight: '700', color: c.text },
+  current: { marginTop: 2, fontSize: 13, color: c.textMuted },
   body: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4, gap: 16 },
-  section: { gap: 8 },
-  sectionLabel: { fontSize: 12, fontWeight: '600', color: Palette.muted, textTransform: 'uppercase' },
-  segment: {
-    flexDirection: 'row',
-    padding: 3,
-    borderRadius: 12,
-    backgroundColor: '#EEF2F6',
-    gap: 3,
-  },
-  segmentBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10 },
-  segmentBtnOn: { backgroundColor: Palette.card, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
-  segmentText: { fontSize: 14, fontWeight: '500', color: Palette.actionText },
-  segmentTextOn: { color: Palette.accent, fontWeight: '700' },
-  hint: { fontSize: 12, lineHeight: 17, color: Palette.muted },
   footer: {
     flexDirection: 'row',
     gap: 10,
@@ -198,10 +174,10 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 12 },
-  btnGhost: { backgroundColor: '#EEF2F6' },
-  btnGhostText: { fontSize: 15, fontWeight: '600', color: Palette.actionText },
-  btnPrimary: { backgroundColor: Palette.accent },
-  btnPrimaryText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
-  btnDisabled: { backgroundColor: Palette.disabled },
+  btnGhost: { backgroundColor: c.fillStrong },
+  btnGhostText: { fontSize: 15, fontWeight: '600', color: c.textSecondary },
+  btnPrimary: { backgroundColor: c.accentFill },
+  btnPrimaryText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
+  btnDisabled: { backgroundColor: c.textDisabled },
   pressed: { opacity: 0.8 },
-});
+}));

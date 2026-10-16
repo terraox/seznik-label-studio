@@ -7,9 +7,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon, type AppIconName } from '@/components/app-icon';
-import { Palette } from '@/constants/ui';
+
 import { NUDGE_FAST_MM, NUDGE_FINE_MM, NUDGE_NORMAL_MM } from '@/lib/editor/engine';
 import { formatViewZoomLabel } from '@/lib/label-geometry';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type EditingPadProps = {
   enabled: boolean;
@@ -50,6 +51,7 @@ function PadBtn({
   disabled?: boolean;
   active?: boolean;
 }) {
+  useThemeRefresh();
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const repeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -81,7 +83,7 @@ function PadBtn({
         pressed && !disabled && styles.pressed,
       ]}>
       {icon ? (
-        <AppIcon name={icon} tintColor={disabled ? '#94A3B8' : Palette.ink} size={18} />
+        <AppIcon name={icon} tintColor={disabled ? C.textDisabled : C.text} size={18} />
       ) : (
         <Text style={[styles.btnGlyph, disabled && styles.btnGlyphDisabled]}>{label}</Text>
       )}
@@ -109,6 +111,7 @@ export function EditingPad({
   onZoomIn,
   onZoomOut,
 }: EditingPadProps) {
+  useThemeRefresh();
   const [fine, setFine] = useState(false);
   const step = fine ? NUDGE_FINE_MM : NUDGE_NORMAL_MM;
   const holdStep = fine ? NUDGE_NORMAL_MM : NUDGE_FAST_MM;
@@ -187,11 +190,11 @@ export function EditingPad({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#D5DCE4',
+    borderTopColor: c.border,
     paddingHorizontal: 10,
     paddingTop: 8,
     paddingBottom: 6,
@@ -222,23 +225,23 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnActive: {
-    backgroundColor: '#DCE8F7',
+    backgroundColor: c.fillStrong,
   },
   btnDisabled: {
     opacity: 0.4,
   },
   btnGlyph: {
-    color: Palette.ink,
+    color: c.text,
     fontSize: 13,
     fontWeight: '700',
   },
   btnGlyphDisabled: {
-    color: '#94A3B8',
+    color: c.textMuted,
   },
   zoomCluster: {
     flex: 1,
@@ -251,15 +254,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '800',
-    color: Palette.ink,
+    color: c.text,
   },
   hint: {
     marginTop: 4,
     fontSize: 10,
-    color: '#94A3B8',
+    color: c.textMuted,
     fontWeight: '500',
   },
   pressed: {
     opacity: 0.72,
   },
-});
+}));

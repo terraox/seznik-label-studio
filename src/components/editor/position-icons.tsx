@@ -1,11 +1,11 @@
 import Svg, { Line, Path, Polyline, Rect } from 'react-native-svg';
 import type { ReactNode } from 'react';
-
-const ICON_COLOR = '#556473';
+import { C, useThemeRefresh } from '@/theme';
 
 type IconProps = { size?: number; color?: string };
 
 function SvgWrap({ size, children }: { size: number; children: ReactNode }) {
+  useThemeRefresh();
   return (
     <Svg width={size} height={size} viewBox="0 0 18 18">
       {children}
@@ -13,7 +13,8 @@ function SvgWrap({ size, children }: { size: number; children: ReactNode }) {
   );
 }
 
-export function NudgeUpIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function NudgeUpIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Polyline points="9,4 5.5,8.5 12.5,8.5" fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
@@ -21,7 +22,8 @@ export function NudgeUpIcon({ size = 18, color = ICON_COLOR }: IconProps) {
   );
 }
 
-export function NudgeDownIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function NudgeDownIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Polyline points="9,14 5.5,9.5 12.5,9.5" fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
@@ -29,7 +31,8 @@ export function NudgeDownIcon({ size = 18, color = ICON_COLOR }: IconProps) {
   );
 }
 
-export function NudgeLeftIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function NudgeLeftIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Polyline points="4,9 8.5,5.5 8.5,12.5" fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
@@ -37,7 +40,8 @@ export function NudgeLeftIcon({ size = 18, color = ICON_COLOR }: IconProps) {
   );
 }
 
-export function NudgeRightIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function NudgeRightIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Polyline points="14,9 9.5,5.5 9.5,12.5" fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
@@ -46,7 +50,8 @@ export function NudgeRightIcon({ size = 18, color = ICON_COLOR }: IconProps) {
 }
 
 /** D-pad center: checkmark to center element on label. */
-export function CenterCheckIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function CenterCheckIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Polyline
@@ -62,7 +67,8 @@ export function CenterCheckIcon({ size = 18, color = ICON_COLOR }: IconProps) {
 }
 
 /** Row 1: center vertically on label (box on horizontal midline). */
-export function AlignVerticalCenterIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function AlignVerticalCenterIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Line x1="2" y1="9" x2="16" y2="9" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
@@ -72,7 +78,8 @@ export function AlignVerticalCenterIcon({ size = 18, color = ICON_COLOR }: IconP
 }
 
 /** Row 1: center horizontally on label (box on vertical midline). */
-export function AlignHorizontalCenterIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function AlignHorizontalCenterIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Line x1="9" y1="2" x2="9" y2="16" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
@@ -82,7 +89,8 @@ export function AlignHorizontalCenterIcon({ size = 18, color = ICON_COLOR }: Ico
 }
 
 /** Row 1: fit element to full label (corner brackets). */
-export function FitToCanvasIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function FitToCanvasIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Rect
@@ -105,7 +113,8 @@ export function FitToCanvasIcon({ size = 18, color = ICON_COLOR }: IconProps) {
 }
 
 /** Row 2: align object left edge to label. */
-export function AlignObjectLeftIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function AlignObjectLeftIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Line x1="4" y1="2" x2="4" y2="16" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
@@ -115,7 +124,8 @@ export function AlignObjectLeftIcon({ size = 18, color = ICON_COLOR }: IconProps
 }
 
 /** Row 2: align object horizontal center. */
-export function AlignObjectCenterHIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function AlignObjectCenterHIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Line x1="9" y1="2" x2="9" y2="16" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
@@ -125,7 +135,8 @@ export function AlignObjectCenterHIcon({ size = 18, color = ICON_COLOR }: IconPr
 }
 
 /** Row 2: align object right edge to label. */
-export function AlignObjectRightIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function AlignObjectRightIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Line x1="14" y1="2" x2="14" y2="16" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
@@ -135,7 +146,8 @@ export function AlignObjectRightIcon({ size = 18, color = ICON_COLOR }: IconProp
 }
 
 /** Row 2: stretch width to label edges. */
-export function StretchHorizontalIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function StretchHorizontalIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Rect x="5" y="6.5" width="8" height="5" rx="0.6" stroke={color} strokeWidth="1.3" fill="none" />
@@ -148,7 +160,8 @@ export function StretchHorizontalIcon({ size = 18, color = ICON_COLOR }: IconPro
 }
 
 /** Row 3: align object top edge. */
-export function AlignTopIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function AlignTopIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Line x1="2" y1="4" x2="16" y2="4" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
@@ -158,7 +171,8 @@ export function AlignTopIcon({ size = 18, color = ICON_COLOR }: IconProps) {
 }
 
 /** Row 3: align object bottom edge. */
-export function AlignBottomIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function AlignBottomIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Line x1="2" y1="14" x2="16" y2="14" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
@@ -168,7 +182,8 @@ export function AlignBottomIcon({ size = 18, color = ICON_COLOR }: IconProps) {
 }
 
 /** Row 3: stretch height to label edges. */
-export function StretchVerticalIcon({ size = 18, color = ICON_COLOR }: IconProps) {
+export function StretchVerticalIcon({ size = 18, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Rect x="6.5" y="5" width="5" height="8" rx="0.6" stroke={color} strokeWidth="1.3" fill="none" />
@@ -181,7 +196,8 @@ export function StretchVerticalIcon({ size = 18, color = ICON_COLOR }: IconProps
 }
 
 /** Bottom row: send to back (|◀). */
-export function SendToBackIcon({ size = 20, color = ICON_COLOR }: IconProps) {
+export function SendToBackIcon({ size = 20, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Line x1="4" y1="3" x2="4" y2="15" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
@@ -193,7 +209,8 @@ export function SendToBackIcon({ size = 20, color = ICON_COLOR }: IconProps) {
 }
 
 /** Bottom row: bring to front (▶|). */
-export function BringToFrontIcon({ size = 20, color = ICON_COLOR }: IconProps) {
+export function BringToFrontIcon({ size = 20, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Rect x="4" y="6" width="7" height="6" rx="0.8" stroke={color} strokeWidth="1.3" fill="none" />
@@ -205,7 +222,8 @@ export function BringToFrontIcon({ size = 20, color = ICON_COLOR }: IconProps) {
 }
 
 /** Bottom row: send one layer backward. */
-export function SendBackwardIcon({ size = 20, color = ICON_COLOR }: IconProps) {
+export function SendBackwardIcon({ size = 20, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Rect x="4" y="7.5" width="6.5" height="5" rx="0.7" stroke={color} strokeWidth="1.1" fill="none" opacity={0.45} />
@@ -215,7 +233,8 @@ export function SendBackwardIcon({ size = 20, color = ICON_COLOR }: IconProps) {
 }
 
 /** Bottom row: bring one layer forward. */
-export function BringForwardIcon({ size = 20, color = ICON_COLOR }: IconProps) {
+export function BringForwardIcon({ size = 20, color = C.textSecondary }: IconProps) {
+  useThemeRefresh();
   return (
     <SvgWrap size={size}>
       <Rect x="4.5" y="5.5" width="6.5" height="5" rx="0.7" stroke={color} strokeWidth="1.3" fill="none" />

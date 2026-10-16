@@ -14,14 +14,14 @@ import { Image } from 'expo-image';
 
 import { AppIcon } from '@/components/app-icon';
 import { LabelPreview } from '@/components/label-preview';
-import { Palette } from '@/constants/ui';
+
 import { JEWELRY_DIECUT } from '@/constants/jewelry-diecut';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { TEMPLATES, type TemplateItem } from '@/app/(tabs)/template';
 import { useLabelStore } from '@/stores/label-store';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-const ACCENT = '#48C3C7';
 const DEFAULT_TAG_W = JEWELRY_DIECUT.tagWidthMm;
 const DEFAULT_TAG_H = JEWELRY_DIECUT.tagHeightMm;
 
@@ -33,6 +33,7 @@ const SIZE_PRESETS = [
 ];
 
 export default function JewelleryLabelScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
@@ -85,7 +86,7 @@ export default function JewelleryLabelScreen() {
 
         {/* Option 1: Existing Templates & Labels */}
         <View style={styles.sectionHeader}>
-          <View style={[styles.sectionBadge, { backgroundColor: '#3B82F6' }]}>
+          <View style={[styles.sectionBadge, { backgroundColor: '#3B82F6' }]} /* theme-fixed: category badge, white icon */ >
             <Text style={styles.sectionBadgeText}>1</Text>
           </View>
           <View style={styles.sectionHeaderText}>
@@ -131,7 +132,7 @@ export default function JewelleryLabelScreen() {
 
         {/* Option 2: Import Image */}
         <View style={[styles.sectionHeader, { marginTop: 4 }]}>
-          <View style={[styles.sectionBadge, { backgroundColor: '#8B5CF6' }]}>
+          <View style={[styles.sectionBadge, { backgroundColor: '#8B5CF6' }]} /* theme-fixed: category badge, white icon */ >
             <Text style={styles.sectionBadgeText}>2</Text>
           </View>
           <View style={styles.sectionHeaderText}>
@@ -146,8 +147,8 @@ export default function JewelleryLabelScreen() {
           onPress={handlePickImage}
           style={({ pressed }) => [styles.importButton, pressed && styles.pressed]}
         >
-          <View style={[styles.optionIcon, { backgroundColor: '#8B5CF6' }]}>
-            <AppIcon name="photo" tintColor="#FFFFFF" size={24} />
+          <View style={[styles.optionIcon, { backgroundColor: '#8B5CF6' }]} /* theme-fixed: category badge, white icon */ >
+            <AppIcon name="photo" tintColor={C.onAccent} size={24} />
           </View>
           <View style={styles.optionText}>
             <Text style={styles.optionTitle}>Choose Image</Text>
@@ -155,7 +156,7 @@ export default function JewelleryLabelScreen() {
               This Device or Google Drive
             </Text>
           </View>
-          <AppIcon name="chevron.right" tintColor="#94A3B8" size={18} />
+          <AppIcon name="chevron.right" tintColor={C.textMuted} size={18} />
         </Pressable>
 
         {/* Cancel Button */}
@@ -171,12 +172,12 @@ export default function JewelleryLabelScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: c.scrim },
   sheet: {
     marginHorizontal: 10,
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingTop: 16,
@@ -187,12 +188,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
   },
   subtitle: {
     textAlign: 'center',
     fontSize: 12.5,
-    color: Palette.muted,
+    color: c.textMuted,
     marginBottom: 2,
   },
   sectionHeader: {
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionBadgeText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -219,11 +220,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
   },
   sectionSubtitle: {
     fontSize: 11.5,
-    color: Palette.muted,
+    color: c.textMuted,
   },
   templateScroll: {
     maxHeight: 180,
@@ -243,32 +244,32 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (templatePreview)
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2E8F0', // theme-fixed: light preview (templatePreview)
   },
   templateName: {
     fontSize: 11,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
     textAlign: 'center',
     lineHeight: 14,
   },
   templateDim: {
     fontSize: 10,
-    color: Palette.muted,
+    color: c.textMuted,
   },
   importButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
   },
   optionIcon: {
     width: 44,
@@ -278,23 +279,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   optionText: { flex: 1, minWidth: 0, gap: 2 },
-  optionTitle: { fontSize: 14.5, fontWeight: '600', color: Palette.ink },
-  optionDetail: { fontSize: 11.5, color: Palette.muted },
+  optionTitle: { fontSize: 14.5, fontWeight: '600', color: c.text },
+  optionDetail: { fontSize: 11.5, color: c.textMuted },
   cancel: {
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
   },
-  cancelText: { fontSize: 15, fontWeight: '600', color: '#007AFF' },
+  cancelText: { fontSize: 15, fontWeight: '600', color: c.link },
   pressed: { opacity: 0.7 },
 
   // Sizing Setup Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: c.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -302,7 +303,7 @@ const styles = StyleSheet.create({
   sizingModal: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 18,
     padding: 20,
     gap: 12,
@@ -310,24 +311,24 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
     textAlign: 'center',
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: c.textSecondary,
     textAlign: 'center',
     marginBottom: 4,
   },
   modalThumbWrap: {
     height: 90,
     borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F1F5F9', // theme-fixed: light preview (modalThumbWrap)
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2E8F0', // theme-fixed: light preview (modalThumbWrap)
   },
   modalThumb: {
     width: '100%',
@@ -336,7 +337,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#334155',
+    color: c.textSecondary,
   },
   presetGrid: {
     flexDirection: 'row',
@@ -347,21 +348,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
   },
   presetChipActive: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
+    backgroundColor: c.accent,
+    borderColor: c.accent,
   },
   presetText: {
     fontSize: 11.5,
     fontWeight: '500',
-    color: '#475569',
+    color: c.textSecondary,
   },
   presetTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontWeight: '700',
   },
   dimRow: {
@@ -376,29 +377,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   stepBtn: {
     width: 34,
     height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
   },
   stepBtnText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#334155',
+    color: c.textSecondary,
   },
   dimInput: {
     flex: 1,
     textAlign: 'center',
     fontSize: 15,
     fontWeight: '600',
-    color: '#0F172A',
+    color: c.text,
     height: 38,
     padding: 0,
   },
@@ -410,23 +411,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 7,
     borderRadius: 6,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
   fitChipActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: c.inkFill,
+    borderColor: c.text,
   },
   fitText: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: '#64748B',
+    color: c.textSecondary,
   },
   fitTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   modalActionRow: {
     flexDirection: 'row',
@@ -441,19 +442,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalCancelBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
   },
   modalCancelText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: c.textSecondary,
   },
   modalConfirmBtn: {
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
   },
   modalConfirmText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
-});
+}));

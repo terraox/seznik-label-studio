@@ -9,7 +9,6 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 
-import { Palette } from '@/constants/ui';
 import {
   FULL_CROP,
   computeContainRect,
@@ -20,6 +19,7 @@ import {
   type CropDragKind,
   type NormalizedCrop,
 } from '@/lib/editor/image-crop-math';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const HANDLE = 24;
 
@@ -72,6 +72,7 @@ export const ImageCropCanvas = forwardRef<ImageCropCanvasHandle, Props>(function
   { sourceUri, sourceWidth, sourceHeight, initialCrop, loading, style, onCropChange },
   ref,
 ) {
+  useThemeRefresh();
   const start = initialCrop ?? FULL_CROP;
   const [stageSize, setStageSize] = useState({ width: 1, height: 1 });
   const [imageRect, setImageRect] = useState({ x: 0, y: 0, width: 1, height: 1 });
@@ -202,7 +203,7 @@ export const ImageCropCanvas = forwardRef<ImageCropCanvasHandle, Props>(function
         );
       }}>
       {loading ? (
-        <ActivityIndicator color={Palette.accent} size="large" />
+        <ActivityIndicator color={C.accent} size="large" />
       ) : (
         <>
           <Image
@@ -242,24 +243,24 @@ export const ImageCropCanvas = forwardRef<ImageCropCanvasHandle, Props>(function
   );
 });
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   stage: {
     overflow: 'hidden',
-    backgroundColor: '#111827',
+    backgroundColor: '#111827', // theme-fixed: crop overlay, same in both themes (stage)
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dim: { position: 'absolute', left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.68)' },
+  dim: { position: 'absolute', left: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.68)' }, // theme-fixed: crop overlay, same in both themes (dim)
   gestureLayer: { ...StyleSheet.absoluteFillObject },
   cropFrame: { position: 'absolute' },
   cropBorder: {
     flex: 1,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: '#FFFFFF', // theme-fixed: crop overlay, same in both themes (cropBorder)
   },
   gridLine: {
     position: 'absolute',
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.35)', // theme-fixed: crop overlay, same in both themes (gridLine)
   },
   gridVertical: { top: 0, bottom: 0, width: StyleSheet.hairlineWidth },
   gridHorizontal: { left: 0, right: 0, height: StyleSheet.hairlineWidth },
@@ -269,11 +270,11 @@ const styles = StyleSheet.create({
     height: HANDLE,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: Palette.accent,
-    backgroundColor: '#FFFFFF',
+    borderColor: '#17A6B8', // theme-fixed: crop overlay, same in both themes (handle)
+    backgroundColor: '#FFFFFF', // theme-fixed: crop overlay, same in both themes (handle)
   },
   handleTL: { left: -HANDLE / 2, top: -HANDLE / 2 },
   handleTR: { right: -HANDLE / 2, top: -HANDLE / 2 },
   handleBL: { left: -HANDLE / 2, bottom: -HANDLE / 2 },
   handleBR: { right: -HANDLE / 2, bottom: -HANDLE / 2 },
-});
+}));

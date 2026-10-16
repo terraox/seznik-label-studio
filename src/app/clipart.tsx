@@ -24,11 +24,12 @@ import {
 import { LINE_EMOJI_GROUPS } from '@/constants/line-emoji-catalog';
 import { editorBridge } from '@/constants/editor-bridge';
 import { Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { hydrateUserClipartSvgs, importUserClipartFile, removeUserClipart } from '@/lib/clipart/user-storage';
 import type { ClipartItem } from '@/lib/clipart/types';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import { useUserClipartStore } from '@/stores/user-clipart-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type GalleryCategory = ClipartCategoryId | 'local' | (typeof LINE_EMOJI_GROUPS)[number]['id'];
 
@@ -49,6 +50,7 @@ const RAILS: { id: GalleryCategory; label: string }[] = [
 ];
 
 export default function ClipartScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ from?: string; mode?: string }>();
@@ -143,7 +145,7 @@ export default function ClipartScreen() {
             value={query}
             onChangeText={setQuery}
             placeholder={emojiMode ? 'Search emoji' : 'Search clipart'}
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={C.textMuted}
             style={styles.search}
           />
           {emojiMode ? null : (
@@ -221,16 +223,16 @@ export default function ClipartScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.surface },
   body: { flex: 1, minHeight: 0 },
   galleryRow: { flex: 1, flexDirection: 'row', minHeight: 0 },
   rail: {
     width: RAIL_WIDTH,
     flexGrow: 0,
-    backgroundColor: '#F4F6F8',
+    backgroundColor: c.fill,
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#E3E7ED',
+    borderRightColor: c.hairline,
   },
   railItem: {
     paddingHorizontal: 6,
@@ -238,15 +240,15 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  railItemActive: { backgroundColor: '#FFFFFF' },
+  railItemActive: { backgroundColor: c.surface },
   railLabel: {
     fontSize: 11,
     lineHeight: 14,
-    color: '#9AA3AD',
+    color: c.textMuted,
     fontWeight: '600',
     textAlign: 'center',
   },
-  railLabelActive: { color: Palette.accent },
+  railLabelActive: { color: c.accent },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -256,24 +258,24 @@ const styles = StyleSheet.create({
   },
   search: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
-    color: '#0F172A',
+    color: c.text,
   },
   uploadBtn: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  uploadText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  uploadText: { color: c.onAccent, fontSize: 13, fontWeight: '700' },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#8A97A4',
+    color: c.textMuted,
     paddingHorizontal: Spacing.two,
     paddingTop: Spacing.one,
     paddingBottom: 6,
@@ -284,8 +286,8 @@ const styles = StyleSheet.create({
   empty: {
     paddingHorizontal: 8,
     paddingVertical: 24,
-    color: '#64748B',
+    color: c.textSecondary,
     fontSize: 14,
     lineHeight: 20,
   },
-});
+}));

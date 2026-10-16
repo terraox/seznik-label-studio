@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SettingsStackHeader } from '@/components/settings-stack-header';
@@ -8,8 +8,10 @@ import { DRAWING_COLORS } from '@/components/editor/types';
 import { editorBridge } from '@/constants/editor-bridge';
 import { patchLabelDocument } from '@/lib/label-settings';
 import { useLabelStore } from '@/stores/label-store';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export default function DrawingColorScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ labelId?: string | string[]; selected?: string | string[] }>();
   const labelId = Array.isArray(params.labelId) ? params.labelId[0] : params.labelId;
@@ -51,7 +53,7 @@ export default function DrawingColorScreen() {
           gap: 12,
         }}>
         {DRAWING_COLORS.map((color, index) => {
-          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour
+          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour // theme-fixed: ink value, not UI
           const active = index === selectedIndex;
           return (
             <Pressable
@@ -71,10 +73,10 @@ export default function DrawingColorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
   },
   swatch: {
     height: 72,
@@ -84,18 +86,18 @@ const styles = StyleSheet.create({
   },
   swatchWhite: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
   },
   swatchActive: {
     borderWidth: 3,
-    borderColor: '#48C3C7',
+    borderColor: c.accent,
   },
   swatchCheck: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.35)',
+    color: c.onAccent,
+    textShadowColor: c.scrim,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-});
+}));

@@ -4,7 +4,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Canvas, ColorMatrix, Group, Image as SkiaImage, RuntimeShader, Skia, useImage } from '@shopify/react-native-skia';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
-import { Palette } from '@/constants/ui';
 import { MONO_IMAGE_SKSL } from '@/lib/editor/image-mono';
 import { colorContrastPreviewMatrix, monoPreviewMatrix } from '@/lib/pdf-editor/sharpen';
 import {
@@ -15,6 +14,7 @@ import {
   type PdfColorMode,
   type PdfWatermark,
 } from '@/lib/pdf-editor/session';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 /** Crop box touch tuning, in screen px. */
 const CROP_MIN = 40;
@@ -72,6 +72,7 @@ export function PdfPageViewer({
   /** Crop box width / height to hold while resizing. 0 = free. */
   aspectLock?: number;
 }) {
+  useThemeRefresh();
   const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null);
   const image = useImage(uri ?? undefined);
   const mode: PdfColorMode = colorMode ?? 'Original';
@@ -448,11 +449,11 @@ export function PdfPageViewer({
           style={{
             width: activeStageW,
             height: activeStageH,
-            backgroundColor: '#fff',
+            backgroundColor: '#fff', // theme-fixed: PDF page (printed)
             overflow: 'hidden',
             borderRadius: 4,
             elevation: 2,
-            shadowColor: '#000',
+            shadowColor: '#000', // theme-fixed: page shadow
             shadowOffset: { width: 0, height: 1 },
             shadowOpacity: 0.1,
             shadowRadius: 3,
@@ -502,7 +503,7 @@ export function PdfPageViewer({
             </Canvas>
           ) : uri ? (
             <View style={[styles.placeholder, { width: activeStageW, height: activeStageH }]}>
-              <ActivityIndicator color={Palette.accent} size="small" />
+              <ActivityIndicator color={C.accent} size="small" />
             </View>
           ) : (
             <View style={[styles.placeholder, { width: activeStageW, height: activeStageH }]}>
@@ -546,7 +547,7 @@ export function PdfPageViewer({
                 const r = Math.floor(i / totalCols);
                 const cellW = activeStageW / tiles.cols;
                 const cellH = activeStageH / tiles.rows;
-                const wmColor = watermark.text?.color || '#DC2626';
+                const wmColor = watermark.text?.color || '#DC2626'; // theme-fixed: watermark ink (printed)
                 const staggered = watermark.tiled?.staggered ?? true;
                 const staggerX = staggered && r % 2 === 1 ? cellW * 0.5 : 0;
                 const userPt = watermark.text?.fontSizePt ?? 22;
@@ -601,8 +602,8 @@ export function PdfPageViewer({
                     {
                       width: stampW,
                       height: stampH,
-                      borderColor: watermark.text?.color || '#DC2626',
-                      backgroundColor: 'rgba(255, 255, 255, 0.88)',
+                      borderColor: watermark.text?.color || '#DC2626', // theme-fixed: watermark ink (printed)
+                      backgroundColor: 'rgba(255, 255, 255, 0.88)', // theme-fixed: watermark stamp (printed)
                       opacity: Math.max(0.35, watermark.opacity),
                       transform: [{ rotate: `${watermark.rotationDeg}deg` }],
                     },
@@ -617,7 +618,7 @@ export function PdfPageViewer({
                       style={[
                         styles.stampText,
                         {
-                          color: watermark.text?.color || '#DC2626',
+                          color: watermark.text?.color || '#DC2626', // theme-fixed: watermark ink (printed)
                           fontSize: Math.max(14, Math.round(stampH * 0.42)),
                         },
                       ]}
@@ -634,7 +635,7 @@ export function PdfPageViewer({
                       resizeMode="contain"
                     />
                   ) : (
-                    <Text style={[styles.stampText, { color: watermark.text?.color || '#DC2626' }]}>
+                    <Text style={[styles.stampText, { color: watermark.text?.color || '#DC2626' }]} /* theme-fixed: watermark ink (printed) */ >
                       [IMAGE]
                     </Text>
                   )}
@@ -661,14 +662,14 @@ export function PdfPageViewer({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   stage: { alignItems: 'center', paddingVertical: 8 },
   fillStage: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
-  placeholder: { backgroundColor: Palette.cardTop, alignItems: 'center', justifyContent: 'center' },
-  placeholderText: { color: Palette.muted },
+  placeholder: { backgroundColor: c.fill, alignItems: 'center', justifyContent: 'center' },
+  placeholderText: { color: c.textMuted },
   mask: {
     position: 'absolute',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: '#0A0A0A', // theme-fixed: crop overlay, same in both themes (mask)
   },
   cropFrame: {
     position: 'absolute',
@@ -676,9 +677,9 @@ const styles = StyleSheet.create({
   cropBorder: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: '#FFFFFF', // theme-fixed: crop overlay, same in both themes (cropBorder)
   },
-  corner: { position: 'absolute', width: 24, height: 24, borderColor: '#FFFFFF' },
+  corner: { position: 'absolute', width: 24, height: 24, borderColor: '#FFFFFF' }, // theme-fixed: crop overlay, same in both themes (corner)
   edgeH: {
     position: 'absolute',
     alignSelf: 'center',
@@ -686,7 +687,7 @@ const styles = StyleSheet.create({
     marginLeft: -16,
     width: 32,
     height: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: crop overlay, same in both themes (edgeH)
   },
   edgeV: {
     position: 'absolute',
@@ -694,21 +695,21 @@ const styles = StyleSheet.create({
     marginTop: -16,
     width: 4,
     height: 32,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: crop overlay, same in both themes (edgeV)
   },
   gridV: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     width: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.6)', // theme-fixed: crop overlay, same in both themes (gridV)
   },
   gridH: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.6)', // theme-fixed: crop overlay, same in both themes (gridH)
   },
   stampWrapper: {
     position: 'absolute',
@@ -723,7 +724,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    shadowColor: '#000',
+    shadowColor: '#000', // theme-fixed: crop overlay, same in both themes (stampBox)
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
@@ -733,13 +734,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -9,
     right: 8,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
   },
   dragBadgeText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 9,
     fontWeight: '900',
     letterSpacing: 0.5,
@@ -760,5 +761,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textAlign: 'center',
   },
-  hint: { marginTop: 6, fontSize: 11, color: Palette.muted },
-});
+  hint: { marginTop: 6, fontSize: 11, color: c.textMuted },
+}));

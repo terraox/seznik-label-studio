@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
-import { Palette, cardShadow } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
 import {
   LabelDpi,
   LabelSizePreset,
@@ -24,6 +24,7 @@ import {
   StandardLabelSizeId,
   STANDARD_LABEL_SIZES,
 } from '@/lib/shipping-editor/types';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type LabelSizePickerProps = {
   selectedPreset: LabelSizePreset;
@@ -40,6 +41,7 @@ export function LabelSizePicker({
   onChangeDpi,
   onCustomSize,
 }: LabelSizePickerProps) {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
   const [customW, setCustomW] = useState(String(selectedPreset.widthMm));
@@ -70,7 +72,7 @@ export function LabelSizePicker({
         style={({ pressed }) => [styles.triggerBar, pressed && styles.pressed]}
         onPress={() => setModalVisible(true)}>
         <View style={styles.triggerLeft}>
-          <AppIcon name="doc.plaintext" tintColor="#2563EB" size={18} />
+          <AppIcon name="doc.plaintext" tintColor={C.link} size={18} />
           <View style={styles.triggerInfo}>
             <Text style={styles.triggerTitle}>{selectedPreset.name}</Text>
             <Text style={styles.triggerSubtitle}>
@@ -78,7 +80,7 @@ export function LabelSizePicker({
             </Text>
           </View>
         </View>
-        <AppIcon name="chevron.down" tintColor="#64748B" size={14} />
+        <AppIcon name="chevron.down" tintColor={C.textSecondary} size={14} />
       </Pressable>
 
       {/* Selection Modal */}
@@ -96,7 +98,7 @@ export function LabelSizePicker({
                 hitSlop={12}
                 onPress={() => setModalVisible(false)}
                 style={styles.closeButton}>
-                <AppIcon name="xmark" tintColor="#64748B" size={16} />
+                <AppIcon name="xmark" tintColor={C.textSecondary} size={16} />
               </Pressable>
             </View>
 
@@ -152,7 +154,7 @@ export function LabelSizePicker({
                       </Text>
                     </View>
                     {isSelected && (
-                      <AppIcon name="checkmark.circle.fill" tintColor="#2563EB" size={20} />
+                      <AppIcon name="checkmark.circle.fill" tintColor={C.link} size={20} />
                     )}
                   </Pressable>
                 );
@@ -213,17 +215,17 @@ export function LabelSizePicker({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   triggerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     marginBottom: 10,
   },
   triggerLeft: {
@@ -235,23 +237,23 @@ const styles = StyleSheet.create({
   triggerTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
   },
   triggerSubtitle: {
     fontSize: 11,
-    color: '#64748B',
+    color: c.textSecondary,
     marginTop: 1,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: c.scrim,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 18,
@@ -267,7 +269,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
   },
   closeButton: {
     padding: 6,
@@ -276,7 +278,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
@@ -284,7 +286,7 @@ const styles = StyleSheet.create({
   dpiLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#334155',
+    color: c.textSecondary,
   },
   dpiToggle: {
     flexDirection: 'row',
@@ -294,18 +296,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
   },
   dpiChipActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#2563EB', // theme-fixed: blue button, white text
   },
   dpiText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
+    color: c.textSecondary,
   },
   dpiTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   presetList: {
     maxHeight: 400,
@@ -317,12 +319,12 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     marginBottom: 8,
   },
   presetItemActive: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    borderColor: c.link,
+    backgroundColor: c.accentSoft,
   },
   presetLeft: {
     flex: 1,
@@ -330,35 +332,35 @@ const styles = StyleSheet.create({
   presetName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
   },
   presetTextActive: {
-    color: '#2563EB',
+    color: c.link,
   },
   presetDetail: {
     fontSize: 12,
-    color: '#475569',
+    color: c.textSecondary,
     marginTop: 2,
   },
   presetPx: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: c.textMuted,
     marginTop: 2,
     fontFamily: 'monospace',
   },
   customBox: {
     marginTop: 8,
     padding: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     marginBottom: 16,
   },
   customTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
     marginBottom: 8,
   },
   unitToggleRow: {
@@ -370,19 +372,19 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
   },
   unitBtnActive: {
-    backgroundColor: '#0F172A',
+    backgroundColor: c.inkFill,
   },
   unitBtnText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#475569',
+    color: c.textSecondary,
   },
   unitBtnTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   customInputsRow: {
     flexDirection: 'row',
@@ -394,32 +396,32 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: c.textSecondary,
     marginBottom: 4,
   },
   textInput: {
     height: 38,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 6,
     paddingHorizontal: 8,
     fontSize: 14,
     fontWeight: '600',
-    color: '#0F172A',
+    color: c.text,
   },
   applyBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#2563EB', // theme-fixed: blue button, white text
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
   },
   applyBtnText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '700',
   },
   pressed: {
     opacity: 0.75,
   },
-});
+}));

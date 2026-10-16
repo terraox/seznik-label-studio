@@ -6,13 +6,14 @@
  */
 
 import React, { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { ToolMenuIcon } from '@/components/editor/editor-menu-icons';
 import { PaletteToolItem } from '@/components/editor/palette-tool-item';
 import { paletteDropTypeForLabel } from '@/lib/editor/palette-drop';
 import type { ElementType } from '@/lib/label-document';
 import type { AppIconName } from '@/components/app-icon';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export const STATIC_PALETTE_CONTENT_HEIGHT = 270;
 
@@ -58,6 +59,7 @@ export const StaticToolPalette = memo(function StaticToolPalette({
   onMoveDrag,
   onEndDrag,
 }: StaticToolPaletteProps) {
+  useThemeRefresh();
   return (
     <View style={styles.toolsContainer} collapsable={false}>
       {TOOL_ROWS.map((row, rowIndex) => (
@@ -99,12 +101,12 @@ export const StaticToolPalette = memo(function StaticToolPalette({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   toolsContainer: {
     width: '100%',
     height: STATIC_PALETTE_CONTENT_HEIGHT,
     paddingVertical: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   toolRow: {
     flexDirection: 'row',
@@ -128,10 +130,10 @@ const styles = StyleSheet.create({
   toolLabel: {
     fontSize: 12,
     fontWeight: '400',
-    color: '#475569',
+    color: c.textSecondary,
     textAlign: 'center',
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));

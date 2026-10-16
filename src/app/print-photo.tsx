@@ -22,7 +22,7 @@ import { PhotoFramePreview } from '@/components/photo-frame-preview';
 import { PrintSizeSelector } from '@/components/print-size-selector';
 import { getPhotoFrame } from '@/constants/photo-frames';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow, Palette } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
 import { type LabelSizeMm } from '@/lib/label-geometry';
 import { decodeGalleryImage } from '@/lib/printer/gallery-decode';
 import { pngBase64ToGray, rotateGray } from '@/lib/printer/escpos';
@@ -44,6 +44,7 @@ import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-mana
 import { logPrintTrace } from '@/printing';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
 const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'] as const;
@@ -64,7 +65,7 @@ function StepperRow({
   onCommitValue,
   minusDisabled,
   plusDisabled,
-  valueColor = Palette.accent,
+  valueColor = C.accent,
   bordered,
 }: {
   label: string;
@@ -78,6 +79,7 @@ function StepperRow({
   valueColor?: string;
   bordered?: boolean;
 }) {
+  useThemeRefresh();
   return (
     <View style={[styles.stepRow, bordered && styles.stepRowBorder]}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -126,6 +128,7 @@ function ChipGroup<T extends string>({
   selected: T;
   onSelect: (v: T) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.chipRow}>
       {options.map((option) => {
@@ -150,6 +153,7 @@ function ChipGroup<T extends string>({
 }
 
 export default function PrintPhotoScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{
@@ -512,7 +516,7 @@ export default function PrintPhotoScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+          <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
         </Pressable>
         <Pressable
           onPress={() => router.push('/printer-connect')}
@@ -524,7 +528,7 @@ export default function PrintPhotoScreen() {
           <Text numberOfLines={1} style={styles.connectionText}>
             {connected ? deviceName ?? 'Connected' : 'Unconnected'}
           </Text>
-          <AppIcon name="link" tintColor="#FFFFFF" size={14} />
+          <AppIcon name="link" tintColor="#FFFFFF" size={14} /* theme-fixed: white icon on status fill */ />
         </Pressable>
       </View>
 
@@ -570,7 +574,7 @@ export default function PrintPhotoScreen() {
             <Pressable
               onPress={() => setPhotoRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
               style={({ pressed }) => [styles.photoRotateBtn, pressed && styles.pressed]}>
-              <AppIcon name="arrow.clockwise" tintColor="#0274DF" size={16} />
+              <AppIcon name="arrow.clockwise" tintColor={C.link} size={16} />
               <Text style={styles.photoRotateBtnText}>Rotate Photo ({photoRotation}°)</Text>
             </Pressable>
           </View>
@@ -593,7 +597,7 @@ export default function PrintPhotoScreen() {
             <View style={styles.thumbEmpty} />
           )}
           <Text style={styles.addPhotoText}>Add photo</Text>
-          <AppIcon name="chevron.right" tintColor="#94A3B8" size={16} />
+          <AppIcon name="chevron.right" tintColor={C.textMuted} size={16} />
         </Pressable>
 
         {isFrame ? (
@@ -655,7 +659,7 @@ export default function PrintPhotoScreen() {
           <StepperRow
             label="Print Darkness"
             value={darkness == null ? 'Auto' : String(darkness)}
-            valueColor={darkness == null ? Palette.muted : Palette.accent}
+            valueColor={darkness == null ? C.textMuted : C.accent}
             minusDisabled={darkness == null}
             plusDisabled={darkness != null && darkness >= 15}
             onMinus={() => setDarkness((d) => (d == null || d <= 1 ? null : d - 1))}
@@ -665,7 +669,7 @@ export default function PrintPhotoScreen() {
           <StepperRow
             label="Print Speed"
             value={speed == null ? 'Auto' : String(speed)}
-            valueColor={speed == null ? Palette.muted : Palette.accent}
+            valueColor={speed == null ? C.textMuted : C.accent}
             minusDisabled={speed == null}
             plusDisabled={speed != null && speed >= 5}
             onMinus={() => setSpeed((s) => (s == null || s <= 1 ? null : s - 1))}
@@ -712,8 +716,8 @@ export default function PrintPhotoScreen() {
             <Switch
               value={flipH}
               onValueChange={setFlipH}
-              trackColor={{ false: '#D1D5DB', true: Palette.accent }}
-              thumbColor="#FFFFFF"
+              trackColor={{ false: C.border, true: C.accent }}
+              thumbColor="#FFFFFF" // theme-fixed: white switch thumb
             />
           </View>
           <View style={styles.stepRow}>
@@ -721,8 +725,8 @@ export default function PrintPhotoScreen() {
             <Switch
               value={antiColor}
               onValueChange={setAntiColor}
-              trackColor={{ false: '#D1D5DB', true: Palette.accent }}
-              thumbColor="#FFFFFF"
+              trackColor={{ false: C.border, true: C.accent }}
+              thumbColor="#FFFFFF" // theme-fixed: white switch thumb
             />
           </View>
         </View>
@@ -744,7 +748,7 @@ export default function PrintPhotoScreen() {
             style={{
               width: printCaptureSize.widthPx,
               height: printCaptureSize.heightPx,
-              backgroundColor: '#FFFFFF',
+              backgroundColor: '#FFFFFF', // theme-fixed: print capture surface
               alignItems: 'center',
               justifyContent: 'center',
             }}>
@@ -759,14 +763,14 @@ export default function PrintPhotoScreen() {
         <Pressable
           onPress={() => router.push('/printing-settings')}
           style={({ pressed }) => [styles.gearBtn, pressed && styles.pressed]}>
-          <AppIcon name="gearshape.fill" tintColor="#FFFFFF" size={22} />
+          <AppIcon name="gearshape.fill" tintColor="#FFFFFF" size={22} /* theme-fixed: white icon on a coloured button */ />
         </Pressable>
         <Pressable
           disabled={printing}
           onPress={() => setSizeSheetOpen(true)}
           style={({ pressed }) => [styles.printBtn, (pressed || printing) && styles.pressed]}>
           {printing ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color="#FFFFFF" /* theme-fixed: on accent button */ />
           ) : (
             <Text style={styles.printBtnText}>Print</Text>
           )}
@@ -791,10 +795,10 @@ export default function PrintPhotoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F4F5F7' },
+const styles = themedStyles((c, scheme) => ({
+  root: { flex: 1, backgroundColor: c.fill },
   header: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -806,20 +810,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Palette.danger,
+    backgroundColor: c.dangerFill,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     maxWidth: 180,
   },
-  connectionConnected: { backgroundColor: '#2E9E63' },
-  connectionText: { color: '#FFFFFF', fontSize: 13, fontWeight: '500' },
+  connectionConnected: { backgroundColor: c.successFill },
+  connectionText: { color: c.onAccent, fontSize: 13, fontWeight: '500' },
   scroll: { flex: 1, width: '100%' },
   previewArea: {
     width: '100%',
     alignItems: 'center',
     paddingVertical: 18,
-    backgroundColor: '#D5DCE4',
+    backgroundColor: scheme === 'light' ? '#D5DCE4' : c.canvasArea, // theme-fixed: light keeps its grey stage around the white label
   },
   previewShadow: {
     borderRadius: 6,
@@ -828,21 +832,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: -10000,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (printCaptureNative)
     pointerEvents: 'none',
   },
   printCapture: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (printCapture)
   },
   directPreview: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (directPreview)
     borderRadius: 4,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     ...cardShadow,
   },
-  placeholderHint: { color: Palette.muted, fontSize: 13, fontWeight: '400' },
+  placeholderHint: { color: c.textMuted, fontSize: 13, fontWeight: '400' },
   photoActionRow: {
     marginTop: 10,
     flexDirection: 'row',
@@ -853,20 +857,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: c.accentSoft,
     borderRadius: 10,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: c.border,
   },
   photoRotateBtnText: {
-    color: '#0274DF',
+    color: c.link,
     fontSize: 14,
     fontWeight: '600',
   },
   addPhotoCard: {
     marginTop: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -881,7 +885,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 6,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: c.fillStrong,
   },
   thumbClear: {
     position: 'absolute',
@@ -890,24 +894,24 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: Palette.danger,
+    backgroundColor: c.dangerFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  thumbClearX: { color: '#FFFFFF', fontSize: 12, fontWeight: '600', lineHeight: 14 },
-  addPhotoText: { flex: 1, fontSize: 15, fontWeight: '500', color: Palette.ink },
+  thumbClearX: { color: c.onAccent, fontSize: 12, fontWeight: '600', lineHeight: 14 },
+  addPhotoText: { flex: 1, fontSize: 15, fontWeight: '500', color: c.text },
   hint: {
     marginTop: 12,
     marginHorizontal: 28,
     textAlign: 'center',
-    color: '#94A3B8',
+    color: c.textMuted,
     fontSize: 12,
     fontWeight: '400',
     lineHeight: 17,
   },
   card: {
     marginTop: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -916,7 +920,7 @@ const styles = StyleSheet.create({
   groupLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: Palette.ink,
+    color: c.text,
     marginBottom: 10,
   },
   groupSpaced: { marginTop: 14 },
@@ -925,11 +929,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
   },
-  chipActive: { backgroundColor: Palette.accent },
-  chipText: { fontSize: 13, fontWeight: '500', color: '#556473' },
-  chipTextActive: { color: '#FFFFFF' },
+  chipActive: { backgroundColor: c.accentFill },
+  chipText: { fontSize: 13, fontWeight: '500', color: c.textSecondary },
+  chipTextActive: { color: c.onAccent },
   sliderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -937,11 +941,11 @@ const styles = StyleSheet.create({
     marginTop: 14,
     marginBottom: 8,
   },
-  sliderValue: { fontSize: 14, fontWeight: '500', color: Palette.accent },
+  sliderValue: { fontSize: 14, fontWeight: '500', color: c.accent },
   sliderTrack: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
     position: 'relative',
     marginBottom: 10,
   },
@@ -951,7 +955,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     borderRadius: 2,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   sliderThumb: {
     position: 'absolute',
@@ -960,20 +964,20 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
   },
   sliderButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
   tinyBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tinyBtnText: { fontSize: 16, color: Palette.ink },
+  tinyBtnText: { fontSize: 16, color: c.text },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -982,27 +986,27 @@ const styles = StyleSheet.create({
   },
   stepRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E4E8ED',
+    borderBottomColor: c.hairline,
   },
-  rowLabel: { fontSize: 14, fontWeight: '400', color: Palette.ink, flex: 1 },
+  rowLabel: { fontSize: 14, fontWeight: '400', color: c.text, flex: 1 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stepCircle: {
     width: 28,
     height: 28,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepCircleAccent: {
-    borderColor: Palette.accent,
-    backgroundColor: Palette.accent,
+    borderColor: c.accent,
+    backgroundColor: c.accentFill,
   },
   stepCircleMuted: { opacity: 0.45 },
-  stepGlyph: { fontSize: 18, color: Palette.ink, lineHeight: 20 },
-  stepGlyphMuted: { color: '#94A3B8' },
-  stepGlyphAccent: { fontSize: 18, color: '#FFFFFF', lineHeight: 20 },
+  stepGlyph: { fontSize: 18, color: c.text, lineHeight: 20 },
+  stepGlyphMuted: { color: c.textMuted },
+  stepGlyphAccent: { fontSize: 18, color: c.onAccent, lineHeight: 20 },
   stepValue: {
     minWidth: 52,
     textAlign: 'center',
@@ -1019,13 +1023,13 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingTop: 10,
-    backgroundColor: '#F4F5F7',
+    backgroundColor: c.fill,
   },
   gearBtn: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1033,10 +1037,10 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  printBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '500' },
+  printBtnText: { color: c.onAccent, fontSize: 17, fontWeight: '500' },
   pressed: { opacity: 0.75 },
-});
+}));

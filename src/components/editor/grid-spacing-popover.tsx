@@ -10,7 +10,8 @@ import {
   spacingOptionForMm,
 } from '@/lib/editor/grid-settings-ui';
 import { Spacing } from '@/constants/theme';
-import { Palette, Type, androidRipple } from '@/constants/ui';
+import { Type, androidRipple } from '@/constants/ui';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 type GridSpacingPopoverProps = {
   visible: boolean;
@@ -30,6 +31,7 @@ export function GridSpacingPopover({
   onClose,
   onSpacingChange,
 }: GridSpacingPopoverProps) {
+  useThemeRefresh();
   const [customOpen, setCustomOpen] = useState(false);
   const [draft, setDraft] = useState('');
 
@@ -123,10 +125,10 @@ export function GridSpacingPopover({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+    backgroundColor: c.scrim,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
     paddingTop: 96,
@@ -135,12 +137,12 @@ const styles = StyleSheet.create({
   },
   panel: {
     width: 260,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     gap: Spacing.two,
-    shadowColor: '#0B1F33',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 12,
@@ -148,12 +150,12 @@ const styles = StyleSheet.create({
   },
   title: {
     ...Type.bodyMedium,
-    color: Palette.ink,
+    color: c.text,
     fontWeight: '600',
   },
   disclaimer: {
     ...Type.caption,
-    color: Palette.muted,
+    color: c.textMuted,
     lineHeight: 16,
   },
   chipRow: {
@@ -165,43 +167,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
   },
   chipActive: {
-    backgroundColor: 'rgba(23, 166, 184, 0.12)',
-    borderColor: Palette.accent,
+    backgroundColor: c.accentSoft,
+    borderColor: c.accent,
   },
   chipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Palette.muted,
+    color: c.textMuted,
   },
   chipTextActive: {
-    color: Palette.accent,
+    color: c.accent,
   },
   customBlock: {
     gap: 4,
   },
   customLabel: {
     ...Type.caption,
-    color: Palette.ink,
+    color: c.text,
     fontWeight: '600',
   },
   customInput: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 16,
-    color: Palette.ink,
-    backgroundColor: '#F8FAFC',
+    color: c.text,
+    backgroundColor: c.fill,
   },
   customHint: {
     ...Type.caption,
-    color: Palette.muted,
+    color: c.textMuted,
   },
   doneBtn: {
     alignSelf: 'flex-end',
@@ -210,10 +212,10 @@ const styles = StyleSheet.create({
   },
   doneText: {
     ...Type.bodyMedium,
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '600',
   },
   pressed: {
     opacity: 0.85,
   },
-});
+}));

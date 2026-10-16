@@ -1,7 +1,7 @@
 import { useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
-const ACCENT = '#48C3C7';
 const THUMB_SIZE = 20;
 const TRACK_HEIGHT = 4;
 
@@ -23,6 +23,7 @@ export function FontSlider({
   max?: number;
   step?: number;
 }) {
+  useThemeRefresh();
   const trackWidth = useRef(1);
   const clamped = clampFontSize(value, min, max, step);
   const ratio = (clamped - min) / (max - min);
@@ -59,7 +60,7 @@ export function FontSlider({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   sliderBlock: {
     marginTop: 10,
     paddingBottom: 4,
@@ -76,13 +77,13 @@ const styles = StyleSheet.create({
   sliderTrack: {
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
     overflow: 'hidden',
   },
   sliderFill: {
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
   },
   sliderThumb: {
     position: 'absolute',
@@ -90,8 +91,8 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 2,
-    borderColor: ACCENT,
+    borderColor: c.accent,
   },
-});
+}));

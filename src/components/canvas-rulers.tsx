@@ -4,7 +4,7 @@ import Svg, { Line, Rect } from 'react-native-svg';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
 import { rulerTicksFor, type RulerTick } from '@/lib/editor/ruler-ticks';
-import { Palette } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export const RULER_SIZE = 28;
 
@@ -16,13 +16,6 @@ export type LiveRulerBounds = {
   visible: SharedValue<boolean>;
 };
 
-const RULER_BG = '#F0F4F9';
-const BRAND_BLUE = Palette.header; // #214668
-const TICK_MINOR = '#C4CDD6';
-const TICK_MID = '#A0AEC0';
-const TICK_MAJOR = BRAND_BLUE;
-const LABEL_COLOR = '#8A94A6';
-const DIVIDER_COLOR = BRAND_BLUE;
 
 type Tick = RulerTick;
 
@@ -75,6 +68,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
   selectedRangeMm?: { start: number; end: number } | null;
   liveBounds?: LiveRulerBounds;
 }) {
+  useThemeRefresh();
   const track = Math.max(1, trackWidthPx);
   const content = Math.max(1, contentWidthPx);
   const origin = Math.max(0, originPx);
@@ -112,7 +106,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
     <View style={[styles.hTrack, { width: track }]}>
       <Svg width={track} height={RULER_SIZE} style={StyleSheet.absoluteFill}>
         {/* Light blue-grey background */}
-        <Rect x={0} y={0} width={track} height={RULER_SIZE} fill={RULER_BG} />
+        <Rect x={0} y={0} width={track} height={RULER_SIZE} fill={C.fill} />
 
         {/* Selected element projection band & edge indicators (static fallback) */}
         {selectionProjection && (
@@ -122,7 +116,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
               y={0}
               width={selectionProjection.width}
               height={RULER_SIZE - 1}
-              fill={BRAND_BLUE}
+              fill={C.brandInk}
               opacity={0.12}
             />
             <Line
@@ -130,7 +124,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
               y1={0}
               x2={selectionProjection.x1}
               y2={RULER_SIZE - 1}
-              stroke={BRAND_BLUE}
+              stroke={C.brandInk}
               strokeWidth={1}
               strokeDasharray="2,2"
             />
@@ -139,7 +133,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
               y1={0}
               x2={selectionProjection.x2}
               y2={RULER_SIZE - 1}
-              stroke={BRAND_BLUE}
+              stroke={C.brandInk}
               strokeWidth={1}
               strokeDasharray="2,2"
             />
@@ -153,10 +147,10 @@ export const HorizontalRuler = memo(function HorizontalRuler({
           const isEnd = Math.abs(tick.mm - lengthMm) < 0.01;
           const isMajor = tick.kind === 'major';
           const stroke = isMajor
-            ? TICK_MAJOR
+            ? C.brandInk
             : tick.kind === 'mid'
-              ? TICK_MID
-              : TICK_MINOR;
+              ? C.textMuted
+              : C.textDisabled;
           const strokeWidth = isMajor ? 1.25 : 1;
           const halfStroke = strokeWidth / 2;
           // Inset stroke at bounds so boundary ticks are crisp and not clipped by overflow: 'hidden'
@@ -186,7 +180,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
           y1={RULER_SIZE - 0.5}
           x2={track}
           y2={RULER_SIZE - 0.5}
-          stroke={DIVIDER_COLOR}
+          stroke={C.brandInk}
           strokeWidth={1}
         />
       </Svg>
@@ -232,6 +226,7 @@ export const VerticalRuler = memo(function VerticalRuler({
   selectedRangeMm?: { start: number; end: number } | null;
   liveBounds?: LiveRulerBounds;
 }) {
+  useThemeRefresh();
   const track = Math.max(1, trackHeightPx);
   const content = Math.max(1, contentHeightPx);
   const origin = Math.max(0, originPx);
@@ -269,7 +264,7 @@ export const VerticalRuler = memo(function VerticalRuler({
     <View style={[styles.vTrack, { height: track }]}>
       <Svg width={RULER_SIZE} height={track} style={StyleSheet.absoluteFill}>
         {/* Light blue-grey background */}
-        <Rect x={0} y={0} width={RULER_SIZE} height={track} fill={RULER_BG} />
+        <Rect x={0} y={0} width={RULER_SIZE} height={track} fill={C.fill} />
 
         {/* Selected element projection band & edge indicators (static fallback) */}
         {selectionProjection && (
@@ -279,7 +274,7 @@ export const VerticalRuler = memo(function VerticalRuler({
               y={selectionProjection.top}
               width={RULER_SIZE - 1}
               height={selectionProjection.height}
-              fill={BRAND_BLUE}
+              fill={C.brandInk}
               opacity={0.12}
             />
             <Line
@@ -287,7 +282,7 @@ export const VerticalRuler = memo(function VerticalRuler({
               y1={selectionProjection.y1}
               x2={RULER_SIZE - 1}
               y2={selectionProjection.y1}
-              stroke={BRAND_BLUE}
+              stroke={C.brandInk}
               strokeWidth={1}
               strokeDasharray="2,2"
             />
@@ -296,7 +291,7 @@ export const VerticalRuler = memo(function VerticalRuler({
               y1={selectionProjection.y2}
               x2={RULER_SIZE - 1}
               y2={selectionProjection.y2}
-              stroke={BRAND_BLUE}
+              stroke={C.brandInk}
               strokeWidth={1}
               strokeDasharray="2,2"
             />
@@ -310,10 +305,10 @@ export const VerticalRuler = memo(function VerticalRuler({
           const isEnd = Math.abs(tick.mm - lengthMm) < 0.01;
           const isMajor = tick.kind === 'major';
           const stroke = isMajor
-            ? TICK_MAJOR
+            ? C.brandInk
             : tick.kind === 'mid'
-              ? TICK_MID
-              : TICK_MINOR;
+              ? C.textMuted
+              : C.textDisabled;
           const strokeWidth = isMajor ? 1.25 : 1;
           const halfStroke = strokeWidth / 2;
           let y = origin + tick.px;
@@ -342,7 +337,7 @@ export const VerticalRuler = memo(function VerticalRuler({
           y1={0}
           x2={RULER_SIZE - 0.5}
           y2={track}
-          stroke={DIVIDER_COLOR}
+          stroke={C.brandInk}
           strokeWidth={1}
         />
       </Svg>
@@ -374,6 +369,7 @@ export const VerticalRuler = memo(function VerticalRuler({
 });
 
 export const RulerCorner = memo(function RulerCorner() {
+  useThemeRefresh();
   return (
     <View style={styles.corner}>
       <Text style={styles.cornerText}>mm</Text>
@@ -381,36 +377,36 @@ export const RulerCorner = memo(function RulerCorner() {
   );
 });
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c, scheme) => ({
   hTrack: {
     height: RULER_SIZE,
-    backgroundColor: RULER_BG,
+    backgroundColor: c.fill,
     overflow: 'hidden',
   },
   vTrack: {
     width: RULER_SIZE,
-    backgroundColor: RULER_BG,
+    backgroundColor: c.fill,
     overflow: 'hidden',
   },
   hSelectionOverlay: {
     position: 'absolute',
     top: 0,
     height: RULER_SIZE - 1,
-    backgroundColor: 'rgba(33, 70, 104, 0.12)',
+    backgroundColor: scheme === 'light' ? 'rgba(33, 70, 104, 0.12)' : c.accentSoft, // theme-fixed: light keeps its navy band
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderLeftColor: BRAND_BLUE,
-    borderRightColor: BRAND_BLUE,
+    borderLeftColor: c.brandInk,
+    borderRightColor: c.brandInk,
   },
   vSelectionOverlay: {
     position: 'absolute',
     left: 0,
     width: RULER_SIZE - 1,
-    backgroundColor: 'rgba(33, 70, 104, 0.12)',
+    backgroundColor: scheme === 'light' ? 'rgba(33, 70, 104, 0.12)' : c.accentSoft, // theme-fixed: light keeps its navy band
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderTopColor: BRAND_BLUE,
-    borderBottomColor: BRAND_BLUE,
+    borderTopColor: c.brandInk,
+    borderBottomColor: c.brandInk,
   },
   hLabel: {
     position: 'absolute',
@@ -418,7 +414,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '600',
     letterSpacing: 0.1,
-    color: LABEL_COLOR,
+    color: c.textMuted,
   },
   vLabel: {
     position: 'absolute',
@@ -426,27 +422,27 @@ const styles = StyleSheet.create({
     fontSize: 7.5,
     fontWeight: '600',
     letterSpacing: 0.1,
-    color: LABEL_COLOR,
+    color: c.textMuted,
   },
   endLabel: {
-    color: BRAND_BLUE,
+    color: c.brandInk,
     fontWeight: '700',
   },
   corner: {
     width: RULER_SIZE,
     height: RULER_SIZE,
-    backgroundColor: RULER_BG,
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderColor: DIVIDER_COLOR,
+    borderColor: c.brandInk,
   },
   cornerText: {
-    color: BRAND_BLUE,
+    color: c.brandInk,
     fontSize: 8.5,
     fontWeight: '700',
     letterSpacing: 0.4,
     textTransform: 'lowercase',
   },
-});
+}));

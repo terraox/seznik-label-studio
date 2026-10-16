@@ -15,7 +15,7 @@ import { LabelDimensionModal } from '@/components/label-dimension-modal';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { JEWELRY_DIECUT, JEWELRY_DIECUT_PREVIEW_SINGLE } from '@/constants/jewelry-diecut';
 import { Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { useTranslation } from '@/lib/i18n';
 import {
     createLabelDocument,
@@ -34,6 +34,7 @@ import { scaleDocumentToSize } from '@/lib/element-sizing';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { Image } from 'expo-image';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const SETUP_PRESETS = [
   { label: '50 × 25', width: 50, height: 25 },
@@ -56,6 +57,7 @@ function unitSuffix(unit: LabelUnit): string {
 }
 
 export default function NewLabelSetupScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{
@@ -182,7 +184,7 @@ export default function NewLabelSetupScreen() {
         orientation: defaults.orientation,
         paperType: defaults.paperType,
         elements: [imgElement],
-        background: { type: 'color', color: '#FFFFFF' },
+        background: { type: 'color', color: '#FFFFFF' }, // theme-fixed: label paper colour (document data)
       });
       if (params.isJewelleryTag === 'true' || size.widthMm <= 15) {
         doc.templateCategory = 'jewelry';
@@ -233,7 +235,7 @@ export default function NewLabelSetupScreen() {
         orientation: defaults.orientation,
         paperType: defaults.paperType,
         elements: ups.panels[0] ?? [],
-        background: { type: 'color', color: '#FFFFFF' },
+        background: { type: 'color', color: '#FFFFFF' }, // theme-fixed: label paper colour (document data)
       });
       doc.ups = ups;
       doc.templateCategory = 'Multi-UP';
@@ -482,8 +484,8 @@ export default function NewLabelSetupScreen() {
                 <Switch
                   value={batchEdit}
                   onChange={() => setBatchEdit((b) => !b)}
-                  trackColor={{ false: '#D1D5DB', true: Palette.accent }}
-                  thumbColor="#FFFFFF"
+                  trackColor={{ false: C.border, true: C.accent }}
+                  thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
                 />
               </View>
               </>
@@ -553,21 +555,21 @@ export default function NewLabelSetupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Palette.screen },
+const styles = themedStyles((c, scheme) => ({
+  root: { flex: 1, backgroundColor: c.bg },
   header: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingBottom: 12,
   },
   backBtn: { width: 36, alignItems: 'flex-start' },
-  backChevron: { color: '#FFFFFF', fontSize: 32, fontWeight: '300', lineHeight: 36 },
+  backChevron: { color: c.onAccent, fontSize: 32, fontWeight: '300', lineHeight: 36 },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 17,
     fontWeight: '500',
   },
@@ -575,7 +577,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, gap: 12 },
   previewPad: {
-    backgroundColor: '#D5DCE4',
+    backgroundColor: scheme === 'light' ? '#D5DCE4' : c.canvasArea, // theme-fixed: light keeps its grey stage around the white label
     borderRadius: 10,
     minHeight: 140,
     paddingVertical: 28,
@@ -589,20 +591,20 @@ const styles = StyleSheet.create({
     flex: 1,
     maxWidth: 120,
     minHeight: 48,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (previewCell)
     borderRadius: 4,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C8D0D8',
+    borderColor: '#C8D0D8', // theme-fixed: light preview (previewCell)
     alignItems: 'center',
     justifyContent: 'center',
   },
   previewCellLabel: {
-    color: '#94A3B8',
+    color: '#94A3B8', // theme-fixed: light preview (previewCellLabel)
     fontSize: 13,
     fontWeight: '600',
   },
   previewHint: {
-    color: '#64748B',
+    color: c.textSecondary,
     fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
@@ -613,16 +615,16 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginLeft: 2,
   },
   presetFormatCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 8,
@@ -630,7 +632,7 @@ const styles = StyleSheet.create({
   presetFormatTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
@@ -644,28 +646,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
   },
   presetFormatPillLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
   },
   presetFormatTimes: {
     fontSize: 18,
     fontWeight: '500',
-    color: '#94A3B8',
+    color: c.textMuted,
   },
   presetFormatUnit: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: c.textSecondary,
   },
   presetFormatHint: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: c.textMuted,
     textAlign: 'center',
     lineHeight: 16,
   },
@@ -679,9 +681,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -689,7 +691,7 @@ const styles = StyleSheet.create({
   templatesLinkText: {
     fontSize: 15,
     fontWeight: '500',
-    color: Palette.accent,
+    color: c.accent,
   },
   presetChip: {
     width: '31.5%',
@@ -697,33 +699,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     justifyContent: 'center',
     alignItems: 'center',
   },
   presetChipActive: {
-    backgroundColor: '#EEF2FF',
-    borderColor: Palette.accent,
+    backgroundColor: c.accentSoft,
+    borderColor: c.accent,
   },
   presetChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
+    color: c.textSecondary,
     lineHeight: 16,
     textAlign: 'center',
   },
   presetChipTextActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '600',
   },
   groupCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
   },
   groupRow: {
     paddingHorizontal: 14,
@@ -735,35 +737,35 @@ const styles = StyleSheet.create({
   },
   groupDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.hairline,
     marginLeft: 14,
   },
   cardPressed: { opacity: 0.88 },
-  fieldLabel: { color: Palette.ink, fontSize: 15, fontWeight: '500', flexShrink: 1 },
+  fieldLabel: { color: c.text, fontSize: 15, fontWeight: '500', flexShrink: 1 },
   fieldValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
-  fieldValueText: { color: '#64748B', fontSize: 14, fontWeight: '400', maxWidth: 160 },
-  chevronRight: { color: '#94A3B8', fontSize: 22, fontWeight: '300' },
+  fieldValueText: { color: c.textSecondary, fontSize: 14, fontWeight: '400', maxWidth: 160 },
+  chevronRight: { color: c.textMuted, fontSize: 22, fontWeight: '300' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stepBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepBtnText: { fontSize: 20, color: Palette.ink, fontWeight: '400', lineHeight: 22 },
-  stepValue: { minWidth: 28, textAlign: 'center', fontSize: 16, fontWeight: '500', color: Palette.ink },
+  stepBtnText: { fontSize: 20, color: c.text, fontWeight: '400', lineHeight: 22 },
+  stepValue: { minWidth: 28, textAlign: 'center', fontSize: 16, fontWeight: '500', color: c.text },
   batchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
   infoHint: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: '#94A3B8',
+    borderColor: c.border,
     textAlign: 'center',
     fontSize: 11,
-    color: '#64748B',
+    color: c.textSecondary,
     overflow: 'hidden',
     lineHeight: 16,
   },
@@ -774,14 +776,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 16,
     paddingTop: 10,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
   },
   newButton: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  newButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '500' },
+  newButtonText: { color: c.onAccent, fontSize: 17, fontWeight: '500' },
   pressed: { opacity: 0.75 },
-});
+}));

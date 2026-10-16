@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 
@@ -11,21 +11,24 @@ import type { ImageElementState } from '@/lib/label-document';
 import { resolveEditorColorMode } from '@/lib/editor/image-mono';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { containFitImageOnLabel } from '@/lib/label-coordinate-system';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-const ACCENT = '#48C3C7';
 const TABS = ['Regular', 'Position', 'Image', 'Effect'] as const;
 export type ImagePropertyTab = (typeof TABS)[number];
 const COLOR_MODES = ['Original', 'B & W', 'Halftone'] as const;
 
 function Divider() {
+  useThemeRefresh();
   return <View style={styles.divider} />;
 }
 
 function SectionGap() {
+  useThemeRefresh();
   return <View style={styles.sectionGap} />;
 }
 
 function GraySection({ children }: { children: React.ReactNode }) {
+  useThemeRefresh();
   return <View style={styles.graySection}>{children}</View>;
 }
 
@@ -40,6 +43,7 @@ function SegmentRow<T extends string>({
   selected: T;
   onSelect: (value: T) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.block}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -73,6 +77,7 @@ function StepperRow({
   onMinus: () => void;
   onPlus: () => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.stepperRow}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -98,15 +103,16 @@ function ToggleRow({
   value: boolean;
   onValueChange: (next: boolean) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.toggleRow}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: '#D1D5DB', true: ACCENT }}
-        thumbColor="#FFFFFF"
-        ios_backgroundColor="#D1D5DB"
+        trackColor={{ false: C.border, true: C.accent }}
+        thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+        ios_backgroundColor={C.border}
       />
     </View>
   );
@@ -134,6 +140,7 @@ export function ImagePropertyPanel({
   elementHeightMm,
   onColumnNamePress,
 }: ImagePropertyPanelProps) {
+  useThemeRefresh();
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
   const currentRotation = normalizeRotation(state.rotation ?? 0);
   const isAspectLocked = state.aspectRatioLocked ?? true;
@@ -422,13 +429,13 @@ export function ImagePropertyPanel({
                     <Pressable
                       onPress={handleCropImage}
                       style={({ pressed }) => [styles.actionButton, styles.cropButton, pressed && styles.pressed]}>
-                      <AppIcon name="crop" tintColor="#FFFFFF" size={15} />
+                      <AppIcon name="crop" tintColor={C.onAccent} size={15} />
                       <Text style={styles.cropButtonText}>Crop</Text>
                     </Pressable>
                     <Pressable
                       onPress={handleReplaceImage}
                       style={({ pressed }) => [styles.actionButton, styles.replaceButton, pressed && styles.pressed]}>
-                      <AppIcon name="photo" tintColor="#374151" size={15} />
+                      <AppIcon name="photo" tintColor={C.textSecondary} size={15} />
                       <Text style={styles.replaceButtonText}>Replace</Text>
                     </Pressable>
                   </View>
@@ -436,13 +443,13 @@ export function ImagePropertyPanel({
                     <Pressable
                       onPress={handleRotate90}
                       style={({ pressed }) => [styles.actionButton, styles.rotateButton, pressed && styles.pressed]}>
-                      <AppIcon name="arrow.clockwise" tintColor="#374151" size={15} />
+                      <AppIcon name="arrow.clockwise" tintColor={C.textSecondary} size={15} />
                       <Text style={styles.rotateButtonText}>Rotate 90°</Text>
                     </Pressable>
                     <Pressable
                       onPress={handleCenter}
                       style={({ pressed }) => [styles.actionButton, styles.centerButton, pressed && styles.pressed]}>
-                      <AppIcon name="target" tintColor="#374151" size={15} />
+                      <AppIcon name="target" tintColor={C.textSecondary} size={15} />
                       <Text style={styles.centerButtonText}>Center</Text>
                     </Pressable>
                   </View>
@@ -478,13 +485,13 @@ export function ImagePropertyPanel({
                 <Pressable
                   onPress={handleFitToCanvasPad}
                   style={({ pressed }) => [styles.toolChip, styles.toolChipPrimary, pressed && styles.pressed]}>
-                  <AppIcon name="aspectratio" tintColor="#FFFFFF" size={15} />
+                  <AppIcon name="aspectratio" tintColor={C.onAccent} size={15} />
                   <Text style={styles.toolChipTextPrimary}>Fit Label</Text>
                 </Pressable>
                 <Pressable
                   onPress={handleFitToWidth}
                   style={({ pressed }) => [styles.toolChip, pressed && styles.pressed]}>
-                  <AppIcon name="arrow.left.and.right" tintColor={ACCENT} size={15} />
+                  <AppIcon name="arrow.left.and.right" tintColor={C.accent} size={15} />
                   <Text style={styles.toolChipText}>Fit Width</Text>
                 </Pressable>
               </View>
@@ -535,14 +542,14 @@ export function ImagePropertyPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   panel: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     flex: 1,
   },
   tabScroll: {
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: c.hairline,
     maxHeight: 44,
   },
   tabContent: {
@@ -556,11 +563,11 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: c.textSecondary,
     fontWeight: '500',
   },
   tabTextActive: {
-    color: ACCENT,
+    color: c.accent,
     fontWeight: '700',
   },
   tabIndicator: {
@@ -569,7 +576,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2.5,
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
     borderRadius: 1.5,
   },
   tabSpacer: {
@@ -584,18 +591,18 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   graySection: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: c.fill,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: c.hairline,
   },
   sectionGap: {
     height: 12,
   },
   divider: {
     height: 1,
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.hairline,
     marginVertical: 10,
   },
   previewRow: {
@@ -607,9 +614,9 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (thumbWrapper)
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5E7EB', // theme-fixed: light preview (thumbWrapper)
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -636,34 +643,34 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   cropButton: {
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
   },
   cropButtonText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '600',
   },
   rotateButton: {
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
   },
   rotateButtonText: {
-    color: '#374151',
+    color: c.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
   replaceButton: {
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
   },
   replaceButtonText: {
-    color: '#374151',
+    color: c.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
   centerButton: {
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
   },
   centerButtonText: {
-    color: '#374151',
+    color: c.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -673,7 +680,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#374151',
+    color: c.textSecondary,
   },
   segmentRow: {
     flexDirection: 'row',
@@ -683,23 +690,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: c.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
   segmentChipActive: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
+    backgroundColor: c.accent,
+    borderColor: c.accent,
   },
   segmentText: {
     fontSize: 12.5,
     fontWeight: '500',
-    color: '#4B5563',
+    color: c.textSecondary,
   },
   segmentTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontWeight: '700',
   },
   quickFitRow: {
@@ -714,23 +721,23 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: '#F0FDFA',
+    backgroundColor: c.fill,
     borderWidth: 1,
-    borderColor: '#CCFBF1',
+    borderColor: c.border,
   },
   toolChipPrimary: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
+    backgroundColor: c.accent,
+    borderColor: c.accent,
   },
   toolChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#0D9488',
+    color: c.accent,
   },
   toolChipTextPrimary: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   stepperRow: {
     flexDirection: 'row',
@@ -747,25 +754,25 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperCircleActive: {
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
   },
   stepperSymbol: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#374151',
+    color: c.textSecondary,
   },
   stepperSymbolActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   stepperValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: c.text,
     minWidth: 48,
     textAlign: 'center',
   },
@@ -788,7 +795,7 @@ const styles = StyleSheet.create({
   chooseLink: {
     fontSize: 14,
     fontWeight: '600',
-    color: ACCENT,
+    color: c.accent,
     flexShrink: 1,
     textAlign: 'right',
   },
@@ -804,7 +811,7 @@ const styles = StyleSheet.create({
   thresholdValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#2C3E50',
+    color: c.textSecondary,
   },
   sliderBlock: {
     position: 'relative',
@@ -814,7 +821,7 @@ const styles = StyleSheet.create({
   sliderTrack: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
     position: 'relative',
   },
   sliderFill: {
@@ -823,7 +830,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     borderRadius: 2,
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
   },
   sliderThumb: {
     position: 'absolute',
@@ -832,9 +839,9 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 2,
-    borderColor: ACCENT,
+    borderColor: c.accent,
   },
   sliderTicks: {
     position: 'absolute',
@@ -847,4 +854,4 @@ const styles = StyleSheet.create({
   sliderTickHit: {
     flex: 1,
   },
-});
+}));

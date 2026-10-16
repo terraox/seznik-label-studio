@@ -20,7 +20,7 @@ import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { accentStrong, cardShadow, Palette } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
 import { GRID_SPACING_PRESETS_MM } from '@/lib/editor/canvas-grid';
@@ -33,12 +33,13 @@ import {
   suggestedDiagnosticGridSpacingMm,
 } from '@/lib/printer/diagnostic-grid-print';
 import { usePrinterStore } from '@/stores/printer-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 function statusLook(state: string): { label: string; color: string; bg: string } {
-  if (state === 'connected') return { label: 'Connected', color: '#18794A', bg: '#E8F6EE' };
-  if (state === 'printing') return { label: 'Printing', color: '#0E7C8A', bg: '#E6F6F8' };
-  if (state === 'error') return { label: 'Error', color: '#DC2626', bg: '#FEE2E2' };
-  return { label: 'Not connected', color: '#9A3412', bg: '#FFF7ED' };
+  if (state === 'connected') return { label: 'Connected', color: C.success, bg: C.successSoft };
+  if (state === 'printing') return { label: 'Printing', color: C.accentInk, bg: C.accentSoft };
+  if (state === 'error') return { label: 'Error', color: C.danger, bg: C.dangerSoft };
+  return { label: 'Not connected', color: C.warning, bg: C.warningSoft };
 }
 
 function prettyTransport(value: string | null | undefined): string {
@@ -65,6 +66,7 @@ function prettyTransport(value: string | null | undefined): string {
 }
 
 function DiagRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  useThemeRefresh();
   return (
     <View style={styles.diagRow}>
       <Text style={styles.diagLabel}>{label}</Text>
@@ -76,6 +78,7 @@ function DiagRow({ label, value, mono }: { label: string; value: string; mono?: 
 }
 
 export default function PrinterDiagnosticsScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
@@ -349,7 +352,7 @@ export default function PrinterDiagnosticsScreen() {
               <Text style={styles.sectionTitle}>Grid test label</Text>
               <AppIcon
                 name={gridTestOpen ? 'arrowtriangle.up.fill' : 'arrowtriangle.down.fill'}
-                tintColor={Palette.muted}
+                tintColor={C.textMuted}
                 size={14}
               />
             </Pressable>
@@ -540,6 +543,7 @@ function ActionButton({
   onPress: () => void;
   danger?: boolean;
 }) {
+  useThemeRefresh();
   return (
     <Pressable
       onPress={onPress}
@@ -551,9 +555,9 @@ function ActionButton({
         pressed && !disabled && styles.pressed,
       ]}>
       {busy ? (
-        <ActivityIndicator size="small" color={danger ? '#DC2626' : accentStrong} />
+        <ActivityIndicator size="small" color={danger ? C.danger : C.accentInk} />
       ) : (
-        <AppIcon name={icon} tintColor={disabled ? Palette.disabled : danger ? '#DC2626' : accentStrong} size={18} />
+        <AppIcon name={icon} tintColor={disabled ? C.textDisabled : danger ? C.danger : C.accentInk} size={18} />
       )}
       <Text style={[styles.actionBtnText, danger && styles.actionBtnTextDanger, disabled && styles.actionBtnTextDisabled]}>
         {label}
@@ -562,8 +566,8 @@ function ActionButton({
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Palette.screen, alignItems: 'center' },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bg, alignItems: 'center' },
   scroll: { flex: 1, width: '100%' },
   content: {
     alignItems: 'center',
@@ -572,7 +576,7 @@ const styles = StyleSheet.create({
   },
   inner: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.three },
   hero: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     padding: Spacing.four,
     alignItems: 'center',
@@ -589,8 +593,8 @@ const styles = StyleSheet.create({
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
   pillText: { fontSize: 13, fontWeight: '700' },
-  deviceName: { fontSize: 20, fontWeight: '700', color: Palette.ink, textAlign: 'center' },
-  deviceMeta: { fontSize: 14, color: Palette.muted, textAlign: 'center' },
+  deviceName: { fontSize: 20, fontWeight: '700', color: c.text, textAlign: 'center' },
+  deviceMeta: { fontSize: 14, color: c.textMuted, textAlign: 'center' },
   heroBattery: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -598,13 +602,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#EAECEF',
+    borderTopColor: c.hairline,
     alignSelf: 'stretch',
     justifyContent: 'center',
   },
-  heroBatteryLabel: { fontSize: 14, fontWeight: '600', color: Palette.muted },
+  heroBatteryLabel: { fontSize: 14, fontWeight: '600', color: c.textMuted },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     padding: Spacing.three,
     gap: 8,
@@ -613,7 +617,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: Palette.muted,
+    color: c.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
@@ -623,35 +627,35 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  collapsedHint: { fontSize: 13, lineHeight: 18, color: Palette.muted },
-  help: { fontSize: 13, lineHeight: 19, color: Palette.muted },
-  fieldLabel: { fontSize: 12, fontWeight: '600', color: Palette.muted, marginTop: 4 },
+  collapsedHint: { fontSize: 13, lineHeight: 18, color: c.textMuted },
+  help: { fontSize: 13, lineHeight: 19, color: c.textMuted },
+  fieldLabel: { fontSize: 12, fontWeight: '600', color: c.textMuted, marginTop: 4 },
   presetWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   presetChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: c.hairline,
+    backgroundColor: c.fill,
   },
-  presetChipOn: { borderColor: accentStrong, backgroundColor: '#E6F6F8' },
-  presetChipText: { fontSize: 13, fontWeight: '600', color: Palette.ink },
-  presetChipTextOn: { color: accentStrong },
+  presetChipOn: { borderColor: c.accentInk, backgroundColor: c.accentSoft },
+  presetChipText: { fontSize: 13, fontWeight: '600', color: c.text },
+  presetChipTextOn: { color: c.accentInk },
   mmRow: { flexDirection: 'row', gap: 12 },
   mmField: { flex: 1, gap: 4 },
   mmInput: {
     minHeight: 44,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: c.hairline,
+    backgroundColor: c.surface,
     paddingHorizontal: 12,
     fontSize: 16,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
   },
-  sizeHint: { fontSize: 12, color: Palette.muted },
+  sizeHint: { fontSize: 12, color: c.textMuted },
   diagRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -659,13 +663,13 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#EAECEF',
+    borderTopColor: c.hairline,
   },
-  diagLabel: { fontSize: 14, color: Palette.muted, flex: 0.9 },
+  diagLabel: { fontSize: 14, color: c.textMuted, flex: 0.9 },
   diagValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
     flex: 1.2,
     textAlign: 'right',
   },
@@ -673,29 +677,29 @@ const styles = StyleSheet.create({
   actionBtn: {
     minHeight: 48,
     borderRadius: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 14,
   },
-  actionBtnDanger: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+  actionBtnDanger: { backgroundColor: c.dangerSoft, borderColor: c.danger },
   actionBtnDisabled: { opacity: 0.45 },
-  actionBtnText: { fontSize: 15, fontWeight: '700', color: Palette.ink },
-  actionBtnTextDanger: { color: '#DC2626' },
-  actionBtnTextDisabled: { color: Palette.muted },
+  actionBtnText: { fontSize: 15, fontWeight: '700', color: c.text },
+  actionBtnTextDanger: { color: c.danger },
+  actionBtnTextDisabled: { color: c.textMuted },
   logHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  clear: { color: accentStrong, fontSize: 14, fontWeight: '700' },
-  clearDisabled: { color: Palette.disabled },
+  clear: { color: c.accentInk, fontSize: 14, fontWeight: '700' },
+  clearDisabled: { color: c.textDisabled },
   logBox: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0F172A', // theme-fixed: dark log console in both themes
     borderRadius: 12,
     padding: 12,
     gap: 6,
   },
-  emptyLog: { color: '#94A3B8', fontSize: 13, lineHeight: 18 },
-  logLine: { fontFamily: 'monospace', fontSize: 12, color: '#E2E8F0', lineHeight: 18 },
+  emptyLog: { color: c.textMuted, fontSize: 13, lineHeight: 18 },
+  logLine: { fontFamily: 'monospace', fontSize: 12, color: c.textDisabled, lineHeight: 18 },
   pressed: { opacity: 0.7 },
-});
+}));

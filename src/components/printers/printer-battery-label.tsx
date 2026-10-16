@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { BatteryLevelIcon } from '@/components/printers/battery-level-icon';
-import { Palette } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type PrinterBatteryLabelProps = {
   percent: number | null;
@@ -21,15 +21,16 @@ export function PrinterBatteryLabel({
   showWhenUnknown = false,
   unknownText = '—',
 }: PrinterBatteryLabelProps) {
+  useThemeRefresh();
   if (percent == null && !showWhenUnknown) return null;
 
-  const muted = onDark ? 'rgba(255,255,255,0.75)' : Palette.muted;
+  const muted = onDark ? 'rgba(255,255,255,0.75)' : C.textMuted; // theme-fixed: white on dark hero
 
   return (
     <View style={styles.row} accessibilityLabel={percent != null ? `Battery ${percent} percent` : 'Battery unknown'}>
       {percent != null ? (
         <>
-          <BatteryLevelIcon percent={percent} size={size} tintColor={onDark ? '#FFFFFF' : undefined} />
+          <BatteryLevelIcon percent={percent} size={size} tintColor={onDark ? C.onAccent : undefined} />
           <Text style={[styles.text, onDark && styles.onDark]}>{percent}%</Text>
         </>
       ) : (
@@ -42,8 +43,8 @@ export function PrinterBatteryLabel({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  text: { fontSize: 14, fontWeight: '700', color: Palette.ink },
-  onDark: { color: '#FFFFFF' },
-});
+  text: { fontSize: 14, fontWeight: '700', color: c.text },
+  onDark: { color: c.onAccent },
+}));

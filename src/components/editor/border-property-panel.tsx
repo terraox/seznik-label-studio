@@ -15,8 +15,8 @@ import {
   TD404_BORDER_GAP_MIN_MM,
   td404BorderGapMm,
 } from '@/lib/printer/print-spec';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
-const ACCENT = '#48C3C7';
 const LINE_MIN = 0.1;
 const LINE_MAX = 1.5;
 
@@ -37,6 +37,7 @@ export function BorderPropertyPanel({
   onChangeStyle,
   onRemove,
 }: BorderPropertyPanelProps) {
+  useThemeRefresh();
   const usesTd404 = getPrinterManager().usesTd404CommandSet;
   const gapMin = usesTd404 ? TD404_BORDER_GAP_MIN_MM : JOSH_BORDER_GAP_MIN_MM;
   const gapMax = usesTd404 ? TD404_BORDER_GAP_MAX_MM : JOSH_BORDER_GAP_MAX_MM;
@@ -139,7 +140,7 @@ export function BorderPropertyPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   panel: {
     paddingBottom: 8,
   },
@@ -160,17 +161,17 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: 15,
-    color: '#2C3E50',
+    color: c.textSecondary,
     flexShrink: 1,
   },
   rowValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: ACCENT,
+    color: c.accent,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E4E8ED',
+    backgroundColor: c.hairline,
     marginLeft: 16,
   },
   block: {
@@ -190,7 +191,7 @@ const styles = StyleSheet.create({
   },
   rangeText: {
     fontSize: 12,
-    color: '#8A97A4',
+    color: c.textMuted,
   },
   sliderHit: {
     marginTop: 6,
@@ -200,12 +201,12 @@ const styles = StyleSheet.create({
   sliderTrack: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#D7DDE3',
+    backgroundColor: c.fillStrong,
     overflow: 'hidden',
   },
   sliderFill: {
     height: 4,
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
   },
   sliderThumb: {
     position: 'absolute',
@@ -213,9 +214,9 @@ const styles = StyleSheet.create({
     height: 22,
     marginLeft: -11,
     borderRadius: 11,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
   },
   gapRow: {
     minHeight: 52,
@@ -229,13 +230,13 @@ const styles = StyleSheet.create({
   gapInput: {
     width: 72,
     borderWidth: 1,
-    borderColor: '#D7DDE3',
+    borderColor: c.border,
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 10,
     textAlign: 'center',
     fontSize: 15,
-    color: '#2C3E50',
+    color: c.textSecondary,
   },
   actionRow: {
     marginHorizontal: 16,
@@ -247,12 +248,12 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: ACCENT,
+    borderColor: c.accent,
     paddingVertical: 12,
     alignItems: 'center',
   },
   replaceText: {
-    color: ACCENT,
+    color: c.accent,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -260,16 +261,16 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#E25B5B',
+    borderColor: c.danger,
     paddingVertical: 12,
     alignItems: 'center',
   },
   removeText: {
-    color: '#E25B5B',
+    color: c.danger,
     fontSize: 15,
     fontWeight: '600',
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));

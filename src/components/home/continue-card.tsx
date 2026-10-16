@@ -12,8 +12,9 @@ import {
 import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { ShareNodeIcon } from '@/components/home-icons';
 import { CATALOG_STOCK_LINER, LabelPreview } from '@/components/label-preview';
-import { androidRipple, cardShadow, HomeLayout, Palette, scaleFont } from '@/constants/ui';
+import { androidRipple, cardShadow, HomeLayout, scaleFont } from '@/constants/ui';
 import type { LabelDocument } from '@/lib/label-document';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type ContinueCardProps = {
   document: LabelDocument;
@@ -34,7 +35,8 @@ function ActionItem({
   onPress?: () => void;
   customIcon?: ReactNode;
 }) {
-  const color = disabled ? Palette.disabled : Palette.accent;
+  useThemeRefresh();
+  const color = disabled ? C.textDisabled : C.accent;
 
   return (
     <View style={styles.actionItem}>
@@ -57,7 +59,7 @@ function ActionItem({
         <Text
           numberOfLines={1}
           maxFontSizeMultiplier={HomeLayout.labelMaxFontScale}
-          style={[styles.actionLabel, { color: disabled ? Palette.disabled : Palette.actionText }]}>
+          style={[styles.actionLabel, { color: disabled ? C.textDisabled : C.textSecondary }]}>
           {label}
         </Text>
       </Pressable>
@@ -66,6 +68,7 @@ function ActionItem({
 }
 
 export function ContinueCard({ document, onDelete, onUpload }: ContinueCardProps) {
+  useThemeRefresh();
   const router = useRouter();
   const { width } = useWindowDimensions();
 
@@ -127,7 +130,7 @@ export function ContinueCard({ document, onDelete, onUpload }: ContinueCardProps
         />
         <ActionItem icon="trash" label="Delete" onPress={handleDelete} />
         <ActionItem
-          customIcon={<ShareNodeIcon color={Palette.accent} size={24} />}
+          customIcon={<ShareNodeIcon color={C.accent} size={24} />}
           label="Share"
           onPress={() =>
             router.push({ pathname: '/share', params: { labelId: document.id } })
@@ -139,9 +142,9 @@ export function ContinueCard({ document, onDelete, onUpload }: ContinueCardProps
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   card: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 16,
     overflow: 'hidden',
     ...cardShadow,
@@ -152,7 +155,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     width: '100%',
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     paddingHorizontal: 14,
     paddingVertical: 12,
     minHeight: 46,
@@ -162,14 +165,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   headingTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontWeight: '600',
     flex: 1,
     flexShrink: 1,
     minWidth: 0,
   },
   headingSize: {
-    color: 'rgba(255, 255, 255, 0.88)',
+    color: 'rgba(255, 255, 255, 0.88)', // theme-fixed: white on preview overlay
     fontWeight: '500',
     flexShrink: 0,
     maxWidth: '48%',
@@ -185,14 +188,14 @@ const styles = StyleSheet.create({
     backgroundColor: CATALOG_STOCK_LINER,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E2E7EE',
+    borderColor: '#E2E7EE', // theme-fixed: light preview (previewStage)
   },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     paddingVertical: 14,
     paddingHorizontal: 4,
   },
@@ -217,4 +220,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7,
   },
-});
+}));

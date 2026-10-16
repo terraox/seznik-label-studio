@@ -5,9 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
 import { LabelPreview } from '@/components/label-preview';
-import { Palette, Type } from '@/constants/ui';
+import { Type } from '@/constants/ui';
 import type { LabelDocument } from '@/lib/label-document';
 import { mergeSavedTemplates, useLabelStore } from '@/stores/label-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type TemplateChoiceSheetProps = {
   title: string;
@@ -23,6 +24,7 @@ export function TemplateChoiceSheet({
   existingDocuments,
   onSelectExisting,
 }: TemplateChoiceSheetProps) {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const documents = useLabelStore((s) => s.documents);
   const cloudTemplates = useLabelStore((s) => s.cloudTemplates);
@@ -60,16 +62,16 @@ export function TemplateChoiceSheet({
                 <Pressable
                   onPress={onCreate}
                   style={({ pressed }) => [styles.option, pressed && styles.pressed]}>
-                  <View style={[styles.optionIcon, { backgroundColor: '#3B82F6' }]}>
-                    <AppIcon name="plus.rectangle" tintColor="#FFFFFF" size={30} pointerEvents="none" />
+                  <View style={[styles.optionIcon, { backgroundColor: '#3B82F6' }]} /* theme-fixed: category badge, white icon */ >
+                    <AppIcon name="plus.rectangle" tintColor={C.onAccent} size={30} pointerEvents="none" />
                   </View>
                   <Text style={styles.optionLabel}>Create New</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setMode('existing')}
                   style={({ pressed }) => [styles.option, pressed && styles.pressed]}>
-                  <View style={[styles.optionIcon, { backgroundColor: '#17A6B8' }]}>
-                    <AppIcon name="square.grid.2x2" tintColor="#FFFFFF" size={28} pointerEvents="none" />
+                  <View style={[styles.optionIcon, { backgroundColor: C.accentFill }]}>
+                    <AppIcon name="square.grid.2x2" tintColor={C.onAccent} size={28} pointerEvents="none" />
                   </View>
                   <Text style={styles.optionLabel}>Existing Template</Text>
                 </Pressable>
@@ -110,7 +112,7 @@ export function TemplateChoiceSheet({
                         hitSlop={8}
                         onPress={() => openPrint(doc)}
                         style={({ pressed }) => [styles.printBtn, pressed && styles.pressed]}>
-                        <AppIcon name="printer" tintColor={Palette.accent} size={20} />
+                        <AppIcon name="printer" tintColor={C.accent} size={20} />
                       </Pressable>
                     </View>
                   ))}
@@ -129,22 +131,22 @@ export function TemplateChoiceSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: c.scrim },
   bottom: {
     paddingHorizontal: 10,
     gap: 8,
   },
   sheet: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 14,
     overflow: 'hidden',
     maxHeight: '80%',
   },
   title: {
     textAlign: 'center',
-    color: '#8E97A1',
+    color: c.textMuted,
     ...Type.modalTitle,
     paddingTop: 18,
     paddingBottom: 14,
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E3E6EA',
+    backgroundColor: c.hairline,
     marginHorizontal: 16,
   },
   options: {
@@ -179,7 +181,7 @@ const styles = StyleSheet.create({
   optionLabel: {
     ...Type.caption,
     fontSize: 13,
-    color: Palette.ink,
+    color: c.text,
     textAlign: 'center',
   },
   listHead: {
@@ -189,16 +191,16 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     paddingVertical: 14,
   },
-  backLink: { color: '#007AFF', fontSize: 15, fontWeight: '500', width: 64, paddingLeft: 16 },
+  backLink: { color: c.link, fontSize: 15, fontWeight: '500', width: 64, paddingLeft: 16 },
   backSpacer: { width: 64 },
   list: { maxHeight: 360 },
   templateText: { flex: 1, minWidth: 0, gap: 2 },
-  templateName: { fontSize: 15, fontWeight: '600', color: Palette.ink },
-  templateDetail: { fontSize: 12, color: Palette.muted },
+  templateName: { fontSize: 15, fontWeight: '600', color: c.text },
+  templateDetail: { fontSize: 12, color: c.textMuted },
   listTitle: {
     flex: 1,
     textAlign: 'center',
-    color: '#8E97A1',
+    color: c.textMuted,
     ...Type.modalTitle,
   },
   templateRow: {
@@ -207,7 +209,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E3E6EA',
+    borderBottomColor: c.hairline,
   },
   templateMain: {
     flex: 1,
@@ -228,18 +230,18 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#EEF2F6',
+    backgroundColor: '#EEF2F6', // theme-fixed: light preview (thumb)
     alignItems: 'center',
     justifyContent: 'center',
   },
   empty: {
     textAlign: 'center',
-    color: Palette.muted,
+    color: c.textMuted,
     fontSize: 13,
     paddingVertical: 24,
   },
   cancelBtn: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 14,
     height: 56,
     alignItems: 'center',
@@ -247,7 +249,7 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     ...Type.modalAction,
-    color: '#007AFF',
+    color: c.link,
   },
   pressed: { opacity: 0.65 },
-});
+}));

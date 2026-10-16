@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { AppIcon, type AppIconName } from '@/components/app-icon';
-import { cardShadow, Palette } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const ACTIONS: { icon: AppIconName; label: string }[] = [
   { icon: 'square.and.pencil', label: 'Edit' },
@@ -15,6 +16,7 @@ const ACTIONS: { icon: AppIconName; label: string }[] = [
  * user has no labels yet, so the step has something real to point at.
  */
 export function SampleContinueCard() {
+  useThemeRefresh();
   return (
     <View style={styles.card} pointerEvents="none">
       <View style={styles.headingBar}>
@@ -33,7 +35,7 @@ export function SampleContinueCard() {
       <View style={styles.actionRow}>
         {ACTIONS.map((a) => (
           <View key={a.label} style={styles.action}>
-            <AppIcon name={a.icon} tintColor={Palette.accent} size={23} />
+            <AppIcon name={a.icon} tintColor={C.accent} size={23} />
             <Text style={styles.actionLabel}>{a.label}</Text>
           </View>
         ))}
@@ -42,48 +44,48 @@ export function SampleContinueCard() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   card: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: Palette.accent,
+    borderColor: c.accent,
     ...cardShadow,
   },
   headingBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     paddingHorizontal: 14,
     paddingVertical: 12,
     minHeight: 46,
   },
-  title: { color: '#FFFFFF', fontWeight: '600', fontSize: 14.5 },
+  title: { color: c.onAccent, fontWeight: '600', fontSize: 14.5 },
   badge: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  badgeText: { color: c.onAccent, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   stage: {
     height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E9EDF3',
+    backgroundColor: c.fillStrong,
   },
   label: {
     width: 190,
     height: 84,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 4,
     padding: 10,
     gap: 8,
   },
-  line: { height: 8, borderRadius: 4, backgroundColor: '#CBD3DC' },
+  line: { height: 8, borderRadius: 4, backgroundColor: c.textDisabled },
   qr: {
     position: 'absolute',
     right: 10,
@@ -91,7 +93,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 3,
-    backgroundColor: '#CBD3DC',
+    backgroundColor: c.textDisabled,
   },
   actionRow: {
     flexDirection: 'row',
@@ -100,5 +102,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   action: { flex: 1, alignItems: 'center', gap: 6 },
-  actionLabel: { fontSize: 12.5, fontWeight: '500', color: Palette.actionText },
-});
+  actionLabel: { fontSize: 12.5, fontWeight: '500', color: c.textSecondary },
+}));

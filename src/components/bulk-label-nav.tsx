@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
-import { Palette } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type BulkLabelNavProps = {
   index: number;
@@ -23,6 +23,7 @@ function JumpBtn({
   disabled: boolean;
   onPress: () => void;
 }) {
+  useThemeRefresh();
   return (
     <Pressable
       onPress={onPress}
@@ -44,6 +45,7 @@ export function BulkLabelNav({
   applyAll,
   onApplyAllChange,
 }: BulkLabelNavProps) {
+  useThemeRefresh();
   const n = total < 1 ? 0 : index + 1;
 
   return (
@@ -55,7 +57,7 @@ export function BulkLabelNav({
           disabled={index <= 0}
           hitSlop={4}
           style={({ pressed }) => [styles.arrowBtn, pressed && index > 0 && styles.pressed]}>
-          <AppIcon name="chevron.left" size={20} tintColor={index <= 0 ? Palette.disabled : Palette.ink} />
+          <AppIcon name="chevron.left" size={20} tintColor={index <= 0 ? C.textDisabled : C.text} />
         </Pressable>
         <View style={styles.counterBox}>
           <Text style={styles.counter}>{n} / {total}</Text>
@@ -71,7 +73,7 @@ export function BulkLabelNav({
           <AppIcon
             name="chevron.right"
             size={20}
-            tintColor={index >= total - 1 ? Palette.disabled : Palette.ink}
+            tintColor={index >= total - 1 ? C.textDisabled : C.text}
           />
         </Pressable>
         <JumpBtn label="»" disabled={index >= total - 1} onPress={onLast} />
@@ -97,12 +99,12 @@ export function BulkLabelNav({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   strip: {
     width: '100%',
-    backgroundColor: '#E4E9EE',
+    backgroundColor: c.fillStrong,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#D0D8E0',
+    borderTopColor: c.border,
     paddingTop: 4,
     paddingBottom: 6,
     gap: 4,
@@ -123,11 +125,11 @@ const styles = StyleSheet.create({
   jumpText: {
     fontSize: 18,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
     lineHeight: 20,
   },
   jumpTextOff: {
-    color: Palette.disabled,
+    color: c.textDisabled,
   },
   arrowBtn: {
     width: 34,
@@ -141,22 +143,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#D0D8E0',
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   counter: {
     fontSize: 15,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
     letterSpacing: 0.2,
   },
   scopeRow: {
     flexDirection: 'row',
     alignSelf: 'center',
-    backgroundColor: '#D8DEE6',
+    backgroundColor: c.fillStrong,
     borderRadius: 14,
     padding: 3,
   },
@@ -168,17 +170,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scopeSegOn: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
   },
   scopeText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
   },
   scopeTextOn: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   pressed: {
     opacity: 0.75,
   },
-});
+}));

@@ -15,7 +15,8 @@ import { BARCODE_MODES } from '@/lib/barcode-code128';
 import type { LabelUnit } from '@/lib/label-geometry';
 import { parseOrientation, type LabelOrientation, type PaperType } from '@/lib/label-document';
 import { useSettingsStore } from '@/stores/settings-store';
-import { Palette, androidRipple } from '@/constants/ui';
+import { androidRipple } from '@/constants/ui';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
 const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent'] as const;
@@ -28,6 +29,7 @@ type DimensionField = 'width' | 'height' | null;
 
 /** Default label element properties (WePrint “Default Property Settings” sections). */
 export function DefaultPropertySettingsFields() {
+  useThemeRefresh();
   const defaults = useSettingsStore((s) => s.defaults);
   const patchDefaults = useSettingsStore((s) => s.patchDefaults);
 
@@ -250,15 +252,15 @@ export function DefaultPropertySettingsFields() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: c.scrim,
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 14,
     maxHeight: '70%',
     overflow: 'hidden',
@@ -266,11 +268,11 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#1E293B',
+    color: c.text,
     textAlign: 'center',
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: c.hairline,
   },
   modalList: {
     maxHeight: 320,
@@ -280,18 +282,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   modalRowActive: {
-    backgroundColor: '#E8F7F8',
+    backgroundColor: c.fill,
   },
   modalRowText: {
     fontSize: 16,
-    color: '#334155',
+    color: c.textSecondary,
     textAlign: 'center',
   },
   modalRowTextActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '600',
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));

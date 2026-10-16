@@ -13,12 +13,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { editorBridge } from '@/constants/editor-bridge';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { useDataStore } from '@/stores/data-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const SAMPLE_COLUMNS = ['Name', 'Price', 'SKU', 'Barcode', 'Quantity', 'Date'];
 
 export default function ColumnNameScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ value?: string }>();
   const [draft, setDraft] = useState(params.value ?? '');
@@ -47,7 +49,7 @@ export default function ColumnNameScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+          <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
         </Pressable>
         <Text style={styles.title}>Column Name</Text>
         <Pressable
@@ -69,7 +71,7 @@ export default function ColumnNameScreen() {
             multiline
             style={styles.input}
             placeholder=""
-            placeholderTextColor="#A0AEC0"
+            placeholderTextColor={C.textMuted}
           />
         </View>
 
@@ -104,16 +106,16 @@ export default function ColumnNameScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   screen: {
     flex: 1,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
   },
   header: {
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.two,
@@ -129,7 +131,7 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 17,
     fontWeight: '600',
   },
@@ -140,7 +142,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   confirmText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -158,7 +160,7 @@ const styles = StyleSheet.create({
   inputBox: {
     minHeight: 120,
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
@@ -166,18 +168,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     lineHeight: 22,
-    color: '#2C3E50',
+    color: c.textSecondary,
     textAlignVertical: 'top',
   },
   helpText: {
     fontSize: 14,
     lineHeight: 22,
-    color: '#8A97A4',
+    color: c.textMuted,
     textAlign: 'center',
   },
   sourceText: {
     fontSize: 12.5,
-    color: Palette.accent,
+    color: c.accent,
     textAlign: 'center',
     fontWeight: '600',
   },
@@ -187,15 +189,15 @@ const styles = StyleSheet.create({
   columnRow: {
     minHeight: 48,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D8DEE6',
+    borderBottomColor: c.hairline,
     justifyContent: 'center',
     paddingHorizontal: Spacing.one,
   },
   columnText: {
     fontSize: 15,
-    color: '#2C3E50',
+    color: c.textSecondary,
   },
   pressed: {
     opacity: 0.65,
   },
-});
+}));

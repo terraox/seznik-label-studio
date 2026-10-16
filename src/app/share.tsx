@@ -8,10 +8,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LabelPreview } from '@/components/label-preview';
 import { Spacing } from '@/constants/theme';
-import { Palette, Type } from '@/constants/ui';
+import { Type } from '@/constants/ui';
 import { persistLabelFile } from '@/lib/user-files/labels';
 import { ensureSezprintDir } from '@/lib/user-files/root';
 import { useLabelStore } from '@/stores/label-store';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const CAPTURE_WIDTH = 720;
 
@@ -26,12 +27,13 @@ function ShareOption({
   color: string;
   onPress?: () => void;
 }) {
+  useThemeRefresh();
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.option, pressed && styles.pressed]}>
       <View style={[styles.optionIcon, { backgroundColor: color }]}>
-        <AppIcon name={icon} tintColor="#FFFFFF" size={30} pointerEvents="none" />
+        <AppIcon name={icon} tintColor="#FFFFFF" size={30} pointerEvents="none" /* theme-fixed: white icon on category tile */ />
       </View>
       <Text style={styles.optionLabel}>{label}</Text>
     </Pressable>
@@ -39,6 +41,7 @@ function ShareOption({
 }
 
 export default function ShareModal() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ labelId?: string }>();
   const documents = useLabelStore((s) => s.documents);
@@ -126,13 +129,13 @@ export default function ShareModal() {
               <ShareOption
                 icon="square.grid.2x2"
                 label="Share Template"
-                color="#3498DB"
+                color="#3498DB" // theme-fixed: category tile colour
                 onPress={() => void handleShareTemplate()}
               />
               <ShareOption
                 icon="photo"
                 label="Share Image"
-                color="#8BC34A"
+                color="#8BC34A" // theme-fixed: category tile colour
                 onPress={() => void handleShareImage()}
               />
             </View>
@@ -153,14 +156,14 @@ export default function ShareModal() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
   },
   captureHost: {
     position: 'absolute',
@@ -175,13 +178,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sheet: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 14,
     overflow: 'hidden',
   },
   title: {
     textAlign: 'center',
-    color: '#8E97A1',
+    color: c.textMuted,
     ...Type.modalTitle,
     paddingTop: 18,
     paddingBottom: 14,
@@ -189,7 +192,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E3E6EA',
+    backgroundColor: c.hairline,
     marginHorizontal: 16,
   },
   options: {
@@ -214,19 +217,19 @@ const styles = StyleSheet.create({
   optionLabel: {
     ...Type.caption,
     fontSize: 13,
-    color: Palette.ink,
+    color: c.text,
     textAlign: 'center',
   },
   emptyHint: {
     textAlign: 'center',
-    color: '#8E97A1',
+    color: c.textMuted,
     fontSize: 13.5,
     lineHeight: 19,
     paddingHorizontal: 24,
     paddingVertical: 22,
   },
   cancelBtn: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 14,
     height: 56,
     alignItems: 'center',
@@ -234,9 +237,9 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     ...Type.modalAction,
-    color: '#007AFF',
+    color: c.link,
   },
   pressed: {
     opacity: 0.65,
   },
-});
+}));

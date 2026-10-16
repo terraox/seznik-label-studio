@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Palette } from '@/constants/ui';
 import {
   JEWELRY_DIECUT_PRINT_PRESET_2UP,
   JEWELRY_DIECUT_PRINT_PRESET_3UP,
@@ -33,6 +32,7 @@ import {
   type PrintSizePreset,
 } from '@/lib/print-sizes';
 import { useSettingsStore } from '@/stores/settings-store';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 type PrintSizeSelectorProps = {
   visible: boolean;
@@ -64,6 +64,7 @@ export function PrintSizeSelector({
   onCancel,
   onSelect,
 }: PrintSizeSelectorProps) {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const printing = useSettingsStore((s) => s.printing);
   const patchPrinting = useSettingsStore((s) => s.patchPrinting);
@@ -271,12 +272,12 @@ export function PrintSizeSelector({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: c.scrim },
   sheet: {
     marginHorizontal: 10,
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 16,
     maxHeight: '82%',
     paddingTop: 16,
@@ -285,13 +286,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
     paddingHorizontal: 16,
   },
   subtitle: {
     textAlign: 'center',
     fontSize: 12,
-    color: Palette.muted,
+    color: c.textMuted,
     paddingHorizontal: 20,
     paddingTop: 6,
     paddingBottom: 10,
@@ -303,63 +304,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#F7F9FC',
+    backgroundColor: c.fill,
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  customRow: { backgroundColor: '#EEF8FA', marginTop: 4 },
-  currentRow: { backgroundColor: '#E6F6F8', borderWidth: 1, borderColor: '#B6E4EA' },
+  customRow: { backgroundColor: c.fill, marginTop: 4 },
+  currentRow: { backgroundColor: c.accentSoft, borderWidth: 1, borderColor: c.accent },
   rowText: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 14, fontWeight: '600', color: Palette.ink },
-  rowDetail: { fontSize: 12, color: Palette.muted, marginTop: 2 },
-  rowMeta: { fontSize: 12, color: Palette.muted, fontWeight: '500' },
+  rowLabel: { fontSize: 14, fontWeight: '600', color: c.text },
+  rowDetail: { fontSize: 12, color: c.textMuted, marginTop: 2 },
+  rowMeta: { fontSize: 12, color: c.textMuted, fontWeight: '500' },
   customBox: { paddingHorizontal: 8, paddingBottom: 8, gap: 10 },
   unitRow: { flexDirection: 'row', gap: 8 },
   unitChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
   },
-  unitChipOn: { backgroundColor: Palette.accent },
-  unitChipText: { fontSize: 13, fontWeight: '500', color: Palette.ink },
-  unitChipTextOn: { color: '#FFFFFF' },
+  unitChipOn: { backgroundColor: c.accentFill },
+  unitChipText: { fontSize: 13, fontWeight: '500', color: c.text },
+  unitChipTextOn: { color: c.onAccent },
   inputs: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   inputCol: { flex: 1, gap: 4 },
-  inputLabel: { fontSize: 12, color: Palette.muted },
+  inputLabel: { fontSize: 12, color: c.textMuted },
   input: {
     height: 44,
     borderWidth: 1,
-    borderColor: '#D6DEE8',
+    borderColor: c.hairline,
     borderRadius: 10,
     paddingHorizontal: 12,
     fontSize: 15,
-    color: Palette.ink,
-    backgroundColor: '#FFFFFF',
+    color: c.text,
+    backgroundColor: c.surface,
   },
-  times: { fontSize: 18, color: Palette.muted, paddingBottom: 10 },
-  error: { fontSize: 12, color: Palette.danger },
+  times: { fontSize: 18, color: c.textMuted, paddingBottom: 10 },
+  error: { fontSize: 12, color: c.danger },
   applyBtn: {
     height: 46,
     borderRadius: 12,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   applyBtnDisabled: { opacity: 0.45 },
-  applyText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  applyText: { color: c.onAccent, fontSize: 15, fontWeight: '600' },
   cancel: {
     marginTop: 8,
     marginHorizontal: 8,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelText: { fontSize: 16, fontWeight: '500', color: '#007AFF' },
+  cancelText: { fontSize: 16, fontWeight: '500', color: c.link },
   pressed: { opacity: 0.7 },
-});
+}));

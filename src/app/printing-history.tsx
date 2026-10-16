@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow } from '@/constants/ui';
 import { migratePrintHistoryOnce } from '@/lib/print-history/migrate';
 import { resolveHistoryLabelDocumentAsync } from '@/lib/print-history/resolve-preview';
 import { cloneDocument, generateId, type LabelDocument } from '@/lib/label-document';
@@ -25,6 +25,7 @@ import {
   usePrintHistoryStore,
   type PrintHistoryEntry,
 } from '@/stores/print-history-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const TILE_GAP = Spacing.two;
 const CARD_PREVIEW_HEIGHT = 148;
@@ -52,6 +53,7 @@ function HistoryDayTile({
   onReprint: (entry: PrintHistoryEntry) => void;
   onDelete: (entry: PrintHistoryEntry) => void;
 }) {
+  useThemeRefresh();
   const [sizeLabel, setSizeLabel] = useState('—');
   const previewWidth = width - Spacing.two * 2;
 
@@ -105,21 +107,21 @@ function HistoryDayTile({
           style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Reprint">
-          <AppIcon name="printer" tintColor={Palette.accent} size={22} />
+          <AppIcon name="printer" tintColor={C.accent} size={22} />
         </Pressable>
         <Pressable
           onPress={handleEdit}
           style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Edit label">
-          <AppIcon name="square.and.pencil" tintColor={Palette.accent} size={22} />
+          <AppIcon name="square.and.pencil" tintColor={C.accent} size={22} />
         </Pressable>
         <Pressable
           onPress={() => onDelete(entry)}
           style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Delete from history">
-          <AppIcon name="trash" tintColor={Palette.accent} size={22} />
+          <AppIcon name="trash" tintColor={C.accent} size={22} />
         </Pressable>
       </View>
     </View>
@@ -127,6 +129,7 @@ function HistoryDayTile({
 }
 
 export default function PrintingHistoryScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const entries = usePrintHistoryStore((s) => s.entries);
@@ -250,7 +253,7 @@ export default function PrintingHistoryScreen() {
           hitSlop={12}
           android_ripple={androidRipple}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+          <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
         </Pressable>
         <View style={styles.dateNav}>
           <Pressable
@@ -260,7 +263,7 @@ export default function PrintingHistoryScreen() {
             style={({ pressed }) => [styles.dateArrow, pressed && canGoOlder && styles.pressed]}>
             <AppIcon
               name="chevron.left"
-              tintColor={canGoOlder ? '#FFFFFF' : 'rgba(255,255,255,0.35)'}
+              tintColor={canGoOlder ? C.onAccent : 'rgba(255,255,255,0.35)'} // theme-fixed: dimmed white on header
               size={18}
             />
           </Pressable>
@@ -272,7 +275,7 @@ export default function PrintingHistoryScreen() {
             style={({ pressed }) => [styles.dateArrow, pressed && canGoNewer && styles.pressed]}>
             <AppIcon
               name="chevron.right"
-              tintColor={canGoNewer ? '#FFFFFF' : 'rgba(255,255,255,0.35)'}
+              tintColor={canGoNewer ? C.onAccent : 'rgba(255,255,255,0.35)'} // theme-fixed: dimmed white on header
               size={18}
             />
           </Pressable>
@@ -282,11 +285,11 @@ export default function PrintingHistoryScreen() {
 
       {!ready ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={Palette.accent} />
+          <ActivityIndicator color={C.accent} />
         </View>
       ) : entries.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <AppIcon name="clock.arrow.circlepath" tintColor="#B8C0C8" size={44} />
+          <AppIcon name="clock.arrow.circlepath" tintColor={C.textDisabled} size={44} />
           <Text style={styles.emptyTitle}>No printing history</Text>
           <Text style={styles.emptySub}>
             Each successful print is saved on this device with a label preview. Turn on recording in
@@ -328,16 +331,16 @@ export default function PrintingHistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
   },
   dateHeader: {
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.two,
@@ -363,7 +366,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dateTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 17,
     fontWeight: '600',
     minWidth: 108,
@@ -380,7 +383,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     paddingBottom: Spacing.one,
     fontSize: 13,
-    color: Palette.muted,
+    color: c.textMuted,
   },
   loadingWrap: {
     flex: 1,
@@ -402,7 +405,7 @@ const styles = StyleSheet.create({
     marginBottom: TILE_GAP,
   },
   tileCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 10,
     padding: Spacing.two,
     ...cardShadow,
@@ -416,13 +419,13 @@ const styles = StyleSheet.create({
   sizeLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
     letterSpacing: 0.3,
   },
   timeLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#94A3B8',
+    color: c.textMuted,
   },
   iconActions: {
     flexDirection: 'row',
@@ -431,7 +434,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
     paddingTop: Spacing.one,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E8ECF0',
+    borderTopColor: c.hairline,
   },
   iconActionBtn: {
     minWidth: 44,
@@ -447,10 +450,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
   },
   clearDayBtn: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 24,
     minHeight: 48,
     paddingHorizontal: 28,
@@ -460,7 +463,7 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth - Spacing.three * 2,
   },
   clearDayText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -478,15 +481,15 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
   },
   emptySub: {
     fontSize: 13,
-    color: Palette.muted,
+    color: c.textMuted,
     textAlign: 'center',
     lineHeight: 19,
   },
   pressed: {
     opacity: 0.65,
   },
-});
+}));

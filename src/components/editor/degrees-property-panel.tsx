@@ -19,20 +19,23 @@ import {
   normalizeRotation,
   type TextAlign,
 } from '@/components/editor/types';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-const ACCENT = '#48C3C7';
 const TABS: PropertyTab[] = ['Regular', 'Position', 'Content', 'Paragraph', 'Font'];
 type IconName = AppIconName;
 
 function Divider() {
+  useThemeRefresh();
   return <View style={styles.divider} />;
 }
 
 function SectionGap() {
+  useThemeRefresh();
   return <View style={styles.sectionGap} />;
 }
 
 function GraySection({ children }: { children: ReactNode }) {
+  useThemeRefresh();
   return <View style={styles.graySection}>{children}</View>;
 }
 
@@ -47,6 +50,7 @@ function SegmentRow<T extends string>({
   selected: T;
   onSelect: (value: T) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.block}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -82,6 +86,7 @@ function StepperRow({
   onPlus?: () => void;
   minusDisabled?: boolean;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.stepperRow}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -110,21 +115,23 @@ function ToggleRow({
   value: boolean;
   onValueChange: (next: boolean) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.toggleRow}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: '#D1D5DB', true: ACCENT }}
-        thumbColor="#FFFFFF"
-        ios_backgroundColor="#D1D5DB"
+        trackColor={{ false: C.border, true: C.accent }}
+        thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+        ios_backgroundColor={C.border}
       />
     </View>
   );
 }
 
 function NavRow({ label, value, onPress }: { label: string; value: string; onPress?: () => void }) {
+  useThemeRefresh();
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -132,19 +139,20 @@ function NavRow({ label, value, onPress }: { label: string; value: string; onPre
         <Text style={styles.navValue} numberOfLines={1}>
           {value || ' '}
         </Text>
-        <AppIcon name="chevron.right" tintColor="#B8C0C8" size={14} weight="semibold" />
+        <AppIcon name="chevron.right" tintColor={C.textDisabled} size={14} weight="semibold" />
       </View>
     </Pressable>
   );
 }
 
 function ContentValueRow({ value }: { value: string }) {
+  useThemeRefresh();
   return (
     <View style={styles.contentRow}>
       <Text style={styles.rowLabel}>Content</Text>
       <View style={styles.contentRight}>
         <Text style={styles.contentValue}>{value}</Text>
-        <AppIcon name="viewfinder" tintColor={ACCENT} size={22} />
+        <AppIcon name="viewfinder" tintColor={C.accent} size={22} />
       </View>
     </View>
   );
@@ -157,6 +165,7 @@ function StyleButtons({
   state: DegreesElementState;
   patch: (updates: Partial<DegreesElementState>) => void;
 }) {
+  useThemeRefresh();
   const items = [
     { key: 'bold', label: 'B', style: styles.boldGlyph, active: state.bold, field: 'bold' as const },
     { key: 'italic', label: 'I', style: styles.italicGlyph, active: state.italic, field: 'italic' as const },
@@ -198,6 +207,7 @@ function AlignButtons({
   state: DegreesElementState;
   patch: (updates: Partial<DegreesElementState>) => void;
 }) {
+  useThemeRefresh();
   const icons: { icon: IconName; align: TextAlign }[] = [
     { icon: 'text.alignleft', align: 'left' },
     { icon: 'text.aligncenter', align: 'center' },
@@ -212,7 +222,7 @@ function AlignButtons({
           key={align}
           onPress={() => patch({ align })}
           style={[styles.alignBtn, state.align === align && styles.alignBtnActive]}>
-          <AppIcon name={icon} tintColor={state.align === align ? '#FFFFFF' : '#556473'} size={16} />
+          <AppIcon name={icon} tintColor={state.align === align ? C.onAccent : C.textSecondary} size={16} />
         </Pressable>
       ))}
     </View>
@@ -226,12 +236,13 @@ function ColorRow({
   selectedIndex: number;
   onSelect: (index: number) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.colorRow}>
       <Text style={styles.rowLabel}>Drawing Color</Text>
       <View style={styles.colorGroup}>
         {DRAWING_COLORS.map((color, index) => {
-          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour
+          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour // theme-fixed: ink value, not UI
           const active = index === selectedIndex;
           return (
             <Pressable
@@ -253,6 +264,7 @@ function ColorRow({
 }
 
 function PanelNote({ children }: { children: string }) {
+  useThemeRefresh();
   return <Text style={styles.note}>{children}</Text>;
 }
 
@@ -267,6 +279,7 @@ function ContentSection({
   onColumnNamePress?: () => void;
   contentInputRef?: React.RefObject<TextInput | null>;
 }) {
+  useThemeRefresh();
   return (
     <>
       <SegmentRow
@@ -294,7 +307,7 @@ function ContentSection({
           <View style={styles.contentRow}>
             <Text style={styles.rowLabel}>Content</Text>
             <Pressable onPress={() => router.push('/scan')} hitSlop={8}>
-              <AppIcon name="viewfinder" tintColor={ACCENT} size={22} />
+              <AppIcon name="viewfinder" tintColor={C.accent} size={22} />
             </Pressable>
           </View>
           <TextInput
@@ -304,7 +317,7 @@ function ContentSection({
             onChangeText={(content) => patch({ content })}
             multiline
             placeholder="Enter serial / degrees content"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={C.textMuted}
           />
         </>
       )}
@@ -321,6 +334,7 @@ function ParagraphSection({
   patch: (updates: Partial<DegreesElementState>) => void;
   showNote?: boolean;
 }) {
+  useThemeRefresh();
   return (
     <>
       <StepperRow
@@ -375,6 +389,7 @@ function FontSection({
   patch: (updates: Partial<DegreesElementState>) => void;
   includeAlignment?: boolean;
 }) {
+  useThemeRefresh();
   return (
     <>
       <NavRow label="Font" value={state.fontFamily} onPress={() => router.push({ pathname: '/font-library', params: { from: 'edit' } })} />
@@ -431,6 +446,7 @@ export function DegreesPropertyPanel({
   elementHeightMm,
   contentFocusRequest = 0,
 }: DegreesPropertyPanelProps) {
+  useThemeRefresh();
   const contentInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -576,49 +592,49 @@ export function DegreesPropertyPanel({
   );
 }
 
-const styles = StyleSheet.create({
-  panel: { flex: 1, backgroundColor: '#FFFFFF' },
-  tabScroll: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E4E8ED' },
+const styles = themedStyles((c) => ({
+  panel: { flex: 1, backgroundColor: c.surface },
+  tabScroll: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.hairline },
   tabContent: { paddingHorizontal: 2 },
   tabItem: { paddingHorizontal: 14, paddingTop: 10, alignItems: 'center' },
-  tabText: { fontSize: 14, color: '#7E8B98', fontWeight: '500' },
-  tabTextActive: { color: ACCENT, fontWeight: '600' },
+  tabText: { fontSize: 14, color: c.textMuted, fontWeight: '500' },
+  tabTextActive: { color: c.accent, fontWeight: '600' },
   tabIndicator: {
     marginTop: 8,
     width: '100%',
     minWidth: 32,
     height: 3,
     borderRadius: 2,
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
   },
   tabSpacer: { marginTop: 8, height: 3 },
-  body: { flex: 1, backgroundColor: '#FFFFFF' },
+  body: { flex: 1, backgroundColor: c.surface },
   bodyContent: { paddingBottom: 24 },
   block: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
   rowLabel: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#2C3E50',
+    color: c.textSecondary,
     lineHeight: 20,
     includeFontPadding: false,
     ...Platform.select({ android: { textAlignVertical: 'center' as const }, default: {} }),
   },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#E4E8ED', marginLeft: 16 },
-  sectionGap: { height: 8, backgroundColor: '#EEF1F5' },
-  graySection: { backgroundColor: '#EEF1F5' },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 16 },
+  sectionGap: { height: 8, backgroundColor: c.fillStrong },
+  graySection: { backgroundColor: c.fillStrong },
   segmentRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   segmentChip: {
     flex: 1,
     minHeight: 34,
     borderRadius: 8,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  segmentChipActive: { backgroundColor: ACCENT },
-  segmentText: { fontSize: 12, fontWeight: '600', color: '#556473', textAlign: 'center' },
-  segmentTextActive: { color: '#FFFFFF' },
+  segmentChipActive: { backgroundColor: c.accent },
+  segmentText: { fontSize: 12, fontWeight: '600', color: c.textSecondary, textAlign: 'center' },
+  segmentTextActive: { color: c.onAccent },
   stepperRow: {
     minHeight: 52,
     paddingHorizontal: 16,
@@ -633,16 +649,16 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperCircleActive: { borderColor: ACCENT, backgroundColor: ACCENT },
-  stepperCircleDisabled: { borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
-  stepperSymbol: { fontSize: 18, lineHeight: 20, color: '#64748B', fontWeight: '500' },
-  stepperSymbolActive: { color: '#FFFFFF' },
-  stepperSymbolDisabled: { color: '#CBD5E1' },
-  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: ACCENT },
+  stepperCircleActive: { borderColor: c.accent, backgroundColor: c.accent },
+  stepperCircleDisabled: { borderColor: c.hairline, backgroundColor: c.fill },
+  stepperSymbol: { fontSize: 18, lineHeight: 20, color: c.textSecondary, fontWeight: '500' },
+  stepperSymbolActive: { color: c.onAccent },
+  stepperSymbolDisabled: { color: c.textDisabled },
+  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: c.accent },
   toggleRow: {
     minHeight: 52,
     paddingHorizontal: 16,
@@ -660,19 +676,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   contentRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  contentValue: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  contentValue: { fontSize: 14, color: c.textSecondary, fontWeight: '500' },
   contentInput: {
     marginHorizontal: 16,
     marginBottom: 16,
     minHeight: 88,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: '#1E293B',
-    backgroundColor: '#F8FAFC',
+    color: c.text,
+    backgroundColor: c.fill,
     textAlignVertical: 'top',
   },
   navRow: {
@@ -684,19 +700,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   navRight: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '55%' },
-  navValue: { fontSize: 14, color: '#64748B' },
+  navValue: { fontSize: 14, color: c.textSecondary },
   styleRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   styleBtn: {
     flex: 1,
     minHeight: 36,
     borderRadius: 8,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  styleBtnActive: { backgroundColor: ACCENT },
-  styleBtnText: { fontSize: 16, color: '#556473', fontWeight: '600' },
-  styleBtnTextActive: { color: '#FFFFFF' },
+  styleBtnActive: { backgroundColor: c.accent },
+  styleBtnText: { fontSize: 16, color: c.textSecondary, fontWeight: '600' },
+  styleBtnTextActive: { color: c.onAccent },
   boldGlyph: { fontWeight: '800' },
   italicGlyph: { fontStyle: 'italic' },
   underlineGlyph: { textDecorationLine: 'underline' },
@@ -706,20 +722,20 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 36,
     borderRadius: 8,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  alignBtnActive: { backgroundColor: ACCENT },
+  alignBtnActive: { backgroundColor: c.accent },
   sliderBlock: { marginTop: 10, position: 'relative' },
   sliderTrack: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
     overflow: 'visible',
     position: 'relative',
   },
-  sliderFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: ACCENT, borderRadius: 2 },
+  sliderFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: c.accent, borderRadius: 2 },
   sliderThumb: {
     position: 'absolute',
     top: -8,
@@ -727,9 +743,9 @@ const styles = StyleSheet.create({
     height: 20,
     marginLeft: -10,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
   },
   sliderTicks: { flexDirection: 'row', marginTop: 4 },
   sliderTickHit: { flex: 1, height: 24 },
@@ -749,23 +765,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  colorOuterActive: { borderWidth: 2, borderColor: ACCENT },
+  colorOuterActive: { borderWidth: 2, borderColor: c.accent },
   colorDot: { width: 22, height: 22, borderRadius: 11 },
-  colorDotWhite: { borderWidth: StyleSheet.hairlineWidth, borderColor: '#CBD5E1' },
+  colorDotWhite: { borderWidth: StyleSheet.hairlineWidth, borderColor: c.border },
   note: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 12,
     lineHeight: 17,
-    color: '#7E8B98',
+    color: c.textMuted,
   },
-  noteWrap: { backgroundColor: '#EEF1F5' },
+  noteWrap: { backgroundColor: c.fillStrong },
   positionWrap: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 16,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
   },
   padColumn: { alignItems: 'center', gap: 6 },
   padMiddleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -773,11 +789,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  padCenter: { backgroundColor: '#FFFFFF' },
+  padCenter: { backgroundColor: c.surface },
   alignGrid: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   gridBtn: {
     width: '22%',
@@ -785,7 +801,7 @@ const styles = StyleSheet.create({
     minWidth: 44,
     maxWidth: 52,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -794,15 +810,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
     gap: 10,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
   },
   positionActionBtn: {
     flex: 1,
     minHeight: 44,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pressed: { opacity: 0.7 },
-});
+}));

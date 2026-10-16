@@ -26,7 +26,7 @@ import { PdfToolPanel, type PdfToolId } from '@/components/pdf-editor/pdf-tool-p
 import { PrinterConnectionPill } from '@/components/printers/printer-connection-pill';
 import { PdfWatermarkTool } from '@/components/pdf-editor/pdf-watermark-tool';
 import { Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { planLabelRender } from '@/lib/pdf-editor/label-render-plan';
 import { exportEditedPdf } from '@/lib/pdf-editor/export';
 import { copyPdfToCache, loadPdfMetadata } from '@/lib/pdf-editor/load';
@@ -55,6 +55,7 @@ import { downscaleWatermarkTile, previewTileSize } from '@/lib/pdf-editor/waterm
 import { usePdfEditStore } from '@/stores/pdf-edit-store';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type Step = 'pick' | 'size' | 'edit' | 'print';
 
@@ -67,6 +68,7 @@ const STEP_TITLE: Record<Step, string> = {
 
 /** Standalone PDF editor: size, then crop tools, then print or export. */
 export default function PdfEditorScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     docUri?: string;
@@ -403,7 +405,7 @@ export default function PdfEditorScreen() {
     <Image source={{ uri: pageUri }} style={StyleSheet.absoluteFill} contentFit="contain" />
   ) : (
     <View style={[StyleSheet.absoluteFill, styles.previewSpinner]}>
-      <ActivityIndicator color={Palette.accent} />
+      <ActivityIndicator color={C.accent} />
     </View>
   );
 
@@ -411,7 +413,7 @@ export default function PdfEditorScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable onPress={goBack} hitSlop={8} style={styles.headerBtn}>
-          <AppIcon name="chevron.left" size={22} tintColor="#fff" />
+          <AppIcon name="chevron.left" size={22} tintColor={C.onAccent} />
         </Pressable>
         <Text style={styles.headerTitle}>{STEP_TITLE[step]}</Text>
         <PrinterConnectionPill />
@@ -427,7 +429,7 @@ export default function PdfEditorScreen() {
               <View key={id} style={styles.stepItem}>
                 <View style={[styles.stepDot, (on || done) && styles.stepDotOn]}>
                   {done ? (
-                    <AppIcon name="checkmark" size={11} tintColor="#FFFFFF" />
+                    <AppIcon name="checkmark" size={11} tintColor={C.onAccent} />
                   ) : (
                     <Text style={[styles.stepNum, (on || done) && styles.stepNumOn]}>{i + 1}</Text>
                   )}
@@ -444,7 +446,7 @@ export default function PdfEditorScreen() {
 
       {step === 'pick' || !session ? (
         <View style={styles.empty}>
-          {loading ? <ActivityIndicator color={Palette.accent} /> : null}
+          {loading ? <ActivityIndicator color={C.accent} /> : null}
           <Text style={styles.emptyTitle}>Import a PDF</Text>
           <Text style={styles.emptyBody}>
             Choose a file from this device or Google Drive. You will set the label size next.
@@ -458,7 +460,7 @@ export default function PdfEditorScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={styles.fileRow}>
             <View style={styles.fileIcon}>
-              <AppIcon name="doc.text" size={22} tintColor={Palette.accent} />
+              <AppIcon name="doc.text" size={22} tintColor={C.accent} />
             </View>
             <View style={styles.fileText}>
               <Text style={styles.fileName} numberOfLines={1}>
@@ -479,7 +481,7 @@ export default function PdfEditorScreen() {
           {tool === 'crop' ? (
             <View style={styles.cropStage}>
               {renderViewer({ crop: true, watermark: false, expand: true })}
-              {loading ? <ActivityIndicator color={Palette.accent} style={{ marginVertical: 8 }} /> : null}
+              {loading ? <ActivityIndicator color={C.accent} style={{ marginVertical: 8 }} /> : null}
             </View>
           ) : (
             <ScrollView
@@ -497,7 +499,7 @@ export default function PdfEditorScreen() {
                     {session.outputSize.widthMm} × {session.outputSize.heightMm} mm
                   </Text>
                 </View>
-                {loading ? <ActivityIndicator color="#FFFFFF" style={{ marginTop: 8 }} /> : null}
+                {loading ? <ActivityIndicator color={C.onAccent} style={{ marginTop: 8 }} /> : null}
               </View>
             </ScrollView>
           )}
@@ -605,7 +607,7 @@ export default function PdfEditorScreen() {
                 onNext={() => setCurrentPage(session.currentPageIndex + 1)}
               />
             ) : null}
-            {loading ? <ActivityIndicator color="#FFFFFF" style={{ marginTop: 8 }} /> : null}
+            {loading ? <ActivityIndicator color={C.onAccent} style={{ marginTop: 8 }} /> : null}
           </View>
           <View style={styles.printSettings}>
             <PdfPrintPanel
@@ -653,7 +655,7 @@ export default function PdfEditorScreen() {
                 pressed && styles.pressed,
               ]}>
               {printing ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color={C.onAccent} size="small" />
               ) : (
                 <Text style={styles.primaryText}>{printerLive ? 'Print' : 'Connect printer'}</Text>
               )}
@@ -676,7 +678,7 @@ export default function PdfEditorScreen() {
               pressed && styles.pressed,
             ]}>
             {loading && (step === 'pick' || !session) ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={C.onAccent} size="small" />
             ) : (
               <Text style={styles.primaryText}>{step === 'pick' || !session ? 'Import PDF' : 'Next'}</Text>
             )}
@@ -688,11 +690,11 @@ export default function PdfEditorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Palette.screen },
+const styles = themedStyles((c, scheme) => ({
+  screen: { flex: 1, backgroundColor: c.bg },
   header: {
     height: 48,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
@@ -701,7 +703,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'left',
-    color: '#fff',
+    color: c.onAccent,
     fontSize: 17,
     fontWeight: '600',
   },
@@ -710,30 +712,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: c.hairline,
   },
   stepItem: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   stepDot: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepDotOn: { backgroundColor: Palette.accent },
-  stepNum: { fontSize: 11, fontWeight: '700', color: '#64748B' },
-  stepNumOn: { color: '#FFFFFF' },
-  stepLabel: { marginLeft: 6, fontSize: 13, fontWeight: '600', color: '#94A3B8' },
-  stepLabelOn: { color: Palette.ink },
-  stepLine: { flex: 1, height: 2, marginHorizontal: 8, backgroundColor: '#E2E8F0', borderRadius: 1 },
-  stepLineOn: { backgroundColor: Palette.accent },
+  stepDotOn: { backgroundColor: c.accentFill },
+  stepNum: { fontSize: 11, fontWeight: '700', color: c.textSecondary },
+  stepNumOn: { color: c.onAccent },
+  stepLabel: { marginLeft: 6, fontSize: 13, fontWeight: '600', color: c.textMuted },
+  stepLabelOn: { color: c.text },
+  stepLine: { flex: 1, height: 2, marginHorizontal: 8, backgroundColor: c.fillStrong, borderRadius: 1 },
+  stepLineOn: { backgroundColor: c.accentFill },
   editColumn: { flex: 1, minHeight: 0 },
-  cropStage: { flex: 1, minHeight: 0, width: '100%', overflow: 'hidden', backgroundColor: '#111827' },
+  cropStage: { flex: 1, minHeight: 0, width: '100%', overflow: 'hidden', backgroundColor: '#111827' }, // theme-fixed: dark crop stage in both themes
   previewArea: {
-    backgroundColor: '#AEB4BC',
+    backgroundColor: scheme === 'light' ? '#AEB4BC' : c.canvasArea, // theme-fixed: light keeps its grey stage around the white label
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 24,
@@ -741,7 +743,7 @@ const styles = StyleSheet.create({
   },
   previewShadow: {
     borderRadius: 6,
-    shadowColor: '#000',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.22,
     shadowRadius: 6,
@@ -749,28 +751,28 @@ const styles = StyleSheet.create({
   },
   sizeBadge: {
     marginTop: 10,
-    backgroundColor: 'rgba(0,0,0,0.38)',
+    backgroundColor: c.scrim,
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 3,
   },
-  sizeBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
+  sizeBadgeText: { color: c.onAccent, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
   printContent: { paddingBottom: 24 },
   printSettings: { paddingHorizontal: 12, paddingTop: 12 },
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24, gap: 12 },
   editContent: { paddingBottom: 24 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: Palette.ink },
-  emptyBody: { fontSize: 14, color: Palette.muted, textAlign: 'center', lineHeight: 20 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: c.text },
+  emptyBody: { fontSize: 14, color: c.textMuted, textAlign: 'center', lineHeight: 20 },
   fileRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
@@ -778,32 +780,32 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: c.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   fileText: { flex: 1, gap: 2 },
-  fileName: { fontSize: 15, fontWeight: '600', color: Palette.ink },
-  fileMeta: { fontSize: 12, color: '#64748B' },
-  change: { fontSize: 14, fontWeight: '600', color: Palette.accent },
+  fileName: { fontSize: 15, fontWeight: '600', color: c.text },
+  fileMeta: { fontSize: 12, color: c.textSecondary },
+  change: { fontSize: 14, fontWeight: '600', color: c.accent },
   previewSpinner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   bottomBar: {
     flexShrink: 0,
     paddingHorizontal: 16,
     paddingTop: 10,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: c.hairline,
   },
   primaryBtn: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 26,
     minHeight: 52,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  primaryText: { color: c.onAccent, fontSize: 16, fontWeight: '600' },
   printActions: { flexDirection: 'row', gap: 10 },
   exportBtn: {
     flex: 1,
@@ -811,14 +813,14 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     borderRadius: 26,
     borderWidth: 1.5,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
-  exportBtnText: { color: Palette.accent, fontSize: 16, fontWeight: '600' },
+  exportBtnText: { color: c.accent, fontSize: 16, fontWeight: '600' },
   printBtn: { flex: 1.4 },
-  connectFirstBtn: { backgroundColor: '#DC2626' },
+  connectFirstBtn: { backgroundColor: c.dangerFill },
   btnOff: { opacity: 0.5 },
   pressed: { opacity: 0.72 },
-});
+}));

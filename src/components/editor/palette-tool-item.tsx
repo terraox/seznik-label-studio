@@ -1,10 +1,11 @@
 import { useMemo, useRef } from 'react';
-import { Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
 import { ToolMenuIcon } from '@/components/editor/editor-menu-icons';
 import type { AppIconName } from '@/components/app-icon';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const DRAG_START_PX = 10;
 
@@ -25,6 +26,7 @@ export function PaletteToolItem({
   onDragEnd: (windowX: number, windowY: number) => void;
   style?: StyleProp<ViewStyle>;
 }) {
+  useThemeRefresh();
   const callbacksRef = useRef({ onPress, onDragStart, onDragMove, onDragEnd });
   callbacksRef.current = { onPress, onDragStart, onDragMove, onDragEnd };
 
@@ -73,7 +75,7 @@ const webHitStyle = {
   userSelect: 'none',
 } as const;
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   hit: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -82,7 +84,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '400',
-    color: '#475569',
+    color: c.textSecondary,
     textAlign: 'center',
   },
-});
+}));

@@ -26,7 +26,7 @@ import {
 import { LabelPreview } from '@/components/label-preview';
 import { PrintSizeSelector } from '@/components/print-size-selector';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow, Palette, Type } from '@/constants/ui';
+import { cardShadow, Type } from '@/constants/ui';
 import {
   JEWELRY_DIECUT,
   JEWELRY_DIECUT_PRINT_PRESET_2UP,
@@ -137,6 +137,8 @@ import {
   tileDocumentTwoUpDieCut37,
   type PrintSizePreset,
 } from '@/lib/print-sizes';
+import { logCaptureSha1 } from '@/lib/debug/capture-hash';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
 const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'] as const;
@@ -298,6 +300,7 @@ function StepperRow({
   plusDisabled?: boolean;
   bordered?: boolean;
 }) {
+  useThemeRefresh();
   return (
     <View style={[styles.stepperRow, bordered && styles.stepperRowBorder]}>
       <Text style={styles.stepperLabel}>{label}</Text>
@@ -339,6 +342,7 @@ function StepperRow({
 }
 
 function BorderedStepperRow(props: QualityStepperProps) {
+  useThemeRefresh();
   return <StepperRow {...props} bordered />;
 }
 
@@ -351,6 +355,7 @@ function ChipGroup<T extends string>({
   selected: T;
   onSelect: (value: T) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.chipRow}>
       {options.map((option) => {
@@ -376,6 +381,7 @@ function ChipGroup<T extends string>({
 }
 
 export default function PrintScreen() {
+  const uiScheme = useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const params = useLocalSearchParams<{
@@ -1099,6 +1105,7 @@ export default function PrintScreen() {
               return captureRef(shotRef, printCaptureShotOptions);
             });
             captureMs = Date.now() - tCap0;
+            logCaptureSha1('bitmap', png, uiScheme);
             captureResolvedAt = Date.now();
             timer.end('capture+verify');
             if (!png) {
@@ -1201,6 +1208,7 @@ export default function PrintScreen() {
           const tConn0 = Date.now();
           const capturePacked = async () => {
             const pngBase64 = await captureRef(shotRef, printCaptureShotOptions);
+            logCaptureSha1('packed', pngBase64, uiScheme);
             captureResolvedAt = Date.now();
             return pngBase64;
           };
@@ -1423,6 +1431,7 @@ export default function PrintScreen() {
                 await waitForNextPaint();
                 const captured = await captureRef(shotRef, printCaptureShotOptions);
                 if (!captured) throw err instanceof Error ? err : new Error(String(err));
+                logCaptureSha1('josh-fallback', captured, uiScheme);
                 base64 = captured;
                 rotatedBase64 = rotatePngBase64(
                   applyInkDarknessToPng(base64, inkSteps, threshold, pageDoc),
@@ -1675,6 +1684,7 @@ export default function PrintScreen() {
                 if (!captured) {
                   throw err instanceof Error ? err : new Error(String(err));
                 }
+                logCaptureSha1('viewshot-fallback', captured, uiScheme);
                 base64 = captured;
                 rotatedBase64 = rotatePngBase64(
                   applyInkDarknessToPng(base64, inkSteps, threshold, pageDoc),
@@ -1827,7 +1837,7 @@ export default function PrintScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+          <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
         </Pressable>
 
         <Pressable
@@ -1842,7 +1852,7 @@ export default function PrintScreen() {
               ? `${activeModelMeta.shortName}: ${deviceName ?? 'Connected'}`
               : `${activeModelMeta.shortName} · Unconnected`}
           </Text>
-          <AppIcon name="link" tintColor="#FFFFFF" size={14} />
+          <AppIcon name="link" tintColor="#FFFFFF" size={14} /* theme-fixed: white icon on status fill */ />
         </Pressable>
       </View>
 
@@ -1875,7 +1885,7 @@ export default function PrintScreen() {
                   {
                     width: cardWidth,
                     height: cardHeight,
-                    backgroundColor: '#FFFFFF',
+                    backgroundColor: '#FFFFFF', // theme-fixed: print preview / capture surface
                     padding: 8,
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1925,7 +1935,7 @@ export default function PrintScreen() {
                 style={{
                   width: printCaptureLayoutPx.widthPx,
                   height: printCaptureLayoutPx.heightPx,
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: '#FFFFFF', // theme-fixed: print preview / capture surface
                 }}>
                 <LabelPreview
                   document={(displayDocument ?? previewDocument)!}
@@ -1962,7 +1972,7 @@ export default function PrintScreen() {
                 style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
                 <AppIcon
                   name="chevron.left"
-                  tintColor={pageIndex <= 0 ? '#7C848E' : '#FFFFFF'}
+                  tintColor={pageIndex <= 0 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
                   size={16}
                 />
               </Pressable>
@@ -1976,7 +1986,7 @@ export default function PrintScreen() {
                 style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
                 <AppIcon
                   name="chevron.right"
-                  tintColor={pageIndex >= pageCount - 1 ? '#7C848E' : '#FFFFFF'}
+                  tintColor={pageIndex >= pageCount - 1 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
                   size={16}
                 />
               </Pressable>
@@ -2008,7 +2018,7 @@ export default function PrintScreen() {
             <StepperRow
               label="Number of Copies"
               value={String(copies)}
-              valueColor={Palette.accent}
+              valueColor={C.accent}
               minusDisabled={copies <= 1}
               onMinus={() => setCopies((n) => Math.max(1, n - 1))}
               onPlus={() => setCopies((n) => n + 1)}
@@ -2080,7 +2090,7 @@ export default function PrintScreen() {
               <Text style={styles.groupLabel}>Paper Type</Text>
               <ChipGroup options={PAPER_TYPES} selected={paperType} onSelect={changePaperType} />
               {jewelryDieCutJob ? (
-                <Text style={[styles.helperText, { color: '#0284C7', marginTop: 6 }]}>
+                <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
                   💡 Clear-liner jewelry rolls with black timing lines on the back require Paper Type set to "Black mark". If prints skip or overlap, run "Calibrate Paper Sensor" in Printer Connect.
                 </Text>
               ) : null}
@@ -2093,7 +2103,7 @@ export default function PrintScreen() {
               onPress={() => setShowAdvanced((v) => !v)}
               style={({ pressed }) => [styles.advancedHeader, pressed && styles.pressed]}>
               <View style={styles.advancedHeaderLeft}>
-                <AppIcon name="gearshape" tintColor="#475569" size={18} />
+                <AppIcon name="gearshape" tintColor={C.textSecondary} size={18} />
                 <Text style={styles.advancedHeaderTitle}>Advanced Settings</Text>
               </View>
               <View style={styles.advancedHeaderRight}>
@@ -2105,7 +2115,7 @@ export default function PrintScreen() {
                 <View style={styles.advancedChevron}>
                   <AppIcon
                     name={showAdvanced ? 'chevron.up' : 'chevron.down'}
-                    tintColor="#475569"
+                    tintColor={C.textSecondary}
                     size={16}
                   />
                 </View>
@@ -2183,7 +2193,7 @@ export default function PrintScreen() {
                   onPlus={() => changeGapLength(Math.min(20, Math.round((gapLength + 0.5) * 100) / 100))}
                   bordered
                 />
-                <Text style={{ color: '#9CA3AF', fontSize: 12, paddingTop: 8 }}>
+                <Text style={{ color: C.textMuted, fontSize: 12, paddingTop: 8 }}>
                   {(() => {
                     const mgr = getPrinterManager();
                     if (!mgr.usesTd404CommandSet) {
@@ -2235,7 +2245,7 @@ export default function PrintScreen() {
             styles.sizeBtn,
             (pressed || isPdfJob || ratTail143Job || cableFlagJob) && styles.pressed,
           ]}>
-          <AppIcon name="rectangle.dashed" tintColor="#FFFFFF" size={18} />
+          <AppIcon name="rectangle.dashed" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on a coloured button */ />
           <Text style={styles.sizeBtnText} numberOfLines={1}>
             {ratTail143Job
               ? `${RAT_TAIL_143_PRINT.widthMm.toFixed(2)}×${RAT_TAIL_143_PRINT.heightMm.toFixed(2)}mm`
@@ -2253,7 +2263,7 @@ export default function PrintScreen() {
             void handlePrint();
           }}>
           {printing ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color="#FFFFFF" /* theme-fixed: on accent button */ />
           ) : (
             <Text style={styles.printBtnText}>Print</Text>
           )}
@@ -2276,13 +2286,13 @@ export default function PrintScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c, scheme) => ({
   root: {
     flex: 1,
-    backgroundColor: '#F4F5F7',
+    backgroundColor: c.fill,
   },
   header: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     paddingHorizontal: Spacing.three,
     paddingBottom: Spacing.three,
     flexDirection: 'row',
@@ -2299,24 +2309,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Palette.danger,
+    backgroundColor: c.dangerFill,
     paddingVertical: 7,
     paddingHorizontal: 14,
     borderRadius: 8,
     maxWidth: 220,
   },
   connectionConnected: {
-    backgroundColor: '#2E9E63',
+    backgroundColor: c.successFill,
   },
   connectionText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     ...Type.badge,
   },
   scroll: {
     flex: 1,
   },
   previewArea: {
-    backgroundColor: '#AEB4BC',
+    backgroundColor: scheme === 'light' ? '#AEB4BC' : c.canvasArea, // theme-fixed: light keeps its grey stage around the white label
     // minHeight is set inline from previewAreaMinHeight (dynamic).
     alignItems: 'center',
     justifyContent: 'center',
@@ -2326,7 +2336,7 @@ const styles = StyleSheet.create({
   previewShadow: {
     borderRadius: 6,
     // Subtle drop-shadow so the label lifts off the grey stage.
-    shadowColor: '#000',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.22,
     shadowRadius: 6,
@@ -2334,76 +2344,76 @@ const styles = StyleSheet.create({
   },
   sizeBadge: {
     marginTop: 10,
-    backgroundColor: 'rgba(0,0,0,0.38)',
+    backgroundColor: c.scrim,
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 3,
   },
   sizeBadgeText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
   printCapture: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (printCapture)
   },
   printCaptureNative: {
     position: 'absolute',
     top: -10000,
     left: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (printCaptureNative)
     overflow: 'hidden',
     pointerEvents: 'none',
   },
   previewCard: {
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (previewCard)
     overflow: 'hidden',
   },
   docPreviewCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
   },
   docBadgeLarge: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: c.dangerSoft,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 6,
     marginBottom: 8,
   },
   docBadgeLargeText: {
-    color: '#DC2626',
+    color: c.danger,
     fontWeight: '700',
     fontSize: 13,
   },
   docPreviewTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#0F172A',
+    color: c.text,
     textAlign: 'center',
     marginBottom: 4,
   },
   docPreviewSub: {
     fontSize: 12,
-    color: '#64748B',
+    color: c.textSecondary,
   },
   pageNav: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
     marginTop: 14,
-    backgroundColor: '#525860',
+    backgroundColor: c.neutralFill,
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 14,
   },
   pageNavText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -2419,7 +2429,7 @@ const styles = StyleSheet.create({
     bottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#525860',
+    backgroundColor: c.neutralFill,
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -2432,20 +2442,20 @@ const styles = StyleSheet.create({
   zoomDivider: {
     width: 1,
     height: 20,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.25)', // theme-fixed: divider on the dark zoom pill
   },
   zoomText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 22,
     fontWeight: '500',
     lineHeight: 24,
   },
   referenceNote: {
     textAlign: 'center',
-    color: '#9AA3AD',
+    color: c.textMuted,
     ...Type.caption,
     paddingVertical: 14,
-    backgroundColor: '#F4F5F7',
+    backgroundColor: c.fill,
   },
   settingsWrap: {
     paddingHorizontal: 12,
@@ -2455,7 +2465,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   settingsCard: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 4,
@@ -2464,7 +2474,7 @@ const styles = StyleSheet.create({
   cardSection: {
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ECEEF1',
+    borderTopColor: c.hairline,
   },
   advancedHeader: {
     flexDirection: 'row',
@@ -2481,7 +2491,7 @@ const styles = StyleSheet.create({
   advancedHeaderTitle: {
     ...Type.body,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
   },
   advancedHeaderRight: {
     flexDirection: 'row',
@@ -2492,23 +2502,23 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   advancedStatusText: {
     fontSize: 12,
-    color: '#64748B',
+    color: c.textSecondary,
   },
   advancedBody: {
     paddingTop: 6,
     paddingBottom: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ECEEF1',
+    borderTopColor: c.hairline,
   },
   helperText: {
     fontSize: 12,
-    color: '#64748B',
+    color: c.textSecondary,
     marginTop: 6,
     marginBottom: 4,
   },
@@ -2521,16 +2531,16 @@ const styles = StyleSheet.create({
   },
   stepperRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ECEEF1',
+    borderBottomColor: c.hairline,
   },
   calibrationQualityNote: {
-    color: '#B45309',
+    color: c.warning,
     fontSize: 12,
     paddingVertical: 8,
   },
   stepperLabel: {
     ...Type.body,
-    color: Palette.ink,
+    color: c.text,
     flex: 1,
     paddingRight: 8,
   },
@@ -2544,31 +2554,31 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperCircleDisabled: {
-    borderColor: Palette.disabled,
+    borderColor: c.border,
   },
   stepperSymbol: {
     fontSize: 18,
     fontWeight: '400',
-    color: Palette.accent,
+    color: c.accent,
     lineHeight: 20,
   },
   stepperSymbolDisabled: {
-    color: Palette.disabled,
+    color: c.textDisabled,
   },
   stepperValue: {
     ...Type.bodyMedium,
-    color: Palette.ink,
+    color: c.text,
     minWidth: 68,
     textAlign: 'center',
   },
   groupLabel: {
     ...Type.bodyMedium,
-    color: Palette.ink,
+    color: c.text,
     paddingTop: 14,
     paddingBottom: 10,
   },
@@ -2584,20 +2594,20 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#ECEEF1',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
   chipActive: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   chipText: {
     ...Type.chip,
-    color: '#7A8490',
+    color: c.textMuted,
   },
   chipTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   footer: {
     position: 'absolute',
@@ -2609,20 +2619,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     gap: 12,
-    backgroundColor: '#F4F5F7',
+    backgroundColor: c.fill,
   },
   gearBtn: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#5CB85C',
+    backgroundColor: c.successFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sizeBtn: {
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#525860',
+    backgroundColor: c.neutralFill,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -2630,23 +2640,23 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sizeBtnText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 12,
     fontWeight: '600',
   },
   printBtn: {
     flex: 1,
     height: 52,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },
   printBtnText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     ...Type.button,
   },
   pressed: {
     opacity: 0.65,
   },
-});
+}));

@@ -2,13 +2,11 @@ import { useState, type Ref } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-
-import { Palette } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type OcrResultPanelProps = {
   value: string;
@@ -29,6 +27,7 @@ export function OcrResultPanel({
   onCopy,
   onCopyError,
 }: OcrResultPanelProps) {
+  useThemeRefresh();
   const [copied, setCopied] = useState(false);
   const [copying, setCopying] = useState(false);
 
@@ -55,7 +54,7 @@ export function OcrResultPanel({
         value={value}
         onChangeText={onChangeText}
         placeholder=""
-        placeholderTextColor="#A4B0BC"
+        placeholderTextColor={C.textMuted}
         multiline
         editable={!identifying}
         textAlignVertical="center"
@@ -70,7 +69,7 @@ export function OcrResultPanel({
           style={({ pressed }) => [styles.copyBtn, pressed && styles.pressed]}
           hitSlop={8}>
           {copying ? (
-            <ActivityIndicator size="small" color={Palette.accent} />
+            <ActivityIndicator size="small" color={C.accent} />
           ) : (
             <Text style={[styles.copyText, !value.trim() && styles.copyDisabled]}>
               {copied ? 'Copied' : 'Copy'}
@@ -84,15 +83,15 @@ export function OcrResultPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   previewInput: {
     minHeight: 52,
     borderRadius: 6,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#2C3E50',
+    color: c.textSecondary,
     marginBottom: 8,
   },
   copyRow: {
@@ -108,15 +107,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   copyText: {
-    color: Palette.accent,
+    color: c.accent,
     fontSize: 15,
     fontWeight: '600',
   },
   copyDisabled: {
-    color: Palette.disabled,
+    color: c.textDisabled,
   },
   errorText: {
-    color: Palette.danger,
+    color: c.danger,
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 10,
@@ -124,4 +123,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.72,
   },
-});
+}));

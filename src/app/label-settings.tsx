@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -46,12 +45,14 @@ import { usePrinterStore } from '@/stores/printer-store';
 import { QualityControl } from '@/components/quality-control';
 import { clampToCap, qualityCapsFor, resolveQualityBridge } from '@/lib/printer/bridge-quality-caps';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
 const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'] as const;
 const MIRROR_MODES = ['Close', 'Reverse', 'Syntropy'] as const;
 
 export default function LabelSettingsScreen() {
+  useThemeRefresh();
   const params = useLocalSearchParams<{ labelId?: string | string[] }>();
   const labelId = Array.isArray(params.labelId) ? params.labelId[0] : params.labelId;
   const getDocument = useLabelStore((s) => s.getDocument);
@@ -192,8 +193,8 @@ export default function LabelSettingsScreen() {
 
   const drawingColorLabel = useMemo(() => {
     const idx = settings?.defaultDrawingColorIndex ?? 1;
-    const color = DRAWING_COLORS[idx] ?? '#000000';
-    return color === '#FFFFFF' ? 'White' : color;
+    const color = DRAWING_COLORS[idx] ?? '#000000'; // theme-fixed: ink value, not UI
+    return color === '#FFFFFF' ? 'White' : color; // theme-fixed: ink value, not UI
   }, [settings?.defaultDrawingColorIndex]);
 
   if (!doc || !settings) {
@@ -573,20 +574,20 @@ export default function LabelSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   emptyText: {
     padding: 16,
-    color: '#64748B',
+    color: c.textSecondary,
     textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    backgroundColor: c.scrim,
     justifyContent: 'center',
     padding: 24,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     padding: 16,
     gap: 12,
@@ -594,7 +595,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#1E293B',
+    color: c.text,
   },
   modalDone: {
     alignSelf: 'flex-end',
@@ -602,8 +603,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   modalDoneText: {
-    color: '#48C3C7',
+    color: c.accent,
     fontWeight: '600',
     fontSize: 16,
   },
-});
+}));

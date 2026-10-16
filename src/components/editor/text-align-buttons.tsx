@@ -1,13 +1,13 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 
 import type { TextAlign } from '@/components/editor/types';
-
-const ACCENT = '#48C3C7';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type AlignKind = TextAlign;
 
 export function AlignGlyph({ kind, color, size = 18 }: { kind: AlignKind; color: string; size?: number }) {
+  useThemeRefresh();
   if (kind === 'spacing') {
     return (
       <Svg width={size} height={size} viewBox="0 0 18 18">
@@ -58,11 +58,12 @@ export function TextAlignButtons({
   onChange,
   options = DEFAULT_OPTIONS,
 }: TextAlignButtonsProps) {
+  useThemeRefresh();
   return (
     <View style={styles.row}>
       {options.map((value) => {
         const active = align === value;
-        const color = active ? '#FFFFFF' : '#556473';
+        const color = active ? C.onAccent : C.textSecondary;
         return (
           <Pressable
             key={value}
@@ -77,15 +78,15 @@ export function TextAlignButtons({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   row: { flexDirection: 'row', gap: 8, marginTop: 10 },
   btn: {
     flex: 1,
     minHeight: 36,
     borderRadius: 8,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnActive: { backgroundColor: ACCENT },
-});
+  btnActive: { backgroundColor: c.accent },
+}));

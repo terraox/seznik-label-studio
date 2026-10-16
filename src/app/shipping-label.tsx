@@ -23,8 +23,10 @@ import {
   STARTER_SHIPPING_TEMPLATES,
   TEMPLATE_STANDARD_4X6,
 } from '@/lib/shipping-editor/types';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export default function ShippingLabelScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const [template, setTemplate] = useState<ShippingTemplate>(TEMPLATE_STANDARD_4X6);
   const [templateMenuVisible, setTemplateMenuVisible] = useState(false);
@@ -37,7 +39,7 @@ export default function ShippingLabelScreen() {
           hitSlop={12}
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-          <AppIcon name="chevron.left" tintColor="#0F172A" size={18} />
+          <AppIcon name="chevron.left" tintColor={C.text} size={18} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
 
@@ -46,7 +48,7 @@ export default function ShippingLabelScreen() {
         <Pressable
           onPress={() => setTemplateMenuVisible(true)}
           style={({ pressed }) => [styles.templateBtn, pressed && styles.pressed]}>
-          <AppIcon name="square.grid.2x2" tintColor="#2563EB" size={16} />
+          <AppIcon name="square.grid.2x2" tintColor={C.link} size={16} />
           <Text style={styles.templateBtnText}>Templates</Text>
         </Pressable>
       </View>
@@ -70,7 +72,7 @@ export default function ShippingLabelScreen() {
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Choose Starter Template</Text>
               <Pressable onPress={() => setTemplateMenuVisible(false)} hitSlop={12}>
-                <AppIcon name="xmark" tintColor="#64748B" size={16} />
+                <AppIcon name="xmark" tintColor={C.textSecondary} size={16} />
               </Pressable>
             </View>
 
@@ -98,7 +100,7 @@ export default function ShippingLabelScreen() {
                       </Text>
                     </View>
                     {isCurrent && (
-                      <AppIcon name="checkmark.circle.fill" tintColor="#2563EB" size={20} />
+                      <AppIcon name="checkmark.circle.fill" tintColor={C.link} size={20} />
                     )}
                   </Pressable>
                 );
@@ -111,10 +113,10 @@ export default function ShippingLabelScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   header: {
     flexDirection: 'row',
@@ -123,8 +125,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: c.hairline,
+    backgroundColor: c.surface,
   },
   backBtn: {
     flexDirection: 'row',
@@ -134,12 +136,12 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#0F172A',
+    color: c.text,
   },
   title: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
   },
   templateBtn: {
     flexDirection: 'row',
@@ -148,23 +150,23 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: c.accentSoft,
   },
   templateBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#2563EB',
+    color: c.link,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: c.scrim,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 18,
@@ -180,7 +182,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
   },
   templateOption: {
     flexDirection: 'row',
@@ -189,13 +191,13 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     marginBottom: 10,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
   },
   templateOptionActive: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    borderColor: c.link,
+    backgroundColor: c.accentSoft,
   },
   templateOptionLeft: {
     flex: 1,
@@ -203,17 +205,17 @@ const styles = StyleSheet.create({
   templateName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
   },
   templateNameActive: {
-    color: '#2563EB',
+    color: c.link,
   },
   templateDetail: {
     fontSize: 12,
-    color: '#64748B',
+    color: c.textSecondary,
     marginTop: 2,
   },
   pressed: {
     opacity: 0.75,
   },
-});
+}));

@@ -3,10 +3,12 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrintDirectlyIcon, UseFrameIcon } from '@/components/home-icons';
-import { Palette, Type } from '@/constants/ui';
+import { Type } from '@/constants/ui';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export default function PrintPhotoModal() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
 
@@ -46,7 +48,7 @@ export default function PrintPhotoModal() {
               onPress={handleUseFrame}
               style={({ pressed }) => [styles.option, pressed && styles.pressed]}>
               <View style={styles.iconContainer}>
-                <UseFrameIcon color="#214668" size={38} />
+                <UseFrameIcon color={C.brandInk} size={38} />
               </View>
               <Text style={styles.optionLabel}>Use frame</Text>
             </Pressable>
@@ -55,7 +57,7 @@ export default function PrintPhotoModal() {
               onPress={() => void handlePrintDirectly()}
               style={({ pressed }) => [styles.option, pressed && styles.pressed]}>
               <View style={styles.iconContainer}>
-                <PrintDirectlyIcon color="#17A6B8" size={38} />
+                <PrintDirectlyIcon color={C.accent} size={38} />
               </View>
               <Text style={styles.optionLabel}>Print directly</Text>
             </Pressable>
@@ -73,27 +75,27 @@ export default function PrintPhotoModal() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
   },
   bottom: {
     paddingHorizontal: 10,
     gap: 8,
   },
   sheet: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 14,
     overflow: 'hidden',
   },
   title: {
     textAlign: 'center',
-    color: '#8E97A1',
+    color: c.textMuted,
     ...Type.modalTitle,
     paddingTop: 18,
     paddingBottom: 14,
@@ -101,7 +103,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E3E6EA',
+    backgroundColor: c.hairline,
     marginHorizontal: 16,
   },
   options: {
@@ -128,11 +130,11 @@ const styles = StyleSheet.create({
     ...Type.caption,
     fontSize: 14,
     fontWeight: '500',
-    color: '#2C3E50',
+    color: c.textSecondary,
     textAlign: 'center',
   },
   cancelBtn: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 14,
     height: 56,
     alignItems: 'center',
@@ -140,9 +142,9 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     ...Type.modalAction,
-    color: '#007AFF',
+    color: c.link,
   },
   pressed: {
     opacity: 0.65,
   },
-});
+}));

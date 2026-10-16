@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import type { ReactNode } from 'react';
 import { createContext, useContext } from 'react';
 
@@ -24,6 +24,7 @@ import {
   StretchVerticalIcon,
 } from '@/components/editor/position-icons';
 import type { TextAlign } from '@/components/editor/types';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const NUDGE_MM = 0.5;
 const PRESS_HIT_SLOP = 10;
@@ -44,6 +45,7 @@ export function PositionLayerActionsProvider({
   value: PositionLayerActions;
   children: ReactNode;
 }) {
+  useThemeRefresh();
   return (
     <PositionLayerActionsContext.Provider value={value}>{children}</PositionLayerActionsContext.Provider>
   );
@@ -77,6 +79,7 @@ export function PositionControls({
   textAlign,
   layerActions: layerActionsProp,
 }: PositionControlsProps) {
+  useThemeRefresh();
   const layerActionsFromContext = useContext(PositionLayerActionsContext);
   const layerActions = layerActionsProp ?? layerActionsFromContext;
   const maxLeft = Math.max(0, labelWidthMm - width);
@@ -223,12 +226,10 @@ export function PositionControls({
 const BTN = {
   size: 44,
   radius: 6,
-  bg: '#EEF1F5',
-  centerBg: '#E8ECF1',
   gap: 6,
 } as const;
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   pressed: { opacity: 0.72 },
   positionWrap: {
     flexDirection: 'row',
@@ -243,18 +244,18 @@ const styles = StyleSheet.create({
     width: BTN.size,
     height: BTN.size,
     borderRadius: BTN.radius,
-    backgroundColor: BTN.bg,
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  padCenter: { backgroundColor: BTN.centerBg },
+  padCenter: { backgroundColor: c.fillStrong },
   alignGrid: { flex: 1, gap: BTN.gap },
   alignRow: { flexDirection: 'row', gap: BTN.gap },
   gridBtn: {
     flex: 1,
     height: BTN.size,
     borderRadius: BTN.radius,
-    backgroundColor: BTN.bg,
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -268,9 +269,9 @@ const styles = StyleSheet.create({
     flex: 1,
     height: BTN.size,
     borderRadius: BTN.radius,
-    backgroundColor: BTN.bg,
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   layerBtnDisabled: { opacity: 0.4 },
-});
+}));

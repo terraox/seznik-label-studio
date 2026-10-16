@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -19,7 +19,6 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-import { Palette } from '@/constants/ui';
 import {
   DIVIDER_BAR_THICKNESS_PX,
   DIVIDER_HIT_SIZE_PX,
@@ -28,6 +27,7 @@ import {
   resolveSplitRelease,
   type SplitReleaseResult,
 } from '@/lib/editor/canvas-split';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 type CanvasPanelDividerProps = {
   canvasHeightPx: number;
@@ -56,6 +56,7 @@ export function CanvasPanelDivider({
   onDragCancel,
   onTap,
 }: CanvasPanelDividerProps) {
+  useThemeRefresh();
   const fallbackHeightSv = useSharedValue(canvasHeightPx);
   const activeHeightSv = canvasHeightSv ?? fallbackHeightSv;
   const startPxSv = useSharedValue(canvasHeightPx);
@@ -191,19 +192,19 @@ const webHandleStyle = {
   userSelect: 'none',
 } as const;
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   hit: {
     height: DIVIDER_HIT_SIZE_PX,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     zIndex: 10,
   },
   bar: {
     width: 44,
     height: DIVIDER_BAR_THICKNESS_PX,
     borderRadius: 2,
-    backgroundColor: '#94A3B8',
+    backgroundColor: c.textDisabled,
   },
-});
+}));

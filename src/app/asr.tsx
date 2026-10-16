@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { editorBridge, type OcrResultType } from '@/constants/editor-bridge';
 import { createAsrSpeechEngine } from '@/lib/asr-speech';
-import { Palette } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 function RadioOption({
   label,
@@ -27,6 +27,7 @@ function RadioOption({
   selected: boolean;
   onPress: () => void;
 }) {
+  useThemeRefresh();
   return (
     <Pressable onPress={onPress} style={styles.radioRow} hitSlop={6}>
       <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
@@ -50,6 +51,7 @@ function formatPreview(text: string, type: OcrResultType) {
 }
 
 export default function AsrScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ from?: string | string[] }>();
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
@@ -164,7 +166,7 @@ export default function AsrScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerSide}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={24} />
+          <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
         </Pressable>
         <Text style={styles.headerTitle}>ASR</Text>
         <Pressable onPress={handleConfirm} hitSlop={10} style={[styles.headerSide, styles.headerSideRight]}>
@@ -188,7 +190,7 @@ export default function AsrScreen() {
                 setInterimText('');
               }}
               placeholder={listening ? 'Listening…' : 'Hold to Speak or type here'}
-              placeholderTextColor="#A4B0BC"
+              placeholderTextColor={C.textMuted}
               multiline
               textAlignVertical="top"
             />
@@ -250,10 +252,10 @@ export default function AsrScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
   },
   header: {
     flexDirection: 'row',
@@ -261,7 +263,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingBottom: 12,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
   },
   headerSide: {
     width: 72,
@@ -272,13 +274,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
   },
   confirmText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'right',
@@ -291,7 +293,7 @@ const styles = StyleSheet.create({
   },
   transcriptCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -309,7 +311,7 @@ const styles = StyleSheet.create({
     minHeight: 220,
     fontSize: 16,
     lineHeight: 22,
-    color: '#2C3E50',
+    color: c.textSecondary,
     padding: 0,
   },
   actionRow: {
@@ -317,7 +319,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E4E8ED',
+    borderTopColor: c.hairline,
     paddingHorizontal: 8,
     paddingVertical: 12,
   },
@@ -329,7 +331,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   actionSpeakText: {
-    color: Palette.accent,
+    color: c.accent,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -337,12 +339,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   actionClearText: {
-    color: Palette.danger,
+    color: c.danger,
     fontSize: 16,
     fontWeight: '500',
   },
   bottomSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     paddingHorizontal: 16,
     paddingTop: 18,
   },
@@ -363,32 +365,32 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 1.5,
-    borderColor: '#B8C0C8',
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioOuterActive: {
-    borderColor: Palette.accent,
+    borderColor: c.accent,
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   radioLabel: {
     fontSize: 15,
-    color: '#556473',
+    color: c.textSecondary,
     fontWeight: '500',
   },
   radioLabelActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '600',
   },
   previewBox: {
     minHeight: 52,
     borderRadius: 6,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     paddingHorizontal: 14,
     paddingVertical: 12,
     justifyContent: 'center',
@@ -396,16 +398,16 @@ const styles = StyleSheet.create({
   },
   previewText: {
     fontSize: 15,
-    color: '#2C3E50',
+    color: c.textSecondary,
     lineHeight: 20,
   },
   effectPreviewLabel: {
     textAlign: 'center',
-    color: '#7E8B98',
+    color: c.textMuted,
     fontSize: 14,
     fontWeight: '500',
   },
   pressed: {
     opacity: 0.72,
   },
-});
+}));

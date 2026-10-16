@@ -17,13 +17,14 @@ import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { editorBridge } from '@/constants/editor-bridge';
 import { FONT_LIBRARY, FONT_RAILS, type FontLibraryItem } from '@/constants/font-library';
 import { Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { isCatalogFontInstalled } from '@/lib/fonts/availability';
 import { downloadCatalogFont, importFontFile, removeInstalledFont } from '@/lib/fonts/install';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import type { FontRail, InstalledFontRecord } from '@/lib/fonts/types';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type FontRow = {
   id: string;
@@ -83,6 +84,7 @@ function rowsForRail(rail: FontRail, installed: InstalledFontRecord[]): FontRow[
 }
 
 export default function FontLibraryScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ from?: string }>();
   const fromEdit = params.from === 'edit';
@@ -166,7 +168,7 @@ export default function FontLibraryScreen() {
       />
       {!fontsLoaded ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={Palette.accent} />
+          <ActivityIndicator color={C.accent} />
         </View>
       ) : (
         <View style={styles.body}>
@@ -242,7 +244,7 @@ export default function FontLibraryScreen() {
                         onPress={() => confirmRemove(item)}
                         hitSlop={8}
                         style={styles.deleteBtn}>
-                        <AppIcon name="trash" tintColor={Palette.danger} size={18} />
+                        <AppIcon name="trash" tintColor={C.danger} size={18} />
                       </Pressable>
                     ) : item.downloadable ? (
                       <Pressable
@@ -250,10 +252,10 @@ export default function FontLibraryScreen() {
                         disabled={busyId != null}
                         style={styles.downloadBtn}>
                         {busy ? (
-                          <ActivityIndicator color="#FFFFFF" size="small" />
+                          <ActivityIndicator color={C.onAccent} size="small" />
                         ) : (
                           <>
-                            <AppIcon name="arrow.down" tintColor="#FFFFFF" size={16} />
+                            <AppIcon name="arrow.down" tintColor={C.onAccent} size={16} />
                             <Text style={styles.downloadBtnText}>Download</Text>
                           </>
                         )}
@@ -273,7 +275,7 @@ export default function FontLibraryScreen() {
                   busyId === 'import' && styles.importBusy,
                 ]}>
                 {busyId === 'import' ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color={C.onAccent} />
                 ) : (
                   <Text style={styles.importLabel}>Import font</Text>
                 )}
@@ -287,44 +289,44 @@ export default function FontLibraryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.surface },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, flexDirection: 'row' },
   rail: {
     width: 108,
-    backgroundColor: '#F4F6F8',
+    backgroundColor: c.fill,
     paddingTop: Spacing.two,
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#E3E7ED',
+    borderRightColor: c.hairline,
   },
   railItem: {
     paddingHorizontal: 10,
     paddingVertical: 14,
   },
   railItemActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   railLabel: {
     fontSize: 13,
     lineHeight: 18,
-    color: '#9AA3AD',
+    color: c.textMuted,
     fontWeight: '500',
   },
   railLabelActive: {
-    color: Palette.accent,
+    color: c.accent,
   },
-  listWrap: { flex: 1, backgroundColor: '#FFFFFF' },
+  listWrap: { flex: 1, backgroundColor: c.surface },
   list: { flex: 1 },
   browseHint: {
-    color: Palette.muted,
+    color: c.textMuted,
     fontSize: 12,
     lineHeight: 16,
     paddingHorizontal: Spacing.two,
     paddingTop: Spacing.two,
   },
   emptyLocal: {
-    color: Palette.muted,
+    color: c.textMuted,
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
@@ -334,16 +336,16 @@ const styles = StyleSheet.create({
   card: {
     minHeight: 64,
     borderRadius: 12,
-    backgroundColor: '#F3F5F8',
+    backgroundColor: c.fill,
     paddingHorizontal: Spacing.three,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
   cardNeedsDownload: {
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
     borderWidth: 1,
-    borderColor: '#D7DEE8',
+    borderColor: c.hairline,
     borderStyle: 'dashed',
   },
   fontMeta: {
@@ -353,14 +355,14 @@ const styles = StyleSheet.create({
   },
   fontName: {
     fontSize: 22,
-    color: '#1E293B',
+    color: c.text,
   },
   fontNameMuted: {
-    color: '#64748B',
+    color: c.textSecondary,
   },
   downloadHint: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: c.textMuted,
     fontWeight: '500',
   },
   downloadBtn: {
@@ -368,14 +370,14 @@ const styles = StyleSheet.create({
     height: 36,
     paddingHorizontal: 12,
     borderRadius: 18,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
   downloadBtnText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -395,15 +397,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 36,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   importBusy: { opacity: 0.85 },
   importLabel: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },
   pressed: { opacity: 0.75 },
-});
+}));

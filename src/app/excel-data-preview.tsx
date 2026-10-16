@@ -6,14 +6,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '@/components/app-icon';
 import { ExcelDataTable } from '@/components/excel-data-table';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { useDataStore } from '@/stores/data-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
 export default function ExcelDataPreviewScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     excelFileId?: string | string[];
@@ -61,7 +63,7 @@ export default function ExcelDataPreviewScreen() {
             onPress={() => router.back()}
             hitSlop={12}
             style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}>
-            <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+            <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
           </Pressable>
           <Text style={styles.headerTitle}>Data File</Text>
           <View style={styles.headerBtn} />
@@ -78,7 +80,7 @@ export default function ExcelDataPreviewScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+          <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
         </Pressable>
         <Text style={styles.headerTitle}>Data File</Text>
         <View style={styles.headerBtn} />
@@ -90,19 +92,19 @@ export default function ExcelDataPreviewScreen() {
             onPress={() => setQuery('')}
             hitSlop={8}
             style={({ pressed }) => [styles.refreshHit, pressed && styles.pressed]}>
-            <AppIcon name="arrow.clockwise" tintColor={Palette.accent} size={20} />
+            <AppIcon name="arrow.clockwise" tintColor={C.accent} size={20} />
           </Pressable>
           <TextInput
             style={styles.searchInput}
             placeholder="Search Data"
-            placeholderTextColor={Palette.muted}
+            placeholderTextColor={C.textMuted}
             value={query}
             onChangeText={setQuery}
             autoCorrect={false}
             autoCapitalize="none"
           />
           <View style={styles.scanHit}>
-            <AppIcon name="viewfinder" tintColor={Palette.accent} size={22} />
+            <AppIcon name="viewfinder" tintColor={C.accent} size={22} />
           </View>
         </View>
 
@@ -149,8 +151,8 @@ export default function ExcelDataPreviewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Palette.header },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.header },
   header: {
     width: '100%',
     maxWidth: MaxContentWidth,
@@ -162,11 +164,11 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   headerBtn: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, textAlign: 'center', color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
-  empty: { padding: 24, color: '#FFFFFF', textAlign: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', color: c.onAccent, fontSize: 17, fontWeight: '600' },
+  empty: { padding: 24, color: c.onAccent, textAlign: 'center' },
   sheet: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     overflow: 'hidden',
@@ -180,12 +182,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     gap: 8,
   },
   refreshHit: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   scanHit: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  searchInput: { flex: 1, fontSize: 15, color: Palette.ink, paddingVertical: 0 },
+  searchInput: { flex: 1, fontSize: 15, color: c.text, paddingVertical: 0 },
   sheetChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -197,28 +199,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
-  chipOn: { backgroundColor: Palette.accent },
-  chipText: { fontSize: 13, fontWeight: '600', color: Palette.ink },
-  chipTextOn: { color: '#FFFFFF' },
+  chipOn: { backgroundColor: c.accentFill },
+  chipText: { fontSize: 13, fontWeight: '600', color: c.text },
+  chipTextOn: { color: c.onAccent },
   tableWrap: {
     flex: 1,
     marginHorizontal: 10,
     marginBottom: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 8,
     overflow: 'hidden',
   },
   footer: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: c.hairline,
   },
   footerBtn: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center' },
-  footerSplit: { width: StyleSheet.hairlineWidth, backgroundColor: '#E2E8F0' },
-  cancelText: { fontSize: 17, fontWeight: '600', color: '#2563EB' },
-  confirmText: { fontSize: 17, fontWeight: '600', color: '#DC2626' },
+  footerSplit: { width: StyleSheet.hairlineWidth, backgroundColor: c.hairline },
+  cancelText: { fontSize: 17, fontWeight: '600', color: c.link },
+  confirmText: { fontSize: 17, fontWeight: '600', color: c.danger },
   pressed: { opacity: 0.7 },
-});
+}));

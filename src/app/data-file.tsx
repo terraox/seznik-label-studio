@@ -6,7 +6,6 @@ import {
   FlatList,
   Linking,
   Pressable,
-  StyleSheet,
   Text,
   useWindowDimensions,
   View,
@@ -15,12 +14,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { editorBridge } from '@/constants/editor-bridge';
-import { cardShadow, Palette, Type } from '@/constants/ui';
+import { cardShadow, Type } from '@/constants/ui';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { useExcelImportFlow, type ExcelImportSuccess } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
 import { useDataStore, type ImportedExcelFile } from '@/stores/data-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const TABS = ['All', 'Excel', 'PDF', 'CSV', 'Remote Data'] as const;
 
@@ -47,6 +47,7 @@ function formatSizeCompact(bytes?: number): string {
 }
 
 function DataFileTypeIcon({ type }: { type: ImportedDataFile['type'] | 'URL' }) {
+  useThemeRefresh();
   if (type === 'Excel' || type === 'CSV') {
     return (
       <View style={styles.typeIconExcel}>
@@ -71,7 +72,7 @@ function DataFileTypeIcon({ type }: { type: ImportedDataFile['type'] | 'URL' }) 
   }
   return (
     <View style={styles.typeIconOther}>
-      <AppIcon name="doc.text" tintColor="#64748B" size={18} />
+      <AppIcon name="doc.text" tintColor={C.textSecondary} size={18} />
     </View>
   );
 }
@@ -91,6 +92,7 @@ function DataFileGridTile({
   editing: boolean;
   onPress: () => void;
 }) {
+  useThemeRefresh();
   const sizeLabel = formatSizeCompact(sizeBytes);
 
   return (
@@ -113,7 +115,7 @@ function DataFileGridTile({
       </View>
       {editing ? (
         <View style={styles.gridEditBadge}>
-          <AppIcon name="trash" tintColor="#DC2626" size={14} />
+          <AppIcon name="trash" tintColor={C.danger} size={14} />
         </View>
       ) : null}
     </Pressable>
@@ -121,6 +123,7 @@ function DataFileGridTile({
 }
 
 function EmptyIllustration() {
+  useThemeRefresh();
   return (
     <View style={styles.illustration}>
       <View style={styles.boxBack} />
@@ -149,6 +152,7 @@ function inferFileType(name: string): ImportedDataFile['type'] {
 }
 
 export default function DataFileScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const params = useLocalSearchParams<{
@@ -419,7 +423,7 @@ export default function DataFileScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+          <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
         </Pressable>
 
         <Text style={styles.headerTitle}>Data File</Text>
@@ -565,13 +569,13 @@ export default function DataFileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: '#F4F5F7',
+    backgroundColor: c.fill,
   },
   header: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.three,
@@ -586,7 +590,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 18,
     fontWeight: '500',
   },
@@ -597,7 +601,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   editBtnText: {
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(255,255,255,0.9)', // theme-fixed: white on coloured surface
     fontSize: 16,
     fontWeight: '500',
   },
@@ -608,7 +612,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     paddingBottom: 10,
   },
@@ -622,13 +626,13 @@ const styles = StyleSheet.create({
   },
   tabItemActive: {},
   tabText: {
-    color: 'rgba(255,255,255,0.72)',
+    color: 'rgba(255,255,255,0.72)', // theme-fixed: white on coloured surface
     fontSize: 13,
     fontWeight: '400',
     textAlign: 'center',
   },
   tabTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontWeight: '500',
   },
   tabIndicator: {
@@ -636,7 +640,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     height: 3,
     borderRadius: 2,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   tabIndicatorSpacer: {
     marginTop: 8,
@@ -664,7 +668,7 @@ const styles = StyleSheet.create({
     bottom: 18,
     width: 110,
     height: 62,
-    backgroundColor: '#B8DDF5',
+    backgroundColor: '#B8DDF5', // theme-fixed: spreadsheet illustration
     borderRadius: 4,
   },
   boxFront: {
@@ -672,9 +676,9 @@ const styles = StyleSheet.create({
     bottom: 18,
     width: 110,
     height: 62,
-    backgroundColor: '#9ECAE8',
+    backgroundColor: '#9ECAE8', // theme-fixed: spreadsheet illustration
     borderTopWidth: 2,
-    borderTopColor: '#7FB8DC',
+    borderTopColor: '#7FB8DC', // theme-fixed: spreadsheet illustration
     borderRadius: 4,
   },
   boxFlapLeft: {
@@ -683,7 +687,7 @@ const styles = StyleSheet.create({
     left: 28,
     width: 52,
     height: 28,
-    backgroundColor: '#C5E4F7',
+    backgroundColor: '#C5E4F7', // theme-fixed: spreadsheet illustration
     transform: [{ skewX: '-24deg' }],
     borderTopLeftRadius: 3,
   },
@@ -693,7 +697,7 @@ const styles = StyleSheet.create({
     right: 28,
     width: 52,
     height: 28,
-    backgroundColor: '#C5E4F7',
+    backgroundColor: '#C5E4F7', // theme-fixed: spreadsheet illustration
     transform: [{ skewX: '24deg' }],
     borderTopRightRadius: 3,
   },
@@ -712,7 +716,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#8EC5E8',
+    backgroundColor: '#8EC5E8', // theme-fixed: spreadsheet illustration
   },
   planeWing: {
     position: 'absolute',
@@ -725,7 +729,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 14,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#8EC5E8',
+    borderBottomColor: '#8EC5E8', // theme-fixed: spreadsheet illustration
   },
   trail: {
     position: 'absolute',
@@ -739,16 +743,16 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#8EC5E8',
+    backgroundColor: '#8EC5E8', // theme-fixed: spreadsheet illustration
   },
   emptyText: {
-    color: '#8E97A1',
+    color: c.textMuted,
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',
   },
   emptyHint: {
-    color: '#64748B',
+    color: c.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     paddingHorizontal: 24,
@@ -768,7 +772,7 @@ const styles = StyleSheet.create({
   },
   gridTile: {
     position: 'relative',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 8,
     minHeight: 118,
     paddingHorizontal: 8,
@@ -778,7 +782,7 @@ const styles = StyleSheet.create({
   },
   gridTileEditing: {
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: c.dangerSoft,
   },
   gridTileTop: {
     flexDirection: 'row',
@@ -788,7 +792,7 @@ const styles = StyleSheet.create({
   },
   gridSize: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: c.textMuted,
     fontWeight: '500',
     maxWidth: '50%',
     textAlign: 'right',
@@ -801,7 +805,7 @@ const styles = StyleSheet.create({
   gridName: {
     fontSize: 12,
     lineHeight: 16,
-    color: '#334155',
+    color: c.textSecondary,
     textAlign: 'center',
     fontWeight: '500',
   },
@@ -809,7 +813,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     right: 6,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: c.dangerSoft,
     borderRadius: 10,
     padding: 4,
   },
@@ -817,13 +821,13 @@ const styles = StyleSheet.create({
     width: 26,
     height: 30,
     borderRadius: 3,
-    backgroundColor: '#E11D48',
+    backgroundColor: c.dangerFill,
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingBottom: 3,
   },
   typeIconPdfLabel: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 7,
     fontWeight: '800',
     letterSpacing: 0.2,
@@ -832,7 +836,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 30,
     borderRadius: 3,
-    backgroundColor: '#16A34A',
+    backgroundColor: c.successFill,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -843,11 +847,11 @@ const styles = StyleSheet.create({
     left: 4,
     width: 14,
     height: 10,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.35)', // theme-fixed: white on coloured surface
     borderTopLeftRadius: 2,
   },
   typeIconLetter: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 14,
     fontWeight: '800',
     marginTop: 4,
@@ -856,12 +860,12 @@ const styles = StyleSheet.create({
     width: 26,
     height: 30,
     borderRadius: 3,
-    backgroundColor: '#0EA5E9',
+    backgroundColor: '#0EA5E9', // theme-fixed: badge fill with white text
     alignItems: 'center',
     justifyContent: 'center',
   },
   typeIconUrlLabel: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 7,
     fontWeight: '800',
   },
@@ -869,19 +873,19 @@ const styles = StyleSheet.create({
     width: 26,
     height: 30,
     borderRadius: 3,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   footer: {
     paddingHorizontal: 24,
     paddingTop: Spacing.two,
-    backgroundColor: '#F4F5F7',
+    backgroundColor: c.fill,
   },
   importBtn: {
     height: 52,
     borderRadius: 26,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
     maxWidth: MaxContentWidth,
@@ -889,7 +893,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   importBtnText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     ...Type.button,
   },
   pressed: {
@@ -897,7 +901,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: c.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
@@ -905,26 +909,26 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     padding: 22,
   },
   modalHeading: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#1E293B',
+    color: c.text,
     marginBottom: 16,
     textAlign: 'center',
   },
   modalInput: {
     height: 48,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     fontSize: 15,
-    color: '#1E293B',
-    backgroundColor: '#F8FAFC',
+    color: c.text,
+    backgroundColor: c.fill,
     marginBottom: 12,
   },
   modalActionRow: {
@@ -940,19 +944,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalCancelBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
   },
   modalSaveBtn: {
-    backgroundColor: '#17A6B8',
+    backgroundColor: c.accentFill,
   },
   modalCancelText: {
-    color: '#64748B',
+    color: c.textSecondary,
     fontSize: 15,
     fontWeight: '500',
   },
   modalSaveText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 15,
     fontWeight: '600',
   },
-});
+}));

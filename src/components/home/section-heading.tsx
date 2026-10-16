@@ -1,8 +1,10 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { HomeLayout, Palette } from '@/constants/ui';
+import { HomeLayout } from '@/constants/ui';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export function SectionHeading({ children }: { children: string }) {
+  useThemeRefresh();
   return (
     <View style={styles.wrap}>
       <Text
@@ -14,7 +16,7 @@ export function SectionHeading({ children }: { children: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: {
     height: HomeLayout.sectionHeadingBlock - HomeLayout.sectionHeadingGap,
     marginBottom: HomeLayout.sectionHeadingGap,
@@ -24,7 +26,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
-    color: Palette.muted,
+    color: c.textMuted,
     letterSpacing: 0.2,
   },
-});
+}));

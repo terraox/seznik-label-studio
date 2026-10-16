@@ -8,6 +8,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const GRID_SIZE = 8;
 const GRID_GAP = 4;
@@ -37,6 +38,7 @@ function CountField({
   value: number;
   onChange: (next: number) => void;
 }) {
+  useThemeRefresh();
   const [draft, setDraft] = useState(String(value));
 
   useEffect(() => {
@@ -94,6 +96,7 @@ export function TableSizePicker({
   onCancel,
   onConfirm,
 }: TableSizePickerProps) {
+  useThemeRefresh();
   const { width: screenWidth } = useWindowDimensions();
   const modalWidth = Math.min(screenWidth * 0.78, 320);
   const gridInner = modalWidth - 36;
@@ -175,7 +178,7 @@ export function TableSizePicker({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: {
     flex: 1,
     alignItems: 'center',
@@ -183,10 +186,10 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
   },
   modal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 14,
     paddingTop: 18,
     paddingHorizontal: 16,
@@ -199,7 +202,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '700',
-    color: '#111111',
+    color: c.text,
     marginBottom: 14,
   },
   grid: {
@@ -212,13 +215,13 @@ const styles = StyleSheet.create({
   },
   cell: {
     borderWidth: 1,
-    borderColor: '#D8DEE6',
-    backgroundColor: '#FFFFFF',
+    borderColor: c.hairline,
+    backgroundColor: c.surface,
     borderRadius: 2,
   },
   cellSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#007AFF', // theme-fixed: selected-cell highlight
+    borderColor: c.link,
   },
   writeRow: {
     flexDirection: 'row',
@@ -231,7 +234,7 @@ const styles = StyleSheet.create({
   countLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#334155',
+    color: c.textSecondary,
     marginBottom: 6,
   },
   countControls: {
@@ -244,14 +247,14 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#007AFF',
+    borderColor: c.link,
     alignItems: 'center',
     justifyContent: 'center',
   },
   countBtnText: {
     fontSize: 18,
     lineHeight: 20,
-    color: '#007AFF',
+    color: c.link,
     fontWeight: '600',
   },
   countInput: {
@@ -260,19 +263,19 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#D8DEE6',
+    borderColor: c.hairline,
     textAlign: 'center',
     fontSize: 15,
     fontWeight: '700',
-    color: '#007AFF',
+    color: c.link,
     paddingVertical: 0,
     paddingHorizontal: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   footer: {
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#D1D1D6',
+    borderTopColor: c.border,
     height: 46,
     marginHorizontal: -16,
   },
@@ -283,19 +286,19 @@ const styles = StyleSheet.create({
   },
   footerDivider: {
     width: StyleSheet.hairlineWidth,
-    backgroundColor: '#D1D1D6',
+    backgroundColor: c.hairline,
   },
   cancelText: {
     fontSize: 17,
     fontWeight: '400',
-    color: '#007AFF',
+    color: c.link,
   },
   confirmText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#007AFF',
+    color: c.link,
   },
   pressed: {
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: c.pressedOverlay,
   },
-});
+}));

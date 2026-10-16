@@ -11,10 +11,8 @@ import {
   View,
 } from 'react-native';
 import type { ElementAnchorRect } from '@/lib/editor/quick-value';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-const ACCENT = '#48C3C7';
-const DANGER = '#E53935';
-const MUTED = '#8A94A6';
 
 /** Ignore backdrop taps briefly so the leftover double-tap doesn't dismiss or blur the input. */
 const BACKDROP_ARM_MS = 400;
@@ -38,6 +36,7 @@ export function QuickValueModal({
   onCancel,
   onConfirm,
 }: QuickValueModalProps) {
+  useThemeRefresh();
   const [draft, setDraft] = useState(initialValue);
   const [cardHeight, setCardHeight] = useState(200);
   const [backdropArmed, setBackdropArmed] = useState(false);
@@ -172,8 +171,8 @@ export function QuickValueModal({
             showSoftInputOnFocus
             multiline
             placeholder={placeholder || 'Enter value'}
-            placeholderTextColor="#94A3B8"
-            selectionColor={ACCENT}
+            placeholderTextColor={C.textMuted}
+            selectionColor={C.accent}
             autoCapitalize="none"
             autoCorrect={false}
             blurOnSubmit={false}
@@ -208,7 +207,7 @@ export function QuickValueModal({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 10000,
@@ -216,15 +215,15 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     paddingTop: 18,
     paddingHorizontal: 20,
     paddingBottom: 16,
-    shadowColor: '#000000',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.16,
     shadowRadius: 14,
@@ -234,24 +233,24 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1E293B',
+    color: c.text,
     marginBottom: 12,
   },
   inputContainer: {
     width: '100%',
     minHeight: 80,
     maxHeight: 160,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 18,
   },
   input: {
     fontSize: 16,
-    color: '#1E293B',
+    color: c.text,
     textAlignVertical: 'top',
     minHeight: 60,
   },
@@ -273,16 +272,16 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 16,
     fontWeight: '600',
-    color: MUTED,
+    color: c.textMuted,
   },
   clearText: {
     fontSize: 16,
     fontWeight: '600',
-    color: DANGER,
+    color: c.danger,
   },
   confirmText: {
     fontSize: 16,
     fontWeight: '600',
-    color: ACCENT,
+    color: c.accent,
   },
-});
+}));

@@ -33,6 +33,7 @@ import {
   SequenceRuleConfig,
   BarcodeSymbology,
 } from '@/lib/printer/SerialLabelEngine';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 function encodeTsplSerialLabel(
   text: string,
@@ -66,6 +67,7 @@ function LabelPreview({
   widthMm: string;
   heightMm: string;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.previewCard}>
       <View style={styles.previewHeader}>
@@ -84,6 +86,7 @@ function LabelPreview({
 }
 
 export default function SerialLabelScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -265,12 +268,12 @@ export default function SerialLabelScreen() {
       {/* Header */}
       <View style={styles.navHeader}>
         <Pressable hitSlop={12} onPress={() => router.back()} style={styles.backBtn}>
-          <AppIcon name="chevron.left" tintColor="#0F172A" size={20} />
+          <AppIcon name="chevron.left" tintColor={C.text} size={20} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
         <Text style={styles.navTitle}>Serial Labels</Text>
         <Pressable hitSlop={12} onPress={() => router.push('/printer-connect')} style={styles.connectIconBtn}>
-          <AppIcon name="antenna.radiowaves.left.and.right" tintColor="#2563EB" size={20} />
+          <AppIcon name="antenna.radiowaves.left.and.right" tintColor={C.link} size={20} />
         </Pressable>
       </View>
 
@@ -291,7 +294,7 @@ export default function SerialLabelScreen() {
               </Text>
             </View>
           </View>
-          <AppIcon name="chevron.right" tintColor="#64748B" size={16} />
+          <AppIcon name="chevron.right" tintColor={C.textSecondary} size={16} />
         </Pressable>
 
         {/* Title & Description */}
@@ -310,7 +313,7 @@ export default function SerialLabelScreen() {
             value={sampleText}
             onChangeText={setSampleText}
             placeholder="e.g. Desk1 or SN-001"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={C.textMuted}
           />
 
           <View style={styles.row}>
@@ -322,7 +325,7 @@ export default function SerialLabelScreen() {
                 onChangeText={setEndNumber}
                 keyboardType="numeric"
                 placeholder="20"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={C.textMuted}
               />
             </View>
             <View style={styles.col}>
@@ -333,7 +336,7 @@ export default function SerialLabelScreen() {
                 onChangeText={setStep}
                 keyboardType="numeric"
                 placeholder="1"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={C.textMuted}
               />
             </View>
             <View style={styles.col}>
@@ -344,7 +347,7 @@ export default function SerialLabelScreen() {
                 onChangeText={setPadding}
                 keyboardType="numeric"
                 placeholder="auto"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={C.textMuted}
               />
             </View>
           </View>
@@ -358,7 +361,7 @@ export default function SerialLabelScreen() {
                 onChangeText={setWidthMm}
                 keyboardType="numeric"
                 placeholder="50"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={C.textMuted}
               />
             </View>
             <View style={styles.col}>
@@ -369,7 +372,7 @@ export default function SerialLabelScreen() {
                 onChangeText={setHeightMm}
                 keyboardType="numeric"
                 placeholder="30"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={C.textMuted}
               />
             </View>
           </View>
@@ -426,7 +429,7 @@ export default function SerialLabelScreen() {
             />
 
             <TouchableOpacity style={styles.button} onPress={handleGenerateAndPrint}>
-              <AppIcon name="printer.fill" tintColor="#FFFFFF" size={18} />
+              <AppIcon name="printer.fill" tintColor={C.onAccent} size={18} />
               <Text style={[styles.buttonText, { marginLeft: 8 }]}>
                 Print Batch ({generated.length} Labels)
               </Text>
@@ -439,7 +442,7 @@ export default function SerialLabelScreen() {
       <Modal visible={isPrinting} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.progressCard}>
-            <ActivityIndicator size="large" color="#2563EB" />
+            <ActivityIndicator size="large" color={C.link} />
             <Text style={styles.modalHeading}>Printing Serial Labels</Text>
             <Text style={styles.modalProgressText}>
               Label {printProgress.current} of {printProgress.total}
@@ -474,8 +477,8 @@ export default function SerialLabelScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F1F5F9' },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.fill },
   navHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -483,12 +486,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: c.border,
+    backgroundColor: c.surface,
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, width: 60 },
-  backText: { fontSize: 16, color: '#0F172A', fontWeight: '500' },
-  navTitle: { fontSize: 17, fontWeight: '700', color: '#0F172A' },
+  backText: { fontSize: 16, color: c.text, fontWeight: '500' },
+  navTitle: { fontSize: 17, fontWeight: '700', color: c.text },
   connectIconBtn: { width: 60, alignItems: 'flex-end', justifyContent: 'center' },
   scrollContent: { padding: 16 },
   statusBanner: {
@@ -500,56 +503,56 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
   },
-  statusBannerOnline: { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' },
-  statusBannerOffline: { backgroundColor: '#FFF1F2', borderColor: '#FECDD3' },
+  statusBannerOnline: { backgroundColor: c.successSoft, borderColor: c.border },
+  statusBannerOffline: { backgroundColor: c.dangerSoft, borderColor: c.dangerSoft },
   statusLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
-  dotOnline: { backgroundColor: '#16A34A' },
-  dotOffline: { backgroundColor: '#E11D48' },
-  statusTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-  statusSubtitle: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  heading: { fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
-  subheading: { fontSize: 13, color: '#64748B', lineHeight: 18, marginBottom: 16 },
+  dotOnline: { backgroundColor: c.successFill },
+  dotOffline: { backgroundColor: c.dangerFill },
+  statusTitle: { fontSize: 14, fontWeight: '700', color: c.text },
+  statusSubtitle: { fontSize: 12, color: c.textSecondary, marginTop: 2 },
+  heading: { fontSize: 22, fontWeight: '800', color: c.text, marginBottom: 4 },
+  subheading: { fontSize: 13, color: c.textSecondary, lineHeight: 18, marginBottom: 16 },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 14,
     padding: 16,
-    shadowColor: '#000',
+    shadowColor: c.shadow,
     shadowOpacity: 0.04,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
     marginBottom: 16,
   },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
-  label: { fontSize: 13, fontWeight: '600', color: '#334155', marginTop: 12, marginBottom: 6 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: '600', color: c.textSecondary, marginTop: 12, marginBottom: 6 },
   input: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: '#0F172A',
+    color: c.text,
   },
   row: { flexDirection: 'row', gap: 8 },
   col: { flex: 1 },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   chip: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
+    borderColor: c.border,
+    backgroundColor: c.fill,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  chipActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-  chipText: { color: '#475569', fontSize: 13, fontWeight: '600' },
-  chipTextActive: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-  error: { color: '#EF4444', marginTop: 10, fontSize: 13, fontWeight: '500' },
+  chipActive: { backgroundColor: '#2563EB', borderColor: c.link }, // theme-fixed: blue selected chip, white text
+  chipText: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
+  chipTextActive: { color: c.onAccent, fontSize: 13, fontWeight: '600' },
+  error: { color: c.danger, marginTop: 10, fontSize: 13, fontWeight: '500' },
   button: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#2563EB', // theme-fixed: blue button, white text
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -557,14 +560,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginTop: 16,
   },
-  secondaryButton: { backgroundColor: '#0F172A' },
+  secondaryButton: { backgroundColor: c.inkFill },
   btnDisabled: { opacity: 0.5 },
-  buttonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
+  buttonText: { color: c.onAccent, fontWeight: '700', fontSize: 15 },
   resultsContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 14,
     padding: 16,
-    shadowColor: '#000',
+    shadowColor: c.shadow,
     shadowOpacity: 0.04,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
@@ -577,19 +580,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  previewCount: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
-  previewRange: { fontSize: 13, color: '#64748B', fontWeight: '600' },
+  previewCount: { fontSize: 15, fontWeight: '700', color: c.text },
+  previewRange: { fontSize: 13, color: c.textSecondary, fontWeight: '600' },
   previewList: { marginBottom: 8 },
   previewCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF', // theme-fixed: light preview (previewCard)
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2E8F0', // theme-fixed: light preview (previewCard)
     borderRadius: 10,
     padding: 12,
     marginRight: 10,
     minWidth: 130,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#000', // theme-fixed: light preview (previewCard)
     shadowOpacity: 0.03,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
@@ -601,43 +604,43 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 8,
   },
-  previewIndex: { fontSize: 10, color: '#64748B', fontWeight: '700' },
-  previewDim: { fontSize: 10, color: '#94A3B8' },
-  previewText: { fontWeight: '700', fontSize: 16, color: '#0F172A', marginBottom: 8 },
-  barcodeBox: { alignItems: 'center', width: '100%', backgroundColor: '#F8FAFC', padding: 6, borderRadius: 6 },
-  barcodeBars: { fontSize: 12, letterSpacing: 2, color: '#0F172A', fontWeight: '900' },
-  barcodeText: { fontSize: 10, color: '#475569', marginTop: 2, fontWeight: '600' },
+  previewIndex: { fontSize: 10, color: '#64748B', fontWeight: '700' }, // theme-fixed: light preview (previewIndex)
+  previewDim: { fontSize: 10, color: '#94A3B8' }, // theme-fixed: light preview (previewDim)
+  previewText: { fontWeight: '700', fontSize: 16, color: '#0F172A', marginBottom: 8 }, // theme-fixed: light preview (previewText)
+  barcodeBox: { alignItems: 'center', width: '100%', backgroundColor: c.fill, padding: 6, borderRadius: 6 },
+  barcodeBars: { fontSize: 12, letterSpacing: 2, color: c.text, fontWeight: '900' },
+  barcodeText: { fontSize: 10, color: c.textSecondary, marginTop: 2, fontWeight: '600' },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: c.scrim,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   progressCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     padding: 24,
     width: '100%',
     maxWidth: 320,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: c.shadow,
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 6,
   },
-  modalHeading: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginTop: 14, marginBottom: 6 },
-  modalProgressText: { fontSize: 14, color: '#64748B', fontWeight: '500' },
-  modalCurrentLabel: { fontSize: 16, fontWeight: '700', color: '#2563EB', marginTop: 4, marginBottom: 16 },
+  modalHeading: { fontSize: 18, fontWeight: '700', color: c.text, marginTop: 14, marginBottom: 6 },
+  modalProgressText: { fontSize: 14, color: c.textSecondary, fontWeight: '500' },
+  modalCurrentLabel: { fontSize: 16, fontWeight: '700', color: c.link, marginTop: 4, marginBottom: 16 },
   progressBarBg: {
     width: '100%',
     height: 8,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: c.fillStrong,
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 20,
   },
-  progressBarFill: { height: '100%', backgroundColor: '#2563EB' },
+  progressBarFill: { height: '100%', backgroundColor: '#2563EB' }, // theme-fixed: progress fill
   cancelBtn: { paddingVertical: 8, paddingHorizontal: 20 },
-  cancelBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 14 },
-});
+  cancelBtnText: { color: c.danger, fontWeight: '700', fontSize: 14 },
+}));

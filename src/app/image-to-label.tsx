@@ -22,7 +22,7 @@ import { AppIcon } from '@/components/app-icon';
 import { LabelSizeSetupSection } from '@/components/label-size-setup-section';
 import type { Rotation } from '@/components/editor/types';
 import { Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import { ingestReferenceImage } from '@/lib/editor/reference-image-ingest';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { clampLabelMm, validateLabelSize, type LabelUnit } from '@/lib/label-geometry';
@@ -34,6 +34,7 @@ import {
 } from '@/lib/reference-image';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type Step = 'upload' | 'size';
 
@@ -45,6 +46,7 @@ const MEASURE_POINTS = [
 const ROTATIONS: readonly Rotation[] = [0, 90, 180, 270];
 
 export default function ImageToLabelScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const defaults = useSettingsStore((s) => s.defaults);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
@@ -162,7 +164,7 @@ export default function ImageToLabelScreen() {
       {step === 'upload' || !imageUri ? (
         <View style={styles.empty}>
           <View style={styles.emptyIcon}>
-            <AppIcon name="photo.on.rectangle" tintColor={Palette.accent} size={32} />
+            <AppIcon name="photo.on.rectangle" tintColor={C.accent} size={32} />
           </View>
           <Text style={styles.emptyTitle}>Upload a soft copy</Text>
           <Text style={styles.emptyBody}>
@@ -224,9 +226,9 @@ export default function ImageToLabelScreen() {
               <Switch
                 value={needPrinting}
                 onValueChange={setNeedPrinting}
-                trackColor={{ false: '#D1D5DB', true: Palette.accent }}
-                thumbColor="#FFFFFF"
-                ios_backgroundColor="#D1D5DB"
+                trackColor={{ false: C.border, true: C.accent }}
+                thumbColor="#FFFFFF" // theme-fixed: white switch thumb
+                ios_backgroundColor={C.border}
               />
             </View>
           </View>
@@ -274,7 +276,7 @@ export default function ImageToLabelScreen() {
             pressed && !opening && styles.pressed,
           ]}>
           {opening ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <ActivityIndicator color="#FFFFFF" size="small" /* theme-fixed: on accent button */ />
           ) : (
             <Text style={styles.openButtonText}>
               {step === 'upload' || !imageUri ? 'Upload image' : 'Create label'}
@@ -287,21 +289,21 @@ export default function ImageToLabelScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Palette.screen },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.bg },
   header: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingBottom: 12,
   },
   backBtn: { width: 36, alignItems: 'flex-start' },
-  backChevron: { color: '#FFFFFF', fontSize: 32, fontWeight: '300', lineHeight: 36 },
+  backChevron: { color: c.onAccent, fontSize: 32, fontWeight: '300', lineHeight: 36 },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 17,
     fontWeight: '500',
   },
@@ -317,43 +319,43 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: Palette.ink },
-  emptyBody: { fontSize: 14, color: Palette.muted, textAlign: 'center', lineHeight: 20 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: c.text },
+  emptyBody: { fontSize: 14, color: c.textMuted, textAlign: 'center', lineHeight: 20 },
   guide: {
     alignSelf: 'stretch',
     marginTop: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     padding: 14,
     gap: 10,
   },
-  guideTitle: { fontSize: 14, fontWeight: '700', color: Palette.ink },
+  guideTitle: { fontSize: 14, fontWeight: '700', color: c.text },
   guideRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   guideDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     marginTop: 6,
   },
-  guideText: { flex: 1, fontSize: 13, color: '#475569', lineHeight: 18 },
+  guideText: { flex: 1, fontSize: 13, color: c.textSecondary, lineHeight: 18 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, gap: 12 },
   fileRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
@@ -361,66 +363,66 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: '#F4F6F9',
+    backgroundColor: c.fill,
   },
   fileText: { flex: 1, gap: 2 },
-  fileName: { fontSize: 15, fontWeight: '600', color: Palette.ink },
-  fileMeta: { fontSize: 12, color: '#64748B' },
-  change: { fontSize: 14, fontWeight: '600', color: Palette.accent },
-  sizeNote: { fontSize: 13, color: '#64748B', lineHeight: 18, paddingHorizontal: 4 },
+  fileName: { fontSize: 15, fontWeight: '600', color: c.text },
+  fileMeta: { fontSize: 12, color: c.textSecondary },
+  change: { fontSize: 14, fontWeight: '600', color: c.accent },
+  sizeNote: { fontSize: 13, color: c.textSecondary, lineHeight: 18, paddingHorizontal: 4 },
   previewClip: { overflow: 'hidden' },
   optionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     padding: 14,
     gap: 12,
   },
-  optionLabel: { fontSize: 14, fontWeight: '700', color: Palette.ink },
-  optionHint: { fontSize: 12, color: '#64748B', lineHeight: 16 },
+  optionLabel: { fontSize: 14, fontWeight: '700', color: c.text },
+  optionHint: { fontSize: 12, color: c.textSecondary, lineHeight: 16 },
   rotationRow: { flexDirection: 'row', gap: 8 },
   rotationChip: {
     flex: 1,
     minHeight: 36,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
   },
-  rotationChipActive: { backgroundColor: Palette.accent, borderColor: Palette.accent },
-  rotationText: { fontSize: 14, fontWeight: '600', color: '#475569' },
-  rotationTextActive: { color: '#FFFFFF' },
+  rotationChipActive: { backgroundColor: c.accentFill, borderColor: c.accent },
+  rotationText: { fontSize: 14, fontWeight: '600', color: c.textSecondary },
+  rotationTextActive: { color: c.onAccent },
   printRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   printText: { flex: 1, gap: 2 },
   warn: {
-    color: '#B45309',
+    color: c.warning,
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: c.border,
   },
   bottomBar: {
     paddingHorizontal: 16,
     paddingTop: 10,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: c.hairline,
   },
   openButton: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 12,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   openButtonDisabled: { opacity: 0.5 },
-  openButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  openButtonText: { color: c.onAccent, fontSize: 16, fontWeight: '600' },
   pressed: { opacity: 0.72 },
-});
+}));

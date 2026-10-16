@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
-import { Palette } from '@/constants/ui';
+
 import {
   CONSUMER_PRINTER_LIST,
   toDriverModel,
@@ -19,6 +19,7 @@ import {
 } from '@/constants/printer-models';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore } from '@/stores/printer-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 interface SeznikPrinterGridProps {
   onSelectModel?: (model: ConsumerPrinter) => void;
@@ -35,6 +36,7 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
   onDisconnect,
   compact = false,
 }) => {
+  useThemeRefresh();
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
   const activeModelId = usePrinterStore((s) => s.selectedPrinterModel);
@@ -182,13 +184,13 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
                   <View
                     style={[
                       styles.statusDot,
-                      { backgroundColor: modelConnected ? '#10B981' : isSelected ? Palette.accent : '#94A3B8' },
+                      { backgroundColor: modelConnected ? C.successFill : isSelected ? C.accentFill : C.textMuted },
                     ]}
                   />
                   <Text
                     style={[
                       styles.statusText,
-                      { color: modelConnected ? '#10B981' : isSelected ? Palette.accent : '#64748B' },
+                      { color: modelConnected ? C.success : isSelected ? C.accent : C.textSecondary },
                     ]}>
                     {modelConnected
                       ? `Connected: ${deviceName ?? model.name}`
@@ -202,9 +204,9 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
               {/* Action Arrow / Check */}
               <View style={styles.actionArrow}>
                 {modelConnected ? (
-                  <AppIcon name="checkmark.circle.fill" tintColor="#10B981" size={22} />
+                  <AppIcon name="checkmark.circle.fill" tintColor={C.success} size={22} />
                 ) : (
-                  <AppIcon name="chevron.right" tintColor={isSelected ? Palette.accent : '#94A3B8'} size={18} />
+                  <AppIcon name="chevron.right" tintColor={isSelected ? C.accent : C.textMuted} size={18} />
                 )}
               </View>
             </Pressable>
@@ -217,10 +219,10 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
                   onPress={() => handleInternalTestPrint(model)}
                   disabled={isTesting}>
                   {isTesting ? (
-                    <ActivityIndicator size="small" color="#007AFF" />
+                    <ActivityIndicator size="small" color={C.link} />
                   ) : (
                     <>
-                      <AppIcon name="printer" tintColor="#007AFF" size={15} />
+                      <AppIcon name="printer" tintColor={C.link} size={15} />
                       <Text style={styles.testPrintBtnText}>Test Print</Text>
                     </>
                   )}
@@ -231,10 +233,10 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
                   onPress={() => handleInternalDisconnect(model)}
                   disabled={isDisconnecting}>
                   {isDisconnecting ? (
-                    <ActivityIndicator size="small" color="#FF3B30" />
+                    <ActivityIndicator size="small" color={C.danger} />
                   ) : (
                     <>
-                      <AppIcon name="xmark" tintColor="#FF3B30" size={14} />
+                      <AppIcon name="xmark" tintColor={C.danger} size={14} />
                       <Text style={styles.disconnectBtnText}>Disconnect</Text>
                     </>
                   )}
@@ -254,31 +256,31 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   container: {
     gap: 12,
   },
   modelCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000000',
+    borderColor: c.hairline,
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
   modelCardSelected: {
-    borderColor: Palette.accent,
+    borderColor: c.accent,
     borderWidth: 1.5,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
   },
   modelCardConnected: {
-    borderColor: '#10B981',
+    borderColor: c.success,
     borderWidth: 1.5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -308,7 +310,7 @@ const styles = StyleSheet.create({
   modelName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
     flex: 1,
     marginRight: 8,
   },
@@ -325,7 +327,7 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 12,
-    color: '#64748B',
+    color: c.textSecondary,
     marginBottom: 4,
   },
   statusRow: {
@@ -352,7 +354,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: c.hairline,
   },
   testPrintBtn: {
     flex: 1,
@@ -362,15 +364,15 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: c.accentSoft,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: c.border,
     gap: 6,
   },
   testPrintBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#007AFF',
+    color: c.link,
   },
   disconnectBtn: {
     flex: 1,
@@ -380,15 +382,15 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: c.dangerSoft,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: c.dangerSoft,
     gap: 6,
   },
   disconnectBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FF3B30',
+    color: c.danger,
   },
   btnPressed: {
     opacity: 0.7,
@@ -398,12 +400,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   warningText: {
     fontSize: 11,
-    color: '#64748B',
+    color: c.textSecondary,
     lineHeight: 15,
   },
-});
+}));

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type ShopCategory = 'all' | 'rolls' | 'specialty';
 
@@ -23,8 +24,8 @@ const PRODUCTS = [
     size: 'Continuous & die-cut',
     blurb: 'Everyday thermal stock for receipts, prices, and short runs.',
     icon: 'square.stack.3d.up.fill' as const,
-    tone: '#E7F6F8',
-    ink: Palette.accent,
+    tone: '#E7F6F8', // theme-fixed: product art tint
+    ink: '#17A6B8', // theme-fixed: product art ink
   },
   {
     id: 'ribbon',
@@ -33,8 +34,8 @@ const PRODUCTS = [
     size: 'Matched packs',
     blurb: 'Ribbon sized for Seznik TD-404 so density stays even.',
     icon: 'arrow.clockwise' as const,
-    tone: '#E8EEF6',
-    ink: Palette.header,
+    tone: '#E8EEF6', // theme-fixed: product art tint
+    ink: '#214668', // theme-fixed: product art ink
   },
   {
     id: 'shipping',
@@ -43,8 +44,8 @@ const PRODUCTS = [
     size: '100 × 150 mm',
     blurb: 'Wide stock for barcodes, addresses, and dispatch slips.',
     icon: 'tray.and.arrow.down.fill' as const,
-    tone: '#F3EEE6',
-    ink: '#8A5A2B',
+    tone: '#F3EEE6', // theme-fixed: product art tint
+    ink: '#8A5A2B', // theme-fixed: product art ink
   },
   {
     id: 'jewellery',
@@ -53,8 +54,8 @@ const PRODUCTS = [
     size: 'Hang tags',
     blurb: 'Small tags that still hold a SKU and a price.',
     icon: 'tag' as const,
-    tone: '#F8E8EC',
-    ink: '#9B3D55',
+    tone: '#F8E8EC', // theme-fixed: product art tint
+    ink: '#9B3D55', // theme-fixed: product art ink
   },
   {
     id: 'care',
@@ -63,12 +64,13 @@ const PRODUCTS = [
     size: 'Apparel',
     blurb: 'Soft care labels for wash instructions and fibre content.',
     icon: 'doc.text' as const,
-    tone: '#E8F3EC',
-    ink: '#1F7A45',
+    tone: '#E8F3EC', // theme-fixed: product art tint
+    ink: '#1F7A45', // theme-fixed: product art ink
   },
 ];
 
 export default function ShopScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const tabPad = useTabBarPadding(Spacing.four);
   const [category, setCategory] = useState<ShopCategory>('all');
@@ -97,7 +99,7 @@ export default function ShopScreen() {
             </Text>
           </View>
           <View style={styles.heroMark}>
-            <AppIcon name="bag.fill" tintColor="#FFFFFF" size={22} />
+            <AppIcon name="bag.fill" tintColor={C.onAccent} size={22} />
           </View>
         </View>
 
@@ -136,7 +138,7 @@ export default function ShopScreen() {
         </View>
 
         <View style={styles.note}>
-          <AppIcon name="info.circle" tintColor={Palette.header} size={18} />
+          <AppIcon name="info.circle" tintColor={C.brandInk} size={18} />
           <Text style={styles.noteText}>
             Checkout in the app is not open yet. Contact Seznik support and we will pack the stock.
           </Text>
@@ -146,30 +148,30 @@ export default function ShopScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     alignItems: 'center',
   },
   header: {
     width: '100%',
     maxWidth: MaxContentWidth,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.three,
     paddingBottom: 12,
     justifyContent: 'flex-end',
   },
   headerKicker: {
-    color: 'rgba(255,255,255,0.62)',
+    color: 'rgba(255,255,255,0.62)', // theme-fixed: white text on the dark banner
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 22,
     fontWeight: '700',
     letterSpacing: -0.4,
@@ -190,7 +192,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    backgroundColor: '#16324C',
+    backgroundColor: '#16324C', // theme-fixed: dark banner, same in both themes
     borderRadius: 22,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -201,21 +203,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   heroEyebrow: {
-    color: '#7ED4DE',
+    color: '#7ED4DE', // theme-fixed: text on the dark banner
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   heroTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 18,
     lineHeight: 23,
     fontWeight: '700',
     letterSpacing: -0.3,
   },
   heroBody: {
-    color: 'rgba(255,255,255,0.72)',
+    color: 'rgba(255,255,255,0.72)', // theme-fixed: white text on the dark banner
     fontSize: 13,
     lineHeight: 18,
   },
@@ -223,7 +225,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -239,21 +241,21 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#D7DEE6',
+    borderColor: c.hairline,
   },
   pillActive: {
-    backgroundColor: Palette.header,
-    borderColor: Palette.header,
+    backgroundColor: c.header,
+    borderColor: c.brandInk,
   },
   pillLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
   },
   pillLabelActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   list: {
     gap: 8,
@@ -262,7 +264,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -284,15 +286,15 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
   },
   cardBlurb: {
     fontSize: 12,
     lineHeight: 16,
-    color: '#5C6B78',
+    color: c.textSecondary,
   },
   askLabel: {
-    color: '#0E7C8A',
+    color: c.accentInk,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -300,16 +302,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     alignItems: 'flex-start',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E3E8EE',
+    borderColor: c.hairline,
   },
   noteText: {
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
-    color: Palette.ink,
+    color: c.text,
   },
-});
+}));

@@ -10,7 +10,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AppIcon } from '@/components/app-icon';
-import { androidRipple, cardShadow, HomeLayout, Palette } from '@/constants/ui';
+import { androidRipple, cardShadow, HomeLayout } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const ITEMS = [
   'Label rolls',
@@ -24,6 +25,7 @@ const ITEMS = [
 const LOOP_WIDTH = 780;
 
 export function BuyFromUsStrip() {
+  useThemeRefresh();
   const router = useRouter();
   const offset = useSharedValue(0);
 
@@ -54,7 +56,7 @@ export function BuyFromUsStrip() {
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.header}>
         <View style={styles.badge}>
-          <AppIcon name="bag.fill" tintColor="#FFFFFF" size={18} />
+          <AppIcon name="bag.fill" tintColor={C.onAccent} size={18} />
         </View>
         <View style={styles.headerText}>
           <Text
@@ -72,7 +74,7 @@ export function BuyFromUsStrip() {
         </View>
         <View style={styles.ctaWrap}>
           <Text style={styles.cta}>Shop</Text>
-          <AppIcon name="chevron.right" tintColor={Palette.accent} size={14} />
+          <AppIcon name="chevron.right" tintColor={C.accent} size={14} />
         </View>
       </View>
 
@@ -91,10 +93,10 @@ export function BuyFromUsStrip() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   card: {
     minHeight: HomeLayout.buyStripHeight,
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 16,
     overflow: 'hidden',
     paddingTop: 14,
@@ -112,7 +114,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -124,12 +126,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
   },
   subtitle: {
     fontSize: 12,
     fontWeight: '400',
-    color: Palette.muted,
+    color: c.textMuted,
   },
   ctaWrap: {
     flexDirection: 'row',
@@ -139,7 +141,7 @@ const styles = StyleSheet.create({
   cta: {
     fontSize: 14,
     fontWeight: '700',
-    color: Palette.accent,
+    color: c.accent,
   },
   track: {
     height: 38,
@@ -156,16 +158,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#E8F6F8',
+    backgroundColor: c.accentSoft,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C5E7EC',
+    borderColor: c.hairline,
   },
   chipText: {
     fontSize: 13,
     fontWeight: '500',
-    color: Palette.accent,
+    color: c.accent,
   },
   pressed: {
     opacity: 0.85,
   },
-});
+}));

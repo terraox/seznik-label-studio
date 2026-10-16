@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import {
   FlatList,
   Pressable,
-  StyleSheet,
   Text,
   useWindowDimensions,
   View,
@@ -12,10 +11,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { INDIAN_LANGUAGES } from '@/constants/indian-languages';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { Palette, cardShadow } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
 import { useSettingsStore } from '@/stores/settings-store';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export default function LanguageSwitchScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const selectedCode = useSettingsStore((s) => s.language);
@@ -71,14 +72,14 @@ export default function LanguageSwitchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     alignItems: 'center',
   },
   banner: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 10,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
@@ -89,15 +90,15 @@ const styles = StyleSheet.create({
   bannerTitle: {
     fontSize: 15,
     fontWeight: '500',
-    color: Palette.ink,
+    color: c.text,
   },
   bannerSub: {
     marginTop: 4,
     fontSize: 13,
-    color: Palette.muted,
+    color: c.textMuted,
   },
   row: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 10,
     paddingHorizontal: Spacing.three,
     paddingVertical: 14,
@@ -108,7 +109,7 @@ const styles = StyleSheet.create({
   },
   rowActive: {
     borderWidth: 1.5,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
   },
   rowMain: {
     flex: 1,
@@ -116,29 +117,29 @@ const styles = StyleSheet.create({
   native: {
     fontSize: 18,
     fontWeight: '500',
-    color: Palette.ink,
+    color: c.text,
   },
   nativeActive: {
-    color: Palette.accent,
+    color: c.accent,
   },
   name: {
     marginTop: 2,
     fontSize: 14,
     fontWeight: '600',
-    color: '#334155',
+    color: c.textSecondary,
   },
   region: {
     marginTop: 2,
     fontSize: 12,
-    color: Palette.muted,
+    color: c.textMuted,
   },
   check: {
     fontSize: 18,
     fontWeight: '500',
-    color: Palette.accent,
+    color: c.accent,
     marginLeft: Spacing.two,
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));

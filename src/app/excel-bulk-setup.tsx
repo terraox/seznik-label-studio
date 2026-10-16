@@ -4,7 +4,6 @@ import {
   Alert,
   Pressable,
   ScrollView,
-  StyleSheet,
   Switch,
   Text,
   View,
@@ -15,7 +14,7 @@ import { AppIcon } from '@/components/app-icon';
 import { KindBarcodeGlyph, KindQrGlyph, KindTextGlyph } from '@/components/excel-kind-icons';
 import { ExcelLabelPreview } from '@/components/excel-label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import {
   attachBulkToLabelDocument,
   createBulkLabelDocument,
@@ -28,8 +27,7 @@ import { clampLabelMm } from '@/lib/label-geometry';
 import { useDataStore } from '@/stores/data-store';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
-
-const TEAL = '#3EC6D0';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const KINDS: { id: BulkSlotKind; Glyph: typeof KindTextGlyph }[] = [
   { id: 'text', Glyph: KindTextGlyph },
@@ -49,6 +47,7 @@ function paramMm(value: string | string[] | undefined, fallback: number): number
 }
 
 export default function ExcelBulkSetupScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     excelFileId?: string | string[];
@@ -167,7 +166,7 @@ export default function ExcelBulkSetupScreen() {
             onPress={() => router.back()}
             hitSlop={12}
             style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}>
-            <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+            <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
           </Pressable>
           <Text style={styles.headerTitle}>Data Column</Text>
           <View style={styles.headerBtn} />
@@ -184,7 +183,7 @@ export default function ExcelBulkSetupScreen() {
           onPress={() => router.back()}
           hitSlop={12}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+          <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
         </Pressable>
         <Text style={styles.headerTitle}>Data Column</Text>
         <Pressable
@@ -237,7 +236,7 @@ export default function ExcelBulkSetupScreen() {
                 accessibilityState={{ checked: mapping.include }}>
                 <View style={[styles.check, mapping.include && styles.checkOn]}>
                   {mapping.include ? (
-                    <AppIcon name="checkmark" tintColor="#FFFFFF" size={13} />
+                    <AppIcon name="checkmark" tintColor={C.onAccent} size={13} />
                   ) : null}
                 </View>
               </Pressable>
@@ -266,8 +265,8 @@ export default function ExcelBulkSetupScreen() {
           <Switch
             value={displayHead}
             onValueChange={setDisplayHead}
-            trackColor={{ false: '#D1D5DB', true: TEAL }}
-            thumbColor="#FFFFFF"
+            trackColor={{ false: C.border, true: C.accent }}
+            thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
           />
         </View>
         <ExcelLabelPreview sheet={sheet} mappings={syncedMappings} displayHead={displayHead} />
@@ -276,13 +275,13 @@ export default function ExcelBulkSetupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F3F5F8' },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: c.fill },
   header: {
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.two,
@@ -293,28 +292,28 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 17,
     fontWeight: '600',
   },
   headerAction: { minWidth: 72, alignItems: 'flex-end', paddingRight: 4 },
-  confirmHeader: { color: '#FFFFFF', fontSize: 16, fontWeight: '400' },
-  confirmHeaderOff: { color: 'rgba(255,255,255,0.4)' },
+  confirmHeader: { color: c.onAccent, fontSize: 16, fontWeight: '400' },
+  confirmHeaderOff: { color: 'rgba(255,255,255,0.4)' }, // theme-fixed: white on header
   body: { flex: 1, width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center' },
   bodyContent: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8, gap: 10 },
-  empty: { padding: Spacing.four, color: Palette.muted, textAlign: 'center' },
+  empty: { padding: Spacing.four, color: c.textMuted, textAlign: 'center' },
   sheetChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
-  chipOn: { backgroundColor: TEAL },
-  chipText: { fontSize: 13, fontWeight: '600', color: Palette.ink },
-  chipTextOn: { color: '#FFFFFF' },
+  chipOn: { backgroundColor: c.accent },
+  chipText: { fontSize: 13, fontWeight: '600', color: c.text },
+  chipTextOn: { color: c.onAccent },
   columnCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 10,
     minHeight: 54,
     paddingLeft: 12,
@@ -329,13 +328,13 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: '#C5CED6',
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
-  checkOn: { backgroundColor: TEAL, borderColor: TEAL },
-  columnName: { flex: 1, fontSize: 16, fontWeight: '400', color: '#334155' },
+  checkOn: { backgroundColor: c.accent, borderColor: c.accent },
+  columnName: { flex: 1, fontSize: 16, fontWeight: '400', color: c.textSecondary },
   kindRow: { flexDirection: 'row', alignItems: 'center' },
   kindOff: { opacity: 0.35 },
   dock: {
@@ -350,6 +349,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  displayHeadLabel: { fontSize: 15, color: '#64748B' },
+  displayHeadLabel: { fontSize: 15, color: c.textSecondary },
   pressed: { opacity: 0.7 },
-});
+}));

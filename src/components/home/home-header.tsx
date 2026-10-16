@@ -1,12 +1,14 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StatusChip } from '@/components/home/status-chip';
 import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { Spacing } from '@/constants/theme';
-import { HomeLayout, Palette } from '@/constants/ui';
+import { HomeLayout } from '@/constants/ui';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export function HomeHeader() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
 
   return (
@@ -18,13 +20,13 @@ export function HomeHeader() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   header: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: HomeLayout.screenPad,
     paddingBottom: Spacing.three,
   },
-});
+}));

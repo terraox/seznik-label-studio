@@ -31,16 +31,18 @@ import { isScanEmptyError, payloadFromBarcodeResult, SCAN_CODE_TYPES } from '@/l
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SCAN_FRAME_SIZE = Math.min(Math.round(SCREEN_WIDTH * 0.72), 280);
-const CORNER_COLOR = '#A3E635'; // Lime green matching screenshot
+const CORNER_COLOR = '#A3E635'; // Lime green matching screenshot // theme-fixed: camera overlay
 const CORNER_LENGTH = 28;
 const CORNER_THICKNESS = 4.5;
 
 /** SVG-less clean lightbulb icon */
 function LightbulbIcon({ active = false, size = 38 }: { active?: boolean; size?: number }) {
-  const color = active ? '#FFD600' : '#FFFFFF';
+  useThemeRefresh();
+  const color = active ? '#FFD600' : '#FFFFFF'; // theme-fixed: camera overlay
   return (
     <View style={[styles.bulbContainer, { width: size, height: size }]}>
       {/* Bulb head */}
@@ -49,7 +51,7 @@ function LightbulbIcon({ active = false, size = 38 }: { active?: boolean; size?:
           styles.bulbHead,
           {
             borderColor: color,
-            backgroundColor: active ? 'rgba(255, 214, 0, 0.25)' : 'transparent',
+            backgroundColor: active ? 'rgba(255, 214, 0, 0.25)' : 'transparent', // theme-fixed: camera overlay
           },
         ]}
       />
@@ -69,6 +71,7 @@ function LightbulbIcon({ active = false, size = 38 }: { active?: boolean; size?:
 }
 
 export default function ScanScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ from?: string | string[]; mode?: string | string[] }>();
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
@@ -287,7 +290,7 @@ export default function ScanScreen() {
   if (!permission) {
     return (
       <View style={[styles.centerContainer, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
+        <ActivityIndicator size="large" color={C.onAccent} />
         <Text style={styles.permissionText}>Initializing camera...</Text>
       </View>
     );
@@ -424,7 +427,7 @@ export default function ScanScreen() {
                 disabled={!cameraReady || capturing || cloning}
                 style={({ pressed }) => [styles.cloneShutter, pressed && styles.btnPressed]}>
                 {capturing || cloning ? (
-                  <ActivityIndicator color="#101419" />
+                  <ActivityIndicator color={C.text} />
                 ) : (
                   <View style={styles.cloneShutterInner} />
                 )}
@@ -546,7 +549,7 @@ export default function ScanScreen() {
       {imageSourceSheet}
       {cloning ? (
         <View style={styles.cloningOverlay} pointerEvents="auto">
-          <ActivityIndicator size="large" color="#FFFFFF" />
+          <ActivityIndicator size="large" color={C.onAccent} />
           <Text style={styles.cloningText}>Rebuilding label…</Text>
         </View>
       ) : null}
@@ -554,20 +557,20 @@ export default function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#000000', // theme-fixed: camera background
   },
   centerContainer: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#000000', // theme-fixed: camera background
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
   },
   maskDark: {
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
   },
   maskBottom: {
     flex: 1,
@@ -576,7 +579,7 @@ const styles = StyleSheet.create({
   },
   permissionContainer: {
     flex: 1,
-    backgroundColor: '#101419',
+    backgroundColor: '#101419', // theme-fixed: camera chrome
   },
   permissionContent: {
     flex: 1,
@@ -588,7 +591,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1E293B', // theme-fixed: camera chrome
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
@@ -597,25 +600,25 @@ const styles = StyleSheet.create({
     fontSize: 40,
   },
   permissionHeading: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 20,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 12,
   },
   permissionSub: {
-    color: '#94A3B8',
+    color: c.textMuted,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 32,
   },
   permissionText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 15,
   },
   primaryButton: {
-    backgroundColor: '#17A6B8',
+    backgroundColor: c.accentFill,
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 12,
@@ -624,14 +627,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.text,
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 12,
@@ -639,7 +642,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryButtonText: {
-    color: '#94A3B8',
+    color: c.textMuted,
     fontSize: 15,
     fontWeight: '500',
   },
@@ -654,7 +657,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 14,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: c.scrim,
   },
   backButton: {
     width: 44,
@@ -663,13 +666,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backChevron: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 34,
     fontWeight: '300',
     lineHeight: 38,
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 19,
     fontWeight: '600',
   },
@@ -680,7 +683,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   photoText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -733,8 +736,8 @@ const styles = StyleSheet.create({
   scanLaser: {
     width: '100%',
     height: 2.5,
-    backgroundColor: '#A3E635',
-    shadowColor: '#A3E635',
+    backgroundColor: '#A3E635', // theme-fixed: camera overlay
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.9,
     shadowRadius: 6,
@@ -742,14 +745,14 @@ const styles = StyleSheet.create({
   },
   manualEntryBtn: {
     borderWidth: 1,
-    borderColor: '#FFFFFF',
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderColor: c.surface,
+    backgroundColor: c.scrim,
     borderRadius: 4,
     paddingVertical: 9,
     paddingHorizontal: 18,
   },
   manualEntryText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13.5,
     fontWeight: '400',
     letterSpacing: 0.2,
@@ -757,20 +760,20 @@ const styles = StyleSheet.create({
   importLabelBtn: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#17A6B8',
-    backgroundColor: 'rgba(23, 166, 184, 0.35)',
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
     borderRadius: 4,
     paddingVertical: 10,
     paddingHorizontal: 18,
   },
   importLabelBtnText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13.5,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
   importLabelButton: {
-    backgroundColor: '#17A6B8',
+    backgroundColor: c.accentFill,
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 12,
@@ -779,7 +782,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   importLabelButtonText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -800,13 +803,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   torchText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '400',
     letterSpacing: 0.3,
   },
   torchTextActive: {
-    color: '#FFD600',
+    color: '#FFD600', // theme-fixed: camera overlay
     fontWeight: '600',
   },
   // Lightbulb Icon Graphics
@@ -861,7 +864,7 @@ const styles = StyleSheet.create({
   // Manual Entry Dialog
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: c.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
@@ -869,12 +872,12 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     padding: 22,
     ...Platform.select({
       ios: {
-        shadowColor: '#000000',
+        shadowColor: c.shadow,
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.25,
         shadowRadius: 12,
@@ -885,19 +888,19 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#1E293B',
+    color: c.text,
     marginBottom: 16,
     textAlign: 'center',
   },
   textInput: {
     height: 48,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     fontSize: 15,
-    color: '#1E293B',
-    backgroundColor: '#F8FAFC',
+    color: c.text,
+    backgroundColor: c.fill,
     marginBottom: 20,
   },
   modalButtons: {
@@ -912,29 +915,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalCancelBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
   },
   modalSubmitBtn: {
-    backgroundColor: '#17A6B8',
+    backgroundColor: c.accentFill,
   },
   modalCancelText: {
-    color: '#64748B',
+    color: c.textSecondary,
     fontSize: 15,
     fontWeight: '500',
   },
   modalSubmitText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 15,
     fontWeight: '600',
   },
   // Result Modal
   resultBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    backgroundColor: c.scrim,
     justifyContent: 'flex-end',
   },
   resultCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 20,
@@ -948,48 +951,48 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   successCheck: {
-    color: '#16A34A',
+    color: c.success,
     fontSize: 24,
     fontWeight: '700',
   },
   resultHeading: {
     fontSize: 19,
     fontWeight: '700',
-    color: '#0F172A',
+    color: c.text,
     marginBottom: 4,
   },
   resultTypeTag: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#17A6B8',
-    backgroundColor: '#E0F7FA',
+    color: c.accent,
+    backgroundColor: c.fillStrong,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
   },
   resultContentBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: c.fill,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     padding: 14,
     marginBottom: 20,
   },
   resultLabel: {
     fontSize: 12,
-    color: '#64748B',
+    color: c.textSecondary,
     marginBottom: 4,
     fontWeight: '500',
   },
   resultDataText: {
     fontSize: 16,
-    color: '#0F172A',
+    color: c.text,
     fontWeight: '600',
   },
   resultActions: {
@@ -1002,28 +1005,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryActionBtn: {
-    backgroundColor: '#17A6B8',
+    backgroundColor: c.accentFill,
   },
   primaryActionText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 15,
     fontWeight: '600',
   },
   secondaryActionBtn: {
-    backgroundColor: '#F0F9FF',
+    backgroundColor: c.accentSoft,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: c.border,
   },
   secondaryActionText: {
-    color: '#0284C7',
+    color: c.link,
     fontSize: 15,
     fontWeight: '600',
   },
   cancelActionBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
   },
   cancelActionText: {
-    color: '#475569',
+    color: c.textSecondary,
     fontSize: 15,
     fontWeight: '500',
   },
@@ -1036,29 +1039,29 @@ const styles = StyleSheet.create({
     height: 68,
     borderRadius: 34,
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.15)', // theme-fixed: camera overlay
   },
   cloneShutterInner: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   cloningOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: c.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
     zIndex: 20,
   },
   cloningText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 15,
     fontWeight: '600',
   },
-});
+}));

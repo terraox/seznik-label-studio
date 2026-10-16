@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { editorBridge, type OcrResultType } from '@/constants/editor-bridge';
 import { isScanEmptyError, payloadFromBarcodeResult } from '@/lib/scan-codes';
-import { Palette } from '@/constants/ui';
+
 import {
   OCR_ERROR_MESSAGES,
   OcrResultPanel,
@@ -33,6 +33,7 @@ import {
   useOcrSession,
 } from '@/lib/ocr';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PREVIEW_SIZE = Math.min(Math.round(SCREEN_WIDTH * 0.62), 260);
@@ -61,6 +62,7 @@ function RadioOption({
   selected: boolean;
   onPress: () => void;
 }) {
+  useThemeRefresh();
   return (
     <Pressable onPress={onPress} style={styles.radioRow} hitSlop={6}>
       <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
@@ -72,6 +74,7 @@ function RadioOption({
 }
 
 export default function OcrScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ from?: string | string[] }>();
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
@@ -278,7 +281,7 @@ export default function OcrScreen() {
   if (!permission) {
     return (
       <View style={[styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
+        <ActivityIndicator size="large" color={C.onAccent} />
       </View>
     );
   }
@@ -288,7 +291,7 @@ export default function OcrScreen() {
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom + 20 }]}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerSide}>
-            <AppIcon name="chevron.left" tintColor="#FFFFFF" size={24} />
+            <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
           </Pressable>
           <Text style={styles.headerTitle}>OCR</Text>
           <View style={styles.headerSide} />
@@ -328,7 +331,7 @@ export default function OcrScreen() {
 
         <View style={[styles.header, styles.captureHeader, { paddingTop: insets.top + 8 }]}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerSide}>
-            <AppIcon name="chevron.left" tintColor="#FFFFFF" size={24} />
+            <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
           </Pressable>
           <Text style={styles.headerTitle}>OCR</Text>
           <View style={styles.headerSide} />
@@ -341,7 +344,7 @@ export default function OcrScreen() {
             hitSlop={10}>
             <AppIcon
               name={torch ? 'flashlight.on.fill' : 'flashlight.off.fill'}
-              tintColor="#FFFFFF"
+              tintColor={C.onAccent}
               size={28}
             />
           </Pressable>
@@ -351,7 +354,7 @@ export default function OcrScreen() {
             disabled={!cameraReady || capturing}
             style={({ pressed }) => [styles.shutterOuter, pressed && styles.pressed]}>
             {capturing ? (
-              <ActivityIndicator color={Palette.header} />
+              <ActivityIndicator color={C.brandInk} />
             ) : (
               <View style={styles.shutterInner} />
             )}
@@ -361,7 +364,7 @@ export default function OcrScreen() {
             onPress={handleGalleryPick}
             style={({ pressed }) => [styles.captureSideBtn, pressed && styles.pressed]}
             hitSlop={10}>
-            <AppIcon name="photo.on.rectangle" tintColor="#FFFFFF" size={28} />
+            <AppIcon name="photo.on.rectangle" tintColor={C.onAccent} size={28} />
           </Pressable>
         </View>
         {imageSourceSheet}
@@ -373,7 +376,7 @@ export default function OcrScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={goBack} hitSlop={12} style={styles.headerSide}>
-          <AppIcon name="chevron.left" tintColor="#FFFFFF" size={24} />
+          <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
         </Pressable>
         <Text style={styles.headerTitle}>OCR</Text>
         <Pressable
@@ -400,7 +403,7 @@ export default function OcrScreen() {
             disabled={identifying || ocr.running}
             style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}>
             {identifying || ocr.running ? (
-              <ActivityIndicator size="small" color={Palette.accent} />
+              <ActivityIndicator size="small" color={C.accent} />
             ) : (
               <Text style={styles.actionIdentifyText}>Identify</Text>
             )}
@@ -457,14 +460,14 @@ export default function OcrScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
   },
   centered: {
     flex: 1,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -474,7 +477,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingBottom: 12,
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     zIndex: 10,
   },
   captureHeader: {
@@ -482,7 +485,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(33, 70, 104, 0.35)',
+    backgroundColor: 'rgba(33, 70, 104, 0.35)', // theme-fixed: overlay on photo
   },
   headerSide: {
     width: 72,
@@ -493,13 +496,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
   },
   confirmText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'right',
@@ -512,13 +515,13 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   permissionTitle: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 20,
     fontWeight: '700',
     textAlign: 'center',
   },
   permissionSub: {
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.75)', // theme-fixed: white on photo / dark overlay
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -528,12 +531,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 48,
     borderRadius: 10,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   permissionBtnText: {
-    color: '#FFFFFF',
+    color: c.onAccent,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -542,12 +545,12 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: 'rgba(255,255,255,0.35)', // theme-fixed: white on photo / dark overlay
     alignItems: 'center',
     justifyContent: 'center',
   },
   permissionSecondaryText: {
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.85)', // theme-fixed: white on photo / dark overlay
     fontSize: 15,
     fontWeight: '500',
   },
@@ -573,7 +576,7 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
@@ -582,10 +585,10 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   identifyBlueSection: {
-    backgroundColor: Palette.header,
+    backgroundColor: c.header,
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 18,
@@ -596,7 +599,7 @@ const styles = StyleSheet.create({
     height: PREVIEW_SIZE,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   previewImage: {
     width: '100%',
@@ -604,7 +607,7 @@ const styles = StyleSheet.create({
   },
   previewPlaceholder: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   actionRow: {
     width: '100%',
@@ -622,18 +625,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   actionIdentifyText: {
-    color: Palette.accent,
+    color: c.accent,
     fontSize: 16,
     fontWeight: '500',
   },
   actionClearText: {
-    color: Palette.danger,
+    color: c.danger,
     fontSize: 16,
     fontWeight: '500',
   },
   identifyWhiteSection: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     paddingHorizontal: 16,
     paddingTop: 18,
     paddingBottom: 24,
@@ -655,35 +658,35 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 1.5,
-    borderColor: '#B8C0C8',
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioOuterActive: {
-    borderColor: Palette.accent,
+    borderColor: c.accent,
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   radioLabel: {
     fontSize: 15,
-    color: '#556473',
+    color: c.textSecondary,
     fontWeight: '500',
   },
   radioLabelActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '600',
   },
   effectPreviewLabel: {
     textAlign: 'center',
-    color: '#7E8B98',
+    color: c.textMuted,
     fontSize: 14,
     fontWeight: '500',
   },
   pressed: {
     opacity: 0.72,
   },
-});
+}));

@@ -2,8 +2,9 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';
-import { Palette } from '@/constants/ui';
+
 import type { DiscoveredPrinter } from '@/lib/printer/printer-manager';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export type DeviceBadge = {
   label: string;
@@ -35,6 +36,7 @@ export function DeviceList({
   onRescan,
   badgeFor,
 }: DeviceListProps) {
+  useThemeRefresh();
   const list = Array.isArray(devices) ? devices : [];
   return (
     <View style={styles.wrap}>
@@ -76,6 +78,7 @@ function Section({
   onConnect: (device: DiscoveredPrinter) => void;
   badgeFor: (device: DiscoveredPrinter) => DeviceBadge | null;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.block}>
       <View style={styles.card}>
@@ -93,7 +96,7 @@ function Section({
                   index < devices.length - 1 && styles.rowBorder,
                   pressed && styles.pressed,
                 ]}>
-                <AppIcon name="printer" tintColor={Palette.muted} size={20} />
+                <AppIcon name="printer" tintColor={C.textMuted} size={20} />
                 <View style={styles.info}>
                   <View style={styles.nameRow}>
                     <Text style={styles.name} numberOfLines={1}>
@@ -143,7 +146,7 @@ function emptyCopy(
   return 'No printers yet. Turn the printer on, then scan again.';
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: { gap: Spacing.three },
   block: { gap: 8 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 },
@@ -151,25 +154,25 @@ const styles = StyleSheet.create({
   section: {
     fontSize: 12,
     fontWeight: '700',
-    color: Palette.muted,
+    color: c.textMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
-  rescan: { color: Palette.accent, fontSize: 14, fontWeight: '700' },
+  rescan: { color: c.accent, fontSize: 14, fontWeight: '700' },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     paddingHorizontal: Spacing.three,
     paddingVertical: 4,
   },
-  empty: { color: Palette.muted, fontSize: 14, lineHeight: 20, paddingVertical: 12 },
+  empty: { color: c.textMuted, fontSize: 14, lineHeight: 20, paddingVertical: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#EAECEF' },
+  rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.hairline },
   info: { flex: 1, gap: 2 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  name: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: Palette.ink },
+  name: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: c.text },
   badge: {
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -177,7 +180,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   badgeText: { fontSize: 11, fontWeight: '700' },
-  meta: { fontSize: 12, color: '#94A3B8' },
+  meta: { fontSize: 12, color: c.textMuted },
   connect: { fontSize: 14, fontWeight: '700' },
   pressed: { opacity: 0.7 },
-});
+}));

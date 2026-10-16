@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 
-import { Palette } from '@/constants/ui';
 import {
   fromMm,
   MAX_LABEL_MM,
@@ -22,6 +21,7 @@ import {
   validateLabelSize,
   type LabelUnit,
 } from '@/lib/label-geometry';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const KEYBOARD_GAP = 32;
 
@@ -61,6 +61,7 @@ export function LabelDimensionModal({
   onClose,
   onConfirm,
 }: LabelDimensionModalProps) {
+  useThemeRefresh();
   const [text, setText] = useState(() => formatField(valueMm, unit));
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [inputReady, setInputReady] = useState(false);
@@ -228,7 +229,7 @@ export function LabelDimensionModal({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: {
     flex: 1,
     justifyContent: 'center',
@@ -237,19 +238,19 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
   },
   card: {
     width: '100%',
     maxWidth: 400,
     alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingTop: 20,
     paddingBottom: 16,
     gap: 12,
-    shadowColor: '#000000',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 20,
@@ -258,39 +259,39 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: c.textSecondary,
     textAlign: 'center',
     marginTop: -4,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 22,
     fontWeight: '500',
-    color: Palette.ink,
-    backgroundColor: '#F8FAFC',
+    color: c.text,
+    backgroundColor: c.fill,
     textAlign: 'center',
   },
   inputError: {
-    borderColor: '#DC2626',
+    borderColor: c.danger,
   },
   error: {
     fontSize: 12,
-    color: '#DC2626',
+    color: c.danger,
     textAlign: 'center',
   },
   unitHeading: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginTop: 4,
@@ -303,19 +304,19 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
   },
   unitChipOn: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   unitChipText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
   },
   unitChipTextOn: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   actions: {
     flexDirection: 'row',
@@ -330,28 +331,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelBtn: {
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.fillStrong,
   },
   doneBtn: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   doneBtnDisabled: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: c.textDisabled,
   },
   cancelText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#475569',
+    color: c.textSecondary,
   },
   doneText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   doneTextDisabled: {
-    color: '#F8FAFC',
+    color: c.textDisabled,
   },
   pressed: {
     opacity: 0.85,
   },
-});
+}));

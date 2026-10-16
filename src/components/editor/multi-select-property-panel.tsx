@@ -10,8 +10,7 @@ import {
 } from '@/components/editor/types';
 import { elementContentValue } from '@/lib/editor/selection';
 import { elementSizeMm, type LabelElement } from '@/lib/label-document';
-
-const ACCENT = '#48C3C7';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export type MultiSelectPropertyPanelProps = {
   primary: LabelElement;
@@ -23,6 +22,7 @@ export type MultiSelectPropertyPanelProps = {
 };
 
 function Divider() {
+  useThemeRefresh();
   return <View style={styles.divider} />;
 }
 
@@ -37,6 +37,7 @@ function SegmentRow<T extends string>({
   selected: T;
   onSelect: (value: T) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.block}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -70,6 +71,7 @@ function StepperRow({
   onMinus?: () => void;
   onPlus?: () => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.stepperRow}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -97,15 +99,16 @@ function ToggleRow({
   mixed?: boolean;
   onValueChange: (next: boolean) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.toggleRow}>
       <Text style={styles.rowLabel}>{label}{mixed ? ' (mixed)' : ''}</Text>
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: '#D1D5DB', true: ACCENT }}
-        thumbColor="#FFFFFF"
-        ios_backgroundColor="#D1D5DB"
+        trackColor={{ false: C.border, true: C.accent }}
+        thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+        ios_backgroundColor={C.border}
       />
     </View>
   );
@@ -120,12 +123,13 @@ function ColorRow({
   mixed?: boolean;
   onSelect: (index: number) => void;
 }) {
+  useThemeRefresh();
   return (
     <View style={styles.colorRow}>
       <Text style={styles.rowLabel}>Drawing Color{mixed ? ' (mixed)' : ''}</Text>
       <View style={styles.colorGroup}>
         {DRAWING_COLORS.map((color, index) => {
-          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour
+          if (color === '#FFFFFF') return null; // white is not offered as a drawing colour // theme-fixed: ink value, not UI
           const active = !mixed && index === selectedIndex;
           return (
             <Pressable
@@ -168,6 +172,7 @@ export function MultiSelectPropertyPanel({
   onPatchPrimary,
   onPatchAllSelected,
 }: MultiSelectPropertyPanelProps) {
+  useThemeRefresh();
   const size = elementSizeMm(primary);
   const content = elementContentValue(primary);
   const contentType = readContentType(primary);
@@ -201,7 +206,7 @@ export function MultiSelectPropertyPanel({
           onPress={() => router.push({ pathname: '/scan', params: { from: 'edit' } })}
           hitSlop={8}
           style={({ pressed }) => [pressed && styles.pressed]}>
-          <AppIcon name="barcode.viewfinder" tintColor={ACCENT} size={22} />
+          <AppIcon name="barcode.viewfinder" tintColor={C.accent} size={22} />
         </Pressable>
       </View>
       <TextInput
@@ -215,7 +220,7 @@ export function MultiSelectPropertyPanel({
           }
         }}
         placeholder="Enter value"
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={C.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
       />
@@ -286,22 +291,22 @@ export function MultiSelectPropertyPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   body: { flex: 1 },
   bodyContent: { paddingBottom: 24 },
   block: { paddingHorizontal: 16, paddingVertical: 10 },
-  rowLabel: { fontSize: 14, color: '#475569', marginBottom: 8 },
+  rowLabel: { fontSize: 14, color: c.textSecondary, marginBottom: 8 },
   segmentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   segmentChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
   },
-  segmentChipActive: { backgroundColor: ACCENT },
-  segmentText: { fontSize: 13, color: '#475569' },
-  segmentTextActive: { color: '#FFFFFF', fontWeight: '600' },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#E2E8F0', marginHorizontal: 16 },
+  segmentChipActive: { backgroundColor: c.accent },
+  segmentText: { fontSize: 13, color: c.textSecondary },
+  segmentTextActive: { color: c.onAccent, fontWeight: '600' },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginHorizontal: 16 },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -313,13 +318,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: c.hairline,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
-    color: '#1E293B',
-    backgroundColor: '#F8FAFC',
+    color: c.text,
+    backgroundColor: c.fill,
   },
   stepperRow: {
     flexDirection: 'row',
@@ -333,14 +338,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperCircleActive: { backgroundColor: ACCENT },
-  stepperSymbol: { fontSize: 18, color: '#64748B', lineHeight: 20 },
-  stepperSymbolActive: { color: '#FFFFFF' },
-  stepperValue: { fontSize: 14, color: '#1E293B', minWidth: 72, textAlign: 'center' },
+  stepperCircleActive: { backgroundColor: c.accent },
+  stepperSymbol: { fontSize: 18, color: c.textSecondary, lineHeight: 20 },
+  stepperSymbolActive: { color: c.onAccent },
+  stepperValue: { fontSize: 14, color: c.text, minWidth: 72, textAlign: 'center' },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,11 +362,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  colorOuterActive: { borderWidth: 2, borderColor: ACCENT },
+  colorOuterActive: { borderWidth: 2, borderColor: c.accent },
   colorDot: { width: 22, height: 22, borderRadius: 11 },
-  colorDotWhite: { borderWidth: 1, borderColor: '#CBD5E1' },
+  colorDotWhite: { borderWidth: 1, borderColor: c.border },
   sectionGap: { height: 8 },
-  mixedHint: { fontSize: 12, color: '#94A3B8', paddingHorizontal: 16, marginTop: -4 },
-  panelNote: { fontSize: 12, color: '#94A3B8', paddingHorizontal: 16, paddingTop: 12 },
+  mixedHint: { fontSize: 12, color: c.textMuted, paddingHorizontal: 16, marginTop: -4 },
+  panelNote: { fontSize: 12, color: c.textMuted, paddingHorizontal: 16, paddingTop: 12 },
   pressed: { opacity: 0.6 },
-});
+}));

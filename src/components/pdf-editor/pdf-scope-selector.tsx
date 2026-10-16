@@ -1,7 +1,7 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
-import { Palette } from '@/constants/ui';
 import type { PageScope } from '@/lib/pdf-editor/session';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 export function PdfScopeSelector({
   scope,
@@ -14,6 +14,7 @@ export function PdfScopeSelector({
   rangeError?: string;
   onChange: (scope: PageScope) => void;
 }) {
+  useThemeRefresh();
   if (pageCount < 2) return null;
 
   return (
@@ -58,6 +59,7 @@ export function PdfScopeSelector({
 }
 
 function Seg({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  useThemeRefresh();
   return (
     <Pressable onPress={onPress} style={[styles.seg, on && styles.segOn]}>
       <Text style={[styles.segText, on && styles.segTextOn]}>{label}</Text>
@@ -65,32 +67,32 @@ function Seg({ label, on, onPress }: { label: string; on: boolean; onPress: () =
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: { gap: 8, marginTop: 8 },
-  label: { fontSize: 12, color: Palette.muted, fontWeight: '600' },
+  label: { fontSize: 12, color: c.textMuted, fontWeight: '600' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   seg: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Palette.hairline,
+    borderColor: c.hairline,
   },
-  segOn: { borderColor: Palette.accent, backgroundColor: '#E7F7F9' },
-  segText: { fontSize: 12, color: Palette.actionText },
-  segTextOn: { color: Palette.accent, fontWeight: '600' },
+  segOn: { borderColor: c.accent, backgroundColor: c.accentSoft },
+  segText: { fontSize: 12, color: c.textSecondary },
+  segTextOn: { color: c.accent, fontWeight: '600' },
   rangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: {
     width: 56,
     borderWidth: 1,
-    borderColor: Palette.hairline,
+    borderColor: c.hairline,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 6,
     textAlign: 'center',
-    color: Palette.ink,
+    color: c.text,
   },
-  to: { color: Palette.muted },
-  hint: { color: Palette.muted, fontSize: 12 },
-  err: { color: Palette.danger, fontSize: 12 },
-});
+  to: { color: c.textMuted },
+  hint: { color: c.textMuted, fontSize: 12 },
+  err: { color: c.danger, fontSize: 12 },
+}));

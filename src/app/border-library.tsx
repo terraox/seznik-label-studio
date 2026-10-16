@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { FlatList, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BorderPreview } from '@/components/border-preview';
@@ -13,16 +13,18 @@ import {
 } from '@/constants/border-library';
 import { editorBridge } from '@/constants/editor-bridge';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { Palette, cardShadow } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
 import { joshBorderGapMm } from '@/lib/printer/josh-print';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { td404BorderGapMm } from '@/lib/printer/print-spec';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
 export default function BorderLibraryScreen() {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{
@@ -122,14 +124,14 @@ export default function BorderLibraryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     alignItems: 'center',
   },
   browseHint: {
-    color: Palette.muted,
+    color: c.textMuted,
     fontSize: 12.5,
     lineHeight: 17,
     paddingTop: Spacing.two,
@@ -146,32 +148,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 16,
-    backgroundColor: '#E8ECF1',
+    backgroundColor: c.fillStrong,
   },
   chipActive: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   chipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#556473',
+    color: c.textSecondary,
   },
   chipTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderRadius: 10,
     padding: Spacing.two,
     ...cardShadow,
   },
   cardActive: {
     borderWidth: 1.5,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
   },
   previewBox: {
     height: 88,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: '#EEF1F5', // theme-fixed: light preview (previewBox)
     borderRadius: 6,
     padding: 10,
     marginBottom: 8,
@@ -179,14 +181,14 @@ const styles = StyleSheet.create({
   borderName: {
     fontSize: 13,
     fontWeight: '700',
-    color: Palette.ink,
+    color: c.text,
   },
   borderCategory: {
     marginTop: 2,
     fontSize: 11,
-    color: Palette.muted,
+    color: c.textMuted,
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));

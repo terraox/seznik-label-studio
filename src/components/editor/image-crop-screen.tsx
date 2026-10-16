@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -16,8 +15,7 @@ import {
   FULL_CROP,
   type NormalizedCrop,
 } from '@/lib/editor/image-crop-math';
-
-const ACCENT = '#48C3C7';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type ImageCropScreenProps = {
   sourceUri: string;
@@ -44,6 +42,7 @@ export function ImageCropScreen({
   onCancel,
   onDone,
 }: ImageCropScreenProps) {
+  useThemeRefresh();
   const insets = useSafeAreaInsets();
   const canvasRef = useRef<ImageCropCanvasHandle>(null);
   const [loadingDims, setLoadingDims] = useState(true);
@@ -121,7 +120,7 @@ export function ImageCropScreen({
           hitSlop={12}
           style={({ pressed }) => [styles.doneBtn, (pressed || saving) && styles.pressed]}>
           {saving ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
+            <ActivityIndicator color={C.onAccent} size="small" />
           ) : (
             <Text style={styles.doneText}>Done</Text>
           )}
@@ -148,8 +147,8 @@ export function ImageCropScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0F172A' },
+const styles = themedStyles((c) => ({
+  root: { flex: 1, backgroundColor: '#0F172A' }, // theme-fixed: dark crop screen in both themes
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -159,19 +158,19 @@ const styles = StyleSheet.create({
   },
   headerBtn: { minWidth: 64, paddingVertical: 8 },
   headerCenter: { flex: 1, alignItems: 'center' },
-  title: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
-  subtitle: { color: '#94A3B8', fontSize: 12, marginTop: 2 },
-  cancelText: { color: '#CBD5E1', fontSize: 16, fontWeight: '500' },
+  title: { color: c.onAccent, fontSize: 17, fontWeight: '700' },
+  subtitle: { color: c.textMuted, fontSize: 12, marginTop: 2 },
+  cancelText: { color: c.textDisabled, fontSize: 16, fontWeight: '500' },
   doneBtn: {
     minWidth: 72,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: ACCENT,
+    backgroundColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  doneText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  doneText: { color: c.onAccent, fontSize: 16, fontWeight: '700' },
   stage: {
     flex: 1,
     marginHorizontal: 12,
@@ -188,9 +187,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1E293B', // theme-fixed: dark crop screen in both themes
   },
-  resetText: { color: '#E2E8F0', fontSize: 15, fontWeight: '600' },
-  footerHint: { color: '#64748B', fontSize: 12, textAlign: 'center' },
+  resetText: { color: c.textDisabled, fontSize: 15, fontWeight: '600' },
+  footerHint: { color: c.textSecondary, fontSize: 12, textAlign: 'center' },
   pressed: { opacity: 0.72 },
-});
+}));

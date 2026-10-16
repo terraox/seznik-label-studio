@@ -2,7 +2,8 @@ import { router } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { Alert, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { cardShadow, Palette } from '@/constants/ui';
+import { cardShadow } from '@/constants/ui';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type IconName = AppIconName;
 
@@ -29,6 +30,7 @@ export function LabelSettingsMenu({
   onShare,
   onUpload,
 }: LabelSettingsMenuProps) {
+  useThemeRefresh();
   const MENU_ITEMS: { label: string; icon: IconName; onPress?: () => void }[] = [
     {
       label: 'Label Settings',
@@ -106,7 +108,7 @@ export function LabelSettingsMenu({
               pressed && styles.pressed,
             ]}>
             <View style={styles.menuIconWrap}>
-              <AppIcon name={item.icon} tintColor="#556473" size={20} />
+              <AppIcon name={item.icon} tintColor={C.textSecondary} size={20} />
             </View>
             <Text style={styles.menuLabel}>{item.label}</Text>
           </Pressable>
@@ -119,19 +121,19 @@ export function LabelSettingsMenu({
 /** @deprecated Use LabelSettingsMenu */
 export const MoreMenu = LabelSettingsMenu;
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 30,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: c.pressedOverlay,
   },
   menu: {
     position: 'absolute',
     left: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
     overflow: 'hidden',
@@ -146,7 +148,7 @@ const styles = StyleSheet.create({
   },
   menuRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#EAECEF',
+    borderBottomColor: c.hairline,
   },
   menuIconWrap: {
     width: 28,
@@ -156,9 +158,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '500',
-    color: Palette.ink,
+    color: c.text,
   },
   pressed: {
     opacity: 0.65,
   },
-});
+}));

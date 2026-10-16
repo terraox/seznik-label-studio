@@ -28,6 +28,7 @@ import { idleElementRefsUnchanged } from '@/lib/editor/drag-layer';
 import { SNAP_GUIDE_COLOR, SNAP_GUIDE_STROKE_PX } from '@/lib/editor/canvas-chrome';
 import type { SnapGuide } from '@/lib/editor/engine';
 import { type ElementAnchorRect } from '@/lib/editor/quick-value';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 type KonvaCanvasProps = {
   document: LabelDocument;
@@ -149,6 +150,7 @@ const CanvasElementNodes = memo(function CanvasElementNodes({
   elements: LabelElement[];
   chrome: ElementChrome;
 }) {
+  useThemeRefresh();
   return (
     <>
       {elements.map((element) => (
@@ -222,6 +224,7 @@ const GridLivePlate = memo(function GridLivePlate({
   color: string;
   rotationDeg: number;
 }) {
+  useThemeRefresh();
   const style = useAnimatedStyle(() => {
     const w = liveBounds.widthMm.value * pxPerMM;
     const h = liveBounds.heightMm.value * pxPerMM;
@@ -278,6 +281,7 @@ const GridStaticPlate = memo(function GridStaticPlate({
   color: string;
   rotationDeg: number;
 }) {
+  useThemeRefresh();
   return (
     <View
       pointerEvents="none"
@@ -344,6 +348,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
   },
   ref,
 ) {
+  useThemeRefresh();
   const w = Math.max(1, canvasWidthPx);
   const h = Math.max(1, canvasHeightPx);
   const resolvedGridSpacingMm = gridSpacingMm ?? DEFAULT_GRID_SPACING_MM;
@@ -362,13 +367,13 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
       ? surfaceColor
       : doc.background?.type === 'color'
         ? doc.background.color
-        : '#FFFFFF';
+        : '#FFFFFF'; // theme-fixed: label artboard
 
   const stickerFillColor = surfaceColor
     ? surfaceColor
     : doc.background?.type === 'color'
       ? doc.background.color
-      : '#FFFFFF';
+      : '#FFFFFF'; // theme-fixed: label artboard
 
   // Jewelry rat-tail guides (if applicable)
   const jewelryGuides = useMemo(() => {
@@ -383,7 +388,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
             left: 0,
             right: 0,
             borderBottomWidth: 1,
-            borderBottomColor: '#CBD5E1',
+            borderBottomColor: '#CBD5E1', // theme-fixed: die-cut guide drawn on the label
             borderStyle: 'dashed',
           }}
         />
@@ -394,7 +399,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
             left: 0,
             right: 0,
             borderBottomWidth: 1,
-            borderBottomColor: '#E2E8F0',
+            borderBottomColor: '#E2E8F0', // theme-fixed: die-cut guide drawn on the label
           }}
         />
         <View
@@ -405,7 +410,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
             left: ((tagWidthMm - tailWidthMm) / 2) * pxPerMM,
             width: tailWidthMm * pxPerMM,
             borderWidth: 1,
-            borderColor: '#E2E8F0',
+            borderColor: '#E2E8F0', // theme-fixed: die-cut guide drawn on the label
             borderStyle: 'dashed',
             borderRadius: 1.2 * pxPerMM,
           }}
@@ -457,7 +462,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
             height={Math.max(1, h - 2)}
             rx={radius}
             ry={radius}
-            stroke="#000000"
+            stroke="#000000" // theme-fixed: outline drawn on the label
             strokeWidth={1}
             fill="none"
           />
@@ -635,7 +640,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
                 rx={Math.max(1, (doc.mediaShape === 'circle' ? Math.min(w, h) / 2 : w / 2) - 1)}
                 ry={Math.max(1, (doc.mediaShape === 'circle' ? Math.min(w, h) / 2 : h / 2) - 1)}
                 fill={stickerFillColor}
-                stroke="#000000"
+                stroke="#000000" // theme-fixed: outline drawn on the label
                 strokeWidth={1}
               />
             </Svg>
@@ -711,7 +716,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
               pointerEvents="none"
               style={[
                 StyleSheet.absoluteFillObject,
-                { borderWidth: 1.5, borderStyle: 'dashed', borderColor: selectionColor || '#48C3C7' },
+                { borderWidth: 1.5, borderStyle: 'dashed', borderColor: selectionColor || '#48C3C7' }, // theme-fixed: canvas selection chrome
               ]}
             />
           ) : null}
@@ -752,6 +757,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
 
 /** Stretched behind every element. The parent artboard ignores touches, and this sits outside the element ViewShot. */
 function ReferenceGuide({ fileName, rotation }: { fileName: string; rotation: number }) {
+  useThemeRefresh();
   const uri = referenceImageDisplayUri(fileName, FileSystem.documentDirectory);
   if (!uri) return null;
   return (
@@ -767,7 +773,7 @@ function ReferenceGuide({ fileName, rotation }: { fileName: string; rotation: nu
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   artboardLayer: {
     position: 'absolute',
     left: 0,
@@ -792,15 +798,15 @@ const styles = StyleSheet.create({
   },
   emptyHint: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: c.textMuted,
     fontWeight: '500',
   },
   artboardBorder: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
-    borderColor: 'rgba(94, 234, 212, 0.45)',
+    borderColor: 'rgba(94, 234, 212, 0.45)', // theme-fixed: artboard edge chrome
   },
   activeLayer: {
     zIndex: 20,
   },
-});
+}));

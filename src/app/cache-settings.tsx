@@ -16,6 +16,7 @@ import {
   type CacheCategorySizes,
 } from '@/lib/cache/storage-sizes';
 import { useLabelStore } from '@/stores/label-store';
+import { C, useThemeRefresh } from '@/theme';
 
 function jsonBytes(value: unknown): number {
   try {
@@ -36,6 +37,7 @@ const EMPTY_SIZES: CacheCategorySizes = {
 };
 
 export default function CacheSettingsScreen() {
+  useThemeRefresh();
   const cloudTemplates = useLabelStore((s) => s.cloudTemplates);
   const [sizes, setSizes] = useState<CacheCategorySizes>(EMPTY_SIZES);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,8 +88,8 @@ export default function CacheSettingsScreen() {
     <SettingsScreenShell title="Cache Settings">
       <SettingsCard>
         <View style={usedSpaceRow}>
-          <Text style={usedSpaceLabel}>Used Space</Text>
-          <Text style={usedSpaceValue}>{refreshing ? '…' : formatCacheBytes(usedBytes)}</Text>
+          <Text style={[usedSpaceLabel, { color: C.textMuted }]}>Used Space</Text>
+          <Text style={[usedSpaceValue, { color: C.danger }]}>{refreshing ? '…' : formatCacheBytes(usedBytes)}</Text>
         </View>
       </SettingsCard>
 
@@ -114,11 +116,9 @@ const usedSpaceLabel = {
   flex: 1,
   fontSize: 15,
   fontWeight: '500' as const,
-  color: '#7D7D7D',
 };
 
 const usedSpaceValue = {
   fontSize: 15,
   fontWeight: '700' as const,
-  color: '#E15B64',
 };

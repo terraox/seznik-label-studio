@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { PanResponder, Pressable, Text, View } from 'react-native';
 
 import { PdfScopeSelector } from '@/components/pdf-editor/pdf-scope-selector';
-import { Palette } from '@/constants/ui';
+
 import { parsePageRange, type PageScope } from '@/lib/pdf-editor/session';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const PRESETS = [
   { label: '0 (Off)', val: 0 },
@@ -24,6 +25,7 @@ export function PdfSharpnessTool({
   pageCount: number;
   onChange: (n: number, scope: PageScope) => void;
 }) {
+  useThemeRefresh();
   const [scope, setScope] = useState<PageScope>({ mode: 'this' });
   const rangeError =
     scope.mode === 'range' ? parsePageRange(String(scope.start), String(scope.end), pageCount).error : undefined;
@@ -162,12 +164,12 @@ export function PdfSharpnessTool({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: { gap: 10 },
-  help: { fontSize: 12, color: Palette.muted, lineHeight: 16 },
+  help: { fontSize: 12, color: c.textMuted, lineHeight: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  label: { fontSize: 12, fontWeight: '600', color: Palette.ink },
-  value: { fontSize: 15, fontWeight: '700', color: Palette.accent },
+  label: { fontSize: 12, fontWeight: '600', color: c.text },
+  value: { fontSize: 15, fontWeight: '700', color: c.accent },
   sliderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -178,15 +180,15 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: Palette.hairline,
-    backgroundColor: Palette.cardTop,
+    borderColor: c.hairline,
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepBtnText: {
     fontSize: 18,
     fontWeight: '600',
-    color: Palette.actionText,
+    color: c.textSecondary,
     lineHeight: 20,
   },
   sliderContainer: {
@@ -198,13 +200,13 @@ const styles = StyleSheet.create({
   trackBar: {
     height: 10,
     borderRadius: 5,
-    backgroundColor: Palette.hairline,
+    backgroundColor: c.hairline,
     overflow: 'hidden',
     width: '100%',
   },
   trackFill: {
     height: '100%',
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
     borderRadius: 5,
   },
   thumb: {
@@ -212,13 +214,13 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: 2.5,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: c.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3,
@@ -227,7 +229,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   presetRow: {
     flexDirection: 'row',
@@ -241,21 +243,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: Palette.hairline,
-    backgroundColor: Palette.cardTop,
+    borderColor: c.hairline,
+    backgroundColor: c.fill,
     alignItems: 'center',
   },
   presetBtnActive: {
-    borderColor: Palette.accent,
-    backgroundColor: '#E7F7F9',
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
   },
   presetText: {
     fontSize: 11,
     fontWeight: '500',
-    color: Palette.muted,
+    color: c.textMuted,
   },
   presetTextActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '700',
   },
-});
+}));

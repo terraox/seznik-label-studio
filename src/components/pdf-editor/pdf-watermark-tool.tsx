@@ -1,6 +1,5 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
-import { Palette } from '@/constants/ui';
 import { PdfScopeSelector } from '@/components/pdf-editor/pdf-scope-selector';
 import {
   ninePointToOffsetNorm,
@@ -10,6 +9,7 @@ import {
   type PdfWatermark,
 } from '@/lib/pdf-editor/session';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 const WORD_PRESETS = [
   'CONFIDENTIAL',
@@ -23,14 +23,14 @@ const WORD_PRESETS = [
 ];
 
 const COLOR_PRESETS = [
-  { label: 'Red', hex: '#DC2626' },
-  { label: 'Crimson', hex: '#991B1B' },
-  { label: 'Slate', hex: '#374151' },
-  { label: 'Dark', hex: '#111827' },
-  { label: 'Blue', hex: '#2563EB' },
-  { label: 'Green', hex: '#059669' },
-  { label: 'Gold', hex: '#D97706' },
-  { label: 'Purple', hex: '#7C3AED' },
+  { label: 'Red', hex: '#DC2626' }, // theme-fixed: watermark ink choice (printed)
+  { label: 'Crimson', hex: '#991B1B' }, // theme-fixed: watermark ink choice (printed)
+  { label: 'Slate', hex: '#374151' }, // theme-fixed: watermark ink choice (printed)
+  { label: 'Dark', hex: '#111827' }, // theme-fixed: watermark ink choice (printed)
+  { label: 'Blue', hex: '#2563EB' }, // theme-fixed: watermark ink choice (printed)
+  { label: 'Green', hex: '#059669' }, // theme-fixed: watermark ink choice (printed)
+  { label: 'Gold', hex: '#D97706' }, // theme-fixed: watermark ink choice (printed)
+  { label: 'Purple', hex: '#7C3AED' }, // theme-fixed: watermark ink choice (printed)
 ];
 
 const DENSITY_PRESETS = [
@@ -75,6 +75,7 @@ export function PdfWatermarkTool({
   onChange: (next: PdfWatermark) => void;
   onPickImage: (uri: string) => void;
 }) {
+  useThemeRefresh();
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
   const rangeError =
     value.scope.mode === 'range'
@@ -99,7 +100,7 @@ export function PdfWatermarkTool({
     });
   };
 
-  const currentColor = value.text?.color || '#DC2626';
+  const currentColor = value.text?.color || '#DC2626'; // theme-fixed: watermark ink (printed)
   const currentSpacing = value.tiled?.spacingNorm ?? { x: 0.24, y: 0.24 };
   const gridInfo = tiledRepeatCount(currentSpacing);
   const currentFontSize = value.text?.fontSizePt ?? 22;
@@ -523,6 +524,7 @@ export function PdfWatermarkTool({
 }
 
 function Seg({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  useThemeRefresh();
   return (
     <Pressable onPress={onPress} style={[styles.seg, on && styles.segOn]}>
       <Text style={[styles.segText, on && styles.segTextOn]}>{label}</Text>
@@ -542,7 +544,7 @@ const ANCHOR_ITEMS: { id: NinePoint; label: string }[] = [
   { id: 'bottom-right', label: 'Bottom Right' },
 ];
 
-const styles = StyleSheet.create({
+const styles = themedStyles((c) => ({
   wrap: { gap: 10 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   block: { gap: 8 },
@@ -555,34 +557,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: '#E7F7F9',
+    backgroundColor: c.accentSoft,
   },
   headerActionText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Palette.accent,
+    color: c.accent,
   },
   gridBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: c.fill,
   },
   gridBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Palette.ink,
+    color: c.text,
   },
-  label: { fontSize: 12, color: Palette.ink, fontWeight: '600' },
+  label: { fontSize: 12, color: c.text, fontWeight: '600' },
   input: {
     borderWidth: 1,
-    borderColor: Palette.hairline,
+    borderColor: c.hairline,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    color: Palette.ink,
+    color: c.text,
     fontSize: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
   },
   presetsRow: {
     flexDirection: 'row',
@@ -594,20 +596,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: Palette.hairline,
-    backgroundColor: Palette.cardTop,
+    borderColor: c.hairline,
+    backgroundColor: c.fill,
   },
   wordChipActive: {
-    borderColor: Palette.accent,
-    backgroundColor: '#E7F7F9',
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
   },
   wordChipText: {
     fontSize: 10,
     fontWeight: '600',
-    color: Palette.actionText,
+    color: c.textSecondary,
   },
   wordChipTextActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '700',
   },
   colorRow: {
@@ -624,12 +626,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: Palette.hairline,
-    backgroundColor: Palette.cardTop,
+    borderColor: c.hairline,
+    backgroundColor: c.fill,
   },
   colorBtnActive: {
-    borderColor: Palette.accent,
-    backgroundColor: '#E7F7F9',
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
   },
   colorDot: {
     width: 10,
@@ -638,21 +640,21 @@ const styles = StyleSheet.create({
   },
   colorText: {
     fontSize: 10,
-    color: Palette.actionText,
+    color: c.textSecondary,
     fontWeight: '500',
   },
   colorTextActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '700',
   },
   pick: {
     borderWidth: 1,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
     borderRadius: 8,
     padding: 10,
     alignItems: 'center',
   },
-  pickText: { color: Palette.accent, fontWeight: '600' },
+  pickText: { color: c.accent, fontWeight: '600' },
   locationGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -664,33 +666,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Palette.hairline,
-    backgroundColor: Palette.cardTop,
+    borderColor: c.hairline,
+    backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
   },
   locationBtnActive: {
-    borderColor: Palette.accent,
-    backgroundColor: '#E7F7F9',
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
   },
   alignmentDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Palette.hairline,
+    backgroundColor: c.hairline,
   },
   alignmentDotActive: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   locationLabel: {
     fontSize: 11,
     fontWeight: '500',
-    color: Palette.actionText,
+    color: c.textSecondary,
     textAlign: 'center',
   },
   locationLabelActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '700',
   },
   dragHintRow: {
@@ -704,12 +706,12 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   dragHintText: {
     flex: 1,
     fontSize: 11,
-    color: Palette.muted,
+    color: c.textMuted,
     lineHeight: 15,
   },
   chip: {
@@ -719,21 +721,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: Palette.hairline,
-    backgroundColor: Palette.cardTop,
+    borderColor: c.hairline,
+    backgroundColor: c.fill,
     alignItems: 'center',
   },
   chipActive: {
-    borderColor: Palette.accent,
-    backgroundColor: '#E7F7F9',
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
   },
   chipText: {
     fontSize: 11,
-    color: Palette.actionText,
+    color: c.textSecondary,
     fontWeight: '500',
   },
   chipTextActive: {
-    color: Palette.accent,
+    color: c.accent,
     fontWeight: '700',
   },
   seg: {
@@ -741,10 +743,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Palette.hairline,
+    borderColor: c.hairline,
   },
-  segOn: { borderColor: Palette.accent, backgroundColor: '#E7F7F9' },
-  segText: { fontSize: 12, color: Palette.actionText },
-  segTextOn: { color: Palette.accent, fontWeight: '600' },
-});
+  segOn: { borderColor: c.accent, backgroundColor: c.accentSoft },
+  segText: { fontSize: 12, color: c.textSecondary },
+  segTextOn: { color: c.accent, fontWeight: '600' },
+}));
 
