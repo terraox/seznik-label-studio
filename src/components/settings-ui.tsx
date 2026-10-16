@@ -248,10 +248,12 @@ export function SettingsSegmentGroup<T extends string>({
   options,
   selected,
   onSelect,
+  badgeFor,
 }: {
   options: readonly T[];
   selected: T;
   onSelect: (value: T) => void;
+  badgeFor?: (value: T) => string | null;
 }) {
   const styles = useStyles();
   return (
@@ -259,6 +261,7 @@ export function SettingsSegmentGroup<T extends string>({
       <View style={styles.segmentRow}>
         {options.map((option) => {
           const active = option === selected;
+          const badge = badgeFor?.(option) ?? null;
           return (
             <Pressable
               key={option}
@@ -268,6 +271,11 @@ export function SettingsSegmentGroup<T extends string>({
               <Text style={[styles.segmentText, active && styles.segmentTextActive]} numberOfLines={1}>
                 {option}
               </Text>
+              {badge ? (
+                <Text style={[styles.segmentBadge, active && styles.segmentBadgeActive]} numberOfLines={1}>
+                  {badge}
+                </Text>
+              ) : null}
             </Pressable>
           );
         })}
@@ -282,19 +290,26 @@ export function SettingsSegmentRow<T extends string>({
   selected,
   onSelect,
   showDivider,
+  badgeFor,
 }: {
   label: string;
   options: readonly T[];
   selected: T;
   onSelect: (value: T) => void;
   showDivider?: boolean;
+  badgeFor?: (value: T) => string | null;
 }) {
   const styles = useStyles();
   return (
     <>
       <View style={styles.segmentBlock}>
         <Text style={styles.rowLabel}>{label}</Text>
-        <SettingsSegmentGroup options={options} selected={selected} onSelect={onSelect} />
+        <SettingsSegmentGroup
+          options={options}
+          selected={selected}
+          onSelect={onSelect}
+          badgeFor={badgeFor}
+        />
       </View>
       {showDivider ? <SettingsDivider /> : null}
     </>
@@ -619,6 +634,16 @@ const useStyles = makeStyles((c, scheme) => ({
     textAlign: 'center',
   },
   segmentTextActive: {
+    color: c.onAccent,
+  },
+  segmentBadge: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: c.textMuted,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  segmentBadgeActive: {
     color: c.onAccent,
   },
   colorRow: {

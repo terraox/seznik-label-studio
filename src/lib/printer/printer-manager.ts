@@ -3256,6 +3256,25 @@ class PrinterManager {
     }
   }
 
+  /** Josh PrinterParam gap fields. Null when this build has no reader or the printer is not Josh. */
+  async readJoshGapReport(): Promise<{
+    available: boolean;
+    gapType: number;
+    gapLength: number;
+    supportedGapTypes: number[];
+    line: string;
+  } | null> {
+    if (!this.isJosh) return null;
+    const josh = this.getJosh();
+    if (!josh || typeof josh.readJoshGapReport !== 'function') return null;
+    try {
+      return await josh.readJoshGapReport();
+    } catch (error) {
+      console.warn('[printer] Josh gap report failed', error);
+      return null;
+    }
+  }
+
   /** Snapshot of internal state for the diagnostics screen. */
   getDiagnostics(): DiagnosticInfo {
     const connectionState = this.reconcileConnectionState();

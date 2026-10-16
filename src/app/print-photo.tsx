@@ -40,13 +40,20 @@ import {
 } from '@/lib/printer/print-job';
 import { printArtworkJob } from '@/lib/printer/universal-bridge';
 import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-manager';
+import {
+  PAPER_TYPES,
+  formatPaperTypeSetting,
+  paperPrinterId,
+  paperTypeCommand,
+  paperTypeSelectionNote,
+  paperTypeTestBadge,
+} from '@/lib/printer/paper-type';
 import { logPrintTrace } from '@/printing';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
-const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'] as const;
 const COLOR_MODES = ['Original', 'B & W', 'Halftone'] as const;
 
 type ColorMode = (typeof COLOR_MODES)[number];
@@ -122,16 +129,19 @@ function ChipGroup<T extends string>({
   options,
   selected,
   onSelect,
+  badgeFor,
 }: {
   options: readonly T[];
   selected: T;
   onSelect: (v: T) => void;
+  badgeFor?: (value: T) => string | null;
 }) {
   useThemeRefresh();
   return (
     <View style={styles.chipRow}>
       {options.map((option) => {
         const active = option === selected;
+        const badge = badgeFor?.(option) ?? null;
         return (
           <Pressable
             key={option}
@@ -144,6 +154,9 @@ function ChipGroup<T extends string>({
             <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
               {option}
             </Text>
+            {badge ? (
+              <Text style={[styles.chipBadge, active && styles.chipBadgeActive]}>{badge}</Text>
+            ) : null}
           </Pressable>
         );
       })}
@@ -357,12 +370,15 @@ export default function PrintPhotoScreen() {
       });
       timer.end('decode');
 
-      const media =
-        paperType === 'Receipt'
-          ? 'continuous'
-          : paperType === 'Black mark'
-            ? 'bline'
-            : 'gap';
+      const photoPaper = paperTypeCommand({
+        printer: paperPrinterId({ isJosh: manager.isJosh, isDev: manager.isDev }),
+        paperType,
+        gapMm: gapLength,
+      });
+      const media = photoPaper.media;
+      console.info(
+        `[PAPER-TYPE] ${photoPaper.printer} ${paperType} ${formatPaperTypeSetting(photoPaper)}`,
+      );
 
       timer.start('rasterize');
       if (flipH) {
@@ -408,7 +424,7 @@ export default function PrintPhotoScreen() {
         threshold,
         flipY: false,
         copies,
-        gapMm: gapLength,
+        gapMm: photoPaper.gapMm,
         mediaType: media,
         density: darkness,
         speed: speed ?? 6,
@@ -686,11 +702,20 @@ export default function PrintPhotoScreen() {
           <Text style={[styles.groupLabel, styles.groupSpaced]}>Orientation</Text>
           <ChipGroup options={ORIENTATIONS} selected={orientation} onSelect={setOrientation} />
           <Text style={[styles.groupLabel, styles.groupSpaced]}>Paper Type</Text>
-          <ChipGroup options={PAPER_TYPES} selected={paperType} onSelect={setPaperType} />
+          <ChipGroup
+            options={PAPER_TYPES}
+            selected={paperType}
+            onSelect={setPaperType}
+            badgeFor={(option) => paperTypeTestBadge(option)}
+          />
+          {paperTypeSelectionNote(paperType) ? (
+            <Text style={styles.paperNote}>{paperTypeSelectionNote(paperType)}</Text>
+          ) : null}
           <StepperRow
             label="Gap Length"
-            value={`${gapLength.toFixed(2)} mm`}
-            minusDisabled={gapLength <= 0}
+            value={`${(paperType === 'Receipt' ? 0 : gapLength).toFixed(2)} mm`}
+            minusDisabled={paperType === 'Receipt' || gapLength <= 0}
+            plusDisabled={paperType === 'Receipt' || gapLength >= 20}
             onMinus={() => setGapLength((v) => Math.max(0, Math.round((v - 0.5) * 100) / 100))}
             onPlus={() => setGapLength((v) => Math.min(20, Math.round((v + 0.5) * 100) / 100))}
             bordered
@@ -933,6 +958,9 @@ const styles = themedStyles((c, scheme) => ({
   chipActive: { backgroundColor: c.accentFill },
   chipText: { fontSize: 13, fontWeight: '500', color: c.textSecondary },
   chipTextActive: { color: c.onAccent },
+  chipBadge: { fontSize: 9, fontWeight: '700', color: c.textMuted, textAlign: 'center', marginTop: 2 },
+  chipBadgeActive: { color: c.onAccent },
+  paperNote: { fontSize: 12, color: c.textMuted, marginTop: 8 },
   sliderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

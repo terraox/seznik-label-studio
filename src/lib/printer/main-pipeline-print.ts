@@ -9,6 +9,11 @@ import {
   resolveQualityBridge,
 } from '@/lib/printer/bridge-quality-caps';
 import { grayToPngBase64 } from '@/lib/printer/escpos';
+import {
+  formatPaperTypeSetting,
+  paperPrinterId,
+  paperTypeCommand,
+} from '@/lib/printer/paper-type';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { joshEffectiveDpi, joshHeadlessRasterOptions, joshInkOffsetMm } from '@/lib/printer/josh-print';
 import { tryNativeSdkPngPrint } from '@/lib/printer/print-job';
@@ -142,7 +147,17 @@ export async function printLabelDocumentMainPipeline(
   const bakeOffset = manager.usesTd404CommandSet;
   const offsetH = bakeOffset ? 0 : printOffsetMm.x;
   const offsetV = bakeOffset ? 0 : printOffsetMm.y;
-  const media = 'gap' as const;
+  const printer = paperPrinterId({ isJosh: manager.isJosh, isDev: manager.isDev });
+  const paperCommand = paperTypeCommand({
+    printer,
+    paperType: doc.paperType,
+    gapMm,
+  });
+  const media = paperCommand.media;
+  const sentGapMm = paperCommand.gapMm;
+  console.info(
+    `[PAPER-TYPE] ${printer} ${doc.paperType} ${formatPaperTypeSetting(paperCommand)}`,
+  );
   const { bitmap, gray } = await rasterizeForPipeline(
     doc,
     jobDpi,
@@ -163,7 +178,7 @@ export async function printLabelDocumentMainPipeline(
       pngBase64,
       widthMm: doc.widthMm,
       heightMm: doc.heightMm,
-      gapMm,
+      gapMm: sentGapMm,
       copies,
       density:
         printDensity !== undefined && printDensity !== null
@@ -185,7 +200,7 @@ export async function printLabelDocumentMainPipeline(
       pngBase64,
       widthMm: doc.widthMm,
       heightMm: doc.heightMm,
-      gapMm,
+      gapMm: sentGapMm,
       copies,
       density: printDensity,
       speed: printSpeed,
@@ -209,7 +224,7 @@ export async function printLabelDocumentMainPipeline(
       bytesPerRow: bitmap.bytesPerRow,
       widthMm: doc.widthMm,
       heightMm: doc.heightMm,
-      gapMm,
+      gapMm: sentGapMm,
       copies,
       density: printDensity,
       speed: printSpeed,
@@ -223,7 +238,7 @@ export async function printLabelDocumentMainPipeline(
       pngBase64,
       widthMm: doc.widthMm,
       heightMm: doc.heightMm,
-      gapMm,
+      gapMm: sentGapMm,
       copies,
       density: printDensity,
       speed: printSpeed,
@@ -242,7 +257,7 @@ export async function printLabelDocumentMainPipeline(
       pngBase64,
       widthMm: doc.widthMm,
       heightMm: doc.heightMm,
-      gapMm,
+      gapMm: sentGapMm,
       copies,
       density: printDensity,
       speed: printSpeed,
@@ -266,7 +281,7 @@ export async function printLabelDocumentMainPipeline(
       bytesPerRow: bitmap.bytesPerRow,
       widthMm: doc.widthMm,
       heightMm: doc.heightMm,
-      gapMm,
+      gapMm: sentGapMm,
       copies,
       density: printDensity,
       speed: printSpeed,
@@ -280,7 +295,7 @@ export async function printLabelDocumentMainPipeline(
       pngBase64,
       widthMm: doc.widthMm,
       heightMm: doc.heightMm,
-      gapMm,
+      gapMm: sentGapMm,
       copies,
       density: printDensity,
       speed: printSpeed,

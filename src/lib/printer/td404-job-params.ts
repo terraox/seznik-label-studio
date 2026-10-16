@@ -4,6 +4,8 @@
  * (the module cannot send 1.5, and 8–12 are outside this head's TSPL range).
  */
 
+import { mediaForPaperType, paperTypeCommand } from '@/lib/printer/paper-type';
+
 export const TD404_DENSITY_MIN = 0;
 export const TD404_DENSITY_MAX = 15;
 export const TD404_DENSITY_DEFAULT = 10;
@@ -46,9 +48,7 @@ export function clampTd404GapMm(value: number | null | undefined, fallback = 2):
 
 /** Receipt is continuous. Black mark is BLINE. Every other stock is a gap label. */
 export function td404MediaForPaperType(paperType: string | null | undefined): Td404Media {
-  if (paperType === 'Receipt') return 'continuous';
-  if (paperType === 'Black mark') return 'bline';
-  return 'gap';
+  return mediaForPaperType(paperType);
 }
 
 export function resolveTd404JobParams(input: {
@@ -57,12 +57,15 @@ export function resolveTd404JobParams(input: {
   gapMm?: number | null;
   paperType?: string | null;
 }): Td404JobParams {
-  const media = td404MediaForPaperType(input.paperType);
-  const gapMm = media === 'continuous' ? 0 : clampTd404GapMm(input.gapMm);
+  const command = paperTypeCommand({
+    printer: 'td404',
+    paperType: input.paperType,
+    gapMm: input.gapMm,
+  });
   return {
     density: clampTd404Density(input.density),
     speed: clampTd404Speed(input.speed),
-    gapMm,
-    media,
+    gapMm: command.gapMm,
+    media: command.media,
   };
 }

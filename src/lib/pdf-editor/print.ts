@@ -15,6 +15,11 @@ import {
   sendIsolatedPrintCopies,
 } from '@/lib/printer/print-job';
 import { resolvePrintQuality } from '@/lib/printer/print-quality';
+import {
+  formatPaperTypeSetting,
+  paperPrinterId,
+  paperTypeCommand,
+} from '@/lib/printer/paper-type';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { printArtworkJob } from '@/lib/printer/universal-bridge';
 import { usePrinterStore } from '@/stores/printer-store';
@@ -88,10 +93,16 @@ export async function printEditedPdf(
     ),
   });
   const paper = settings.defaults.paperType;
-  const mediaType = paper === 'Receipt' ? 'continuous' : paper === 'Black mark' ? 'bline' : 'gap';
   const copies = Math.max(1, Math.round(options?.copies ?? 1));
   const dpi = manager.getPrintDpi();
   const gapMm = options?.gapMm ?? label.gapLengthMm;
+  const paperCommand = paperTypeCommand({
+    printer: paperPrinterId({ isJosh: manager.isJosh, isDev: manager.isDev }),
+    paperType: paper,
+    gapMm,
+  });
+  const mediaType = paperCommand.media;
+  console.info(`[PAPER-TYPE] ${paperCommand.printer} ${paper} ${formatPaperTypeSetting(paperCommand)}`);
   const hOffsetMm = options?.hOffsetMm ?? label.hOffsetMm;
   const vOffsetMm = options?.vOffsetMm ?? label.vOffsetMm;
 
@@ -143,7 +154,7 @@ export async function printEditedPdf(
         threshold: quality.threshold,
         alreadyBinarized,
         copies,
-        gapMm,
+        gapMm: paperCommand.gapMm,
         mediaType,
         density: quality.density,
         speed: quality.speed,
@@ -165,7 +176,7 @@ export async function printEditedPdf(
       const bytes = encodeConnectedPrinterJob(bits, {
         widthMm,
         heightMm,
-        gapMm,
+        gapMm: paperCommand.gapMm,
         copies: 1,
         density: quality.density,
         speed: quality.speed,

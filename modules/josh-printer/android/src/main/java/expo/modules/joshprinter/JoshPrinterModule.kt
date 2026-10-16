@@ -161,6 +161,21 @@ class JoshPrinterModule : Module() {
       }
     }
 
+    AsyncFunction("readPrinterGapReport") { promise: Promise ->
+      val mgr = getOrInitManager()
+      if (mgr == null) {
+        promise.resolve(mapOf("available" to false))
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        try {
+          promise.resolve(mgr.readPrinterGapReport())
+        } catch (e: Exception) {
+          promise.reject("ERR_JOSH_GAP", e.message ?: "Failed to read gap report", e)
+        }
+      }
+    }
+
     AsyncFunction("getBatteryLevel") { promise: Promise ->
       val mgr = getOrInitManager()
       if (mgr == null) {

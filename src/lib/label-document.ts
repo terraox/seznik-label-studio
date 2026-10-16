@@ -223,16 +223,25 @@ export function parseOrientation(value: string | undefined): LabelOrientation {
   return numeric === 90 || numeric === 180 || numeric === 270 ? numeric : 0;
 }
 
+const PAPER_TYPE_VALUES = new Set<string>([
+  'Receipt',
+  'Label',
+  'Cardstock',
+  'Transparent',
+  'Black mark',
+]);
+
+/**
+ * Read a stored or route paper type. A missing or unknown value is Label.
+ * An explicit Cardstock stays Cardstock — this does not rewrite saved labels.
+ */
+export function readPaperType(value: unknown): PaperType {
+  if (typeof value === 'string' && PAPER_TYPE_VALUES.has(value)) return value as PaperType;
+  return 'Label';
+}
+
 export function parsePaperType(value: string | undefined): PaperType {
-  if (
-    value === 'Receipt' ||
-    value === 'Label' ||
-    value === 'Transparent' ||
-    value === 'Black mark'
-  ) {
-    return value;
-  }
-  return 'Cardstock';
+  return readPaperType(value);
 }
 
 export function createLabelDocument(params: {
@@ -248,7 +257,7 @@ export function createLabelDocument(params: {
   background?: TemplateBackground;
 }): LabelDocument {
   const now = Date.now();
-  const paperType = params.paperType ?? 'Cardstock';
+  const paperType = params.paperType ?? 'Label';
   return {
     id: generateId('label'),
     name: params.name,

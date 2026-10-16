@@ -745,6 +745,7 @@ class JoshPrinterManager(private val context: Context) {
                     "timestamp" to System.currentTimeMillis(),
                 ))
                 scheduleDebugBatteryLogAfterConnect()
+                schedulePrinterGapReport()
                 return true
             }
             val liveMac = connectedMacAddress
@@ -1906,6 +1907,49 @@ class JoshPrinterManager(private val context: Context) {
     /**
      * LPAPI is created via [LPAPI.Factory.createInstance] with no custom [IDzPrinter] — shared DzPrinter singleton.
      */
+    fun schedulePrinterGapReport() {
+        mainHandler.postDelayed({
+            Thread({ logPrinterGapReport("connect") }, "josh-gap-report").start()
+        }, 500)
+    }
+
+    /**
+     * Printer-reported gap sensor. Does not hide paper types; the diagnostics screen shows the raw values.
+     * gapLength is the raw PrinterParam int (SDK units), not millimetres.
+     */
+    fun readPrinterGapReport(): Map<String, Any?> {
+        if (!isConnected()) {
+            return mapOf("available" to false)
+        }
+        val dz2 = IDzPrinter.Factory.getInstance() as? IDzPrinter2 ?: return mapOf("available" to false)
+        return try {
+            dz2.refreshPrinterParam()
+            val param = dz2.getPrinterParam() ?: return mapOf("available" to false)
+            val types = param.supportedGapTypes?.toList() ?: emptyList()
+            val line = "printer gapType=${param.gapType} gapLength=${param.gapLength} supportedGapTypes=${types.joinToString(",")}"
+            Log.i(TAG, line)
+            mapOf(
+                "available" to true,
+                "gapType" to param.gapType,
+                "gapLength" to param.gapLength,
+                "supportedGapTypes" to types,
+                "line" to line,
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "readPrinterGapReport failed", e)
+            mapOf("available" to false)
+        }
+    }
+
+    private fun logPrinterGapReport(reason: String) {
+        if (!isConnected()) {
+            Log.i(TAG, "printer gap report skipped ($reason): not connected")
+            return
+        }
+        val report = readPrinterGapReport()
+        Log.i(TAG, "printer gap report ($reason): ${report["line"] ?: "unavailable"}")
+    }
+
     fun scheduleDebugBatteryLogAfterConnect() {
         if (!isDebuggable()) return
         if (!batteryDebugScheduled.compareAndSet(false, true)) return
@@ -2003,6 +2047,7 @@ class JoshPrinterManager(private val context: Context) {
             "timestamp" to lastConnectedAt.get(),
         ))
         scheduleDebugBatteryLogAfterConnect()
+        schedulePrinterGapReport()
     }
 
     private fun handleDisconnected() {

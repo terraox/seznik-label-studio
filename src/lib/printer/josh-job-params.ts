@@ -5,6 +5,7 @@
  */
 
 import { JOSH_GAP_TYPE, joshGapTypeFromMedia } from '@/lib/printer/josh-print';
+import { mediaForPaperType, paperTypeCommand } from '@/lib/printer/paper-type';
 
 export const JOSH_GAP_MIN_MM = 0;
 export const JOSH_GAP_MAX_MM = 20;
@@ -45,9 +46,7 @@ export function clampJoshGapMm(value: number | null | undefined, fallback = JOSH
 
 /** Receipt is continuous. Black mark is LPAPI type 3. Every other stock is gap paper (type 2). */
 export function joshMediaForPaperType(paperType: string | null | undefined): JoshMedia {
-  if (paperType === 'Receipt') return 'continuous';
-  if (paperType === 'Black mark') return 'bline';
-  return 'gap';
+  return mediaForPaperType(paperType);
 }
 
 function lpapiDensityOrDefault(value: number | null | undefined): number {
@@ -67,15 +66,18 @@ export function resolveJoshJobParams(input: {
   paperType?: string | null;
   media?: JoshMedia | null;
 }): JoshJobParams {
-  const media = input.media ?? joshMediaForPaperType(input.paperType);
-  const gapType = joshGapTypeFromMedia(media);
-  const gapMm = media === 'continuous' ? 0 : clampJoshGapMm(input.gapMm);
+  const command = paperTypeCommand({
+    printer: 'josh',
+    paperType: input.paperType,
+    gapMm: input.gapMm,
+    media: input.media,
+  });
   return {
     density: lpapiDensityOrDefault(input.density),
     speed: lpapiSpeedOrDefault(input.speed),
-    gapMm,
-    gapType,
-    media,
+    gapMm: command.gapMm,
+    gapType: command.joshGapType,
+    media: command.media,
   };
 }
 

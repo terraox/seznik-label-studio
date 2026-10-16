@@ -547,14 +547,17 @@ class DevPrinterModule : Module() {
             ?: throw IllegalArgumentException("Could not decode PNG for print.")
 
           val useEscPos = commandSet != "tspl"
+          if (useEscPos && media == "bline") {
+            Log.w(TAG, "DEV ESC/POS has no black-mark command; feed uses the gap length")
+          }
           val feedDots = if (media == "continuous") 0 else Math.max(16, Math.min(48, Math.round(gapMm * 8.0).toInt()))
 
           val (jobBytes, wDots, hDots) = if (useEscPos) {
             Log.i(TAG, "Building ESC/POS raster job: ${widthMm}x${heightMm}mm feedDots=$feedDots offset=${hOffsetMm}x${vOffsetMm}mm head=${printheadWidthMm}mm...")
             buildEscPosRasterJob(decoded, widthMm, printheadWidthMm, hOffsetMm, vOffsetMm, feedDots, dither, threshold)
           } else {
-            Log.i(TAG, "Building TSPL label job: ${widthMm}x${heightMm}mm head=${printheadWidthMm}mm gap=${gapMm}mm copies=$copies offset=${hOffsetMm}x${vOffsetMm}mm density=$density speed=$speed threshold=$threshold...")
-            buildTsplPrintJob(decoded, widthMm, heightMm, printheadWidthMm, gapMm, copies, density, speed, hOffsetMm, vOffsetMm, dither, threshold)
+            Log.i(TAG, "Building TSPL label job: ${widthMm}x${heightMm}mm head=${printheadWidthMm}mm gap=${gapMm}mm media=$media copies=$copies offset=${hOffsetMm}x${vOffsetMm}mm density=$density speed=$speed threshold=$threshold...")
+            buildTsplPrintJob(decoded, widthMm, heightMm, printheadWidthMm, gapMm, copies, density, speed, hOffsetMm, vOffsetMm, dither, threshold, media)
           }
 
           if (!decoded.isRecycled) decoded.recycle()
@@ -728,9 +731,16 @@ class DevPrinterModule : Module() {
     return String.format(java.util.Locale.US, "%.2f", rounded)
   }
 
-  /**
-   * Hardware TSPL label job generator matching inventort-seznik's BluetoothTscPrinter.printLabel
-   */
+  /** TSPL sensor line. Continuous is GAP 0. Black mark is BLINE. ESC/POS has no black-mark command. */
+  private fun tsplMediaLine(media: String, gapMm: Double): String {
+    val gInt = Math.max(0, Math.round(gapMm).toInt())
+    return when (media) {
+      "bline" -> "BLINE $gInt mm,0 mm\r\n"
+      "continuous" -> "GAP 0 mm,0 mm\r\n"
+      else -> "GAP $gInt mm,0 mm\r\n"
+    }
+  }
+
   private fun buildTsplPrintJob(
     bitmap: Bitmap,
     widthMm: Double,
@@ -743,7 +753,8 @@ class DevPrinterModule : Module() {
     hOffsetMm: Double,
     vOffsetMm: Double,
     dither: Boolean = false,
-    threshold: Int = 160
+    threshold: Int = 160,
+    media: String = "gap",
   ): PrintJobResult {
     val dpm = 8.0 // 203 DPI = 8 dots/mm
     val rawW = Math.max(64, Math.round(widthMm * dpm).toInt())
@@ -833,14 +844,15 @@ class DevPrinterModule : Module() {
     // Declare SIZE as the true label dimensions matching physical stock (never artificially inflated)
     val sizeWidthMm = widthMm
     val sizeHeightMm = heightMm
-    val gInt = Math.max(0, Math.round(gapMm).toInt())
+    val mediaLine = tsplMediaLine(media, gapMm)
+    Log.i(TAG, "DEV paper type media=$media line=${mediaLine.trim()}")
 
     val sb = StringBuilder()
     sb.append("SPEED ").append(speed).append("\r\n")
     sb.append("DENSITY ").append(density).append("\r\n")
     sb.append("SIZE ").append(formatMm(sizeWidthMm)).append(" mm,")
       .append(formatMm(sizeHeightMm)).append(" mm\r\n")
-    sb.append("GAP ").append(gInt).append(" mm,0 mm\r\n")
+    sb.append(mediaLine)
     sb.append("DIRECTION 0\r\n")
     sb.append("REFERENCE 0,0\r\n")
     sb.append("SET TEAR ON\r\n")

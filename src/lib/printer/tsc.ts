@@ -7,10 +7,10 @@ import type { BitRaster } from '@/lib/printer/escpos';
 import {
   DEFAULT_PRINTER_PROFILE,
   dotsPerMm,
-  formatTsplMm,
   formatTsplSizeCommand,
   mediaOriginXMm,
 } from '@/lib/printer/print-spec';
+import { td404MediaLine, type PaperMedia } from '@/lib/printer/paper-type';
 import { clampTd404Density, clampTd404GapMm, clampTd404Speed } from '@/lib/printer/td404-job-params';
 
 export type TscJobOptions = {
@@ -50,10 +50,8 @@ function ascii(s: string): Uint8Array {
 }
 
 function mediaCommand(media: TscJobOptions['media'], gapMm: number): string {
-  const g = formatTsplMm(gapMm);
-  if (media === 'bline') return `BLINE ${g} mm,0 mm\r\n`;
-  if (media === 'continuous') return `GAP 0.00 mm,0 mm\r\n`;
-  return `GAP ${g} mm,0 mm\r\n`;
+  const kind: PaperMedia = media === 'bline' || media === 'continuous' ? media : 'gap';
+  return td404MediaLine(kind, gapMm);
 }
 
 /**
@@ -288,7 +286,7 @@ export function encodeTscTextSample(options: {
   const cmd =
     '\r\n' +
     `${formatTsplSizeCommand(widthMm, heightMm)}\r\n` +
-    `GAP ${formatTsplMm(gapMm)} mm,0 mm\r\n` +
+    td404MediaLine('gap', gapMm) +
     'SPEED 5\r\n' +
     `DENSITY ${density}\r\n` +
     'DIRECTION 0,0\r\n' +

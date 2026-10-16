@@ -26,7 +26,8 @@ import { IosAlertInput, IosAlertModal } from '@/components/ui/ios-alert-modal';
 import { editorBridge, isBorderRemoval } from '@/constants/editor-bridge';
 import { DRAWING_COLORS } from '@/components/editor/types';
 import { borderBoxForCenterGap } from '@/lib/border-geometry';
-import { generateId, parseOrientation, type LabelDocument, type LabelOrientation, type PaperType } from '@/lib/label-document';
+import { generateId, parseOrientation, readPaperType, type LabelDocument, type LabelOrientation, type PaperType } from '@/lib/label-document';
+import { paperTypeSelectionNote, paperTypeTestBadge } from '@/lib/printer/paper-type';
 import { clampLabelMm } from '@/lib/label-geometry';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import {
@@ -361,18 +362,19 @@ export default function LabelSettingsScreen() {
         <SettingsSegmentRow
           label="Paper Type"
           options={PAPER_TYPES}
-          selected={
-            PAPER_TYPES.includes(doc.paperType as (typeof PAPER_TYPES)[number])
-              ? (doc.paperType as (typeof PAPER_TYPES)[number])
-              : 'Label'
-          }
+          selected={readPaperType(doc.paperType)}
+          badgeFor={(option) => paperTypeTestBadge(option)}
           onSelect={(paperType) => commit({ paperType: paperType as PaperType })}
           showDivider
         />
+        {paperTypeSelectionNote(readPaperType(doc.paperType)) ? (
+          <SettingsNote>{paperTypeSelectionNote(readPaperType(doc.paperType)) ?? ''}</SettingsNote>
+        ) : null}
         <SettingsStepperRow
           label="Gap Length"
-          value={`${settings.gapLengthMm.toFixed(1)} mm`}
-          minusDisabled={settings.gapLengthMm <= 0}
+          value={`${(readPaperType(doc.paperType) === 'Receipt' ? 0 : settings.gapLengthMm).toFixed(1)} mm`}
+          minusDisabled={readPaperType(doc.paperType) === 'Receipt' || settings.gapLengthMm <= 0}
+          plusDisabled={readPaperType(doc.paperType) === 'Receipt' || settings.gapLengthMm >= 20}
           onMinus={() =>
             patchSettings({
               gapLengthMm: Math.max(0, Math.round((settings.gapLengthMm - 0.5) * 10) / 10),

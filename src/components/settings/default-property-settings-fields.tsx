@@ -4,6 +4,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { LabelDimensionModal } from '@/components/label-dimension-modal';
 import {
   SettingsCard,
+  SettingsNote,
   SettingsSectionLabel,
   SettingsSegmentRow,
   SettingsStepperRow,
@@ -13,13 +14,13 @@ import {
 import { formatLiveDate, formatLiveTime } from '@/components/editor/types';
 import { BARCODE_MODES } from '@/lib/barcode-code128';
 import type { LabelUnit } from '@/lib/label-geometry';
-import { parseOrientation, type LabelOrientation, type PaperType } from '@/lib/label-document';
+import { parseOrientation, readPaperType, type LabelOrientation, type PaperType } from '@/lib/label-document';
+import { PAPER_TYPES, paperTypeSelectionNote, paperTypeTestBadge } from '@/lib/printer/paper-type';
 import { useSettingsStore } from '@/stores/settings-store';
 import { androidRipple } from '@/constants/ui';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
-const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent'] as const;
 const WRAP_MODES = ['Close', 'Char', 'Word'] as const;
 const QR_LEVELS = ['L', 'M', 'Q', 'H'] as const;
 const QR_ZONES = ['0', '2', '4'] as const;
@@ -44,9 +45,7 @@ export function DefaultPropertySettingsFields() {
   }, []);
 
   const orientation = `${defaults.orientation}°` as (typeof ORIENTATIONS)[number];
-  const paperType = PAPER_TYPES.includes(defaults.paperType as (typeof PAPER_TYPES)[number])
-    ? (defaults.paperType as (typeof PAPER_TYPES)[number])
-    : 'Label';
+  const paperType = readPaperType(defaults.paperType);
 
   return (
     <>
@@ -77,8 +76,12 @@ export function DefaultPropertySettingsFields() {
           label="Paper Type"
           options={PAPER_TYPES}
           selected={paperType}
+          badgeFor={(option) => paperTypeTestBadge(option)}
           onSelect={(value) => patchDefaults({ paperType: value as PaperType })}
         />
+        {paperTypeSelectionNote(paperType) ? (
+          <SettingsNote>{paperTypeSelectionNote(paperType) ?? ''}</SettingsNote>
+        ) : null}
       </SettingsCard>
 
       <SettingsSectionLabel>Font</SettingsSectionLabel>

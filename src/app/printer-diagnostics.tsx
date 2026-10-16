@@ -20,7 +20,14 @@ import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import type { PaperType } from '@/lib/label-document';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
+import {
+  PAPER_TYPE_TEST_PHOTO,
+  activePaperTypeTestPrinter,
+  paperTypeTestRows,
+  printPaperTypeTestRow,
+} from '@/lib/printer/paper-type-test-sheet';
 import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
 import { GRID_SPACING_PRESETS_MM } from '@/lib/editor/canvas-grid';
 import {
@@ -94,6 +101,7 @@ export default function PrinterDiagnosticsScreen() {
     String(suggestedDiagnosticGridSpacingMm(DIAGNOSTIC_GRID_SIZE_PRESETS[0].widthMm, DIAGNOSTIC_GRID_SIZE_PRESETS[0].heightMm)),
   );
   const [gridTestOpen, setGridTestOpen] = useState(false);
+  const [gapReportLine, setGapReportLine] = useState<string | null>(null);
 
   const gridPreset = useMemo(
     () => DIAGNOSTIC_GRID_SIZE_PRESETS.find((p) => p.id === gridPresetId) ?? DIAGNOSTIC_GRID_SIZE_PRESETS[0],
@@ -133,6 +141,16 @@ export default function PrinterDiagnosticsScreen() {
         usePrinterStore.getState().status === 'printing'
       ) {
         void getPrinterManager().refreshBattery({ force: true });
+        if (getPrinterManager().isJosh) {
+          void getPrinterManager()
+            .readJoshGapReport()
+            .then((report) => {
+              setGapReportLine(report?.line ?? 'printer gapType=unknown supportedGapTypes=unknown');
+            })
+            .catch(() => {
+              setGapReportLine('printer gapType=unknown supportedGapTypes=unknown');
+            });
+        }
       }
     }, [refresh]),
   );
@@ -163,6 +181,20 @@ export default function PrinterDiagnosticsScreen() {
       log(result.alreadyConnected ? 'Already connected.' : `Reconnected in ${result.reconnectMs} ms.`);
     } catch (error) {
       fail('Connection test failed', error);
+    } finally {
+      setBusy(null);
+      refresh();
+    }
+  };
+
+  const printPaperRow = async (paperType: PaperType) => {
+    setBusy(`paper-${paperType}`);
+    try {
+      log(`Printing paper type ${paperType}…`);
+      const setting = await printPaperTypeTestRow(paperType);
+      log(`Sent ${paperType}: ${setting}`);
+    } catch (error) {
+      fail('Paper type test failed', error);
     } finally {
       setBusy(null);
       refresh();
@@ -466,6 +498,39 @@ export default function PrinterDiagnosticsScreen() {
           </View>
 
           <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Paper type test</Text>
+            <Text style={styles.sizeHint}>{PAPER_TYPE_TEST_PHOTO}</Text>
+            {activePaperTypeTestPrinter() === 'josh' ? (
+              <Text style={styles.monoNote}>
+                {gapReportLine ?? 'printer gapType=… supportedGapTypes=…'}
+              </Text>
+            ) : null}
+            {activePaperTypeTestPrinter() === 'dev' ? (
+              <Text style={styles.sizeHint}>
+                Dev sends GAP, GAP 0, or BLINE only after a native rebuild. ESC/POS has no black-mark command.
+              </Text>
+            ) : null}
+            {activePaperTypeTestPrinter() == null ? (
+              <Text style={styles.sizeHint}>Connect a Josh, TD-404, or Dev printer. Label X and Tez are not tested.</Text>
+            ) : (
+              paperTypeTestRows(activePaperTypeTestPrinter()!).map((row) => (
+                <View key={row.paperType} style={styles.paperRow}>
+                  <Text style={styles.paperTitle}>{row.paperType}</Text>
+                  <Text style={styles.monoNote}>{row.setting}</Text>
+                  <Text style={styles.sizeHint}>{row.expect}</Text>
+                  <ActionButton
+                    label={`Print ${row.paperType}`}
+                    icon="printer"
+                    busy={busy === `paper-${row.paperType}`}
+                    disabled={busy !== null || !linked}
+                    onPress={() => void printPaperRow(row.paperType)}
+                  />
+                </View>
+              ))
+            )}
+          </View>
+
+          <View style={styles.card}>
             <Text style={styles.sectionTitle}>Actions</Text>
             <ActionButton
               label="Reconnect last printer"
@@ -653,6 +718,14 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 16,
     fontWeight: '600',
     color: c.text,
+  },
+  paperRow: { gap: 4, marginTop: 12 },
+  paperTitle: { fontSize: 15, fontWeight: '600', color: c.text },
+  monoNote: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    color: c.textSecondary,
+    marginTop: 4,
   },
   sizeHint: { fontSize: 12, color: c.textMuted },
   diagRow: {

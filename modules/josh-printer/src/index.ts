@@ -104,6 +104,13 @@ type NativeJoshPrinter = {
   printMonoLabel?(monoBytes: Uint8Array, options: Record<string, unknown>): Promise<JoshPrintResult>;
   getBondedDevices?(): Promise<JoshDevice[]>;
   getBatteryLevel(): Promise<number>;
+  readPrinterGapReport(): Promise<{
+    available?: boolean;
+    gapType?: number;
+    gapLength?: number;
+    supportedGapTypes?: number[];
+    line?: string;
+  }>;
   debugLogBattery?(): Promise<void>;
   addListener(
     eventName: string,
@@ -364,6 +371,37 @@ export async function printJoshPngLabel(
     vOffsetMm: options.vOffsetMm ?? 0,
     alignment: options.alignment ?? 'left',
   });
+}
+
+export type JoshGapReport = {
+  available: boolean;
+  gapType: number;
+  gapLength: number;
+  supportedGapTypes: number[];
+  /** `printer gapType=… gapLength=… supportedGapTypes=…` */
+  line: string;
+};
+
+export async function readJoshGapReport(): Promise<JoshGapReport | null> {
+  const mod = getNative();
+  if (!mod || typeof mod.readPrinterGapReport !== 'function') return null;
+  const report = await mod.readPrinterGapReport();
+  if (!report?.available) return null;
+  const types = Array.isArray(report.supportedGapTypes)
+    ? report.supportedGapTypes.map((value) => Number(value)).filter((value) => Number.isFinite(value))
+    : [];
+  const gapType = Number(report.gapType);
+  const gapLength = Number(report.gapLength);
+  const line =
+    report.line ??
+    `printer gapType=${gapType} gapLength=${gapLength} supportedGapTypes=${types.join(',')}`;
+  return {
+    available: true,
+    gapType,
+    gapLength,
+    supportedGapTypes: types,
+    line,
+  };
 }
 
 export async function printJoshTestText(text?: string): Promise<boolean> {

@@ -66,6 +66,7 @@ import {
   generateId,
   mmToPt,
   composeUpsDocument,
+  readPaperType,
   type LabelDocument,
   type LabelOrientation,
   type PaperType,
@@ -86,6 +87,14 @@ import {
 } from '@/lib/printer/print-job';
 import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-manager';
 import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
+import {
+  PAPER_TYPES,
+  formatPaperTypeSetting,
+  paperPrinterId,
+  paperTypeCommand,
+  paperTypeSelectionNote,
+  paperTypeTestBadge,
+} from '@/lib/printer/paper-type';
 import { resolveTd404JobParams } from '@/lib/printer/td404-job-params';
 import {
   createPrintSpec,
@@ -141,7 +150,6 @@ import { logCaptureSha1 } from '@/lib/debug/capture-hash';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
-const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'] as const;
 
 function buildScanDocument(
   scanType: string,
@@ -350,16 +358,19 @@ function ChipGroup<T extends string>({
   options,
   selected,
   onSelect,
+  badgeFor,
 }: {
   options: readonly T[];
   selected: T;
   onSelect: (value: T) => void;
+  badgeFor?: (value: T) => string | null;
 }) {
   useThemeRefresh();
   return (
     <View style={styles.chipRow}>
       {options.map((option) => {
         const active = option === selected;
+        const badge = badgeFor?.(option) ?? null;
         return (
           <Pressable
             key={option}
@@ -367,12 +378,18 @@ function ChipGroup<T extends string>({
             hitSlop={8}
             style={({ pressed }) => [
               styles.chip,
+              badgeFor ? styles.chipWithBadge : null,
               active && styles.chipActive,
               pressed && styles.pressed,
             ]}>
             <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
               {option}
             </Text>
+            {badge ? (
+              <Text style={[styles.chipBadge, active && styles.chipBadgeActive]} numberOfLines={1}>
+                {badge}
+              </Text>
+            ) : null}
           </Pressable>
         );
       })}
@@ -600,7 +617,7 @@ export default function PrintScreen() {
     setDarkness(settings.printDarkness);
     setSpeed(settings.printSpeed);
     setOrientation(`${sourceDocument.orientation}°` as (typeof ORIENTATIONS)[number]);
-    setPaperType(sourceDocument.paperType);
+    setPaperType(readPaperType(sourceDocument.paperType));
   }, [sourceDocument]);
 
   // Darkness / speed changed in Label Settings while this screen stays mounted.
@@ -901,12 +918,21 @@ export default function PrintScreen() {
       setPrinting(true);
       try {
         const targetSelection = pageCount > 1 ? pageIndex : 'all';
+        const pdfPaper = paperTypeCommand({
+          printer: paperPrinterId({ isJosh: manager.isJosh, isDev: manager.isDev }),
+          paperType,
+          gapMm: gapLength,
+        });
+        console.info(
+          `[PAPER-TYPE] ${pdfPaper.printer} ${paperType} ${formatPaperTypeSetting(pdfPaper)}`,
+        );
         await printPdfToThermal(pdfPages, {
           pageSelection: targetSelection,
           copies,
           density: darkness ?? 10,
           speed: speed ?? 3,
-          gapMm: gapLength,
+          gapMm: pdfPaper.gapMm,
+          mediaType: pdfPaper.media,
           docName: jobName,
         });
 
@@ -1273,22 +1299,17 @@ export default function PrintScreen() {
           });
         }
 
-        const media =
-          paperType === 'Receipt'
-            ? 'continuous'
-            : paperType === 'Black mark'
-              ? 'bline'
-              : 'gap';
-        const wantsBline =
-          media === 'bline' ||
-          /black\s*mark/i.test(jobName) ||
-          pageDoc?.elements.some(
-            (el) =>
-              (el.type === 'text' || el.type === 'degrees') &&
-              /black\s*mark/i.test(
-                'text' in el ? String(el.text) : 'content' in el ? String(el.content) : '',
-              ),
-          );
+        const paperCommand = paperTypeCommand({
+          printer: paperPrinterId({ isJosh: manager.isJosh, isDev: manager.isDev }),
+          paperType,
+          gapMm: gapLength,
+          labelName: jobName,
+        });
+        const media = paperCommand.media;
+        const sentGapMm = paperCommand.gapMm;
+        console.info(
+          `[PAPER-TYPE] ${paperCommand.printer} ${paperType} ${formatPaperTypeSetting(paperCommand)}`,
+        );
 
         const td404Job = manager.usesTd404CommandSet
           ? resolveTd404JobParams({
@@ -1304,7 +1325,6 @@ export default function PrintScreen() {
               speed: printSpeed,
               gapMm: gapLength,
               paperType,
-              media: wantsBline ? 'bline' : media,
             })
           : null;
 
@@ -1328,7 +1348,7 @@ export default function PrintScreen() {
             speed: printSpeed,
             hOffsetMm: offsetH,
             vOffsetMm: offsetV,
-            media: wantsBline ? 'bline' : media,
+            media: media,
             threshold,
             dither,
           });
@@ -1354,7 +1374,7 @@ export default function PrintScreen() {
             dpi: jobDpi,
             hOffsetMm: offsetH,
             vOffsetMm: offsetV,
-            media: wantsBline ? 'bline' : media,
+            media: media,
             threshold: jewelryDieCutJob ? Math.max(threshold, 168) : threshold,
           });
           usedNative = true;
@@ -1389,7 +1409,7 @@ export default function PrintScreen() {
                 speed: joshJob?.speed ?? printSpeed,
                 hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
                 vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
-                media: joshJob?.media ?? (wantsBline ? 'bline' : media),
+                media: joshJob?.media ?? media,
                 dpi: jobDpi,
               });
               if (!usedNative) {
@@ -1416,7 +1436,7 @@ export default function PrintScreen() {
                 dpi: jobDpi,
                 hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
                 vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
-                media: joshJob?.media ?? (wantsBline ? 'bline' : media),
+                media: joshJob?.media ?? media,
                 alignment: manager.getActivePrinterProfile().alignment,
               });
               usedNative = true;
@@ -1450,7 +1470,7 @@ export default function PrintScreen() {
                 dpi: jobDpi,
                 hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
                 vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
-                media: joshJob?.media ?? (wantsBline ? 'bline' : media),
+                media: joshJob?.media ?? media,
                 alignment: manager.getActivePrinterProfile().alignment,
               });
               usedNative = true;
@@ -1469,14 +1489,14 @@ export default function PrintScreen() {
               pngBase64: rotatedBase64,
               widthMm: paper.widthMm,
               heightMm: paper.heightMm,
-              gapMm: gapLength,
+              gapMm: sentGapMm,
               copies: sendCopies,
               density: darkness != null ? printDensity : 14,
               speed: speed != null ? printSpeed : 3,
               threshold,
               vOffsetMm: offsetV,
               hOffsetMm: offsetH,
-              media: wantsBline ? 'bline' : media,
+              media: media,
               orientation: 0,
               dpi: jobDpi,
               dither,
@@ -1523,7 +1543,7 @@ export default function PrintScreen() {
                 speed: td404Job?.speed ?? printSpeed,
                 vOffsetMm: offsetV,
                 hOffsetMm: offsetH,
-                media: td404Job?.media ?? (wantsBline ? 'bline' : media),
+                media: td404Job?.media ?? media,
                 dpi: jobDpi,
               });
               const nativeCallMs = Date.now() - tNative0;
@@ -1577,7 +1597,7 @@ export default function PrintScreen() {
                 speed: td404Job?.speed ?? printSpeed,
                 vOffsetMm: offsetV,
                 hOffsetMm: offsetH,
-                media: td404Job?.media ?? (wantsBline ? 'bline' : media),
+                media: td404Job?.media ?? media,
                 dpi: jobDpi,
               });
               const nativeCallMs = Date.now() - tNative0;
@@ -1623,7 +1643,7 @@ export default function PrintScreen() {
                 speed: td404Job?.speed ?? printSpeed,
                 vOffsetMm: offsetV,
                 hOffsetMm: offsetH,
-                media: td404Job?.media ?? (wantsBline ? 'bline' : media),
+                media: td404Job?.media ?? media,
                 orientation: 0,
                 dpi: jobDpi,
               });
@@ -1701,7 +1721,7 @@ export default function PrintScreen() {
                 speed: td404Job?.speed ?? printSpeed,
                 vOffsetMm: offsetV,
                 hOffsetMm: offsetH,
-                media: td404Job?.media ?? (wantsBline ? 'bline' : media),
+                media: td404Job?.media ?? media,
                 orientation: 0,
                 dpi: jobDpi,
               }).catch(() => false);
@@ -1745,7 +1765,7 @@ export default function PrintScreen() {
             speed: td404Job?.speed ?? printSpeed,
             vOffsetMm: offsetV,
             hOffsetMm: offsetH,
-            media: td404Job?.media ?? (wantsBline ? 'bline' : media),
+            media: td404Job?.media ?? media,
             dpi: jobDpi,
           });
           timer.end('encode');
@@ -2088,7 +2108,15 @@ export default function PrintScreen() {
 
             <View style={styles.cardSection}>
               <Text style={styles.groupLabel}>Paper Type</Text>
-              <ChipGroup options={PAPER_TYPES} selected={paperType} onSelect={changePaperType} />
+              <ChipGroup
+                options={PAPER_TYPES}
+                selected={paperType}
+                onSelect={changePaperType}
+                badgeFor={(option) => paperTypeTestBadge(option)}
+              />
+              {paperTypeSelectionNote(paperType) ? (
+                <Text style={styles.helperText}>{paperTypeSelectionNote(paperType)}</Text>
+              ) : null}
               {jewelryDieCutJob ? (
                 <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
                   💡 Clear-liner jewelry rolls with black timing lines on the back require Paper Type set to "Black mark". If prints skip or overlap, run "Calibrate Paper Sensor" in Printer Connect.
@@ -2187,8 +2215,9 @@ export default function PrintScreen() {
                 ) : null}
                 <StepperRow
                   label="Gap Length"
-                  value={`${gapLength.toFixed(2)} mm`}
-                  minusDisabled={gapLength <= 0}
+                  value={`${(paperType === 'Receipt' ? 0 : gapLength).toFixed(2)} mm`}
+                  minusDisabled={paperType === 'Receipt' || gapLength <= 0}
+                  plusDisabled={paperType === 'Receipt' || gapLength >= 20}
                   onMinus={() => changeGapLength(Math.max(0, Math.round((gapLength - 0.5) * 100) / 100))}
                   onPlus={() => changeGapLength(Math.min(20, Math.round((gapLength + 0.5) * 100) / 100))}
                   bordered
@@ -2598,6 +2627,18 @@ const styles = themedStyles((c, scheme) => ({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+  },
+  chipWithBadge: {
+    height: 48,
+  },
+  chipBadge: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: c.textMuted,
+    marginTop: 1,
+  },
+  chipBadgeActive: {
+    color: c.onAccent,
   },
   chipActive: {
     backgroundColor: c.accentFill,
