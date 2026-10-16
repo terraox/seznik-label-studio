@@ -6,9 +6,28 @@ export const SPLASH_FRAMES = 180; // 3.0 s
 const SPEED = 6.6 / (SPLASH_FRAMES / SPLASH_FPS);
 export const SPLASH_SIZE = 1254;
 
-const BG = '#fefefe';
-const NAVY = '#11275a';
 const CYAN = '#12b4ff';
+
+/**
+ * One animation, two themes. Both draw exactly the same frames from the same layers — these three
+ * colours are the only difference between them, so nothing moves, fades or gains an edge in one
+ * theme that it does not have in the other. The paper stays white in both, because paper is the
+ * one thing that really is white.
+ */
+export type SplashProps = { dark?: boolean };
+
+const PALETTE = {
+  light: {
+    bg: '#fefefe',
+    body: '#11275a', // printer shell, and the opening the label feeds from
+    ink: '#0e2455', // SEZNIK / INDIA
+  },
+  dark: {
+    bg: '#000000',
+    body: '#2b4a8a',
+    ink: '#e9eefb',
+  },
+} as const;
 
 // Coordinates below are in logo.png pixels (1254 x 1254).
 const SLOT_Y = 577; // where the label leaves the printer
@@ -64,8 +83,25 @@ const range = (frame: number, fromS: number, toS: number, easing = Easing.out(Ea
 
 const fill = { position: 'absolute', left: 0, top: 0, width: SPLASH_SIZE, height: SPLASH_SIZE } as const;
 
-export const Splash = () => {
+// The swoosh and the wordmark, with the white paper lifted into alpha. Drawn over #fefefe it is
+// the original artwork again, so both themes can share the one file.
+const INK_ART = 'swoosh-ink.png';
+
+/** Paint `color` through the alpha of `file`, so flat art can be recoloured per theme. */
+const stencil = (file: string, color: string) =>
+  ({
+    WebkitMaskImage: `url(${staticFile(file)})`,
+    maskImage: `url(${staticFile(file)})`,
+    WebkitMaskSize: '100% 100%',
+    maskSize: '100% 100%',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    backgroundColor: color,
+  }) as const;
+
+export const Splash = ({ dark = false }: SplashProps) => {
   const frame = useCurrentFrame();
+  const p = dark ? PALETTE.dark : PALETTE.light;
   const t = (frame / SPLASH_FPS) * SPEED; // design time
   const realT = frame / SPLASH_FPS; // for wobble, so it does not speed up with everything else
 
@@ -104,9 +140,10 @@ export const Splash = () => {
   const settle = 1 + 0.01 * Math.sin(range(frame, 6.0, 6.6, Easing.linear) * Math.PI);
 
   const paperClip = (extra: object) => ({ ...fill, ...extra });
+  const wordmarkClip = { clipPath: `inset(0 0 ${SPLASH_SIZE - 1130}px 0)` };
 
   return (
-    <AbsoluteFill style={{ backgroundColor: BG }}>
+    <AbsoluteFill style={{ backgroundColor: p.bg }}>
       <div style={{ ...fill, transform: `translateY(-55px) scale(${settle})`, transformOrigin: '50% 50%' }}>
         {/* Swoosh: the logo with the printer removed and the label painted out. */}
         <div
@@ -117,14 +154,14 @@ export const Splash = () => {
             maskImage: wipeMask,
           }}
         >
-          <Img src={staticFile('swoosh.png')} style={fill} />
+          <Img src={staticFile(INK_ART)} style={fill} />
           <svg width={SPLASH_SIZE} height={SPLASH_SIZE} style={fill}>
-            <polygon points={LABEL_HOLE_POINTS} fill={BG} />
-            <path d={PANEL_PATH} fill={BG} stroke={BG} strokeWidth={PANEL_WHITEOUT_WIDTH} strokeLinejoin="round" />
+            <polygon points={LABEL_HOLE_POINTS} fill={p.bg} />
+            <path d={PANEL_PATH} fill={p.bg} stroke={p.bg} strokeWidth={PANEL_WHITEOUT_WIDTH} strokeLinejoin="round" />
           </svg>
         </div>
 
-        {/* Printer body: flat navy, builds up from the bottom. */}
+        {/* Printer body: one flat colour, builds up from the bottom. */}
         <div
           style={{
             ...fill,
@@ -133,7 +170,7 @@ export const Splash = () => {
             transform: `translateY(${bodyRise}px)`,
           }}
         >
-          <Img src={staticFile('printer-body.png')} style={fill} />
+          <div style={{ ...fill, ...stencil('printer-body.png', p.body) }} />
           {/* Status light: dim when idle, bright while printing. */}
           <div
             style={{
@@ -163,7 +200,7 @@ export const Splash = () => {
 
         {/* Front opening, drawn in left to right. */}
         <svg width={SPLASH_SIZE} height={SPLASH_SIZE} style={{ ...fill, clipPath: `inset(0 ${SPLASH_SIZE - (608 + panelW)}px 0 0)` }}>
-          <path d={PANEL_PATH} fill={NAVY} />
+          <path d={PANEL_PATH} fill={p.body} />
         </svg>
 
         {/* Blank label, clipped at the slot so it comes out from inside the printer. */}
@@ -224,7 +261,8 @@ export const Splash = () => {
 
         {/* SEZNIK + INDIA, printed row by row. */}
         <div style={paperClip({ clipPath: `inset(${TEXT_TOP}px 0 ${SPLASH_SIZE - rowY}px 0)` })}>
-          <Img src={staticFile('logo.png')} style={paperClip({ clipPath: `inset(0 0 ${SPLASH_SIZE - 1130}px 0)` })} />
+          {/* The wordmark is flat in the artwork, so stencilling it changes nothing but its colour. */}
+          <div style={paperClip({ ...wordmarkClip, ...stencil(INK_ART, p.ink) })} />
           <div
             style={{
               position: 'absolute',
@@ -247,8 +285,8 @@ export const Splash = () => {
                 fontSize: 92,
                 letterSpacing: 30,
                 paddingLeft: 30,
-                WebkitTextStroke: `3px ${NAVY}`,
-                color: NAVY,
+                WebkitTextStroke: `3px ${p.ink}`,
+                color: p.ink,
                 lineHeight: 1,
               }}
             >

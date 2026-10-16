@@ -3,21 +3,32 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 
-import { makeStyles } from '@/theme';
+import { makeStyles, useScheme, useSettingsHydrated } from '@/theme';
 
-// Rendered from splash-remotion/ (`npm run render` in that folder).
-const SPLASH_ANIMATION = require('../../assets/images/splash-animation.webp');
+// Rendered from splash-remotion/ (`npm run render` in that folder). Same animation, drawn on the
+// theme's own background, so neither theme shows the other one's backdrop.
+const SPLASH_ANIMATION = {
+  light: require('../../assets/images/splash-animation.webp'),
+  dark: require('../../assets/images/splash-animation-dark.webp'),
+};
 // The WebP is ~3.0 s and plays once (loop count 1), then holds on its last frame.
 const PLAY_MS = 3000;
 const FADE_MS = 120;
 // Hold on the finished logo for 0.6 s; the app mounts behind the opaque splash meanwhile, so the
 // fade reveals a drawn home screen instead of a blank one.
 const HANDOFF_MS = 600;
+// If the image never reports loading (or the saved theme never arrives), don't leave the user
+// stuck on the native splash.
+const GIVE_UP_MS = 1500;
 
 /** Plays the "label getting printed" logo animation over the app, then fades out. Tap to skip. */
 export function AnimatedSplash({ onFinish, onDone }: { onFinish: () => void; onDone: () => void }) {
   const { width, height } = useWindowDimensions();
   const styles = useStyles();
+  const scheme = useScheme();
+  // Swapping the source mid-play would restart the WebP against a timer that is already running,
+  // so the animation only starts once the saved theme is in and the choice is final.
+  const themeReady = useSettingsHydrated();
   const size = Math.min(width * 0.9, height * 0.6);
   const opacity = useRef(new Animated.Value(1)).current;
   const started = useRef(false);
@@ -50,8 +61,7 @@ export function AnimatedSplash({ onFinish, onDone }: { onFinish: () => void; onD
   }, [finish]);
 
   useEffect(() => {
-    // If the image never reports loading, don't leave the user stuck on the native splash.
-    const fallback = setTimeout(start, 800);
+    const fallback = setTimeout(start, GIVE_UP_MS);
     return () => clearTimeout(fallback);
   }, [start]);
 
@@ -60,18 +70,20 @@ export function AnimatedSplash({ onFinish, onDone }: { onFinish: () => void; onD
       pointerEvents={blocking ? 'auto' : 'none'}
       style={[StyleSheet.absoluteFill, styles.root, { opacity }]}>
       <Pressable style={styles.fill} onPress={finish} disabled={!blocking}>
-        <Image
-          source={SPLASH_ANIMATION}
-          style={{ width: size, height: size }}
-          contentFit="contain"
-          autoplay
-          cachePolicy="memory"
-          onLoad={start}
-          onError={() => {
-            start();
-            finish();
-          }}
-        />
+        {themeReady ? (
+          <Image
+            source={SPLASH_ANIMATION[scheme]}
+            style={{ width: size, height: size }}
+            contentFit="contain"
+            autoplay
+            cachePolicy="memory"
+            onLoad={start}
+            onError={() => {
+              start();
+              finish();
+            }}
+          />
+        ) : null}
       </Pressable>
     </Animated.View>
   );

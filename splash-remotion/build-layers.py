@@ -1,7 +1,11 @@
 """Splits ../assets/images/logo.png into flat layers for the Remotion splash.
 
   public/printer-body.png  flat navy printer body (lid + side), alpha taken from the logo's antialiasing
-  public/swoosh.png        the logo with the printer body blanked out (swoosh, label, wordmark)
+  public/swoosh.png        the logo with the printer body blanked out (swoosh, label, wordmark);
+                           kept to eyeball the step above, the composition does not use it
+  public/swoosh-ink.png    the same with the white background lifted into alpha. Both themes draw
+                           this one: over #fefefe it is swoosh.png again, over black it needs no
+                           second cut of the artwork, so light and dark stay the same drawing
 
 Needs ffmpeg. Run: python3 build-layers.py
 """
@@ -74,6 +78,25 @@ for i in range(W * H):
         swoosh[i * 3:i * 3 + 3] = bytes(BG)
 
 
+def unmatte(rgb):
+    """White background -> alpha, so the art can sit on any colour.
+
+    The logo is flat vector art composited on near-white, so the matte inverts exactly: drawn
+    back over BG it is the same image, pixel for pixel.
+    """
+    out = bytearray(W * H * 4)
+    for i in range(W * H):
+        r, g, b = rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]
+        a = 255 - min(r, g, b)
+        if a <= 3:  # background, plus the rounding noise around it
+            continue
+        base = 255 - a
+        for k, c in enumerate((r, g, b)):
+            out[i * 4 + k] = max(0, min(255, round((c - base) * 255 / a)))
+        out[i * 4 + 3] = a
+    return out
+
+
 def save(buf, pix, out):
     p = os.path.join(tmp, os.path.basename(out) + '.raw')
     open(p, 'wb').write(buf)
@@ -83,4 +106,5 @@ def save(buf, pix, out):
 os.makedirs(os.path.join(HERE, 'public'), exist_ok=True)
 save(rgba, 'rgba', os.path.join(HERE, 'public', 'printer-body.png'))
 save(swoosh, 'rgb24', os.path.join(HERE, 'public', 'swoosh.png'))
+save(unmatte(swoosh), 'rgba', os.path.join(HERE, 'public', 'swoosh-ink.png'))
 print('ok')
