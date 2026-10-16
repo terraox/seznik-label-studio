@@ -1,7 +1,9 @@
 import Constants from 'expo-constants';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Alert,
   Linking,
@@ -18,8 +20,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionSheet } from '@/components/ui/action-sheet';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple } from '@/constants/ui';
+import { copyImportIntoSezprint } from '@/lib/user-files/root';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
+import { usePrintHistoryStore } from '@/stores/print-history-store';
+import { printCounts, usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import {
   THEME_DARK_READY,
@@ -90,6 +95,105 @@ function SettingRow({
   );
 }
 
+const PROFILE_NAME = 'User';
+const PROFILE_PHONE = 'XXXXX';
+
+function ProfileCard() {
+  const styles = useStyles();
+  const c = useColors();
+  const photoUri = useSettingsStore((s) => s.profilePhotoUri);
+  const setPhotoUri = useSettingsStore((s) => s.setProfilePhotoUri);
+
+  const byDay = usePrintStatsStore((s) => s.byDay);
+  const lifetime = usePrintStatsStore((s) => s.lifetime);
+  const seeded = usePrintStatsStore((s) => s.seeded);
+  const historyCount = usePrintHistoryStore((s) => s.entries.length);
+  useEffect(() => {
+    // One-time: count prints that were already in history before counters existed.
+    if (!seeded) usePrintStatsStore.getState().seed(usePrintHistoryStore.getState().entries);
+  }, [seeded, historyCount]);
+  const { today, week } = printCounts(byDay);
+
+  const pickPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]?.uri) return;
+      const stored = await copyImportIntoSezprint(
+        'images',
+        result.assets[0].uri,
+        `profile-photo-${Date.now()}.jpg`,
+      );
+      setPhotoUri(stored);
+    } catch {
+      Alert.alert('Photo', 'Could not add the photo. Please try again.');
+    }
+  };
+
+  const onAvatarPress = () => {
+    if (!photoUri) {
+      void pickPhoto();
+      return;
+    }
+    Alert.alert('Profile photo', undefined, [
+      { text: 'Change photo', onPress: () => void pickPhoto() },
+      { text: 'Remove photo', style: 'destructive', onPress: () => setPhotoUri(null) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  return (
+    <View style={styles.profileCard}>
+      <View style={styles.profileTop}>
+      <Pressable
+        onPress={onAvatarPress}
+        accessibilityRole="button"
+        accessibilityLabel={photoUri ? 'Change profile photo' : 'Add profile photo'}
+        style={({ pressed }) => [styles.avatarRing, pressed && styles.avatarPressed]}>
+        <View style={styles.avatar}>
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={styles.avatarImg} contentFit="cover" />
+          ) : (
+            <Text style={styles.avatarInitial}>{PROFILE_NAME.charAt(0).toUpperCase()}</Text>
+          )}
+        </View>
+        <View style={styles.avatarBadge}>
+          <AppIcon name="square.and.pencil" tintColor={c.onAccent} size={12} />
+        </View>
+      </Pressable>
+      <View style={styles.profileCopy}>
+        <Text style={styles.profileName} numberOfLines={1}>{PROFILE_NAME}</Text>
+        <View style={styles.phonePill}>
+          <AppIcon name="phone.fill" tintColor={c.textSecondary} size={12} />
+          <Text style={styles.profilePhone} numberOfLines={1}>{PROFILE_PHONE}</Text>
+        </View>
+      </View>
+      </View>
+      <View style={styles.statsRow}>
+        {(
+          [
+            { label: 'Today', value: today, icon: 'sun.max', tint: '#F59E0B' },
+            { label: 'Last 7 days', value: week, icon: 'calendar', tint: c.accentStrong },
+            { label: 'Lifetime', value: lifetime, icon: 'trophy', tint: '#8B5CF6' },
+          ] as const
+        ).map((st) => (
+          <View key={st.label} style={styles.statTile}>
+            <View style={[styles.statIcon, { backgroundColor: `${st.tint}22` }]}>
+              <AppIcon name={st.icon} tintColor={st.tint} size={16} />
+            </View>
+            <Text style={styles.statValue}>{st.value}</Text>
+            <Text style={styles.statLabel}>{st.label}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function SettingGroup({ children }: { children: ReactNode }) {
   const styles = useStyles();
   return <View style={styles.group}>{children}</View>;
@@ -153,6 +257,8 @@ export default function SettingScreen() {
         ]}
         showsVerticalScrollIndicator={false}>
         <View style={[styles.inner, { width: contentWidth, maxWidth: MaxContentWidth }]}>
+          <ProfileCard />
+
           <SettingGroup>
             <SettingRow
               label={t('setting.connectBluetoothPrinter')}
@@ -352,6 +458,94 @@ const useStyles = makeStyles((c, scheme) => ({
     height: StyleSheet.hairlineWidth,
     backgroundColor: c.hairline,
     marginLeft: ICON_COL + Spacing.three * 2,
+  },
+  profileTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  statsRow: { flexDirection: 'row', gap: Spacing.two },
+  statTile: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: c.fill,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.hairline,
+    paddingVertical: Spacing.two + 2,
+  },
+  statIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: c.text,
+    fontVariant: ['tabular-nums'],
+  },
+  statLabel: { fontSize: 11, fontWeight: '500', color: c.textMuted },
+  profileCard: {
+    gap: Spacing.three,
+    backgroundColor: c.surface,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.hairline,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    ...cardElevation(c, scheme),
+  },
+  avatarRing: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 2,
+    borderColor: c.accentStrong,
+    padding: 3,
+  },
+  avatarPressed: { opacity: 0.85 },
+  avatar: {
+    flex: 1,
+    borderRadius: 39,
+    backgroundColor: c.header,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: { width: '100%', height: '100%' },
+  avatarInitial: { fontSize: 32, fontWeight: '700', color: c.onHeader },
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: c.accentStrong,
+    borderWidth: 2,
+    borderColor: c.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileCopy: { flex: 1, minWidth: 0, gap: 6 },
+  profileName: { fontSize: 20, fontWeight: '700', color: c.text, letterSpacing: 0.2 },
+  phonePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: c.fill,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  profilePhone: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: c.textSecondary,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.6,
   },
   fontIconBox: {
     width: 22,

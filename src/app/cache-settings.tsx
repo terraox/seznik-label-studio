@@ -1,6 +1,7 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Alert, Platform, Text, View } from 'react-native';
 
 import {
   SettingsActionCard,
@@ -15,6 +16,7 @@ import {
   measureCacheCategorySizes,
   type CacheCategorySizes,
 } from '@/lib/cache/storage-sizes';
+import { ANDROID_PUBLIC_SEZPRINT_ROOT, sezprintSubdirUri } from '@/lib/user-files/paths';
 import { useLabelStore } from '@/stores/label-store';
 import { C, useThemeRefresh } from '@/theme';
 
@@ -41,6 +43,11 @@ export default function CacheSettingsScreen() {
   const cloudTemplates = useLabelStore((s) => s.cloudTemplates);
   const [sizes, setSizes] = useState<CacheCategorySizes>(EMPTY_SIZES);
   const [refreshing, setRefreshing] = useState(false);
+  const [publicExists, setPublicExists] = useState<boolean | null>(null);
+  const privatePath = FileSystem.documentDirectory
+    ? sezprintSubdirUri(FileSystem.documentDirectory, 'labels').replace(/^file:\/\//, '')
+    : 'Unavailable';
+  const publicPath = `${ANDROID_PUBLIC_SEZPRINT_ROOT}labels/`.replace(/^file:\/\//, '');
 
   const refreshSizes = useCallback(() => {
     setRefreshing(true);
@@ -57,6 +64,11 @@ export default function CacheSettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       refreshSizes();
+      if (Platform.OS === 'android') {
+        FileSystem.getInfoAsync(`${ANDROID_PUBLIC_SEZPRINT_ROOT}labels/`)
+          .then((i) => setPublicExists(i.exists))
+          .catch(() => setPublicExists(false));
+      }
     }, [refreshSizes]),
   );
 
@@ -99,6 +111,22 @@ export default function CacheSettingsScreen() {
         ))}
       </SettingsCard>
 
+      <SettingsCard>
+        <View style={pathBlock}>
+          <Text style={[usedSpaceLabel, { color: C.text }]}>Saved labels folder</Text>
+          <Text selectable style={[pathText, { color: C.textMuted }]}>{privatePath}</Text>
+          <Text style={[pathText, { color: C.textMuted }]}>App-private: not visible in file managers.</Text>
+          {Platform.OS === 'android' ? (
+            <>
+              <Text selectable style={[pathText, { color: C.textMuted, marginTop: 8 }]}>{publicPath}</Text>
+              <Text style={[pathText, { color: C.textMuted }]}>
+                {publicExists ? 'Public copy folder exists.' : 'Public copy folder not found (Android may block it).'}
+              </Text>
+            </>
+          ) : null}
+        </View>
+      </SettingsCard>
+
       <SettingsActionCard label="Clear Cache" accent onPress={clearCache} />
     </SettingsScreenShell>
   );
@@ -122,3 +150,7 @@ const usedSpaceValue = {
   fontSize: 15,
   fontWeight: '700' as const,
 };
+
+const pathBlock = { padding: 16, gap: 4 };
+
+const pathText = { fontSize: 12, lineHeight: 17 };

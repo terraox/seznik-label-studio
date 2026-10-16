@@ -137,6 +137,8 @@ type SettingsStoreState = {
   smartCropHintSeen: boolean;
   /** Settings → Appearance. Follow system by default. */
   appearance: AppearancePreference;
+  /** Settings profile card photo (file uri inside sezprint/images), or null. */
+  profilePhotoUri: string | null;
   patchEditor: (updates: Partial<EditorSettings>) => void;
   restoreEditorDefaults: () => void;
   patchDefaults: (updates: Partial<DefaultPropertySettings>) => void;
@@ -147,6 +149,7 @@ type SettingsStoreState = {
   setCanvasTutorialSeen: (seen: boolean) => void;
   setSmartCropHintSeen: (seen: boolean) => void;
   setAppearance: (appearance: AppearancePreference) => void;
+  setProfilePhotoUri: (uri: string | null) => void;
 };
 
 export const useSettingsStore = create<SettingsStoreState>()(
@@ -159,7 +162,8 @@ export const useSettingsStore = create<SettingsStoreState>()(
       tutorialSeen: false,
       canvasTutorialSeen: false,
       smartCropHintSeen: false,
-      appearance: 'system',
+      appearance: 'light',
+      profilePhotoUri: null,
 
       patchEditor: (updates) => set((state) => ({ editor: { ...state.editor, ...updates } })),
       restoreEditorDefaults: () => set({ editor: DEFAULT_EDITOR_SETTINGS }),
@@ -173,6 +177,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setCanvasTutorialSeen: (seen) => set({ canvasTutorialSeen: seen }),
       setSmartCropHintSeen: (seen) => set({ smartCropHintSeen: seen }),
       setAppearance: (appearance) => set({ appearance }),
+      setProfilePhotoUri: (profilePhotoUri) => set({ profilePhotoUri }),
     }),
     {
       name: 'sez-print/settings',
