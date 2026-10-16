@@ -2033,14 +2033,15 @@ const styles = themedStyles((c) => ({
     shadowRadius: 1.5,
     elevation: 2,
   },
+  // Handles sit just outside the box edge so they never cover the text inside it.
   handleS: {
-    bottom: -CHROME_HANDLE_RADIUS_PX,
+    bottom: -(CHROME_HANDLE_SIZE_PX + 1),
     left: '50%',
     marginLeft: -CHROME_HANDLE_RADIUS_PX,
   },
   handleE: {
     top: '50%',
-    right: -CHROME_HANDLE_RADIUS_PX,
+    right: -(CHROME_HANDLE_SIZE_PX + 1),
     marginTop: -CHROME_HANDLE_RADIUS_PX,
   },
   lockBadge: {

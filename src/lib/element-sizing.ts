@@ -401,7 +401,9 @@ const TEXT_FIT_SLACK_MM = 0.6;
 /** Largest share of the label a new text box may span once its font is above the default. */
 const NEW_TEXT_MAX_WIDTH_SHARE = 0.7;
 
-export const NEW_TEXT_PLACEHOLDER = 'Double tap to add text';
+/** Two short lines, so a new box is compact and readable instead of one long strip. */
+export const NEW_TEXT_PLACEHOLDER = 'Double-tap\nto enter text';
+const NEW_TEXT_LINES = NEW_TEXT_PLACEHOLDER.split('\n');
 
 export function fitTextDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {
   const fonts = existingTextFonts(existing);
@@ -433,15 +435,16 @@ export function fitNewTextDefaults(
   let fontSize = Math.max(4, Math.min(28, preferredFontPt));
 
   const oneLine = (pt: number) => {
-    const textW = measureTextWidthMm(NEW_TEXT_PLACEHOLDER, pt);
+    // Widest of the placeholder lines sets the box width.
+    const textW = Math.max(...NEW_TEXT_LINES.map((line) => measureTextWidthMm(line, pt)));
     const padX = textHorizontalPaddingMm(pt);
-    // 0.96 matches the wrap limit, so Word wrap still keeps this string on one line.
+    // 0.96 matches the wrap limit, so Word wrap still keeps each line whole.
     const width = textW / 0.96 + padX * 2 + 0.6;
     const height = visibleTextHeightMm({
       text: NEW_TEXT_PLACEHOLDER,
       fontSize: pt,
       widthMm: width,
-      autoWrapping: 'Close',
+      autoWrapping: 'Word',
     });
     return { width, height };
   };

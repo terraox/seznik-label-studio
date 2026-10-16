@@ -2367,7 +2367,11 @@ export default function EditScreen() {
         setQuickEditTarget({
           id,
           type: element.type,
-          value: '',
+          // A fresh text box starts blank (placeholder cleared); once the user has typed, edit it.
+          value:
+            element.type === 'text' && element.text && element.text !== NEW_TEXT_PLACEHOLDER
+              ? element.text
+              : '',
           anchorRect,
         });
       }, 80);
