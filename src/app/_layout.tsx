@@ -4,10 +4,11 @@ import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { Component, type ErrorInfo, type ReactNode, useCallback, useEffect, useState } from 'react';
-import { ScrollView, Text, View, useColorScheme } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplash } from '@/components/animated-splash';
+import { NavigationBarScrim } from '@/components/navigation-bar-scrim';
 import { IosAlertHost } from '@/components/ui/ios-alert-host';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
@@ -17,6 +18,21 @@ import { hydrateUserClipartSvgs } from '@/lib/clipart/user-storage';
 import { migrateLegacyUserFiles } from '@/lib/user-files/migrate';
 // import { useAuthStore } from '@/stores/auth-store';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
+import { AppThemeProvider, DarkColors, useScheme, useSettingsHydrated } from '@/theme';
+
+/** React Navigation colours for dark mode. Light keeps DefaultTheme exactly as before. */
+const NavDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: DarkColors.accent,
+    background: DarkColors.bg,
+    card: DarkColors.surface,
+    text: DarkColors.text,
+    border: DarkColors.hairline,
+    notification: DarkColors.danger,
+  },
+};
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -51,7 +67,9 @@ class RootErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
 }
 
 function AppRoot() {
-  const colorScheme = useColorScheme();
+  const scheme = useScheme();
+  // Wait for saved settings so the first screen already has the chosen theme (no flash).
+  const settingsHydrated = useSettingsHydrated();
   useFonts(APP_FONT_MAP);
 
   useEffect(() => startInstalledFontHydration(), []);
@@ -90,9 +108,9 @@ function AppRoot() {
   }, [hasIncomingFile, appReady, authHydrated, signedIn]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={scheme === 'dark' ? NavDarkTheme : DefaultTheme}>
       <StatusBar style="light" />
-      {appReady && authHydrated ? (
+      {appReady && authHydrated && settingsHydrated ? (
         <Stack screenOptions={{ headerShown: false }}>
           {/* Login / register switched off for now.
           <Stack.Protected guard={!signedIn}>
@@ -191,6 +209,7 @@ function AppRoot() {
         </Stack>
       ) : null}
       {splashDone ? null : <AnimatedSplash onFinish={handleSplashFinish} onDone={handleSplashDone} />}
+      <NavigationBarScrim />
     </ThemeProvider>
   );
 }
@@ -199,8 +218,10 @@ export default function RootLayout() {
   return (
     <RootErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <AppRoot />
-        <IosAlertHost />
+        <AppThemeProvider>
+          <AppRoot />
+          <IosAlertHost />
+        </AppThemeProvider>
       </GestureHandlerRootView>
     </RootErrorBoundary>
   );

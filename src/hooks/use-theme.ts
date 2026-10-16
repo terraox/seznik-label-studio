@@ -1,14 +1,11 @@
 /**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
+ * Template colours (`Colors` in constants/theme) for ThemedText / ThemedView / Collapsible.
+ * Follows the app's Appearance setting (src/theme), not just the system.
  */
 
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useScheme } from '@/theme';
 
 export function useTheme() {
-  const scheme = useColorScheme();
-  const theme = scheme === 'dark' ? 'dark' : 'light';
-
-  return Colors[theme];
+  return Colors[useScheme()];
 }

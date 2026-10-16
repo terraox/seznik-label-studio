@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type { AutoWrapping, QrErrorLevel, QrZoneSize } from '@/components/editor/types';
 import { DEFAULT_CANVAS_SPLIT_RATIO } from '@/lib/editor/canvas-split';
 import type { LabelOrientation, PaperType } from '@/lib/label-document';
+import type { AppearancePreference } from '@/theme/tokens';
 
 export type ColorMode = 'Original' | 'B & W' | 'Halftone';
 
@@ -32,6 +33,8 @@ export type EditorSettings = {
   editorGridDisclaimerSeen: boolean;
   /** Extra D-pad under the canvas. Off by default — use Editor Settings to show it. */
   showNudgePad: boolean;
+  /** mm rulers (the scale) along the top and left of the canvas. On unless set to false. */
+  showRulers?: boolean;
   /** Canvas share of the editor split column (0.35–0.89). */
   canvasSplitRatio: number;
   /** When true, the tools sheet is collapsed and the canvas uses the full column. */
@@ -128,6 +131,8 @@ type SettingsStoreState = {
   printing: PrintingSettings;
   language: string;
   tutorialSeen: boolean;
+  /** Settings → Appearance. Follow system by default. */
+  appearance: AppearancePreference;
   patchEditor: (updates: Partial<EditorSettings>) => void;
   restoreEditorDefaults: () => void;
   patchDefaults: (updates: Partial<DefaultPropertySettings>) => void;
@@ -135,6 +140,7 @@ type SettingsStoreState = {
   patchPrinting: (updates: Partial<PrintingSettings>) => void;
   setLanguage: (language: string) => void;
   setTutorialSeen: (seen: boolean) => void;
+  setAppearance: (appearance: AppearancePreference) => void;
 };
 
 export const useSettingsStore = create<SettingsStoreState>()(
@@ -145,6 +151,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       printing: DEFAULT_PRINTING_SETTINGS,
       language: 'en',
       tutorialSeen: false,
+      appearance: 'system',
 
       patchEditor: (updates) => set((state) => ({ editor: { ...state.editor, ...updates } })),
       restoreEditorDefaults: () => set({ editor: DEFAULT_EDITOR_SETTINGS }),
@@ -155,6 +162,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
         set((state) => ({ printing: { ...state.printing, ...updates } })),
       setLanguage: (language) => set({ language }),
       setTutorialSeen: (seen) => set({ tutorialSeen: seen }),
+      setAppearance: (appearance) => set({ appearance }),
     }),
     {
       name: 'sez-print/settings',

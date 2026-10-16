@@ -24,6 +24,10 @@ export type TranslationKey =
   | 'setting.walkthrough'
   | 'setting.feedback'
   | 'setting.aboutUs'
+  | 'setting.appearance'
+  | 'setting.appearanceSystem'
+  | 'setting.appearanceLight'
+  | 'setting.appearanceDark'
   | 'print.print'
   | 'print.copies'
   | 'common.cancel'
@@ -61,6 +65,10 @@ const en: Record<TranslationKey, string> = {
   'setting.walkthrough': 'App Walkthrough',
   'setting.feedback': 'Evaluation & Feedback',
   'setting.aboutUs': 'About Us',
+  'setting.appearance': 'Appearance',
+  'setting.appearanceSystem': 'Follow system',
+  'setting.appearanceLight': 'Light',
+  'setting.appearanceDark': 'Dark',
   'print.print': 'Print',
   'print.copies': 'Number of Copies',
   'common.cancel': 'Cancel',
@@ -97,6 +105,10 @@ const hi: StringsTable = {
   'setting.walkthrough': 'ऐप वॉकथ्रू',
   'setting.feedback': 'मूल्यांकन और प्रतिक्रिया',
   'setting.aboutUs': 'हमारे बारे में',
+  'setting.appearance': 'दिखावट',
+  'setting.appearanceSystem': 'सिस्टम के अनुसार',
+  'setting.appearanceLight': 'लाइट',
+  'setting.appearanceDark': 'डार्क',
   'print.print': 'प्रिंट करें',
   'print.copies': 'प्रतियों की संख्या',
   'common.cancel': 'रद्द करें',
