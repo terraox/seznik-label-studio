@@ -1,12 +1,14 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Palette } from '@/constants/ui';
+import { makeStyles } from '@/theme';
 
 export type ActionSheetItem = {
   label: string;
   onPress: () => void;
   destructive?: boolean;
+  /** Shows a check mark (current choice). */
+  selected?: boolean;
 };
 
 type ActionSheetProps = {
@@ -17,6 +19,7 @@ type ActionSheetProps = {
 
 export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
   const insets = useSafeAreaInsets();
+  const styles = useStyles();
 
   return (
     <Modal
@@ -40,6 +43,7 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
                   style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
                   <Text
                     style={[styles.rowText, item.destructive && styles.destructive]}>
+                    {item.selected ? '✓  ' : ''}
                     {item.label}
                   </Text>
                 </Pressable>
@@ -57,21 +61,21 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
   },
   bottom: {
     paddingHorizontal: 10,
     gap: 8,
   },
   sheet: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.raised,
     borderRadius: 14,
     overflow: 'hidden',
   },
@@ -84,17 +88,17 @@ const styles = StyleSheet.create({
   rowText: {
     fontSize: 17,
     fontWeight: '400',
-    color: '#007AFF',
+    color: c.link,
   },
   destructive: {
-    color: Palette.danger,
+    color: c.danger,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E3E6EA',
+    backgroundColor: c.hairline,
   },
   cancel: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.raised,
     borderRadius: 14,
     minHeight: 56,
     alignItems: 'center',
@@ -103,9 +107,9 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#007AFF',
+    color: c.link,
   },
   pressed: {
     opacity: 0.65,
   },
-});
+}));

@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, Palette } from '@/constants/ui';
+import { androidRipple } from '@/constants/ui';
+import { headerBar, makeStyles, useColors } from '@/theme';
 
 export function SettingsStackHeader({
   title,
@@ -16,6 +17,8 @@ export function SettingsStackHeader({
   onRightPress?: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const c = useColors();
+  const styles = useStyles();
 
   const sideWidth = rightLabel && onRightPress ? 64 : 36;
 
@@ -30,7 +33,7 @@ export function SettingsStackHeader({
           { width: sideWidth, alignItems: sideWidth === 36 ? 'center' : 'flex-start' },
           pressed && styles.pressed,
         ]}>
-        <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />
+        <AppIcon name="chevron.left" tintColor={c.onHeader} size={22} />
       </Pressable>
       <Text style={styles.title}>{title}</Text>
       {rightLabel && onRightPress ? (
@@ -48,12 +51,12 @@ export function SettingsStackHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c, scheme) => ({
   header: {
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-    backgroundColor: Palette.header,
+    ...headerBar(c, scheme),
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.two,
@@ -69,7 +72,7 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: c.onHeader,
     fontSize: 17,
     fontWeight: '600',
   },
@@ -83,11 +86,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rightLabel: {
-    color: '#FFFFFF',
+    color: c.onHeader,
     fontSize: 16,
     fontWeight: '500',
   },
   pressed: {
     opacity: 0.65,
   },
-});
+}));

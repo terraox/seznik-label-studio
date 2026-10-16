@@ -3,9 +3,10 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 
+import { makeStyles } from '@/theme';
+
 // Rendered from splash-remotion/ (`npm run render` in that folder).
 const SPLASH_ANIMATION = require('../../assets/images/splash-animation.webp');
-const SPLASH_BACKGROUND = '#FEFEFE';
 // The WebP is ~3.0 s and plays once (loop count 1), then holds on its last frame.
 const PLAY_MS = 3000;
 const FADE_MS = 120;
@@ -16,6 +17,7 @@ const HANDOFF_MS = 600;
 /** Plays the "label getting printed" logo animation over the app, then fades out. Tap to skip. */
 export function AnimatedSplash({ onFinish, onDone }: { onFinish: () => void; onDone: () => void }) {
   const { width, height } = useWindowDimensions();
+  const styles = useStyles();
   const size = Math.min(width * 0.9, height * 0.6);
   const opacity = useRef(new Animated.Value(1)).current;
   const started = useRef(false);
@@ -75,11 +77,11 @@ export function AnimatedSplash({ onFinish, onDone }: { onFinish: () => void; onD
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   root: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: SPLASH_BACKGROUND,
+    backgroundColor: c.splash,
     zIndex: 1000,
     elevation: 1000,
   },
@@ -89,4 +91,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'stretch',
   },
-});
+}));

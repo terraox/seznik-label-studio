@@ -1,7 +1,5 @@
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -10,7 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Palette } from '@/constants/ui';
+import { makeStyles } from '@/theme';
 import {
   measureWalkthroughTarget,
   scrollWalkthroughBy,
@@ -19,8 +17,9 @@ import {
 import type { WalkthroughStep } from '@/lib/walkthrough/home-steps';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
-const DIM = 'rgba(10, 20, 32, 0.78)';
+const DIM = 'rgba(10, 20, 32, 0.78)'; // theme-fixed: dims whatever is under it, in both themes
 const HOLE_PAD = 6;
+const RING_INSET = 2;
 const CARD_MAX_W = 360;
 const CARD_EST_H = 190;
 
@@ -32,37 +31,40 @@ export function WalkthroughOverlay({
   /** Called on Done or Skip. */
   onFinish: () => void;
 }) {
+  const styles = useStyles();
   const active = useWalkthroughStore((s) => s.active);
   const stepIndex = useWalkthroughStore((s) => s.stepIndex);
   const goTo = useWalkthroughStore((s) => s.goTo);
-  const [focused, setFocused] = useState(true);
-  useFocusEffect(
-    useCallback(() => {
-      setFocused(true);
-      return () => setFocused(false);
-    }, []),
-  );
-  const { width: W, height: H } = useWindowDimensions();
+  const win = useWindowDimensions();
+  // Use the overlay's own laid-out size: on Android the window height can include the
+  // system navigation bar while the overlay container does not, which shifts the card.
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const W = size?.w ?? win.width;
+  const H = size?.h ?? win.height;
   const insets = useSafeAreaInsets();
   const [rect, setRect] = useState<WindowRect | null>(null);
+  const [ready, setReady] = useState(false);
   const [cardH, setCardH] = useState(CARD_EST_H);
   const rootRef = useRef<View>(null);
 
   const visibleSteps = steps;
   const step = visibleSteps[stepIndex];
-  const visible = active && focused && !!step;
+  const visible = active && !!step;
 
   useEffect(() => {
     if (!visible) return;
+    // New step: drop the old cutout and hold the card back until the new target is placed.
+    setRect(null);
+    setReady(false);
     if (!step.target) {
-      setRect(null);
+      setReady(true);
       return;
     }
     let cancelled = false;
     const topBound = insets.top + 70;
 
-    // Modal root origin: target coords are shifted by it so the cutout lines up
-    // regardless of how the platform reports window offsets (status bar etc).
+    // Overlay lives in the same window as the targets (no Modal), so measuring its own
+    // origin and subtracting it gives exact overlay-local coordinates on every device.
     const originOf = () =>
       new Promise<{ x: number; y: number }>((resolve) => {
         if (!rootRef.current) return resolve({ x: 0, y: 0 });
@@ -74,17 +76,21 @@ export function WalkthroughOverlay({
       if (cancelled) return;
       if (!m) {
         setRect(null);
+        setReady(true);
         return;
       }
       // Scroll steps: bring the target's top to just under the header so the card fits below it.
       if (step.scrolls && attempt < 2) {
         const dy = m.y - o.y - topBound;
         if (Math.abs(dy) > 4 && scrollWalkthroughBy(dy)) {
-          setTimeout(() => !cancelled && void run(attempt + 1), 520);
+          setTimeout(() => !cancelled && void run(attempt + 1), 200);
           return;
         }
       }
       setRect({ x: m.x - o.x, y: m.y - o.y, w: m.w, h: m.h });
+      setReady(true);
+      // Re-measure once layout/scroll has fully settled so the cutout never lags the target.
+      if (attempt < 3) setTimeout(() => !cancelled && void run(3), 350);
     };
     // Let the Modal / tab focus settle before measuring.
     const t = setTimeout(() => void run(0), 250);
@@ -97,12 +103,16 @@ export function WalkthroughOverlay({
   if (!visible) return null;
 
   const isLast = stepIndex >= visibleSteps.length - 1;
+  // Keep the ring fully inside the overlay (RING_INSET) so targets flush with a screen edge,
+  // like the tab bar, still show all four borders.
+  const hx = rect ? Math.max(RING_INSET, rect.x - HOLE_PAD) : 0;
+  const hy = rect ? Math.max(RING_INSET, rect.y - HOLE_PAD) : 0;
   const hole = rect
     ? {
-        x: Math.max(0, rect.x - HOLE_PAD),
-        y: Math.max(0, rect.y - HOLE_PAD),
-        w: rect.w + HOLE_PAD * 2,
-        h: rect.h + HOLE_PAD * 2,
+        x: hx,
+        y: hy,
+        w: Math.min(W - RING_INSET, rect.x + rect.w + HOLE_PAD) - hx,
+        h: Math.min(H - RING_INSET, rect.y + rect.h + HOLE_PAD) - hy,
       }
     : null;
 
@@ -119,8 +129,12 @@ export function WalkthroughOverlay({
   }
 
   return (
-    <Modal transparent statusBarTranslucent animationType="fade" onRequestClose={onFinish}>
-      <View ref={rootRef} collapsable={false} style={StyleSheet.absoluteFill}>
+    <View
+      ref={rootRef}
+      collapsable={false}
+      onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+      style={[StyleSheet.absoluteFill, styles.root]}>
+      <View style={StyleSheet.absoluteFill}>
         {hole ? (
           <>
             <View style={[styles.dim, { left: 0, top: 0, width: W, height: hole.y }]} />
@@ -146,6 +160,7 @@ export function WalkthroughOverlay({
           <View style={[styles.dim, StyleSheet.absoluteFill]} />
         )}
 
+        {ready ? (
         <View
           style={[
             styles.cardWrap,
@@ -185,30 +200,33 @@ export function WalkthroughOverlay({
             </View>
           </View>
         </View>
+        ) : null}
       </View>
-    </Modal>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c, scheme) => ({
+  root: { zIndex: 1000, elevation: 1000 },
   dim: { position: 'absolute', backgroundColor: DIM },
   ring: {
     position: 'absolute',
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
   },
   cardWrap: { position: 'absolute' },
   cardCentered: { top: '34%' },
   card: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.raised,
     borderRadius: 16,
     padding: 18,
     gap: 6,
+    ...(scheme === 'dark' ? { borderWidth: StyleSheet.hairlineWidth, borderColor: c.border } : null),
   },
-  stepCount: { color: Palette.muted, fontSize: 12, fontWeight: '600' },
-  title: { color: Palette.ink, fontSize: 17, fontWeight: '700' },
-  body: { color: Palette.actionText, fontSize: 14, lineHeight: 20 },
+  stepCount: { color: c.textMuted, fontSize: 12, fontWeight: '600' },
+  title: { color: c.text, fontSize: 17, fontWeight: '700' },
+  body: { color: c.textSecondary, fontSize: 14, lineHeight: 20 },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -216,11 +234,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   skipSpacer: { width: 1 },
-  skip: { color: Palette.muted, fontSize: 14, fontWeight: '500' },
+  skip: { color: c.textMuted, fontSize: 14, fontWeight: '500' },
   navRow: { flexDirection: 'row', gap: 8 },
   btn: { paddingVertical: 9, paddingHorizontal: 18, borderRadius: 10 },
-  btnPrimary: { backgroundColor: Palette.accent },
-  btnPrimaryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  btnGhost: { backgroundColor: '#EEF2F6' },
-  btnGhostText: { color: Palette.ink, fontSize: 14, fontWeight: '600' },
-});
+  btnPrimary: { backgroundColor: c.accentFill },
+  btnPrimaryText: { color: c.onAccent, fontSize: 14, fontWeight: '600' },
+  btnGhost: { backgroundColor: c.fillStrong },
+  btnGhostText: { color: c.text, fontSize: 14, fontWeight: '600' },
+}));

@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Alert,
   Linking,
@@ -15,16 +15,36 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ActionSheet } from '@/components/ui/action-sheet';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow, Palette } from '@/constants/ui';
+import { androidRipple } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
-import { useTranslation } from '@/lib/i18n';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
+import { useSettingsStore } from '@/stores/settings-store';
+import {
+  THEME_DARK_READY,
+  cardElevation,
+  headerBar,
+  makeStyles,
+  useColors,
+  type AppearancePreference,
+} from '@/theme';
 // import { useAuthStore } from '@/stores/auth-store';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
 type IconName = AppIconName;
 
+const APPEARANCE_OPTIONS: { value: AppearancePreference; key: TranslationKey }[] = [
+  { value: 'system', key: 'setting.appearanceSystem' },
+  { value: 'light', key: 'setting.appearanceLight' },
+  { value: 'dark', key: 'setting.appearanceDark' },
+];
+
+/** Hidden in release builds until every screen supports dark mode (THEME_DARK_READY). */
+const SHOW_APPEARANCE = THEME_DARK_READY || __DEV__;
+
 function FontSettingIcon() {
+  const styles = useStyles();
   return (
     <View style={styles.fontIconBox}>
       <Text style={styles.fontIconText}>A</Text>
@@ -36,15 +56,20 @@ function SettingRow({
   label,
   icon,
   customIcon,
+  value,
   onPress,
   showDivider,
 }: {
   label: string;
   icon?: IconName;
   customIcon?: ReactNode;
+  /** Current choice, shown before the chevron. */
+  value?: string;
   onPress?: () => void;
   showDivider?: boolean;
 }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <>
       <Pressable
@@ -54,10 +79,11 @@ function SettingRow({
         style={({ pressed }) => [styles.row, pressed && onPress && styles.rowPressed]}>
         <View style={styles.rowIcon}>
           {customIcon ??
-            (icon ? <AppIcon name={icon} tintColor="#5A6570" size={22} /> : null)}
+            (icon ? <AppIcon name={icon} tintColor={c.textSecondary} size={22} /> : null)}
         </View>
         <Text style={styles.rowLabel}>{label}</Text>
-        <AppIcon name="chevron.right" tintColor="#B8C0C8" size={14} weight="semibold" />
+        {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+        <AppIcon name="chevron.right" tintColor={c.textDisabled} size={14} weight="semibold" />
       </Pressable>
       {showDivider ? <View style={styles.divider} /> : null}
     </>
@@ -65,16 +91,23 @@ function SettingRow({
 }
 
 function SettingGroup({ children }: { children: ReactNode }) {
+  const styles = useStyles();
   return <View style={styles.group}>{children}</View>;
 }
 
 export default function SettingScreen() {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const tabPad = useTabBarPadding(Spacing.four);
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { t } = useTranslation();
   const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const appearance = useSettingsStore((s) => s.appearance);
+  const setAppearance = useSettingsStore((s) => s.setAppearance);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const appearanceKey =
+    APPEARANCE_OPTIONS.find((o) => o.value === appearance)?.key ?? 'setting.appearanceSystem';
   // const logout = useAuthStore((s) => s.logout);
 
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
@@ -168,6 +201,17 @@ export default function SettingScreen() {
             />
           </SettingGroup>
 
+          {SHOW_APPEARANCE ? (
+            <SettingGroup>
+              <SettingRow
+                label={t('setting.appearance')}
+                icon="circle.lefthalf.filled"
+                value={t(appearanceKey)}
+                onPress={() => setAppearanceOpen(true)}
+              />
+            </SettingGroup>
+          ) : null}
+
           <SettingGroup>
             <SettingRow
               label={t('setting.advancedSettings')}
@@ -214,29 +258,39 @@ export default function SettingScreen() {
           */}
         </View>
       </ScrollView>
+
+      <ActionSheet
+        visible={appearanceOpen}
+        onClose={() => setAppearanceOpen(false)}
+        items={APPEARANCE_OPTIONS.map((o) => ({
+          label: t(o.key),
+          selected: o.value === appearance,
+          onPress: () => setAppearance(o.value),
+        }))}
+      />
     </View>
   );
 }
 
 const ICON_COL = 34;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c, scheme) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     alignItems: 'center',
   },
   header: {
     width: '100%',
     maxWidth: MaxContentWidth,
-    backgroundColor: Palette.header,
+    ...headerBar(c, scheme),
     alignItems: 'center',
     justifyContent: 'center',
     paddingBottom: Spacing.three,
     minHeight: 52,
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: c.onHeader,
     fontSize: 17,
     fontWeight: '500',
   },
@@ -254,9 +308,9 @@ const styles = StyleSheet.create({
     gap: Spacing.two + 2,
   },
   group: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 10,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   row: {
     flexDirection: 'row',
@@ -266,7 +320,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   rowPressed: {
-    backgroundColor: '#F5F7FA',
+    backgroundColor: c.fill,
   },
   rowIcon: {
     width: ICON_COL + Spacing.three * 2,
@@ -277,11 +331,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '400',
-    color: '#2C3E50',
+    color: c.text,
+  },
+  rowValue: {
+    fontSize: 14,
+    color: c.textMuted,
+    marginRight: Spacing.two,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E4E8ED',
+    backgroundColor: c.hairline,
     marginLeft: ICON_COL + Spacing.three * 2,
   },
   fontIconBox: {
@@ -293,7 +352,7 @@ const styles = StyleSheet.create({
   fontIconText: {
     fontSize: 18,
     fontWeight: '500',
-    color: '#5A6570',
+    color: c.textSecondary,
     lineHeight: 20,
   },
-});
+}));

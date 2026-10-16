@@ -13,6 +13,8 @@ import {
   View,
 } from 'react-native';
 
+import { makeStyles, useColors, useScheme } from '@/theme';
+
 export type IosAlertButton = {
   text: string;
   onPress?: () => void;
@@ -46,6 +48,7 @@ export function IosAlertModal({
   cardMaxWidth = 280,
 }: IosAlertModalProps) {
   const { height: windowHeight } = useWindowDimensions();
+  const styles = useStyles();
   const handleBack = onRequestClose ?? onClose;
   const handleBackdrop = dismissOnBackdrop ? (onClose ?? onRequestClose) : undefined;
 
@@ -55,7 +58,6 @@ export function IosAlertModal({
       transparent
       animationType="fade"
       statusBarTranslucent
-      navigationBarTranslucent
       onRequestClose={handleBack}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -154,19 +156,23 @@ export function IosAlertModal({
 }
 
 export function IosAlertInput(props: TextInputProps) {
+  const c = useColors();
+  const scheme = useScheme();
+  const styles = useStyles();
   return (
     <TextInput
-      placeholderTextColor="#8E8E93"
+      placeholderTextColor={c.textMuted}
+      keyboardAppearance={scheme}
       {...props}
       style={[styles.input, props.style]}
     />
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c, scheme) => ({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: c.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
@@ -176,14 +182,18 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.raised,
     borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 8,
+    ...(scheme === 'dark'
+      ? { borderWidth: StyleSheet.hairlineWidth, borderColor: c.hairline }
+      : {
+          shadowColor: c.shadow,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.18,
+          shadowRadius: 16,
+          elevation: 8,
+        }),
   },
   bodyScroll: {
     flexGrow: 0,
@@ -198,14 +208,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '600',
-    color: '#000000',
+    color: c.text,
     textAlign: 'center',
     lineHeight: 22,
   },
   message: {
     fontSize: 13,
     fontWeight: '400',
-    color: '#3C3C43',
+    color: c.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 4,
@@ -213,20 +223,20 @@ const styles = StyleSheet.create({
   input: {
     width: '100%',
     height: 36,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C6C6C8',
+    borderColor: c.border,
     borderRadius: 7,
     paddingHorizontal: 10,
     fontSize: 14,
-    color: '#000000',
+    color: c.text,
     marginTop: 12,
   },
   actionRowHorizontal: {
     flexDirection: 'row',
     flexShrink: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#D1D1D6',
+    borderTopColor: c.hairline,
     height: 45,
   },
   btnHorizontal: {
@@ -238,20 +248,20 @@ const styles = StyleSheet.create({
   },
   verticalDivider: {
     width: StyleSheet.hairlineWidth,
-    backgroundColor: '#D1D1D6',
+    backgroundColor: c.hairline,
     height: '100%',
   },
   actionRowVertical: {
     flexShrink: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#D1D1D6',
+    borderTopColor: c.hairline,
   },
   verticalBtnWrapper: {
     width: '100%',
   },
   horizontalDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#D1D1D6',
+    backgroundColor: c.hairline,
     width: '100%',
   },
   btnVertical: {
@@ -264,24 +274,24 @@ const styles = StyleSheet.create({
   btnText: {
     fontSize: 17,
     fontWeight: '400',
-    color: '#007AFF',
+    color: c.link,
     textAlign: 'center',
   },
   btnTextBold: {
     fontWeight: '600',
   },
   btnTextCancel: {
-    color: '#007AFF',
+    color: c.link,
     fontWeight: '400',
   },
   btnTextDestructive: {
-    color: '#FF3B30',
+    color: c.danger,
     fontWeight: '400',
   },
   btnPressed: {
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: c.pressedOverlay,
   },
   btnDisabled: {
     opacity: 0.35,
   },
-});
+}));

@@ -14,7 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '@/components/app-icon';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow, Palette } from '@/constants/ui';
+import { androidRipple } from '@/constants/ui';
+import { cardElevation, makeStyles, useColors, useScheme } from '@/theme';
 
 const SETTINGS_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 } as const;
 const SETTINGS_CHIP_HIT_SLOP = { top: 6, bottom: 6, left: 4, right: 4 } as const;
@@ -26,6 +27,7 @@ export function SettingsScreenShell({
   title: string;
   children: ReactNode;
 }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
@@ -51,14 +53,18 @@ export function SettingsScreenShell({
 }
 
 export function SettingsCard({ children }: { children: ReactNode }) {
+  const styles = useStyles();
   return <View style={styles.card}>{children}</View>;
 }
 
 export function SettingsDivider() {
+  const styles = useStyles();
   return <View style={styles.divider} />;
 }
 
 export function SettingsNavRow({ label, onPress }: { label: string; onPress?: () => void }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -67,7 +73,7 @@ export function SettingsNavRow({ label, onPress }: { label: string; onPress?: ()
       android_ripple={androidRipple}
       style={({ pressed }) => [styles.navRow, pressed && onPress && styles.pressed]}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <AppIcon name="chevron.right" tintColor="#B8C0C8" size={14} weight="semibold" />
+      <AppIcon name="chevron.right" tintColor={c.textDisabled} size={14} weight="semibold" />
     </Pressable>
   );
 }
@@ -83,6 +89,8 @@ export function SettingsToggleRow({
   onValueChange: (next: boolean) => void;
   showDivider?: boolean;
 }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <>
       <View style={styles.toggleRow}>
@@ -99,9 +107,9 @@ export function SettingsToggleRow({
           <Switch
             value={value}
             onValueChange={onValueChange}
-            trackColor={{ false: '#D1D5DB', true: '#48C3C7' }}
-            thumbColor="#FFFFFF"
-            ios_backgroundColor="#D1D5DB"
+            trackColor={{ false: c.border, true: c.accent }}
+            thumbColor="#FFFFFF" // theme-fixed: white thumb in both themes
+            ios_backgroundColor={c.border}
           />
         </View>
       </View>
@@ -121,6 +129,8 @@ export function SettingsValueRow({
   onPress?: () => void;
   showDivider?: boolean;
 }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <>
       <Pressable
@@ -131,7 +141,7 @@ export function SettingsValueRow({
         <Text style={styles.rowLabel}>{label}</Text>
         <View style={styles.valueRight}>
           <Text style={styles.valueText}>{value}</Text>
-          <AppIcon name="chevron.right" tintColor="#B8C0C8" size={14} weight="semibold" />
+          <AppIcon name="chevron.right" tintColor={c.textDisabled} size={14} weight="semibold" />
         </View>
       </Pressable>
       {showDivider ? <SettingsDivider /> : null}
@@ -150,6 +160,8 @@ export function SettingsStatusRow({
   onPress?: () => void;
   showDivider?: boolean;
 }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <>
       <Pressable
@@ -162,7 +174,7 @@ export function SettingsStatusRow({
           <Text style={[styles.statusText, enabled ? styles.statusEnabled : styles.statusDisabled]}>
             {enabled ? 'Enabled' : 'Not Enabled'}
           </Text>
-          <AppIcon name="chevron.right" tintColor="#B8C0C8" size={14} weight="semibold" />
+          <AppIcon name="chevron.right" tintColor={c.textDisabled} size={14} weight="semibold" />
         </View>
       </Pressable>
       {showDivider ? <SettingsDivider /> : null}
@@ -183,6 +195,8 @@ export function SettingsRadioRow({
   onPress: () => void;
   showDivider?: boolean;
 }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <>
       <Pressable onPress={onPress} style={({ pressed }) => [styles.radioRow, pressed && styles.pressed]}>
@@ -191,7 +205,7 @@ export function SettingsRadioRow({
         </View>
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={styles.cacheValue}>{value}</Text>
-        <AppIcon name="chevron.right" tintColor="#B8C0C8" size={14} weight="semibold" />
+        <AppIcon name="chevron.right" tintColor={c.textDisabled} size={14} weight="semibold" />
       </Pressable>
       {showDivider ? <SettingsDivider /> : null}
     </>
@@ -209,6 +223,7 @@ export function SettingsToggleGroup({
   onValueChange: (next: boolean) => void;
   description?: string;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.toggleGroup}>
       <SettingsCard>
@@ -220,10 +235,12 @@ export function SettingsToggleGroup({
 }
 
 export function SettingsNote({ children }: { children: string }) {
+  const styles = useStyles();
   return <Text style={styles.note}>{children}</Text>;
 }
 
 export function SettingsSectionLabel({ children }: { children: string }) {
+  const styles = useStyles();
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
@@ -236,6 +253,7 @@ export function SettingsSegmentGroup<T extends string>({
   selected: T;
   onSelect: (value: T) => void;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.segmentWrap}>
       <View style={styles.segmentRow}>
@@ -271,6 +289,7 @@ export function SettingsSegmentRow<T extends string>({
   onSelect: (value: T) => void;
   showDivider?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <>
       <View style={styles.segmentBlock}>
@@ -295,6 +314,8 @@ export function SettingsColorRow({
   onSelect: (index: number) => void;
   showDivider?: boolean;
 }) {
+  const styles = useStyles();
+  const scheme = useScheme();
   return (
     <>
       <View style={styles.colorRow}>
@@ -314,7 +335,8 @@ export function SettingsColorRow({
                   style={[
                     styles.colorDot,
                     { backgroundColor: color },
-                    color === '#FFFFFF' && styles.colorDotWhite,
+                    // A ring keeps white swatches visible in light and dark ones visible in dark.
+                    (scheme === 'dark' || color === '#FFFFFF') && styles.colorDotWhite, // theme-fixed: swatch value
                   ]}
                 />
               </Pressable>
@@ -344,6 +366,7 @@ export function SettingsStepperRow({
   plusDisabled?: boolean;
   showDivider?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <>
       <View style={styles.stepperRow}>
@@ -372,6 +395,7 @@ export function SettingsStepperRow({
 }
 
 export function SettingsCacheRow({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.cacheRow}>
       <Text style={styles.cacheLabel}>{label}</Text>
@@ -391,6 +415,7 @@ export function SettingsActionCard({
   danger?: boolean;
   accent?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -409,10 +434,10 @@ export function SettingsActionCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c, scheme) => ({
   root: {
     flex: 1,
-    backgroundColor: Palette.screen,
+    backgroundColor: c.bg,
     alignItems: 'center',
   },
   scroll: {
@@ -420,9 +445,9 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   card: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 10,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   navRow: {
     minHeight: 56,
@@ -451,7 +476,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 15,
     fontWeight: '500',
-    color: '#2C3E50',
+    color: c.text,
     lineHeight: 20,
     paddingRight: 8,
     includeFontPadding: false,
@@ -489,7 +514,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 15,
     fontWeight: '500',
-    color: '#2C3E50',
+    color: c.text,
     lineHeight: 20,
     paddingRight: 12,
     includeFontPadding: false,
@@ -506,45 +531,39 @@ const styles = StyleSheet.create({
   valueText: {
     fontSize: 14,
     fontWeight: '500',
-    color: Palette.accent,
+    color: c.accent,
   },
   statusText: {
     fontSize: 14,
     fontWeight: '500',
   },
   statusEnabled: {
-    color: '#22C55E',
+    color: c.success,
   },
   statusDisabled: {
-    color: '#EF5350',
-  },
-  cacheValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#EF5350',
-    marginRight: 4,
+    color: c.danger,
   },
   radioOuter: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioOuterSelected: {
-    borderColor: Palette.accent,
+    borderColor: c.accent,
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accent,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E4E8ED',
+    backgroundColor: c.hairline,
     marginLeft: 16,
   },
   note: {
@@ -553,7 +572,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     fontSize: 13,
     lineHeight: 20,
-    color: '#8A97A4',
+    color: c.textMuted,
   },
   toggleGroup: {
     gap: 8,
@@ -564,7 +583,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     fontSize: 12,
     fontWeight: '600',
-    color: '#8A97A4',
+    color: c.textMuted,
     letterSpacing: 0.4,
   },
   segmentWrap: {
@@ -585,22 +604,22 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     borderRadius: 8,
-    backgroundColor: '#EEF1F5',
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
   segmentChipActive: {
-    backgroundColor: Palette.accent,
+    backgroundColor: c.accentFill,
   },
   segmentText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#556473',
+    color: c.textSecondary,
     textAlign: 'center',
   },
   segmentTextActive: {
-    color: '#FFFFFF',
+    color: c.onAccent,
   },
   colorRow: {
     paddingHorizontal: 16,
@@ -627,7 +646,7 @@ const styles = StyleSheet.create({
   },
   colorOuterActive: {
     borderWidth: 2,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
   },
   colorDot: {
     width: 24,
@@ -636,7 +655,7 @@ const styles = StyleSheet.create({
   },
   colorDotWhite: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
   },
   stepperRow: {
     minHeight: 56,
@@ -656,48 +675,48 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     borderWidth: 1.5,
-    borderColor: Palette.accent,
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperCircleDisabled: {
-    borderColor: '#CBD5E1',
+    borderColor: c.border,
   },
   stepperSymbol: {
     fontSize: 18,
-    color: Palette.accent,
+    color: c.accent,
     lineHeight: 20,
   },
   stepperSymbolDisabled: {
-    color: '#CBD5E1',
+    color: c.border,
   },
   stepperValue: {
     minWidth: 42,
     textAlign: 'center',
     fontSize: 15,
     fontWeight: '600',
-    color: Palette.accent,
+    color: c.accent,
   },
   actionCard: {
-    backgroundColor: Palette.card,
+    backgroundColor: c.surface,
     borderRadius: 10,
     minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.three,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   actionText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#2C3E50',
+    color: c.text,
   },
   actionTextDanger: {
-    color: '#EF5350',
+    color: c.danger,
     fontWeight: '600',
   },
   actionTextAccent: {
-    color: '#459E83',
+    color: c.success,
     fontWeight: '600',
   },
   cacheRow: {
@@ -712,15 +731,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '400',
-    color: '#7D7D7D',
+    color: c.textMuted,
     paddingRight: 8,
   },
   cacheValue: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#E15B64',
+    color: c.danger,
   },
   pressed: {
     opacity: 0.7,
   },
-});
+}));
