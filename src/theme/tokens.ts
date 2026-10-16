@@ -115,7 +115,7 @@ export const LightColors: ThemeColors = {
   pressedOverlay: 'rgba(0, 0, 0, 0.06)',
   splash: '#FEFEFE',
   shadow: '#0B1F33',
-  canvasArea: '#EEF1F5',
+  canvasArea: '#EFF2F7',
 };
 
 export const DarkColors: ThemeColors = {

@@ -143,7 +143,6 @@ import {
   ArtboardFrame,
   CATALOG_STOCK_LINER,
   EDITOR_ARTBOARD_COLOR,
-  EDITOR_WORKSPACE_COLOR,
   fitLabelCanvas,
   LABEL_PAD_STAGE_MIN_HEIGHT,
 } from '@/components/label-preview';
@@ -1221,7 +1220,8 @@ export default function EditScreen() {
 
   const dieCutPad =
     hasStockSilhouette(doc.templatePreviewType) || isRatTailGeometry(doc.mediaGeometry);
-  const stageBg = EDITOR_WORKSPACE_COLOR;
+  // Area around the white label: light grey in light mode, black in dark mode.
+  const stageBg = C.canvasArea;
   const artboardFill = dieCutPad ? CATALOG_STOCK_LINER : EDITOR_ARTBOARD_COLOR;
 
   // Always reopen at Fit. View zoom is optional; it must not change physical mm.
@@ -5171,7 +5171,7 @@ const styles = themedStyles((c) => ({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: EDITOR_WORKSPACE_COLOR,
+    backgroundColor: c.canvasArea,
     zIndex: 3,
   },
   subToolbarRow: {
@@ -5303,7 +5303,7 @@ const styles = themedStyles((c) => ({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: EDITOR_WORKSPACE_COLOR,
+    backgroundColor: c.canvasArea,
     paddingVertical: 0,
     paddingHorizontal: 0,
     minHeight: LABEL_PAD_STAGE_MIN_HEIGHT,
@@ -5317,7 +5317,7 @@ const styles = themedStyles((c) => ({
   },
   workspace: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: EDITOR_WORKSPACE_COLOR,
+    backgroundColor: c.canvasArea,
     alignItems: 'center',
     justifyContent: 'center',
     paddingBottom: 0,
