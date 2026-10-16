@@ -1,8 +1,9 @@
 /**
  * Zoomable editing pad.
- * Two-finger pinch zooms around the pinch focal point. Two-finger pan moves a
- * zoomed artboard. One-finger pan is only used when nothing is selected so it
- * cannot steal element drag/resize. Fit (zoom = 1) clears pan.
+ * View zoom is driven by parent state (editing pad / menu), not pinch. Optional
+ * pinch is off by default. Two-finger pan moves a zoomed artboard. One-finger
+ * pan is only used when nothing is selected so it cannot steal element
+ * drag/resize. Fit (zoom = 1) clears pan.
  *
  * This is React Native Gesture Handler on iOS/Android — not a WKWebView. The
  * WebView `touch-action` / momentum-scroll issues from the brief do not apply;
@@ -45,6 +46,8 @@ type ZoomableEditPadProps = {
   maxZoom?: number;
   oneFingerPanEnabled?: boolean;
   doubleTapEnabled?: boolean;
+  /** Pinch-to-zoom on the pad; default off — use menu / editing-pad zoom instead. */
+  pinchZoomEnabled?: boolean;
 };
 
 function panLimit(viewSize: number, zoom: number) {
@@ -64,6 +67,7 @@ export function ZoomableEditPad({
   maxZoom = VIEW_ZOOM_MAX,
   oneFingerPanEnabled = false,
   doubleTapEnabled = true,
+  pinchZoomEnabled = false,
 }: ZoomableEditPadProps) {
   const zoomSv = useSharedValue(zoom);
   const panX = useSharedValue(0);
@@ -116,6 +120,7 @@ export function ZoomableEditPad({
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
+        .enabled(pinchZoomEnabled)
         .shouldCancelWhenOutside(false)
         .onStart((e) => {
           'worklet';
@@ -163,6 +168,7 @@ export function ZoomableEditPad({
           runOnJS(reportView)(zoomSv.value, panX.value, panY.value);
         }),
     [
+      pinchZoomEnabled,
       lastZoomReportAt,
       maxZoomSv,
       minZoomSv,
