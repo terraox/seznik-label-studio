@@ -124,7 +124,7 @@ export const PdfPrintPanel = forwardRef<
   const [gapMm, setGapMm] = useState(labelDefaults.gapLengthMm);
   const [hOffset, setHOffset] = useState(savedCalibration?.hOffsetMm ?? 0);
   const [vOffset, setVOffset] = useState(savedCalibration?.vOffsetMm ?? 0);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(true);
 
   // Offsets saved for a printer load when it connects.
   const loadedKey = useRef(calibrationKey);
@@ -290,6 +290,23 @@ export const PdfPrintPanel = forwardRef<
           {error ? <Text style={styles.err}>{error}</Text> : null}
         </View>
 
+        <View style={[styles.section, styles.tip]}>
+          <View style={styles.tipText}>
+            <Text style={styles.tipTitle}>Printing shipping labels?</Text>
+            <Text style={styles.sub}>Keep print darkness at 7 so barcodes and small text stay sharp and scannable.</Text>
+          </View>
+          <Pressable
+            onPress={() => setDarkness(clampToCap(7, qualityCaps.density).value)}
+            disabled={printing || darkness === 7}
+            accessibilityRole="button"
+            accessibilityLabel="Set print darkness to 7"
+            style={({ pressed }) => [styles.tipBtn, darkness === 7 && styles.tipBtnDone, pressed && styles.pressed]}>
+            <Text style={[styles.tipBtnText, darkness === 7 && styles.tipBtnTextDone]}>
+              {darkness === 7 ? 'Darkness is 7' : 'Set darkness to 7'}
+            </Text>
+          </Pressable>
+        </View>
+
         <Pressable onPress={() => setShowAdvanced((v) => !v)} style={[styles.section, styles.advHead]}>
           <View style={styles.advLeft}>
             <AppIcon name="gearshape" size={18} tintColor={C.textSecondary} />
@@ -442,6 +459,21 @@ const styles = themedStyles((c, scheme) => ({
   to: { color: c.textMuted },
   hint: { color: c.textMuted, fontSize: 13 },
   err: { color: c.danger, fontSize: 12 },
+  tip: { gap: 10 },
+  tipText: { gap: 2 },
+  tipTitle: { fontSize: 14, fontWeight: '700', color: c.text },
+  tipBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
+  },
+  tipBtnDone: { borderColor: c.border, backgroundColor: c.surface },
+  tipBtnText: { fontSize: 14, fontWeight: '700', color: c.accentInk },
+  tipBtnTextDone: { color: c.textSecondary },
   advHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   advLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   advChevron: {

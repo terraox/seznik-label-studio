@@ -106,7 +106,12 @@ function describe(s: Section): string {
 function badgeLabel(s: Section): string {
   if (s.source === 'grown') return 'Block';
   if (s.kind === 'group') return 'Larger block';
-  return `Section ${s.order} · ${Math.round(s.confidence * 100)}%`;
+  return `${sectionName(s)} · ${Math.round(s.confidence * 100)}%`;
+}
+
+/** Plain name for a detected section: its number, plus what it holds when that is clear. */
+function sectionName(s: Section): string {
+  return s.hasCodeLike ? `Section ${s.order} (barcode)` : `Section ${s.order}`;
 }
 
 function foundNotice(result: DetectResult): SmartCropNotice | null {
@@ -126,6 +131,7 @@ export type SmartCropSelectionInfo = {
 export function useSmartCrop({
   sourceUri,
   pageIndex,
+  region = null,
   active,
   pageMm,
   hintSeen,
@@ -134,6 +140,8 @@ export function useSmartCrop({
 }: {
   sourceUri: string | null;
   pageIndex: number;
+  /** An existing crop: analysed and mapped as if it were the whole page. */
+  region?: NormRect | null;
   /** True while the crop tool is open. */
   active: boolean;
   /** Page size in mm, for spoken overlay labels. */
@@ -146,6 +154,8 @@ export function useSmartCrop({
   const [status, setStatus] = useState<SmartCropStatus>('idle');
   const [selection, setSelection] = useState<Selection>(emptySelection);
   const [overlaysOn, setOverlaysOn] = useState(false);
+  /** True after a selection: the view zooms to the window so it can be fine-tuned. */
+  const [focused, setFocused] = useState(false);
   const [notice, setNotice] = useState<SmartCropNotice | null>(null);
   const [pending, setPending] = useState<{ x: number; y: number; slop: number } | null>(null);
 
@@ -159,6 +169,7 @@ export function useSmartCrop({
   const commit = useCallback((sel: Selection, outcome: SmartCropSelectionInfo['outcome'], notify = true) => {
     selRef.current = sel;
     setSelection(sel);
+    if (notify) setFocused(sel.items.length > 0);
     if (notify) onSelectionRef.current({ rect: selectionRect(sel), count: sel.items.length, outcome });
   }, []);
 
@@ -167,6 +178,7 @@ export function useSmartCrop({
     selRef.current = emptySelection();
     setSelection(selRef.current);
     setOverlaysOn(false);
+    setFocused(false);
     setNotice(null);
     setPending(null);
     if (!active || !sourceUri) {
@@ -176,7 +188,7 @@ export function useSmartCrop({
       return;
     }
 
-    const key = `${sourceUri}::${pageIndex}`;
+    const key = `${sourceUri}::${pageIndex}::${region ? `${region.x.toFixed(4)},${region.y.toFixed(4)},${region.w.toFixed(4)},${region.h.toFixed(4)}` : 'page'}`;
     const hit = cache.get(key) ?? null;
     entryRef.current = hit;
     setEntry(hit);
@@ -188,7 +200,7 @@ export function useSmartCrop({
       try {
         let e = hit;
         if (!e) {
-          const loaded = await loadAnalysisGray(sourceUri, pageIndex);
+          const loaded = await loadAnalysisGray(sourceUri, pageIndex, region);
           if (cancelled) return;
           const ctx = prepareAnalysis(loaded.gray);
           e = {
@@ -236,7 +248,7 @@ export function useSmartCrop({
     return () => {
       cancelled = true;
     };
-  }, [active, sourceUri, pageIndex]);
+  }, [active, sourceUri, pageIndex, region]);
 
   // ── Taps ──────────────────────────────────────────────────────────────────
   const serveTap = useCallback(
@@ -302,6 +314,7 @@ export function useSmartCrop({
   // ── Smart Crop button, Prev / Next, clear, nudge ──────────────────────────
   const showAll = useCallback(() => {
     setOverlaysOn(true);
+    setFocused(false);
     const result = entryRef.current?.result;
     if (result) setNotice(foundNotice(result));
   }, []);
@@ -373,8 +386,8 @@ export function useSmartCrop({
           rect: s.rect,
           number: s.order,
           state: selected ? 'selected' : id === result.suggestedId ? 'suggested' : 'hint',
-          label: selected ? badgeLabel(s) : id === result.suggestedId ? 'Suggested' : null,
-          a11yLabel: `Section ${s.order}, ${mm(s.rect)}, ${Math.round(s.confidence * 100)} percent confident${selected ? ', selected' : ''}`,
+          label: selected ? badgeLabel(s) : sectionName(s),
+          a11yLabel: `${sectionName(s)}, ${mm(s.rect)}, ${Math.round(s.confidence * 100)} percent confident${selected ? ', selected' : ''}`,
         });
       }
     }
@@ -401,6 +414,7 @@ export function useSmartCrop({
     notice,
     overlays,
     overlaysOn,
+    focused,
     selectedCount: selection.items.length,
     selectedSection,
     selectedLabel: selectedSection ? badgeLabel(selectedSection) : null,

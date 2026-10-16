@@ -29,8 +29,27 @@ export function prefetchNeighborPages(uri: string, pageIndex: number, pageCount:
   }
 }
 
+const regionCache = new Map<string, Promise<string>>();
+
+/** The part of a rendered page inside `rect` (page fractions) as its own PNG, cached so re-cropping opens at once. */
+export function regionImageCached(
+  pageUri: string,
+  rect: { x: number; y: number; w: number; h: number },
+): Promise<string> {
+  const key = `${pageUri}|${rect.x.toFixed(5)},${rect.y.toFixed(5)},${rect.w.toFixed(5)},${rect.h.toFixed(5)}`;
+  const hit = regionCache.get(key);
+  if (hit) return hit;
+  const job = import('@/lib/editor/apply-image-crop')
+    .then((m) => m.applyImageCrop(pageUri, 1, 1, rect, { format: 'png' }))
+    .then((out) => out.uri);
+  job.catch(() => regionCache.delete(key));
+  regionCache.set(key, job);
+  return job;
+}
+
 export function clearRasterCache() {
   cache.clear();
+  regionCache.clear();
 }
 
 export type { RasteredPdfPage };

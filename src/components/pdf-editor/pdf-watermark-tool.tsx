@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { PanResponder, Pressable, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/text-input';
 
 import { PdfScopeSelector } from '@/components/pdf-editor/pdf-scope-selector';
@@ -12,58 +13,51 @@ import {
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
-const WORD_PRESETS = [
-  'CONFIDENTIAL',
-  'SAMPLE',
-  'PAID',
-  'DO NOT COPY',
-  'DRAFT',
-  'ORIGINAL',
-  'APPROVED',
-  'URGENT',
-];
+const WORD_PRESETS = ['CONFIDENTIAL', 'DRAFT', 'SAMPLE', 'PAID', 'COPY', 'URGENT'];
 
 const COLOR_PRESETS = [
   { label: 'Red', hex: '#DC2626' }, // theme-fixed: watermark ink choice (printed)
   { label: 'Crimson', hex: '#991B1B' }, // theme-fixed: watermark ink choice (printed)
   { label: 'Slate', hex: '#374151' }, // theme-fixed: watermark ink choice (printed)
-  { label: 'Dark', hex: '#111827' }, // theme-fixed: watermark ink choice (printed)
+  { label: 'Ink', hex: '#111827' }, // theme-fixed: watermark ink choice (printed)
   { label: 'Blue', hex: '#2563EB' }, // theme-fixed: watermark ink choice (printed)
   { label: 'Green', hex: '#059669' }, // theme-fixed: watermark ink choice (printed)
   { label: 'Gold', hex: '#D97706' }, // theme-fixed: watermark ink choice (printed)
   { label: 'Purple', hex: '#7C3AED' }, // theme-fixed: watermark ink choice (printed)
 ];
 
-const DENSITY_PRESETS = [
-  { label: '6×6', val: 0.14 },
-  { label: '5×5', val: 0.18 },
-  { label: '4×4', val: 0.24 },
-  { label: '3×3', val: 0.33 },
-  { label: '2×2', val: 0.45 },
+const ANCHOR_GRID: NinePoint[] = [
+  'top-left',
+  'top-center',
+  'top-right',
+  'middle-left',
+  'center',
+  'middle-right',
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
 ];
 
-const TILED_TEXT_SIZES = [
-  { label: '14 pt', val: 14 },
-  { label: '18 pt', val: 18 },
-  { label: '22 pt', val: 22 },
-  { label: '28 pt', val: 28 },
-  { label: '36 pt', val: 36 },
-];
+const ANCHOR_LABEL: Record<NinePoint, string> = {
+  'top-left': 'Top left',
+  'top-center': 'Top',
+  center: 'Center',
+  'top-right': 'Top right',
+  'middle-left': 'Left',
+  'middle-right': 'Right',
+  'bottom-left': 'Bottom left',
+  'bottom-center': 'Bottom',
+  'bottom-right': 'Bottom right',
+};
 
-const STAMP_SIZE_PRESETS = [
-  { label: 'Small (25%)', val: 0.25 },
-  { label: 'Medium (42%)', val: 0.42 },
-  { label: 'Large (60%)', val: 0.6 },
-  { label: 'Max (80%)', val: 0.8 },
-];
+const THUMB = 22;
 
-const OPACITY_PRESETS = [
-  { label: '15%', val: 0.15 },
-  { label: '25%', val: 0.25 },
-  { label: '40%', val: 0.4 },
-  { label: '60%', val: 0.6 },
-  { label: '80%', val: 0.8 },
-];
+function snap(raw: number, min: number, max: number, step: number) {
+  const steps = Math.round((raw - min) / step);
+  const next = min + steps * step;
+  const digits = step < 1 ? 2 : 0;
+  return Math.min(max, Math.max(min, Number(next.toFixed(digits))));
+}
 
 export function PdfWatermarkTool({
   value,
@@ -90,12 +84,11 @@ export function PdfWatermarkTool({
   };
 
   const setAnchor = (anchor: NinePoint) => {
-    const offsetNorm = ninePointToOffsetNorm(anchor);
     onChange({
       ...value,
       stamp: {
         anchor,
-        offsetNorm,
+        offsetNorm: ninePointToOffsetNorm(anchor),
         sizeNorm: value.stamp?.sizeNorm ?? 0.42,
       },
     });
@@ -106,406 +99,201 @@ export function PdfWatermarkTool({
   const gridInfo = tiledRepeatCount(currentSpacing);
   const currentFontSize = value.text?.fontSizePt ?? 22;
   const isStaggered = value.tiled?.staggered ?? true;
+  const stampSize = value.stamp?.sizeNorm ?? 0.42;
+
+  const setText = (patch: Partial<NonNullable<PdfWatermark['text']>>) => {
+    onChange({
+      ...value,
+      text: {
+        content: value.text?.content || 'WATERMARK',
+        fontSizePt: currentFontSize,
+        color: currentColor,
+        ...patch,
+      },
+    });
+  };
 
   return (
     <View style={styles.wrap}>
-      {/* Mode Switches */}
-      <View style={styles.row}>
-        <Seg
-          label="Single Stamp"
-          on={value.layout === 'stamp'}
-          onPress={() =>
+      <Segmented
+        value={value.layout}
+        options={[
+          { id: 'stamp', label: 'Stamp' },
+          { id: 'tiled', label: 'Tiled' },
+        ]}
+        onChange={(layout) => {
+          if (layout === 'stamp') {
             onChange({
               ...value,
-              layout: 'stamp',
+              layout,
               stamp: value.stamp ?? { anchor: 'center', offsetNorm: { x: 0.5, y: 0.5 }, sizeNorm: 0.42 },
-            })
+            });
+            return;
           }
-        />
-        <Seg
-          label="Tiled Pattern"
-          on={value.layout === 'tiled'}
-          onPress={() =>
-            onChange({
-              ...value,
-              layout: 'tiled',
-              tiled: value.tiled ?? { spacingNorm: { x: 0.24, y: 0.24 }, staggered: true },
-            })
-          }
-        />
-      </View>
-      <View style={styles.row}>
-        <Seg label="Text Watermark" on={value.type === 'text'} onPress={() => onChange({ ...value, type: 'text' })} />
-        <Seg label="Image Watermark" on={value.type === 'image'} onPress={() => onChange({ ...value, type: 'image' })} />
-      </View>
+          onChange({
+            ...value,
+            layout,
+            tiled: value.tiled ?? { spacingNorm: { x: 0.24, y: 0.24 }, staggered: true },
+          });
+        }}
+      />
+      <Segmented
+        value={value.type}
+        options={[
+          { id: 'text', label: 'Text' },
+          { id: 'image', label: 'Image' },
+        ]}
+        onChange={(type) => onChange({ ...value, type })}
+      />
 
-      {/* Text Configuration */}
       {value.type === 'text' ? (
         <View style={styles.block}>
           <TextInput
             value={value.text?.content ?? ''}
-            onChangeText={(content) =>
-              onChange({
-                ...value,
-                text: { content, fontSizePt: currentFontSize, color: currentColor },
-              })
-            }
+            onChangeText={(content) => setText({ content })}
             placeholder="Watermark text"
             style={styles.input}
           />
-          {/* Quick Word Presets */}
-          <View style={styles.presetsRow}>
+          <View style={styles.chips}>
             {WORD_PRESETS.map((word) => {
               const active = value.text?.content === word;
               return (
                 <Pressable
                   key={word}
-                  onPress={() =>
-                    onChange({
-                      ...value,
-                      text: { content: word, fontSizePt: currentFontSize, color: currentColor },
-                    })
-                  }
-                  style={[styles.wordChip, active && styles.wordChipActive]}>
-                  <Text style={[styles.wordChipText, active && styles.wordChipTextActive]}>{word}</Text>
+                  onPress={() => setText({ content: word })}
+                  style={[styles.chip, active && styles.chipOn]}>
+                  <Text style={[styles.chipText, active && styles.chipTextOn]}>{word}</Text>
                 </Pressable>
               );
             })}
           </View>
-
-          {/* Color Presets */}
-          <Text style={styles.label}>Color Palette</Text>
-          <View style={styles.colorRow}>
+          <Text style={styles.kicker}>Color</Text>
+          <View style={styles.swatches}>
             {COLOR_PRESETS.map((c) => {
               const active = currentColor === c.hex;
               return (
                 <Pressable
                   key={c.hex}
-                  onPress={() =>
-                    onChange({
-                      ...value,
-                      text: {
-                        content: value.text?.content || 'WATERMARK',
-                        fontSizePt: currentFontSize,
-                        color: c.hex,
-                      },
-                    })
-                  }
-                  style={[styles.colorBtn, active && styles.colorBtnActive]}>
-                  <View style={[styles.colorDot, { backgroundColor: c.hex }]} />
-                  <Text style={[styles.colorText, active && styles.colorTextActive]}>{c.label}</Text>
+                  accessibilityLabel={c.label}
+                  onPress={() => setText({ color: c.hex })}
+                  style={[styles.swatch, active && styles.swatchOn]}>
+                  <View style={[styles.swatchDot, { backgroundColor: c.hex }]} />
                 </Pressable>
               );
             })}
           </View>
         </View>
       ) : (
-        <Pressable onPress={pick} style={styles.pick}>
-          <Text style={styles.pickText}>{value.image?.sourceUri ? 'Change image' : 'Choose image'}</Text>
+        <Pressable onPress={pick} style={styles.imageBtn}>
+          <Text style={styles.imageTitle}>{value.image?.sourceUri ? 'Replace image' : 'Choose image'}</Text>
+          <Text style={styles.imageHint}>PNG or JPG. It prints at the opacity below.</Text>
         </Pressable>
       )}
 
-      {/* Single Stamp Controls */}
       {value.layout === 'stamp' ? (
         <View style={styles.block}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.label}>Position & Placement</Text>
-            <Pressable
-              onPress={() => setAnchor('center')}
-              style={styles.headerActionBtn}>
-              <Text style={styles.headerActionText}>Center</Text>
-            </Pressable>
-          </View>
-          <View style={styles.locationGrid}>
-            {ANCHOR_ITEMS.map((item) => {
-              const active = value.stamp?.anchor === item.id;
-              return (
-                <Pressable
-                  key={item.id}
-                  onPress={() => setAnchor(item.id)}
-                  style={[styles.locationBtn, active && styles.locationBtnActive]}>
-                  <View style={[styles.alignmentDot, active && styles.alignmentDotActive]} />
-                  <Text style={[styles.locationLabel, active && styles.locationLabelActive]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={styles.dragHintRow}>
-            <View style={styles.dragDot} />
-            <Text style={styles.dragHintText}>
-              Draggable: Tap any position above to snap, or drag the stamp directly on the page preview.
-            </Text>
-          </View>
-
-          <Text style={styles.label}>Stamp Size ({Math.round((value.stamp?.sizeNorm ?? 0.42) * 100)}%)</Text>
-          <View style={styles.presetsRow}>
-            {STAMP_SIZE_PRESETS.map((p) => {
-              const active = Math.abs((value.stamp?.sizeNorm ?? 0.42) - p.val) < 0.05;
-              return (
-                <Pressable
-                  key={p.label}
-                  onPress={() =>
-                    onChange({
-                      ...value,
-                      stamp: {
-                        anchor: value.stamp?.anchor ?? 'center',
-                        offsetNorm: value.stamp?.offsetNorm ?? { x: 0.5, y: 0.5 },
-                        sizeNorm: p.val,
-                      },
-                    })
-                  }
-                  style={[styles.chip, active && styles.chipActive]}>
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{p.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={styles.row}>
-            <Seg
-              label="− Smaller Size"
-              on={false}
-              onPress={() => {
-                const cur = value.stamp?.sizeNorm ?? 0.42;
-                onChange({
-                  ...value,
-                  stamp: {
-                    anchor: value.stamp?.anchor ?? 'center',
-                    offsetNorm: value.stamp?.offsetNorm ?? { x: 0.5, y: 0.5 },
-                    sizeNorm: Math.max(0.15, Math.round((cur - 0.05) * 100) / 100),
-                  },
-                });
-              }}
-            />
-            <Seg
-              label="+ Larger Size"
-              on={false}
-              onPress={() => {
-                const cur = value.stamp?.sizeNorm ?? 0.42;
-                onChange({
-                  ...value,
-                  stamp: {
-                    anchor: value.stamp?.anchor ?? 'center',
-                    offsetNorm: value.stamp?.offsetNorm ?? { x: 0.5, y: 0.5 },
-                    sizeNorm: Math.min(0.9, Math.round((cur + 0.05) * 100) / 100),
-                  },
-                });
-              }}
-            />
-          </View>
-        </View>
-      ) : (
-        /* Tiled Pattern Controls */
-        <View style={styles.block}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.label}>Grid Density & Spacing</Text>
-            <View style={styles.gridBadge}>
-              <Text style={styles.gridBadgeText}>{`${gridInfo.cols} × ${gridInfo.rows} grid`}</Text>
+          <View style={styles.placeRow}>
+            <View style={styles.placeCopy}>
+              <Text style={styles.kicker}>Position</Text>
+              <Text style={styles.placeValue}>{ANCHOR_LABEL[value.stamp?.anchor ?? 'center']}</Text>
+              <Text style={styles.hint}>Drag the mark on the page, or tap a point.</Text>
+            </View>
+            <View style={styles.anchor}>
+              {ANCHOR_GRID.map((id) => {
+                const active = (value.stamp?.anchor ?? 'center') === id;
+                return (
+                  <Pressable
+                    key={id}
+                    accessibilityLabel={ANCHOR_LABEL[id]}
+                    onPress={() => setAnchor(id)}
+                    style={[styles.anchorCell, active && styles.anchorCellOn]}>
+                    <View style={[styles.anchorDot, active && styles.anchorDotOn]} />
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
-          <View style={styles.presetsRow}>
-            {DENSITY_PRESETS.map((p) => {
-              const active = Math.abs((value.tiled?.spacingNorm?.x ?? 0.24) - p.val) < 0.03;
-              return (
-                <Pressable
-                  key={p.label}
-                  onPress={() =>
-                    onChange({
-                      ...value,
-                      tiled: {
-                        spacingNorm: { x: p.val, y: p.val },
-                        staggered: isStaggered,
-                      },
-                    })
-                  }
-                  style={[styles.chip, active && styles.chipActive]}>
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{p.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={styles.row}>
-            <Seg
-              label="− Denser Grid"
-              on={false}
-              onPress={() => {
-                const s = value.tiled?.spacingNorm ?? { x: 0.24, y: 0.24 };
-                onChange({
-                  ...value,
-                  tiled: {
-                    spacingNorm: {
-                      x: Math.max(0.1, Math.round((s.x - 0.03) * 100) / 100),
-                      y: Math.max(0.1, Math.round((s.y - 0.03) * 100) / 100),
-                    },
-                    staggered: isStaggered,
-                  },
-                });
-              }}
-            />
-            <Seg
-              label="+ Looser Grid"
-              on={false}
-              onPress={() => {
-                const s = value.tiled?.spacingNorm ?? { x: 0.24, y: 0.24 };
-                onChange({
-                  ...value,
-                  tiled: {
-                    spacingNorm: {
-                      x: Math.min(0.5, Math.round((s.x + 0.03) * 100) / 100),
-                      y: Math.min(0.5, Math.round((s.y + 0.03) * 100) / 100),
-                    },
-                    staggered: isStaggered,
-                  },
-                });
-              }}
-            />
-          </View>
-
-          {/* Pattern Alignment Style */}
-          <Text style={styles.label}>Pattern Alignment</Text>
-          <View style={styles.row}>
-            <Seg
-              label="Staggered (Brick)"
-              on={isStaggered}
-              onPress={() =>
-                onChange({
-                  ...value,
-                  tiled: {
-                    spacingNorm: currentSpacing,
-                    staggered: true,
-                  },
-                })
-              }
-            />
-            <Seg
-              label="Straight Grid"
-              on={!isStaggered}
-              onPress={() =>
-                onChange({
-                  ...value,
-                  tiled: {
-                    spacingNorm: currentSpacing,
-                    staggered: false,
-                  },
-                })
-              }
-            />
-          </View>
-
-          {/* Tiled Font Size */}
+          <Meter
+            label="Size"
+            valueLabel={`${Math.round(stampSize * 100)}%`}
+            value={stampSize}
+            min={0.15}
+            max={0.9}
+            step={0.01}
+            onChange={(sizeNorm) =>
+              onChange({
+                ...value,
+                stamp: {
+                  anchor: value.stamp?.anchor ?? 'center',
+                  offsetNorm: value.stamp?.offsetNorm ?? { x: 0.5, y: 0.5 },
+                  sizeNorm,
+                },
+              })
+            }
+          />
+        </View>
+      ) : (
+        <View style={styles.block}>
+          <Meter
+            label="Spacing"
+            valueLabel={`${gridInfo.cols} × ${gridInfo.rows}`}
+            value={currentSpacing.x}
+            min={0.1}
+            max={0.5}
+            step={0.01}
+            onChange={(spacing) =>
+              onChange({
+                ...value,
+                tiled: { spacingNorm: { x: spacing, y: spacing }, staggered: isStaggered },
+              })
+            }
+          />
+          <Segmented
+            value={isStaggered ? 'brick' : 'grid'}
+            options={[
+              { id: 'brick', label: 'Brick' },
+              { id: 'grid', label: 'Straight' },
+            ]}
+            onChange={(id) =>
+              onChange({
+                ...value,
+                tiled: { spacingNorm: currentSpacing, staggered: id === 'brick' },
+              })
+            }
+          />
           {value.type === 'text' ? (
-            <>
-              <Text style={styles.label}>Tiled Text Size ({currentFontSize} pt)</Text>
-              <View style={styles.presetsRow}>
-                {TILED_TEXT_SIZES.map((ts) => {
-                  const active = currentFontSize === ts.val;
-                  return (
-                    <Pressable
-                      key={ts.label}
-                      onPress={() =>
-                        onChange({
-                          ...value,
-                          text: {
-                            content: value.text?.content || 'WATERMARK',
-                            color: currentColor,
-                            fontSizePt: ts.val,
-                          },
-                        })
-                      }
-                      style={[styles.chip, active && styles.chipActive]}>
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{ts.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <View style={styles.row}>
-                <Seg
-                  label="− Smaller Text"
-                  on={false}
-                  onPress={() =>
-                    onChange({
-                      ...value,
-                      text: {
-                        content: value.text?.content || 'WATERMARK',
-                        color: currentColor,
-                        fontSizePt: Math.max(10, currentFontSize - 2),
-                      },
-                    })
-                  }
-                />
-                <Seg
-                  label="+ Larger Text"
-                  on={false}
-                  onPress={() =>
-                    onChange({
-                      ...value,
-                      text: {
-                        content: value.text?.content || 'WATERMARK',
-                        color: currentColor,
-                        fontSizePt: Math.min(48, currentFontSize + 2),
-                      },
-                    })
-                  }
-                />
-              </View>
-            </>
+            <Meter
+              label="Text size"
+              valueLabel={`${currentFontSize} pt`}
+              value={currentFontSize}
+              min={10}
+              max={48}
+              step={1}
+              onChange={(fontSizePt) => setText({ fontSizePt })}
+            />
           ) : null}
         </View>
       )}
 
-      {/* Opacity */}
-      <Text style={styles.label}>Opacity ({Math.round(value.opacity * 100)}%)</Text>
-      <View style={styles.presetsRow}>
-        {OPACITY_PRESETS.map((p) => {
-          const active = Math.abs(value.opacity - p.val) < 0.04;
-          return (
-            <Pressable
-              key={p.label}
-              onPress={() => onChange({ ...value, opacity: p.val })}
-              style={[styles.chip, active && styles.chipActive]}>
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{p.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <View style={styles.row}>
-        <Seg
-          label="− 5% Opacity"
-          on={false}
-          onPress={() =>
-            onChange({
-              ...value,
-              opacity: Math.max(0.05, Math.round((value.opacity - 0.05) * 100) / 100),
-            })
-          }
-        />
-        <Seg
-          label="+ 5% Opacity"
-          on={false}
-          onPress={() =>
-            onChange({
-              ...value,
-              opacity: Math.min(0.95, Math.round((value.opacity + 0.05) * 100) / 100),
-            })
-          }
-        />
-      </View>
+      <Meter
+        label="Opacity"
+        valueLabel={`${Math.round(value.opacity * 100)}%`}
+        value={value.opacity}
+        min={0.05}
+        max={0.95}
+        step={0.05}
+        onChange={(opacity) => onChange({ ...value, opacity })}
+      />
+      <Meter
+        label="Angle"
+        valueLabel={`${value.rotationDeg}°`}
+        value={value.rotationDeg}
+        min={-90}
+        max={90}
+        step={5}
+        onChange={(rotationDeg) => onChange({ ...value, rotationDeg })}
+      />
 
-      {/* Rotation */}
-      <Text style={styles.label}>Rotation ({value.rotationDeg}°)</Text>
-      <View style={styles.row}>
-        {[-45, -30, 0, 30, 45, 90].map((d) => (
-          <Seg
-            key={d}
-            label={`${d}°`}
-            on={value.rotationDeg === d}
-            onPress={() => onChange({ ...value, rotationDeg: d })}
-          />
-        ))}
-      </View>
-
-      {/* Page Scope */}
       <PdfScopeSelector
         scope={value.scope}
         pageCount={pageCount}
@@ -524,230 +312,233 @@ export function PdfWatermarkTool({
   );
 }
 
-function Seg({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { id: T; label: string }[];
+  onChange: (id: T) => void;
+}) {
   useThemeRefresh();
   return (
-    <Pressable onPress={onPress} style={[styles.seg, on && styles.segOn]}>
-      <Text style={[styles.segText, on && styles.segTextOn]}>{label}</Text>
-    </Pressable>
+    <View style={styles.segment}>
+      {options.map((option) => {
+        const on = option.id === value;
+        return (
+          <Pressable
+            key={option.id}
+            onPress={() => onChange(option.id)}
+            style={[styles.segmentBtn, on && styles.segmentBtnOn]}>
+            <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{option.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
-const ANCHOR_ITEMS: { id: NinePoint; label: string }[] = [
-  { id: 'top-left', label: 'Top Left' },
-  { id: 'top-center', label: 'Top' },
-  { id: 'top-right', label: 'Top Right' },
-  { id: 'middle-left', label: 'Left' },
-  { id: 'center', label: 'Center' },
-  { id: 'middle-right', label: 'Right' },
-  { id: 'bottom-left', label: 'Bottom Left' },
-  { id: 'bottom-center', label: 'Bottom' },
-  { id: 'bottom-right', label: 'Bottom Right' },
-];
+function Meter({
+  label,
+  valueLabel,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  valueLabel: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (next: number) => void;
+}) {
+  useThemeRefresh();
+  const [trackWidth, setTrackWidth] = useState(0);
+  const trackRef = useRef(0);
+  trackRef.current = trackWidth;
+  const startRef = useRef(value);
+  const changeRef = useRef(onChange);
+  changeRef.current = onChange;
+  const bounds = useRef({ min, max, step });
+  bounds.current = { min, max, step };
+
+  const fromX = (x: number) => {
+    const width = trackRef.current;
+    const b = bounds.current;
+    if (width <= THUMB) return b.min;
+    const travel = width - THUMB;
+    const clamped = Math.min(width - THUMB / 2, Math.max(THUMB / 2, x));
+    const ratio = (clamped - THUMB / 2) / travel;
+    return snap(b.min + ratio * (b.max - b.min), b.min, b.max, b.step);
+  };
+
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          const next = fromX(evt.nativeEvent.locationX);
+          startRef.current = next;
+          changeRef.current(next);
+        },
+        onPanResponderMove: (_evt, gesture) => {
+          const width = trackRef.current;
+          const b = bounds.current;
+          if (width <= THUMB) return;
+          const travel = width - THUMB;
+          const delta = (gesture.dx / travel) * (b.max - b.min);
+          changeRef.current(snap(startRef.current + delta, b.min, b.max, b.step));
+        },
+      }),
+    [],
+  );
+
+  const span = Math.max(0.0001, max - min);
+  const travel = Math.max(1, trackWidth - THUMB);
+  const left = ((value - min) / span) * travel;
+
+  return (
+    <View style={styles.meter}>
+      <View style={styles.meterHead}>
+        <Text style={styles.kicker}>{label}</Text>
+        <Text style={styles.meterValue}>{valueLabel}</Text>
+      </View>
+      <View
+        style={styles.trackHit}
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          setTrackWidth(w);
+          trackRef.current = w;
+        }}
+        {...pan.panHandlers}>
+        <View style={styles.track} pointerEvents="none">
+          <View style={[styles.trackFill, { width: left + THUMB / 2 }]} />
+        </View>
+        <View pointerEvents="none" style={[styles.thumb, { left }]} />
+      </View>
+    </View>
+  );
+}
 
 const styles = themedStyles((c) => ({
-  wrap: { gap: 10 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  block: { gap: 8 },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerActionBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: c.accentSoft,
-  },
-  headerActionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: c.accent,
-  },
-  gridBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: c.fill,
-  },
-  gridBadgeText: {
+  wrap: { gap: 12 },
+  block: { gap: 10 },
+  kicker: {
     fontSize: 11,
     fontWeight: '600',
-    color: c.text,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: c.textMuted,
   },
-  label: { fontSize: 12, color: c.text, fontWeight: '600' },
+  hint: { fontSize: 12, lineHeight: 16, color: c.textMuted },
+  segment: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: 10,
+    backgroundColor: c.fill,
+  },
+  segmentBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  segmentBtnOn: { backgroundColor: c.accentSoft },
+  segmentText: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
+  segmentTextOn: { color: c.accent },
   input: {
     borderWidth: 1,
-    borderColor: c.hairline,
-    borderRadius: 8,
+    borderColor: c.border,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
     color: c.text,
-    fontSize: 14,
+    fontSize: 15,
     backgroundColor: c.surface,
   },
-  presetsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  wordChip: {
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: {
     paddingVertical: 5,
-    paddingHorizontal: 9,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: c.hairline,
+    paddingHorizontal: 8,
+    borderRadius: 999,
     backgroundColor: c.fill,
   },
-  wordChipActive: {
-    borderColor: c.accent,
-    backgroundColor: c.accentSoft,
-  },
-  wordChipText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: c.textSecondary,
-  },
-  wordChipTextActive: {
-    color: c.accent,
-    fontWeight: '700',
-  },
-  colorRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  colorBtn: {
-    width: '23%',
-    flexDirection: 'row',
+  chipOn: { backgroundColor: c.accentSoft },
+  chipText: { fontSize: 11, fontWeight: '600', color: c.textSecondary },
+  chipTextOn: { color: c.accent },
+  swatches: { flexDirection: 'row', gap: 8 },
+  swatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  swatchOn: { borderColor: c.accent },
+  swatchDot: { width: 18, height: 18, borderRadius: 9 },
+  imageBtn: {
     borderWidth: 1,
-    borderColor: c.hairline,
-    backgroundColor: c.fill,
+    borderColor: c.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: c.surface,
+    gap: 2,
   },
-  colorBtnActive: {
-    borderColor: c.accent,
-    backgroundColor: c.accentSoft,
-  },
-  colorDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  colorText: {
-    fontSize: 10,
-    color: c.textSecondary,
-    fontWeight: '500',
-  },
-  colorTextActive: {
-    color: c.accent,
-    fontWeight: '700',
-  },
-  pick: {
-    borderWidth: 1,
-    borderColor: c.accent,
-    borderRadius: 8,
-    padding: 10,
-    alignItems: 'center',
-  },
-  pickText: { color: c.accent, fontWeight: '600' },
-  locationGrid: {
+  imageTitle: { fontSize: 14, fontWeight: '600', color: c.text },
+  imageHint: { fontSize: 12, color: c.textMuted },
+  placeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  placeCopy: { flex: 1, gap: 2 },
+  placeValue: { fontSize: 15, fontWeight: '600', color: c.text },
+  anchor: {
+    width: 92,
+    height: 92,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-  },
-  locationBtn: {
-    width: '31%',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: c.hairline,
-    backgroundColor: c.fill,
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
   },
-  locationBtnActive: {
-    borderColor: c.accent,
-    backgroundColor: c.accentSoft,
+  anchorCell: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.fill,
   },
-  alignmentDot: {
+  anchorCellOn: { backgroundColor: c.accentSoft },
+  anchorDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: c.hairline,
+    backgroundColor: c.textMuted,
   },
-  alignmentDotActive: {
-    backgroundColor: c.accentFill,
+  anchorDotOn: { backgroundColor: c.accent },
+  meter: { gap: 4 },
+  meterHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  meterValue: { fontSize: 13, fontWeight: '600', color: c.text },
+  trackHit: { height: 32, justifyContent: 'center' },
+  track: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: c.fillStrong,
+    overflow: 'hidden',
   },
-  locationLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: c.textSecondary,
-    textAlign: 'center',
-  },
-  locationLabelActive: {
-    color: c.accent,
-    fontWeight: '700',
-  },
-  dragHintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 2,
-    paddingHorizontal: 2,
-  },
-  dragDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: c.accentFill,
-  },
-  dragHintText: {
-    flex: 1,
-    fontSize: 11,
-    color: c.textMuted,
-    lineHeight: 15,
-  },
-  chip: {
-    flex: 1,
-    minWidth: '18%',
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: c.hairline,
-    backgroundColor: c.fill,
-    alignItems: 'center',
-  },
-  chipActive: {
+  trackFill: { height: '100%', backgroundColor: c.accent },
+  thumb: {
+    position: 'absolute',
+    width: THUMB,
+    height: THUMB,
+    borderRadius: THUMB / 2,
+    backgroundColor: c.surface,
+    borderWidth: 2,
     borderColor: c.accent,
-    backgroundColor: c.accentSoft,
   },
-  chipText: {
-    fontSize: 11,
-    color: c.textSecondary,
-    fontWeight: '500',
-  },
-  chipTextActive: {
-    color: c.accent,
-    fontWeight: '700',
-  },
-  seg: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: c.hairline,
-  },
-  segOn: { borderColor: c.accent, backgroundColor: c.accentSoft },
-  segText: { fontSize: 12, color: c.textSecondary },
-  segTextOn: { color: c.accent, fontWeight: '600' },
 }));
-

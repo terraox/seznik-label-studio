@@ -34,7 +34,7 @@ import { Spacing } from '@/constants/theme';
 
 import { planLabelRender } from '@/lib/pdf-editor/label-render-plan';
 import { exportEditedPdf } from '@/lib/pdf-editor/export';
-import { copyPdfToCache, loadPdfMetadata } from '@/lib/pdf-editor/load';
+import { copyPdfToCache, loadPdfMetadata, loadPdfPageSizes } from '@/lib/pdf-editor/load';
 import { printEditedPdf, type PdfPrintOptions } from '@/lib/pdf-editor/print';
 import { resolvePrintPageIndices, type PdfPrintSelection } from '@/lib/pdf-editor/session';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
@@ -44,18 +44,14 @@ import {
   PREVIEW_DPI,
   clearRasterCache,
   rasterPdfPageCached,
+  regionImageCached,
 } from '@/lib/pdf-editor/raster';
 import {
   clampCropNorm,
-  cropAspectForLabel,
-  defaultCropWindow,
   defaultWatermark,
-  OUTPUT_SIZE_PRESETS,
   pageColorMode,
   ptToMm,
   resolveScopeIndices,
-  snapCropToAspect,
-  type OutputSize,
   type PageScope,
 } from '@/lib/pdf-editor/session';
 import { downscaleWatermarkTile, previewTileSize } from '@/lib/pdf-editor/watermark-tile';
@@ -66,14 +62,8 @@ import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type Step = 'pick' | 'size' | 'edit' | 'print';
 
-/** Label size from a selected section, snapped to a preset when it is one (same rule as the size row). */
-function outputSizeFromMm(widthMm: number, heightMm: number): OutputSize {
-  const preset = OUTPUT_SIZE_PRESETS.find(
-    (p) => Math.abs(p.widthMm - widthMm) < 0.15 && Math.abs(p.heightMm - heightMm) < 0.15,
-  );
-  if (preset) return { kind: preset.kind, widthMm: preset.widthMm, heightMm: preset.heightMm };
-  return { kind: 'custom', widthMm, heightMm };
-}
+/** Manual crop starts on the whole page (or the whole cropped part), so nothing is left out. */
+const FULL_WINDOW = { originNorm: { x: 0, y: 0 }, sizeNorm: { w: 1, h: 1 } };
 
 const STEP_TITLE: Record<Step, string> = {
   pick: 'Print PDF',
@@ -98,6 +88,7 @@ export default function PdfEditorScreen() {
   const setCurrentPage = usePdfEditStore((s) => s.setCurrentPage);
   const setOutputSize = usePdfEditStore((s) => s.setOutputSize);
   const setCrop = usePdfEditStore((s) => s.setCrop);
+  const setPageSizes = usePdfEditStore((s) => s.setPageSizes);
   const setRotationForScope = usePdfEditStore((s) => s.setRotationForScope);
   const setSharpnessForScope = usePdfEditStore((s) => s.setSharpnessForScope);
   const setWatermark = usePdfEditStore((s) => s.setWatermark);
@@ -126,9 +117,11 @@ export default function PdfEditorScreen() {
   } | null>(null);
   const [draftScope, setDraftScope] = useState<PageScope>({ mode: 'this' });
   // Optional: lock the crop to the label's shape. Off by default so width and height crop freely.
-  const [matchLabel, setMatchLabel] = useState(false);
+  // Cropping an already-cropped page: that crop is the "page" the tool works on.
+  const [cropBase, setCropBase] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [baseUri, setBaseUri] = useState<string | null>(null);
+  const [cropKind, setCropKind] = useState<'smart' | 'manual'>('manual');
   // Smart Crop: label size a selected section will set, applied with the crop on Apply.
-  const [draftOutput, setDraftOutput] = useState<{ widthMm: number; heightMm: number } | null>(null);
   const [cropNotice, setCropNotice] = useState<PdfCropScreenNotice | null>(null);
   // Page size as the PDF renderer sees it; crop fractions are measured against this bitmap.
   const [rasterPt, setRasterPt] = useState<{ index: number; w: number; h: number } | null>(null);
@@ -141,6 +134,18 @@ export default function PdfEditorScreen() {
       clearSmartCropCache();
     };
   }, [resetSession]);
+
+  // Exact sizes of every page, read after the editor is already open.
+  const refinePageSizes = useCallback(
+    (uri: string) => {
+      setTimeout(() => {
+        void loadPdfPageSizes(uri)
+          .then((m) => setPageSizes(m.pageSizesPt))
+          .catch(() => {});
+      }, 1500);
+    },
+    [setPageSizes],
+  );
 
   useEffect(() => {
     const rawUri = params.docUri || params.uri;
@@ -161,6 +166,7 @@ export default function PdfEditorScreen() {
             pageSizesPt: meta.pageSizesPt,
           });
           setStep('size');
+          refinePageSizes(cached);
         }
       } catch (err) {
         if (!cancelled) {
@@ -175,7 +181,7 @@ export default function PdfEditorScreen() {
     return () => {
       cancelled = true;
     };
-  }, [params.docUri, params.uri, params.docName, params.name, session, startSession]);
+  }, [params.docUri, params.uri, params.docName, params.name, refinePageSizes, session, startSession]);
 
   const importPdf = useCallback(async () => {
     try {
@@ -194,13 +200,14 @@ export default function PdfEditorScreen() {
         pageSizesPt: meta.pageSizesPt,
       });
       setStep('size');
+      refinePageSizes(cached);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not open this PDF.';
       Alert.alert('PDF', msg);
     } finally {
       setLoading(false);
     }
-  }, [pickDocumentWithSource, startSession]);
+  }, [pickDocumentWithSource, refinePageSizes, startSession]);
 
   const exportPdf = useCallback(async () => {
     if (!session || exporting) return;
@@ -284,41 +291,48 @@ export default function PdfEditorScreen() {
     rasterPt && session && rasterPt.index === session.currentPageIndex
       ? { w: rasterPt.w, h: rasterPt.h }
       : metaPageSize;
-  const currentRotation = session?.rotationByPage[session.currentPageIndex] ?? 0;
-  const labelAspect = session ? cropAspectForLabel(session.outputSize, currentRotation) : 1;
+  const cropRegion = tool === 'crop' ? cropBase : null;
+  const cropPageSize = cropRegion ? { w: pageSize.w * cropRegion.w, h: pageSize.h * cropRegion.h } : pageSize;
+  // Window and section rects are fractions of the working page; the session stores fractions of the full page.
+  const toFullPage = useCallback(
+    (c: { originNorm: { x: number; y: number }; sizeNorm: { w: number; h: number } }) =>
+      cropRegion
+        ? {
+            originNorm: { x: cropRegion.x + c.originNorm.x * cropRegion.w, y: cropRegion.y + c.originNorm.y * cropRegion.h },
+            sizeNorm: { w: c.sizeNorm.w * cropRegion.w, h: c.sizeNorm.h * cropRegion.h },
+          }
+        : c,
+    [cropRegion],
+  );
 
-  // A tapped section snaps the window to it and stages its real size as the
-  // label size (plan §4.2). Nothing reaches the session until Apply Crop.
+  // A tapped section snaps the window to it. The label size is never changed:
+  // the crop is fitted into the size the user already chose.
   const onSmartSelection = useCallback(
     (info: SmartCropSelectionInfo) => {
       if (!info.rect) {
-        // Selection cleared: keep the window where it is, drop the staged size.
-        setDraftOutput(null);
+        // Selection cleared: keep the window where it is.
         setCropNotice(null);
         return;
       }
       const next = clampCropNorm({ x: info.rect.x, y: info.rect.y }, { w: info.rect.w, h: info.rect.h });
       setDraftCrop(next);
-      setDraftOutput({
-        widthMm: Math.round(next.sizeNorm.w * ptToMm(pageSize.w) * 10) / 10,
-        heightMm: Math.round(next.sizeNorm.h * ptToMm(pageSize.h) * 10) / 10,
-      });
-      if (matchLabel) {
-        // Left on, the label shape would shrink the section the user just picked.
-        setMatchLabel(false);
-        setCropNotice('match-off');
-      } else {
-        setCropNotice(null);
+      if (info.outcome === 'added' || info.outcome === 'stepped') {
+        // Tapping a section is the choice: crop to it and stay on this page for more edits.
+        setCrop({ scope: draftScope, ...toFullPage(next) });
+        setTool(null);
+        return;
       }
+      setCropNotice(null);
     },
-    [matchLabel, pageSize.h, pageSize.w],
+    [draftScope, setCrop, toFullPage],
   );
 
   const smart = useSmartCrop({
     sourceUri: session?.sourceUri ?? null,
     pageIndex: session?.currentPageIndex ?? 0,
     active: step === 'edit' && tool === 'crop',
-    pageMm: { w: ptToMm(pageSize.w), h: ptToMm(pageSize.h) },
+    region: cropRegion,
+    pageMm: { w: ptToMm(cropPageSize.w), h: ptToMm(cropPageSize.h) },
     hintSeen: smartCropHintSeen,
     onHintSeen: () => setSmartCropHintSeen(true),
     onSelection: onSmartSelection,
@@ -335,31 +349,31 @@ export default function PdfEditorScreen() {
   );
 
   const openCrop = () => {
-    setDraftOutput(null);
     setCropNotice(null);
+    setCropKind('manual');
+    setBaseUri(null);
     const saved = session?.crop;
     setDraftScope(saved?.scope ?? { mode: 'this' });
-    const start = saved?.sizeNorm
-      ? clampCropNorm(saved.originNorm, saved.sizeNorm)
-      : session
-        ? defaultCropWindow(pageSize, session.outputSize)
-        : null;
-    setDraftCrop(start && matchLabel ? snapCropToAspect(start, pageSize, labelAspect) : start);
+    if (session && saved?.sizeNorm && isCropped) {
+      // Re-cropping: the existing crop becomes the page, with a fresh window on it.
+      const c = clampCropNorm(saved.originNorm, saved.sizeNorm);
+      setCropBase({ x: c.originNorm.x, y: c.originNorm.y, w: c.sizeNorm.w, h: c.sizeNorm.h });
+      setDraftCrop(FULL_WINDOW);
+      return;
+    }
+    setCropBase(null);
+    setDraftCrop(FULL_WINDOW);
   };
   const applyCrop = () => {
-    if (draftOutput) setOutputSize(outputSizeFromMm(draftOutput.widthMm, draftOutput.heightMm));
-    if (draftCrop) setCrop({ scope: draftScope, ...draftCrop });
-    setDraftOutput(null);
+    if (draftCrop) setCrop({ scope: draftScope, ...toFullPage(draftCrop) });
     setTool(null);
-  };
-  const toggleMatchLabel = (on: boolean) => {
-    setMatchLabel(on);
-    if (on && draftCrop) setDraftCrop(snapCropToAspect(draftCrop, pageSize, labelAspect));
   };
   const removeCrop = () => {
     setCrop(null);
     smart.clear();
-    if (session) setDraftCrop(defaultCropWindow(pageSize, session.outputSize));
+    setCropBase(null);
+    setBaseUri(null);
+    setDraftCrop(FULL_WINDOW);
   };
 
   const ensureWatermark = () => {
@@ -435,6 +449,44 @@ export default function PdfEditorScreen() {
     };
   }, [session?.sourceUri, session?.currentPageIndex, session?.pageCount, previewDpi]);
 
+  // Moving to another page while cropping: start over on that page's own crop.
+  const cropPageIndex = session?.currentPageIndex;
+  const lastCropPage = useRef(cropPageIndex);
+  useEffect(() => {
+    if (lastCropPage.current === cropPageIndex) return;
+    lastCropPage.current = cropPageIndex;
+    if (tool === 'crop') openCrop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cropPageIndex]);
+
+  useEffect(() => {
+    if (tool !== 'crop' || !cropBase || !pageUri) return;
+    let cancelled = false;
+    regionImageCached(pageUri, cropBase)
+      .then((uri) => {
+        if (!cancelled) setBaseUri(uri);
+      })
+      .catch(() => {
+        // Fall back to the whole page: the crop still works, just not zoomed to the region.
+        if (!cancelled) {
+          setCropBase(null);
+          setBaseUri(null);
+          setDraftCrop(FULL_WINDOW);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tool, cropBase, pageUri]);
+
+  // Cut the cropped part out in the background, so opening Crop again does not wait for it.
+  const savedCrop = session?.crop;
+  useEffect(() => {
+    if (tool === 'crop' || !pageUri || !isCropped || !savedCrop?.sizeNorm) return;
+    const c = clampCropNorm(savedCrop.originNorm, savedCrop.sizeNorm);
+    void regionImageCached(pageUri, { x: c.originNorm.x, y: c.originNorm.y, w: c.sizeNorm.w, h: c.sizeNorm.h }).catch(() => {});
+  }, [tool, pageUri, isCropped, savedCrop]);
+
   // Smart Crop Phase 1: dev-only on-device measurement. Logs detected boxes and the
   // render / decode / downscale / detect split. No UI, no session change.
   const probeUri = session?.sourceUri;
@@ -454,20 +506,20 @@ export default function PdfEditorScreen() {
     if (!session) return null;
     return (
       <PdfPageViewer
-        uri={pageUri}
-        pageWpt={pageSize.w}
-        pageHpt={pageSize.h}
+        uri={mode.crop && cropRegion ? baseUri : pageUri}
+        pending={Boolean(mode.crop && cropRegion && !baseUri)}
+        pageWpt={mode.crop ? cropPageSize.w : pageSize.w}
+        pageHpt={mode.crop ? cropPageSize.h : pageSize.h}
         rotation={session.rotationByPage[session.currentPageIndex] ?? 0}
         outputSize={session.outputSize}
         originNorm={mode.crop ? (draftCrop?.originNorm ?? { x: 0, y: 0 }) : (session.crop?.originNorm ?? { x: 0, y: 0 })}
         sizeNorm={mode.crop ? draftCrop?.sizeNorm : session.crop?.sizeNorm}
         onCropRect={onCropRect}
-        aspectLock={mode.crop && matchLabel ? labelAspect : 0}
-        overlays={mode.crop ? smart.overlays : undefined}
-        onTapPage={mode.crop ? smart.tap : undefined}
+        overlays={mode.crop && cropKind === 'smart' ? smart.overlays : undefined}
+        onTapPage={mode.crop && cropKind === 'smart' ? smart.tap : undefined}
         busyAt={mode.crop ? smart.busyAt : null}
-        revealOutside={mode.crop && (smart.overlaysOn || smart.selectedCount > 0)}
-        onOverlayActivate={mode.crop ? smart.activate : undefined}
+        revealOutside={mode.crop && cropKind === 'smart' && !smart.focused && (smart.overlaysOn || smart.selectedCount > 0)}
+        onOverlayActivate={mode.crop && cropKind === 'smart' ? smart.activate : undefined}
         cropEnabled={mode.crop}
         isCropped={isCropped}
         expand={mode.expand}
@@ -616,22 +668,22 @@ export default function PdfEditorScreen() {
                 selectionMm={
                   draftCrop
                     ? {
-                        w: draftCrop.sizeNorm.w * ptToMm(pageSize.w),
-                        h: draftCrop.sizeNorm.h * ptToMm(pageSize.h),
+                        w: draftCrop.sizeNorm.w * ptToMm(cropPageSize.w),
+                        h: draftCrop.sizeNorm.h * ptToMm(cropPageSize.h),
                       }
                     : null
                 }
                 outputSize={session.outputSize}
-                pendingOutput={draftOutput}
-                matchLabel={matchLabel}
-                onMatchLabel={toggleMatchLabel}
                 onResetCrop={removeCrop}
                 onApplyCrop={applyCrop}
-                onCancel={() => {
-                  setDraftOutput(null);
-                  setTool(null);
-                }}
+                onCancel={() => setTool(null)}
                 onScope={setDraftScope}
+                kind={cropKind}
+                onKind={(next) => {
+                  setCropKind(next);
+                  if (next === 'manual') smart.clear();
+                  else smart.showAll(); // detect and outline the sections right away
+                }}
                 smart={{
                   status: smart.status,
                   notice: smart.notice ?? cropNotice,

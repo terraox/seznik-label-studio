@@ -118,3 +118,21 @@ export function applyMonoToRgba(
     }
   }
 }
+
+/**
+ * Copy of `src` with B & W or halftone baked in at the source resolution.
+ * Thresholding the full raster keeps text black. Doing it after the page has
+ * been scaled down turns thin strokes into gray and both modes look washed out.
+ */
+export function renderMonoPreview(
+  src: Uint8Array,
+  width: number,
+  height: number,
+  threshold: number,
+  mode: Exclude<EditorColorMode, 'Original'>,
+): Uint8Array {
+  const data = new Uint8Array(src.length);
+  data.set(src);
+  applyMonoToRgba(data, width, height, threshold, mode);
+  return data;
+}

@@ -8,6 +8,7 @@ import {
   binarizeLuminanceBuffer,
   looksLikeImageUri,
   monoFromLuminance,
+  renderMonoPreview,
   resolveEditorColorMode,
 } from '../image-mono';
 
@@ -59,4 +60,27 @@ test('Original without anti-colour leaves pixels alone', () => {
   const rgba = Uint8Array.from([10, 100, 250, 200]);
   applyMonoToRgba(rgba, 1, 1, 128, 'Original');
   assert.deepEqual([...rgba], [10, 100, 250, 200]);
+});
+
+test('preview B & W is solid black or white and does not edit the source', () => {
+  const src = Uint8Array.from([40, 40, 40, 255, 200, 200, 200, 255]);
+  const out = renderMonoPreview(src, 2, 1, 160, 'B & W');
+  assert.deepEqual([...out], [0, 0, 0, 255, 255, 255, 255, 255]);
+  assert.deepEqual([...src], [40, 40, 40, 255, 200, 200, 200, 255]);
+});
+
+test('preview halftone dithers a flat mid-gray that B & W would flatten', () => {
+  const src = new Uint8Array(4 * 4 * 4);
+  for (let i = 0; i < 16; i++) {
+    src[i * 4] = 160;
+    src[i * 4 + 1] = 160;
+    src[i * 4 + 2] = 160;
+    src[i * 4 + 3] = 255;
+  }
+  const bw = renderMonoPreview(src, 4, 4, 160, 'B & W');
+  const dots = renderMonoPreview(src, 4, 4, 160, 'Halftone');
+  const sample = (buf: Uint8Array) => [...buf].filter((_, i) => i % 4 === 0);
+  assert.deepEqual(sample(bw), Array(16).fill(255));
+  const halftone = sample(dots);
+  assert.ok(halftone.some((v) => v === 0) && halftone.some((v) => v === 255));
 });

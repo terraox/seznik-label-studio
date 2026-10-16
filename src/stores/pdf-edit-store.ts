@@ -25,6 +25,8 @@ type PdfEditState = {
   resetSession: () => void;
   setCurrentPage: (index: number) => void;
   setOutputSize: (size: OutputSize) => void;
+  /** Replace the page sizes once they have been read exactly (same page count only). */
+  setPageSizes: (pageSizesPt: { w: number; h: number }[]) => void;
   setCrop: (crop: PdfCrop | null) => void;
   setCropScope: (scope: PageScope) => void;
   setCropOrigin: (originNorm: { x: number; y: number }) => void;
@@ -79,6 +81,9 @@ export const usePdfEditStore = create<PdfEditState>((set) => ({
       if (!s.session) return s;
       return { session: { ...s.session, outputSize: size } };
     }),
+
+  setPageSizes: (pageSizesPt) =>
+    set((s) => (s.session && s.session.pageCount === pageSizesPt.length ? { session: { ...s.session, pageSizesPt } } : s)),
 
   setCrop: (crop) =>
     set((s) => (s.session ? { session: { ...s.session, crop } } : s)),

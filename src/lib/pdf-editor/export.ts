@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { decodePng, encodePng } from '@/lib/fast-png-shim';
 import {
+  ParseSpeeds,
   PDFDocument,
   StandardFonts,
   degrees,
@@ -269,7 +270,15 @@ async function composeEditedPages(
   onProgress?: PdfExportProgress,
 ): Promise<{ doc: PDFDocument; usedRaster: boolean[] }> {
   const srcBytes = await readBytes(session.sourceUri);
-  const srcDoc = await PDFDocument.load(srcBytes);
+  const srcDoc = await PDFDocument.load(srcBytes, { parseSpeed: ParseSpeeds.Fastest, updateMetadata: false });
+  // Import only guesses sizes quickly; the file just parsed has the real ones.
+  session = {
+    ...session,
+    pageSizesPt: srcDoc.getPages().map((p) => {
+      const { width, height } = p.getSize();
+      return { w: width, h: height };
+    }),
+  };
   const out = await PDFDocument.create();
   const usedRaster: boolean[] = [];
 

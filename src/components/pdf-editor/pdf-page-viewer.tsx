@@ -1,13 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image as RNImage, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, ColorMatrix, Group, Image as SkiaImage, RuntimeShader, Skia, useImage } from '@shopify/react-native-skia';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import {
+  AlphaType,
+  Canvas,
+  ColorMatrix,
+  ColorType,
+  Group,
+  Image as SkiaImage,
+  Skia,
+  useImage,
+} from '@shopify/react-native-skia';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { PdfSectionOverlays, PdfTapBusy } from '@/components/pdf-editor/pdf-section-overlays';
 import type { PdfCropOverlay } from '@/components/pdf-editor/use-smart-crop';
-import { MONO_IMAGE_SKSL } from '@/lib/editor/image-mono';
-import { colorContrastPreviewMatrix, monoPreviewMatrix } from '@/lib/pdf-editor/sharpen';
+import { renderMonoPreview, type EditorColorMode } from '@/lib/editor/image-mono';
+import { cropFocusTransform } from '@/lib/pdf-editor/crop-focus';
+import { colorContrastPreviewMatrix, monoPreviewMatrix, unsharpRgba } from '@/lib/pdf-editor/sharpen';
 import {
   clampCropNorm,
   ptToMm,
@@ -29,18 +46,105 @@ const CROP_SLOP = 18;
  */
 const CROP_DRAG_MIN = 9;
 
-function cropZoom(fitW: number, fitH: number, cropW: number, cropH: number) {
+const FOCUS_TIMING = { duration: 320, easing: Easing.out(Easing.cubic) };
+
+/** Stage point → page point. Scale is about the page centre, then tx/ty. */
+function touchToPage(
+  stageX: number,
+  stageY: number,
+  scale: number,
+  tx: number,
+  ty: number,
+  offX: number,
+  offY: number,
+  pageW: number,
+  pageH: number,
+) {
   'worklet';
-  return Math.min(fitW / Math.max(cropW, 1), fitH / Math.max(cropH, 1));
+  const s = Math.max(0.01, scale);
+  const lx = stageX - offX;
+  const ly = stageY - offY;
+  return {
+    x: pageW / 2 + (lx - pageW / 2 - tx) / s,
+    y: pageH / 2 + (ly - pageH / 2 - ty) / s,
+  };
 }
 
-const monoPreviewEffect = (() => {
-  try {
-    return Skia.RuntimeEffect.Make(MONO_IMAGE_SKSL);
-  } catch {
-    return null;
-  }
-})();
+type PageImage = ReturnType<typeof useImage>;
+
+function useMonoPageImage(source: PageImage, mode: EditorColorMode, threshold: number, sharpness: number) {
+  const [mono, setMono] = useState<PageImage>(null);
+  useEffect(() => {
+    if (!source || mode === 'Original') {
+      setMono(null);
+      return;
+    }
+    let cancelled = false;
+    try {
+      const raster = source.makeNonTextureImage();
+      const width = raster.width();
+      const height = raster.height();
+      if (width < 2 || height < 2) return;
+      const pixels = raster.readPixels(0, 0, {
+        width,
+        height,
+        colorType: ColorType.RGBA_8888,
+        alphaType: AlphaType.Unpremul,
+      });
+      if (!pixels || cancelled) return;
+      const needed = width * height * 4;
+      const raw = new Uint8Array(pixels.buffer, pixels.byteOffset, Math.min(pixels.byteLength, needed));
+      const rgba = new Uint8Array(needed);
+      rgba.set(raw);
+      if (sharpness > 0) rgba.set(unsharpRgba(rgba, width, height, sharpness).subarray(0, needed));
+      const data = renderMonoPreview(rgba, width, height, threshold, mode);
+      const next = Skia.Image.MakeImage(
+        {
+          width,
+          height,
+          colorType: ColorType.RGBA_8888,
+          alphaType: AlphaType.Unpremul,
+        },
+        Skia.Data.fromBytes(data),
+        width * 4,
+      );
+      if (!cancelled && next) setMono(next);
+    } catch {
+      if (!cancelled) setMono(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [source, mode, threshold, sharpness]);
+  return mono;
+}
+
+function PdfPagePicture({
+  image,
+  width,
+  height,
+  mode,
+  sharpness,
+  pending,
+}: {
+  image: PageImage;
+  width: number;
+  height: number;
+  mode: EditorColorMode;
+  sharpness: number;
+  pending: boolean;
+}) {
+  if (!image) return null;
+  return (
+    <SkiaImage image={image} x={0} y={0} width={width} height={height} fit="fill">
+      {mode === 'Original' ? (
+        sharpness > 0 ? <ColorMatrix matrix={colorContrastPreviewMatrix(sharpness)} /> : null
+      ) : pending ? (
+        <ColorMatrix matrix={monoPreviewMatrix(false)} />
+      ) : null}
+    </SkiaImage>
+  );
+}
 
 export function PdfPageViewer({
   uri,
@@ -66,6 +170,7 @@ export function PdfPageViewer({
   onTapPage,
   busyAt,
   revealOutside,
+  pending = false,
   onOverlayActivate,
 }: {
   uri: string | null;
@@ -100,6 +205,8 @@ export function PdfPageViewer({
   busyAt?: { x: number; y: number } | null;
   /** Dim the page outside the window instead of hiding it, so sections there can be seen and tapped. */
   revealOutside?: boolean;
+  /** The image is being prepared: show the spinner, not "No page". */
+  pending?: boolean;
   onOverlayActivate?: (id: string) => void;
 }) {
   useThemeRefresh();
@@ -107,6 +214,9 @@ export function PdfPageViewer({
   const image = useImage(uri ?? undefined);
   const mode: PdfColorMode = colorMode ?? 'Original';
   const threshold = Number.isFinite(grayThreshold) ? (grayThreshold as number) : 160;
+  const monoImage = useMonoPageImage(image, mode, threshold, sharpness);
+  const drawn = mode !== 'Original' && monoImage ? monoImage : image;
+  const monoPending = mode !== 'Original' && monoImage == null;
   const pageMmW = ptToMm(pageWpt);
   const pageMmH = ptToMm(pageHpt);
 
@@ -150,8 +260,9 @@ export function PdfPageViewer({
    * inside the frame. Same maths as print (`planLabelRender`), so preview matches paper.
    */
   const labelFit = useMemo(() => {
-    const maxW = 340;
-    const maxH = 380;
+    // Edit step (expand) fills the stage, so a cropped page shows only its portion, large.
+    const maxW = expand && measured ? measured.w : 340;
+    const maxH = expand && measured ? measured.h : 380;
     const frameScale = Math.min(
       maxW / Math.max(outputSize.widthMm, 1),
       maxH / Math.max(outputSize.heightMm, 1),
@@ -185,7 +296,9 @@ export function PdfPageViewer({
       },
     };
   }, [
+    expand,
     isCropped,
+    measured,
     originNorm.x,
     originNorm.y,
     outputSize.heightMm,
@@ -197,9 +310,9 @@ export function PdfPageViewer({
   ]);
 
   // Edit step passes expand so the source page fills the stage. Print keeps the label frame.
-  // Smart Crop's "show the rest" mode keeps the whole page; otherwise the crop window is zoomed to fill.
-  const fillPage = Boolean(expand) && !cropEnabled;
-  const zoomCrop = cropEnabled && !revealOutside;
+  // Crop keeps that same fitted page and eases the camera onto the window.
+  const fillPage = Boolean(expand) && !cropEnabled && !isCropped;
+  const focusCrop = cropEnabled && !revealOutside;
   const pageFit = useMemo(() => {
     const maxW = measured?.w ?? 320;
     const maxH = measured?.h ?? 340;
@@ -240,7 +353,11 @@ export function PdfPageViewer({
   const dispH = useSharedValue(layout.dispH);
   const fitW = useSharedValue(measured?.w ?? layout.dispW);
   const fitH = useSharedValue(measured?.h ?? layout.dispH);
-  const zoomMode = useSharedValue(zoomCrop);
+  const camScale = useSharedValue(1);
+  const camTx = useSharedValue(0);
+  const camTy = useSharedValue(0);
+  const pageOffX = useSharedValue(0);
+  const pageOffY = useSharedValue(0);
   const gestureActive = useSharedValue(false);
   const cropMode = useSharedValue(0);
   // Whether this touch actually became a drag. A tap that wins must not commit.
@@ -266,16 +383,44 @@ export function PdfPageViewer({
   }, [aspectLock, lockAspect]);
 
   useEffect(() => {
+    const stageW = measured?.w ?? layout.dispW;
+    const stageH = measured?.h ?? layout.dispH;
     dispW.value = layout.dispW;
     dispH.value = layout.dispH;
-    fitW.value = measured?.w ?? layout.dispW;
-    fitH.value = measured?.h ?? layout.dispH;
-    zoomMode.value = zoomCrop;
+    fitW.value = stageW;
+    fitH.value = stageH;
+    pageOffX.value = Math.max(0, (stageW - layout.dispW) / 2);
+    pageOffY.value = Math.max(0, (stageH - layout.dispH) / 2);
     if (gestureActive.value) return;
     cropX.value = layout.cropLeft;
     cropY.value = layout.cropTop;
     cropW.value = layout.winW;
     cropH.value = layout.winH;
+    if (!cropEnabled) {
+      camScale.value = 1;
+      camTx.value = 0;
+      camTy.value = 0;
+      return;
+    }
+    const target = cropFocusTransform({
+      pageW: layout.dispW,
+      pageH: layout.dispH,
+      cropX: layout.cropLeft,
+      cropY: layout.cropTop,
+      cropW: layout.winW,
+      cropH: layout.winH,
+      stageW,
+      stageH,
+      focus: focusCrop,
+    });
+    const settled =
+      Math.abs(camScale.value - target.scale) < 0.01 &&
+      Math.abs(camTx.value - target.tx) < 0.5 &&
+      Math.abs(camTy.value - target.ty) < 0.5;
+    if (settled) return;
+    camScale.value = withTiming(target.scale, FOCUS_TIMING);
+    camTx.value = withTiming(target.tx, FOCUS_TIMING);
+    camTy.value = withTiming(target.ty, FOCUS_TIMING);
   }, [
     layout.cropLeft,
     layout.cropTop,
@@ -284,10 +429,15 @@ export function PdfPageViewer({
     layout.dispW,
     layout.dispH,
     measured,
-    zoomCrop,
+    cropEnabled,
+    focusCrop,
     fitW,
     fitH,
-    zoomMode,
+    camScale,
+    camTx,
+    camTy,
+    pageOffX,
+    pageOffY,
     cropX,
     cropY,
     cropW,
@@ -338,33 +488,13 @@ export function PdfPageViewer({
     height: cropH.value,
   }));
 
-  const cropViewportStyle = useAnimatedStyle(() => {
-    const zoom = cropZoom(fitW.value, fitH.value, cropW.value, cropH.value);
-    const viewW = cropW.value * zoom;
-    const viewH = cropH.value * zoom;
-    return {
-      position: 'absolute',
-      left: (fitW.value - viewW) / 2,
-      top: (fitH.value - viewH) / 2,
-      width: viewW,
-      height: viewH,
-    };
-  });
-
-  const cropImageStyle = useAnimatedStyle(() => {
-    const zoom = cropZoom(fitW.value, fitH.value, cropW.value, cropH.value);
-    const dw = dispW.value;
-    const dh = dispH.value;
-    return {
-      width: dw,
-      height: dh,
-      transform: [
-        { translateX: -cropX.value * zoom + (dw / 2) * (zoom - 1) },
-        { translateY: -cropY.value * zoom + (dh / 2) * (zoom - 1) },
-        { scale: zoom },
-      ],
-    };
-  });
+  const cameraStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: camScale.value },
+      { translateX: camTx.value },
+      { translateY: camTy.value },
+    ],
+  }));
 
   const stampW = Math.max(110, Math.min(activeStageW * 0.9, activeStageW * (watermark?.stamp?.sizeNorm ?? 0.42)));
   const stampH = Math.max(42, Math.round(stampW * 0.35));
@@ -407,32 +537,32 @@ export function PdfPageViewer({
         .onBegin((e) => {
           'worklet';
           panStarted.value = false;
-          let l = cropX.value;
-          let t = cropY.value;
-          let r = l + cropW.value;
-          let b = t + cropH.value;
-          if (zoomMode.value) {
-            const zoom = cropZoom(fitW.value, fitH.value, cropW.value, cropH.value);
-            const viewW = cropW.value * zoom;
-            const viewH = cropH.value * zoom;
-            l = (fitW.value - viewW) / 2;
-            t = (fitH.value - viewH) / 2;
-            r = l + viewW;
-            b = t + viewH;
-          }
+          cancelAnimation(camScale);
+          cancelAnimation(camTx);
+          cancelAnimation(camTy);
+          const p = touchToPage(
+            e.x,
+            e.y,
+            camScale.value,
+            camTx.value,
+            camTy.value,
+            pageOffX.value,
+            pageOffY.value,
+            dispW.value,
+            dispH.value,
+          );
+          const l = cropX.value;
+          const t = cropY.value;
+          const r = l + cropW.value;
+          const b = t + cropH.value;
           const zx = Math.min(CROP_GRAB, (r - l) / 3);
           const zy = Math.min(CROP_GRAB, (b - t) / 3);
           let m = 0;
-          if (
-            e.x >= l - CROP_SLOP &&
-            e.x <= r + CROP_SLOP &&
-            e.y >= t - CROP_SLOP &&
-            e.y <= b + CROP_SLOP
-          ) {
-            if (e.x <= l + zx) m |= 1;
-            else if (e.x >= r - zx) m |= 2;
-            if (e.y <= t + zy) m |= 4;
-            else if (e.y >= b - zy) m |= 8;
+          if (p.x >= l - CROP_SLOP && p.x <= r + CROP_SLOP && p.y >= t - CROP_SLOP && p.y <= b + CROP_SLOP) {
+            if (p.x <= l + zx) m |= 1;
+            else if (p.x >= r - zx) m |= 2;
+            if (p.y <= t + zy) m |= 4;
+            else if (p.y >= b - zy) m |= 8;
             if (m === 0) m = 16;
           }
           cropMode.value = m;
@@ -452,7 +582,7 @@ export function PdfPageViewer({
           const s0 = startCrop.value;
           const dw = dispW.value;
           const dh = dispH.value;
-          const zoom = zoomMode.value ? cropZoom(fitW.value, fitH.value, s0.w, s0.h) : 1;
+          const zoom = Math.max(0.01, camScale.value);
           const dx = e.translationX / zoom;
           const dy = e.translationY / zoom;
           if (m === 16) {
@@ -508,7 +638,7 @@ export function PdfPageViewer({
           gestureActive.value = false;
           panStarted.value = false;
         }),
-    [commitCrop, cropH, cropMode, cropW, cropX, cropY, dispH, dispW, fitH, fitW, gestureActive, lockAspect, panStarted, startCrop, zoomMode],
+    [camScale, camTx, camTy, commitCrop, cropH, cropMode, cropW, cropX, cropY, dispH, dispW, gestureActive, lockAspect, pageOffX, pageOffY, panStarted, startCrop],
   );
 
   const cropPinch = useMemo(
@@ -516,13 +646,14 @@ export function PdfPageViewer({
       Gesture.Pinch()
         .onBegin(() => {
           'worklet';
-          if (!zoomMode.value) return;
+          cancelAnimation(camScale);
+          cancelAnimation(camTx);
+          cancelAnimation(camTy);
           gestureActive.value = true;
           startCrop.value = { left: cropX.value, top: cropY.value, w: cropW.value, h: cropH.value };
         })
         .onUpdate((e) => {
           'worklet';
-          if (!zoomMode.value) return;
           const s0 = startCrop.value;
           const dw = dispW.value;
           const dh = dispH.value;
@@ -547,9 +678,9 @@ export function PdfPageViewer({
         })
         .onFinalize(() => {
           'worklet';
-          if (zoomMode.value) commitCrop();
+          commitCrop();
         }),
-    [commitCrop, cropH, cropW, cropX, cropY, dispH, dispW, gestureActive, lockAspect, startCrop, zoomMode],
+    [camScale, camTx, camTy, commitCrop, cropH, cropW, cropX, cropY, dispH, dispW, gestureActive, lockAspect, startCrop],
   );
 
   // A short press that barely moves selects; anything more is a drag. The tap is
@@ -567,21 +698,21 @@ export function PdfPageViewer({
         // or the layout sync would skip the update while it still looks active.
         cropMode.value = 0;
         gestureActive.value = false;
-        let x = e.x;
-        let y = e.y;
-        if (zoomMode.value) {
-          const zoom = cropZoom(fitW.value, fitH.value, cropW.value, cropH.value);
-          const viewW = cropW.value * zoom;
-          const viewH = cropH.value * zoom;
-          const vl = (fitW.value - viewW) / 2;
-          const vt = (fitH.value - viewH) / 2;
-          x = cropX.value + (e.x - vl) / zoom;
-          y = cropY.value + (e.y - vt) / zoom;
-        }
-        runOnJS(onTapPage)({ x, y }, { w: dispW.value, h: dispH.value });
+        const p = touchToPage(
+          e.x,
+          e.y,
+          camScale.value,
+          camTx.value,
+          camTy.value,
+          pageOffX.value,
+          pageOffY.value,
+          dispW.value,
+          dispH.value,
+        );
+        runOnJS(onTapPage)({ x: p.x, y: p.y }, { w: dispW.value, h: dispH.value });
       });
     return Gesture.Exclusive(tap, cropGesture);
-  }, [cropGesture, cropMode, cropH, cropW, cropX, cropY, dispH, dispW, fitH, fitW, gestureActive, onTapPage, zoomMode]);
+  }, [camScale, camTx, camTy, cropGesture, cropMode, dispH, dispW, gestureActive, onTapPage, pageOffX, pageOffY]);
 
   const zoomGestures = useMemo(
     () => Gesture.Simultaneous(stageGesture, cropPinch),
@@ -631,61 +762,69 @@ export function PdfPageViewer({
             }
           : undefined
       }>
-      {zoomCrop ? (
-        <View style={{ width: stageBoxW, height: stageBoxH }}>
-          <Animated.View style={[cropViewportStyle, styles.cropClip]} collapsable={false}>
-            <Animated.View style={cropImageStyle}>
-              {image ? (
-                <Canvas style={{ width: layout.dispW, height: layout.dispH }}>
-                  <SkiaImage
-                    image={image}
-                    x={0}
-                    y={0}
-                    width={layout.dispW}
-                    height={layout.dispH}
-                    fit="fill">
-                    {mode === 'Original' ? (
-                      sharpness > 0 ? (
-                        <ColorMatrix matrix={colorContrastPreviewMatrix(sharpness)} />
-                      ) : null
-                    ) : monoPreviewEffect ? (
-                      <RuntimeShader
-                        source={monoPreviewEffect}
-                        uniforms={{ threshold, mode: mode === 'Halftone' ? 2 : 1 }}>
-                        {sharpness > 0 ? (
-                          <ColorMatrix matrix={colorContrastPreviewMatrix(sharpness)} />
-                        ) : null}
-                      </RuntimeShader>
-                    ) : (
-                      <ColorMatrix matrix={monoPreviewMatrix(mode === 'Halftone')} />
-                    )}
-                  </SkiaImage>
-                </Canvas>
-              ) : uri ? (
-                <View style={[styles.placeholder, { width: layout.dispW, height: layout.dispH }]}>
-                  <ActivityIndicator color={C.accent} size="small" />
-                </View>
-              ) : (
-                <View style={[styles.placeholder, { width: layout.dispW, height: layout.dispH }]}>
-                  <Text style={styles.placeholderText}>No page</Text>
-                </View>
-              )}
+      {cropEnabled ? (
+        <View style={{ width: stageBoxW, height: stageBoxH, overflow: 'hidden' }}>
+          <Animated.View
+            style={[
+              {
+                position: 'absolute',
+                left: Math.max(0, (stageBoxW - layout.dispW) / 2),
+                top: Math.max(0, (stageBoxH - layout.dispH) / 2),
+                width: layout.dispW,
+                height: layout.dispH,
+                backgroundColor: '#fff', // theme-fixed: PDF page (printed)
+                borderRadius: 4,
+              },
+              cameraStyle,
+            ]}>
+            {drawn ? (
+              <Canvas style={{ width: layout.dispW, height: layout.dispH }}>
+                <PdfPagePicture
+                  image={drawn}
+                  width={layout.dispW}
+                  height={layout.dispH}
+                  mode={mode}
+                  sharpness={sharpness}
+                  pending={monoPending}
+                />
+              </Canvas>
+            ) : uri || pending ? (
+              <View style={[styles.placeholder, { width: layout.dispW, height: layout.dispH }]}>
+                <ActivityIndicator color={C.accent} size="small" />
+              </View>
+            ) : (
+              <View style={[styles.placeholder, { width: layout.dispW, height: layout.dispH }]}>
+                <Text style={styles.placeholderText}>No page</Text>
+              </View>
+            )}
+            <Animated.View pointerEvents="none" style={[revealOutside ? styles.maskReveal : styles.mask, topMaskStyle]} />
+            <Animated.View pointerEvents="none" style={[revealOutside ? styles.maskReveal : styles.mask, bottomMaskStyle]} />
+            <Animated.View pointerEvents="none" style={[revealOutside ? styles.maskReveal : styles.mask, leftMaskStyle]} />
+            <Animated.View pointerEvents="none" style={[revealOutside ? styles.maskReveal : styles.mask, rightMaskStyle]} />
+            {overlays && overlays.length > 0 ? (
+              <PdfSectionOverlays
+                overlays={overlays}
+                stageW={layout.dispW}
+                stageH={layout.dispH}
+                onActivate={onOverlayActivate}
+              />
+            ) : null}
+            <Animated.View pointerEvents="none" style={[styles.cropFrame, cropBoxStyle]}>
+              <View style={[styles.gridV, { left: '33.333%' }]} />
+              <View style={[styles.gridV, { left: '66.666%' }]} />
+              <View style={[styles.gridH, { top: '33.333%' }]} />
+              <View style={[styles.gridH, { top: '66.666%' }]} />
+              <View style={styles.cropBorder} />
+              <View style={[styles.corner, { top: -3, left: -3, borderTopWidth: 4, borderLeftWidth: 4 }]} />
+              <View style={[styles.corner, { top: -3, right: -3, borderTopWidth: 4, borderRightWidth: 4 }]} />
+              <View style={[styles.corner, { bottom: -3, left: -3, borderBottomWidth: 4, borderLeftWidth: 4 }]} />
+              <View style={[styles.corner, { bottom: -3, right: -3, borderBottomWidth: 4, borderRightWidth: 4 }]} />
+              <View style={[styles.edgeH, { top: -3 }]} />
+              <View style={[styles.edgeH, { bottom: -3 }]} />
+              <View style={[styles.edgeV, { left: -3 }]} />
+              <View style={[styles.edgeV, { right: -3 }]} />
             </Animated.View>
-          </Animated.View>
-          <Animated.View pointerEvents="none" style={cropViewportStyle}>
-            <View style={[styles.gridV, { left: '33.333%' }]} />
-            <View style={[styles.gridV, { left: '66.666%' }]} />
-            <View style={[styles.gridH, { top: '33.333%' }]} />
-            <View style={[styles.gridH, { top: '66.666%' }]} />
-            <View style={styles.cropBorder} />
-            <View style={[styles.corner, { top: -3, left: -3, borderTopWidth: 4, borderLeftWidth: 4 }]} />
-            <View style={[styles.corner, { top: -3, right: -3, borderTopWidth: 4, borderRightWidth: 4 }]} />
-            <View style={[styles.corner, { bottom: -3, left: -3, borderBottomWidth: 4, borderLeftWidth: 4 }]} />
-            <View style={[styles.corner, { bottom: -3, right: -3, borderBottomWidth: 4, borderRightWidth: 4 }]} />
-            <View style={[styles.edgeH, { top: -3 }]} />
-            <View style={[styles.edgeH, { bottom: -3 }]} />
-            <View style={[styles.edgeV, { left: -3 }]} />
-            <View style={[styles.edgeV, { right: -3 }]} />
+            {busyAt ? <PdfTapBusy at={busyAt} stageW={layout.dispW} stageH={layout.dispH} /> : null}
           </Animated.View>
           <GestureDetector gesture={zoomGestures}>
             <View style={StyleSheet.absoluteFill} />
@@ -731,32 +870,17 @@ export function PdfPageViewer({
                   { translateX: -activeCenterX },
                   { translateY: -activeCenterY },
                 ]}>
-              <SkiaImage
-                image={image}
-                x={0}
-                y={0}
+              <PdfPagePicture
+                image={drawn}
                 width={activeImgW}
                 height={activeImgH}
-                fit="fill">
-                {mode === 'Original' ? (
-                  sharpness > 0 ? (
-                    <ColorMatrix matrix={colorContrastPreviewMatrix(sharpness)} />
-                  ) : null
-                ) : monoPreviewEffect ? (
-                  <RuntimeShader
-                    source={monoPreviewEffect}
-                    uniforms={{ threshold, mode: mode === 'Halftone' ? 2 : 1 }}>
-                    {sharpness > 0 ? (
-                      <ColorMatrix matrix={colorContrastPreviewMatrix(sharpness)} />
-                    ) : null}
-                  </RuntimeShader>
-                ) : (
-                  <ColorMatrix matrix={monoPreviewMatrix(mode === 'Halftone')} />
-                )}
-              </SkiaImage>
+                mode={mode}
+                sharpness={sharpness}
+                pending={monoPending}
+              />
               </Group>
             </Canvas>
-          ) : uri ? (
+          ) : uri || pending ? (
             <View style={[styles.placeholder, { width: activeStageW, height: activeStageH }]}>
               <ActivityIndicator color={C.accent} size="small" />
             </View>
@@ -766,42 +890,6 @@ export function PdfPageViewer({
             </View>
           )}
           </View>
-
-          {cropEnabled ? (
-            <>
-              <Animated.View pointerEvents="none" style={[revealOutside ? styles.maskReveal : styles.mask, topMaskStyle]} />
-              <Animated.View pointerEvents="none" style={[revealOutside ? styles.maskReveal : styles.mask, bottomMaskStyle]} />
-              <Animated.View pointerEvents="none" style={[revealOutside ? styles.maskReveal : styles.mask, leftMaskStyle]} />
-              <Animated.View pointerEvents="none" style={[revealOutside ? styles.maskReveal : styles.mask, rightMaskStyle]} />
-              {overlays && overlays.length > 0 ? (
-                <PdfSectionOverlays
-                  overlays={overlays}
-                  stageW={layout.dispW}
-                  stageH={layout.dispH}
-                  onActivate={onOverlayActivate}
-                />
-              ) : null}
-              <Animated.View pointerEvents="none" style={[styles.cropFrame, cropBoxStyle]}>
-                <View style={[styles.gridV, { left: '33.333%' }]} />
-                <View style={[styles.gridV, { left: '66.666%' }]} />
-                <View style={[styles.gridH, { top: '33.333%' }]} />
-                <View style={[styles.gridH, { top: '66.666%' }]} />
-                <View style={styles.cropBorder} />
-                <View style={[styles.corner, { top: -3, left: -3, borderTopWidth: 4, borderLeftWidth: 4 }]} />
-                <View style={[styles.corner, { top: -3, right: -3, borderTopWidth: 4, borderRightWidth: 4 }]} />
-                <View style={[styles.corner, { bottom: -3, left: -3, borderBottomWidth: 4, borderLeftWidth: 4 }]} />
-                <View style={[styles.corner, { bottom: -3, right: -3, borderBottomWidth: 4, borderRightWidth: 4 }]} />
-                <View style={[styles.edgeH, { top: -3 }]} />
-                <View style={[styles.edgeH, { bottom: -3 }]} />
-                <View style={[styles.edgeV, { left: -3 }]} />
-                <View style={[styles.edgeV, { right: -3 }]} />
-              </Animated.View>
-              <GestureDetector gesture={stageGesture}>
-                <View style={StyleSheet.absoluteFill} />
-              </GestureDetector>
-              {busyAt ? <PdfTapBusy at={busyAt} stageW={layout.dispW} stageH={layout.dispH} /> : null}
-            </>
-          ) : null}
 
           {/* Tiled Watermark Pattern */}
           {watermark?.layout === 'tiled' && tiles
@@ -913,11 +1001,9 @@ export function PdfPageViewer({
       {hideHint ? null : (
       <Text style={styles.hint}>
         {cropEnabled
-          ? zoomCrop
-            ? 'Drag inside to move the window. Only the selected area stays on screen.'
-            : onTapPage
-              ? 'Tap a block to select it. Drag a corner or edge to resize, or inside to move.'
-              : 'Drag a corner or edge to resize. Drag inside to move.'
+          ? revealOutside
+            ? 'Tap a block to select it. Drag a corner or edge to resize, or inside to move.'
+            : 'The frame is what will print. Drag inside to move it, or an edge to resize.'
           : isCropped
             ? `Cropped area fitted to ${outputSize.widthMm} × ${outputSize.heightMm} mm.`
             : mode === 'Halftone'
@@ -936,14 +1022,9 @@ const styles = themedStyles((c) => ({
   fillStage: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
   placeholder: { backgroundColor: c.fill, alignItems: 'center', justifyContent: 'center' },
   placeholderText: { color: c.textMuted },
-  cropClip: {
-    overflow: 'hidden',
-    backgroundColor: '#fff', // theme-fixed: PDF page (printed)
-    borderRadius: 4,
-  },
   mask: {
     position: 'absolute',
-    backgroundColor: '#0A0A0A', // theme-fixed: crop overlay, same in both themes (mask)
+    backgroundColor: 'rgba(10,10,10,0.72)', // theme-fixed: crop focus scrim, same in both themes
   },
   maskReveal: {
     position: 'absolute',

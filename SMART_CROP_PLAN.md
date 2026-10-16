@@ -845,3 +845,56 @@ On-device logs for each of the three sample PDFs show the tapped point, whether 
    - **Pins down R1.1.2 against R1.1.4:** a repeat within 1.2 s / 8 px steps outward; a slower tap removes.
    - **Splits the detector** into `prepareAnalysis` + `detectPrepared` so taps are served before detection ends; `detectSections` is unchanged for callers.
    - **Records** that All pages / Range still share one rect until Phase 3, and that overlay screen-reader access is unverified.
+
+### Revision 4: Label size is never taken from a selection
+- Supersedes the staged label size in R3 (and "label size on Apply"). Selecting or tapping a section only moves the crop window; the output label size stays what the user chose in the size step. The cropped part is fitted into that size at render (aspect preserved), so the panel always shows the chosen label size.
+- Revision log: 5. Removed `draftOutput`/`pendingOutput` staging from `pdf.tsx` and `pdf-crop-tool.tsx`.
+
+### Revision 5: Focus on the selection
+- After a tap, Prev/Next or overlay activation selects something, the crop view zooms to the selected window (the normal zoomed crop view), so trimming is easy. Dragging the window keeps the focus.
+- The Smart Crop button (or Clear) returns to the whole page with outlines, which is how a further section is added to a multi-selection.
+- Revision log: 6. `focused` state in `use-smart-crop.ts`; `revealOutside` in `pdf.tsx` is off while focused.
+
+### Revision 6: Smart Crop and Manual Crop buttons
+- The crop panel opens with two buttons, each with a one-line description under its title: **Smart Crop** ("Finds sections for you. Tap one to select it.") and **Manual Crop** ("Drag the window and its edges yourself."). Smart is the default.
+- Manual Crop clears any selection and turns off section outlines and tap-to-select, leaving the plain window. Smart Crop turns them back on. The old Smart Crop button is now "Show all sections", next to ‹ ›, and only appears in Smart mode.
+- Revision log: 7. `cropKind` state in `pdf.tsx`; `kind`/`onKind` props on `PdfCropTool`.
+
+### Revision 7: Smart and Manual are exclusive
+- Supersedes the "drags still move the window" rule (R3 / R2 Phase 2) for Smart mode. In Smart Crop the window only changes by selecting a section (tap, ‹ ›, outline); dragging is off (`windowLocked`). In Manual Crop taps and outlines are off and only dragging works. Switching keeps the current window.
+- A selection zooms the view to its window (R5). Apply keeps the user on the Edit page showing the cropped part; the header Next opens Print.
+- Revision log: 8. `windowLocked` prop on `PdfPageViewer`; notices now point to Manual Crop for trimming.
+
+### Revision 8: Adjustable selection, named sections, Done
+- Supersedes R7's drag lock: in Smart Crop a selected section is shown zoomed with its borders draggable (move and resize), so the user can fine-tune it. Manual Crop still has no taps or outlines.
+- Every outline now shows a name ("Section N", "Section N (barcode)"), not only the selected one. The panel button reads **Done** and returns to the Edit page showing the cropped page, where crop or other tools can be used again; the header Next opens Print.
+- Edge accuracy on the user's real PDFs is unverified: no redacted samples or device logs yet. The synthetic bordered label snaps to within 2 px of its border.
+- Revision log: 9. Removed `windowLocked`; `sectionName` in `use-smart-crop.ts`.
+
+### Revision 9: Manual by default, tap crops
+- The crop tool opens in **Manual Crop**. Choosing **Smart Crop** detects and outlines sections immediately.
+- Tapping a section in Smart Crop applies the crop to it at once and closes the tool, so the Edit page stays open for watermark, rotate and the rest. Header Next opens Print. ‹ › only preview a section; **Done** applies it. Nested step-outward taps now need the crop tool reopened (the tap closes it).
+- Manual Crop's **Done** applies the window. In both cases the Edit page now shows only the cropped portion (before, `fillPage` showed the whole page); the viewer fits it to the stage.
+- Supersedes R5's "Smart Crop button returns to the whole page" only in that a tap no longer leaves the crop tool open.
+- Revision log: 10. `cropKind` defaults to manual and resets on open; `onSmartSelection` applies on tap; `fillPage` off when cropped.
+
+### Revision 10: Re-cropping treats the crop as the page
+- Opening Crop on a page that already has a crop uses that cropped part as the whole page: the view shows only it (a PNG cut from the preview), the window and section outlines are fractions of it, and Smart Crop analyses only that region (`loadAnalysisGray(..., region)`; cache key includes the region). On Done or tap, the result is composed back into full-page fractions (`toFullPage`), so storage, export and printing are unchanged and the crop scope still applies.
+- Remove drops the crop and returns the tool to the full page. Changing page inside the tool reopens it for that page's own crop.
+- Revision log: 11. `cropBase`/`baseUri` in `pdf.tsx`; `region` option in `useSmartCrop` and `loadAnalysisGray`.
+
+### Revision 11: Match label removed
+- The "Match label" switch and its aspect-lock / snap logic are gone from the crop tool. The window is always free-form; the crop is fitted into the chosen label size at render. Supersedes the match-label notices in R3 and R7 text.
+- Revision log: 12.
+
+### Revision 12: Window starts on the whole page
+- Manual Crop opens with the window covering the whole page (or the whole cropped part when re-cropping), not a label-shaped default that left a small section out. Remove resets to the same.
+- Revision log: 13.
+
+### Revision 13: Re-crop opens without a "No page" gap
+- The cropped part used as the page for a re-crop is cut in the background as soon as a crop is applied and cached (`regionImageCached`, cleared with the raster cache). While it is not ready the viewer shows the spinner (`pending`), never "No page".
+- Revision log: 14.
+
+### Revision 14: Faster PDF import (outside Smart Crop)
+- Import no longer reads and parses the whole file in JS. The native renderer gives page count and first-page size from an 8 DPI render; all pages are assumed that size until `loadPdfPageSizes` (the old pdf-lib read) fills in the exact sizes ~1.5 s after the editor opens. Export re-reads sizes from the file it parses anyway. Falls back to the full parse if the native call fails (also gives the encrypted-PDF message).
+- Revision log: 15.
