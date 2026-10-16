@@ -85,7 +85,7 @@ export function BulkLabelNav({
           accessibilityRole="button"
           accessibilityState={{ selected: !applyAll }}
           style={({ pressed }) => [styles.scopeSeg, !applyAll && styles.scopeSegOn, pressed && styles.pressed]}>
-          <Text style={[styles.scopeText, !applyAll && styles.scopeTextOn]}>This</Text>
+          <Text style={[styles.scopeText, !applyAll && styles.scopeTextOn]}>Current label</Text>
         </Pressable>
         <Pressable
           onPress={() => onApplyAllChange(true)}
