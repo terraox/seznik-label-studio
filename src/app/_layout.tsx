@@ -8,7 +8,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
-import { AnimatedSplash } from '@/components/animated-splash';
+import { IntroScreen } from '@/components/intro-screen';
 import { NavigationBarScrim } from '@/components/navigation-bar-scrim';
 import { IosAlertHost } from '@/components/ui/ios-alert-host';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
@@ -209,7 +209,7 @@ function AppRoot() {
           />
         </Stack>
       ) : null}
-      {splashDone ? null : <AnimatedSplash onFinish={handleSplashFinish} onDone={handleSplashDone} />}
+      {splashDone ? null : <IntroScreen onFinish={handleSplashFinish} onDone={handleSplashDone} />}
       <NavigationBarScrim />
     </ThemeProvider>
   );

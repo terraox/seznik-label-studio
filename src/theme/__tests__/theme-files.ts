@@ -31,7 +31,7 @@ export const CONVERTED_FILES: string[] = [
   'src/components/hint-row.tsx',
   'src/components/walkthrough/walkthrough-overlay.tsx',
   'src/components/walkthrough/walkthrough-target.tsx',
-  'src/components/animated-splash.tsx',
+  'src/components/intro-screen.tsx',
   // G2 (pulled forward)
   'src/app/(tabs)/setting.tsx',
   // Bulk conversion (G2, G3, G4b, G5 printers, G6, G7)
@@ -121,6 +121,7 @@ export const CONVERTED_FILES: string[] = [
   'src/components/pdf-editor/pdf-rotate-tool.tsx',
   'src/components/pdf-editor/pdf-scope-selector.tsx',
   'src/components/pdf-editor/pdf-section-overlays.tsx',
+  'src/components/new-label/new-label-parts.tsx',
   'src/components/pdf-editor/pdf-sharpness-tool.tsx',
   'src/components/pdf-editor/pdf-tool-panel.tsx',
   'src/components/pdf-editor/pdf-watermark-tool.tsx',

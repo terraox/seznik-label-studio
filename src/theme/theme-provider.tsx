@@ -28,7 +28,7 @@ function effectivePreference(saved: AppearancePreference): AppearancePreference 
  */
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const saved = useSettingsStore((s) => s.appearance);
-  const preference = effectivePreference(saved ?? 'system');
+  const preference = effectivePreference(saved ?? 'light');
 
   useLayoutEffect(() => {
     // null = follow the system again.
