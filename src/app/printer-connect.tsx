@@ -145,6 +145,8 @@ export default function PrinterConnectScreen() {
   const mountedRef = useRef(true);
   const autoConnectKeyRef = useRef<string | null>(null);
   const connectRequestRef = useRef(0);
+  /** Silent background reconnect in flight. Never shown as a spinner (printer may simply be off). */
+  const autoConnectingRef = useRef(false);
   /** Printer the user tapped. Stops auto-reconnect from putting the previous one back. */
   const userTargetRef = useRef<string | null>(null);
 
@@ -165,7 +167,7 @@ export default function PrinterConnectScreen() {
       const mgr = getPrinterManager();
       if (mgr.isConnectionHealthy()) return;
       if (mgr.isAutoReconnectSuppressed()) return;
-      if (connectingId) return;
+      if (connectingId || autoConnectingRef.current) return;
       const store = usePrinterStore.getState();
       if (store.status === 'connecting' || store.status === 'printing') return;
       const last = store.lastDeviceForBridge[defaultBridgeForConsumer(selectedModel)];
@@ -177,13 +179,12 @@ export default function PrinterConnectScreen() {
       if (!mgr.isBluetoothEnabled()) return;
       const sessionKey = `${selectedModel}:${last.id}`;
       if (autoConnectKeyRef.current === sessionKey) return;
-      const request = ++connectRequestRef.current;
-      setConnectingId(last.id);
+      autoConnectingRef.current = true;
       try {
         const ok = await mgr.reconnectLastForConsumer(selectedModel);
         if (ok && userTargetRef.current == null) autoConnectKeyRef.current = sessionKey;
       } finally {
-        if (mountedRef.current && connectRequestRef.current === request) setConnectingId(null);
+        autoConnectingRef.current = false;
       }
     },
     [connectingId, selectedModel],
