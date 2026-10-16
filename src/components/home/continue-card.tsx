@@ -19,7 +19,6 @@ import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 type ContinueCardProps = {
   document: LabelDocument;
   onDelete: () => void;
-  onUpload: () => void;
 };
 
 function ActionItem({
@@ -67,7 +66,7 @@ function ActionItem({
   );
 }
 
-export function ContinueCard({ document, onDelete, onUpload }: ContinueCardProps) {
+export function ContinueCard({ document, onDelete }: ContinueCardProps) {
   useThemeRefresh();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -137,7 +136,6 @@ export function ContinueCard({ document, onDelete, onUpload }: ContinueCardProps
             router.push({ pathname: '/share', params: { labelId: document.id } })
           }
         />
-        <ActionItem icon="icloud.and.arrow.up" label="Upload" onPress={onUpload} />
       </View>
     </View>
     </View>

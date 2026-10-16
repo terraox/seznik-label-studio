@@ -7,7 +7,6 @@ const ACTIONS: { icon: AppIconName; label: string }[] = [
   { icon: 'square.and.pencil', label: 'Edit' },
   { icon: 'printer', label: 'Print' },
   { icon: 'trash', label: 'Delete' },
-  { icon: 'icloud.and.arrow.up', label: 'Upload' },
 ];
 
 /**

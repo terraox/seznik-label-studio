@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { BuyFromUsStrip } from '@/components/home/buy-from-us-strip';
 import { ContinueCard } from '@/components/home/continue-card';
@@ -29,7 +29,6 @@ export default function HomeScreen() {
   const tabPad = useTabBarPadding(0);
   const documents = useLabelStore((s) => s.documents);
   const deleteDocument = useLabelStore((s) => s.deleteDocument);
-  const uploadToCloud = useLabelStore((s) => s.uploadToCloud);
 
   const [viewportH, setViewportH] = useState(0);
   const [contentH, setContentH] = useState(0);
@@ -103,13 +102,6 @@ export default function HomeScreen() {
               <ContinueCard
                 document={recentLabel}
                 onDelete={() => deleteDocument(recentLabel.id)}
-                onUpload={() => {
-                  uploadToCloud(recentLabel);
-                  Alert.alert(
-                    'Template saved',
-                    `"${recentLabel.name}" is in Select Existing Template and Template → Cloud.`,
-                  );
-                }}
               />
               </WalkthroughTarget>
             </View>

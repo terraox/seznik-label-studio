@@ -34,7 +34,7 @@ const BASE_STEPS: readonly WalkthroughStep[] = [
     target: 'home.lastEdited',
     scrolls: true,
     title: 'Pick up where you left off',
-    body: 'Your most recent label appears here. Edit, print, share, upload it as a template, or delete it.',
+    body: 'Your most recent label appears here. Edit, print, share, or delete it.',
   },
   {
     id: 'fromFile',
@@ -80,7 +80,7 @@ export function getHomeWalkthrough(hasLabels: boolean): readonly WalkthroughStep
       ? {
           ...s,
           title: 'Your last label shows up here',
-          body: "This is a sample card. Once you create or save your first label, the most recent one appears here with Edit, Print, Delete, Share and Upload buttons.",
+          body: "This is a sample card. Once you create or save your first label, the most recent one appears here with Edit, Print, Delete and Share buttons.",
         }
       : s,
   );
