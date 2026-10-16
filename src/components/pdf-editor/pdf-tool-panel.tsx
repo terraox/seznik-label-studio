@@ -1,5 +1,7 @@
-import { ScrollView, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
+import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { AppIcon } from '@/components/app-icon';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
@@ -18,37 +20,50 @@ export function PdfToolPanel({
   onChange,
   children,
   disabled,
+  accessory,
+  bottomInset = 0,
 }: {
   active: PdfToolId | null;
   onChange: (id: PdfToolId) => void;
-  children: React.ReactNode;
+  children: ReactNode;
   disabled?: boolean;
+  /** Sits between the tool options and the icon row. Used for page browsing. */
+  accessory?: ReactNode;
+  bottomInset?: number;
 }) {
   useThemeRefresh();
+  const { height } = useWindowDimensions();
+  const optionsMax = Math.round(height * 0.33);
+
   return (
-    <View style={styles.wrap}>
-      <View style={styles.grid}>
+    <View style={[styles.wrap, { paddingBottom: Math.max(bottomInset, 6) }]}>
+      {active !== null ? (
+        <FormScrollView
+          style={{ maxHeight: optionsMax }}
+          contentContainerStyle={styles.options}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled>
+          {children}
+        </FormScrollView>
+      ) : null}
+      {accessory}
+      <View style={styles.row}>
         {TOOLS.map((t) => {
           const isActive = active === t.id;
           return (
             <Pressable
               key={t.id}
               disabled={disabled}
+              accessibilityRole="button"
+              accessibilityLabel={t.label}
+              accessibilityState={{ selected: isActive }}
               onPress={() => onChange(t.id)}
               style={[styles.tool, isActive && styles.toolOn, disabled && styles.toolOff]}>
-              <AppIcon name={t.icon} size={20} tintColor={isActive ? C.accent : C.textSecondary} />
-              <Text style={[styles.toolText, isActive && styles.toolTextOn]} numberOfLines={1}>
-                {t.label}
-              </Text>
+              <AppIcon name={t.icon} size={22} tintColor={isActive ? C.accent : C.textSecondary} />
             </Pressable>
           );
         })}
       </View>
-      {active !== null ? (
-        <ScrollView style={styles.body} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-          {children}
-        </ScrollView>
-      ) : null}
     </View>
   );
 }
@@ -59,39 +74,27 @@ const styles = themedStyles((c) => ({
     backgroundColor: c.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: c.hairline,
-    paddingTop: 10,
-    paddingBottom: 8,
-    gap: 8,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  options: {
     paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingTop: 4,
   },
   tool: {
-    flexGrow: 1,
-    flexBasis: '30%',
-    minHeight: 58,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: c.hairline,
-    backgroundColor: c.fill,
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 2,
-    paddingVertical: 8,
   },
   toolOn: {
-    borderColor: c.accent,
     backgroundColor: c.accentSoft,
   },
   toolOff: { opacity: 0.4 },
-  toolText: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
-  toolTextOn: { color: c.accent },
-  body: {
-    maxHeight: 240,
-    paddingHorizontal: 12,
-  },
 }));

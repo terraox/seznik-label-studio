@@ -6,16 +6,16 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
 import { PdfColorTool } from '@/components/pdf-editor/pdf-color-tool';
-import { PdfCropTool } from '@/components/pdf-editor/pdf-crop-tool';
+import { PdfCropTool, type PdfCropScreenNotice } from '@/components/pdf-editor/pdf-crop-tool';
 import { PdfOutputSizeRow } from '@/components/pdf-editor/pdf-output-size-row';
 import { PdfPageNav } from '@/components/pdf-editor/pdf-page-nav';
 import { PdfPageViewer } from '@/components/pdf-editor/pdf-page-viewer';
@@ -25,6 +25,11 @@ import { PdfSharpnessTool } from '@/components/pdf-editor/pdf-sharpness-tool';
 import { PdfToolPanel, type PdfToolId } from '@/components/pdf-editor/pdf-tool-panel';
 import { PrinterConnectionPill } from '@/components/printers/printer-connection-pill';
 import { PdfWatermarkTool } from '@/components/pdf-editor/pdf-watermark-tool';
+import {
+  clearSmartCropCache,
+  useSmartCrop,
+  type SmartCropSelectionInfo,
+} from '@/components/pdf-editor/use-smart-crop';
 import { Spacing } from '@/constants/theme';
 
 import { planLabelRender } from '@/lib/pdf-editor/label-render-plan';
@@ -45,10 +50,12 @@ import {
   cropAspectForLabel,
   defaultCropWindow,
   defaultWatermark,
+  OUTPUT_SIZE_PRESETS,
   pageColorMode,
   ptToMm,
   resolveScopeIndices,
   snapCropToAspect,
+  type OutputSize,
   type PageScope,
 } from '@/lib/pdf-editor/session';
 import { downscaleWatermarkTile, previewTileSize } from '@/lib/pdf-editor/watermark-tile';
@@ -58,6 +65,15 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type Step = 'pick' | 'size' | 'edit' | 'print';
+
+/** Label size from a selected section, snapped to a preset when it is one (same rule as the size row). */
+function outputSizeFromMm(widthMm: number, heightMm: number): OutputSize {
+  const preset = OUTPUT_SIZE_PRESETS.find(
+    (p) => Math.abs(p.widthMm - widthMm) < 0.15 && Math.abs(p.heightMm - heightMm) < 0.15,
+  );
+  if (preset) return { kind: preset.kind, widthMm: preset.widthMm, heightMm: preset.heightMm };
+  return { kind: 'custom', widthMm, heightMm };
+}
 
 const STEP_TITLE: Record<Step, string> = {
   pick: 'Print PDF',
@@ -91,6 +107,8 @@ export default function PdfEditorScreen() {
   const printerStatus = usePrinterStore((s) => s.status);
   const printerLive = printerStatus === 'connected' || printerStatus === 'printing';
   const grayThreshold = useSettingsStore((s) => s.defaults.grayThreshold);
+  const smartCropHintSeen = useSettingsStore((s) => s.smartCropHintSeen);
+  const setSmartCropHintSeen = useSettingsStore((s) => s.setSmartCropHintSeen);
 
   const [step, setStep] = useState<Step>('pick');
   const [tool, setTool] = useState<PdfToolId | null>(null);
@@ -109,6 +127,9 @@ export default function PdfEditorScreen() {
   const [draftScope, setDraftScope] = useState<PageScope>({ mode: 'this' });
   // Optional: lock the crop to the label's shape. Off by default so width and height crop freely.
   const [matchLabel, setMatchLabel] = useState(false);
+  // Smart Crop: label size a selected section will set, applied with the crop on Apply.
+  const [draftOutput, setDraftOutput] = useState<{ widthMm: number; heightMm: number } | null>(null);
+  const [cropNotice, setCropNotice] = useState<PdfCropScreenNotice | null>(null);
   // Page size as the PDF renderer sees it; crop fractions are measured against this bitmap.
   const [rasterPt, setRasterPt] = useState<{ index: number; w: number; h: number } | null>(null);
   const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
@@ -117,6 +138,7 @@ export default function PdfEditorScreen() {
     return () => {
       resetSession();
       clearRasterCache();
+      clearSmartCropCache();
     };
   }, [resetSession]);
 
@@ -264,12 +286,57 @@ export default function PdfEditorScreen() {
       : metaPageSize;
   const currentRotation = session?.rotationByPage[session.currentPageIndex] ?? 0;
   const labelAspect = session ? cropAspectForLabel(session.outputSize, currentRotation) : 1;
+
+  // A tapped section snaps the window to it and stages its real size as the
+  // label size (plan §4.2). Nothing reaches the session until Apply Crop.
+  const onSmartSelection = useCallback(
+    (info: SmartCropSelectionInfo) => {
+      if (!info.rect) {
+        // Selection cleared: keep the window where it is, drop the staged size.
+        setDraftOutput(null);
+        setCropNotice(null);
+        return;
+      }
+      const next = clampCropNorm({ x: info.rect.x, y: info.rect.y }, { w: info.rect.w, h: info.rect.h });
+      setDraftCrop(next);
+      setDraftOutput({
+        widthMm: Math.round(next.sizeNorm.w * ptToMm(pageSize.w) * 10) / 10,
+        heightMm: Math.round(next.sizeNorm.h * ptToMm(pageSize.h) * 10) / 10,
+      });
+      if (matchLabel) {
+        // Left on, the label shape would shrink the section the user just picked.
+        setMatchLabel(false);
+        setCropNotice('match-off');
+      } else {
+        setCropNotice(null);
+      }
+    },
+    [matchLabel, pageSize.h, pageSize.w],
+  );
+
+  const smart = useSmartCrop({
+    sourceUri: session?.sourceUri ?? null,
+    pageIndex: session?.currentPageIndex ?? 0,
+    active: step === 'edit' && tool === 'crop',
+    pageMm: { w: ptToMm(pageSize.w), h: ptToMm(pageSize.h) },
+    hintSeen: smartCropHintSeen,
+    onHintSeen: () => setSmartCropHintSeen(true),
+    onSelection: onSmartSelection,
+  });
+  const smartNudged = smart.nudged;
+
   const onCropRect = useCallback(
-    (o: { x: number; y: number }, sz: { w: number; h: number }) => setDraftCrop(clampCropNorm(o, sz)),
-    [],
+    (o: { x: number; y: number }, sz: { w: number; h: number }) => {
+      setDraftCrop(clampCropNorm(o, sz));
+      // Dragging the window keeps it but drops the "selected section" highlight.
+      smartNudged();
+    },
+    [smartNudged],
   );
 
   const openCrop = () => {
+    setDraftOutput(null);
+    setCropNotice(null);
     const saved = session?.crop;
     setDraftScope(saved?.scope ?? { mode: 'this' });
     const start = saved?.sizeNorm
@@ -280,7 +347,9 @@ export default function PdfEditorScreen() {
     setDraftCrop(start && matchLabel ? snapCropToAspect(start, pageSize, labelAspect) : start);
   };
   const applyCrop = () => {
+    if (draftOutput) setOutputSize(outputSizeFromMm(draftOutput.widthMm, draftOutput.heightMm));
     if (draftCrop) setCrop({ scope: draftScope, ...draftCrop });
+    setDraftOutput(null);
     setTool(null);
   };
   const toggleMatchLabel = (on: boolean) => {
@@ -289,6 +358,7 @@ export default function PdfEditorScreen() {
   };
   const removeCrop = () => {
     setCrop(null);
+    smart.clear();
     if (session) setDraftCrop(defaultCropWindow(pageSize, session.outputSize));
   };
 
@@ -365,6 +435,21 @@ export default function PdfEditorScreen() {
     };
   }, [session?.sourceUri, session?.currentPageIndex, session?.pageCount, previewDpi]);
 
+  // Smart Crop Phase 1: dev-only on-device measurement. Logs detected boxes and the
+  // render / decode / downscale / detect split. No UI, no session change.
+  const probeUri = session?.sourceUri;
+  const probePage = session?.currentPageIndex;
+  useEffect(() => {
+    if (!__DEV__ || !probeUri || probePage == null) return;
+    // Let the preview render settle first so the timings are not contended.
+    const timer = setTimeout(() => {
+      void import('@/lib/pdf-editor/smart-crop/dev-probe').then((m) =>
+        m.logSmartCropProbe(probeUri, probePage, { writeFixture: true }),
+      );
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [probeUri, probePage]);
+
   const renderViewer = (mode: { crop: boolean; watermark: boolean; expand?: boolean; hideHint?: boolean }) => {
     if (!session) return null;
     return (
@@ -378,6 +463,11 @@ export default function PdfEditorScreen() {
         sizeNorm={mode.crop ? draftCrop?.sizeNorm : session.crop?.sizeNorm}
         onCropRect={onCropRect}
         aspectLock={mode.crop && matchLabel ? labelAspect : 0}
+        overlays={mode.crop ? smart.overlays : undefined}
+        onTapPage={mode.crop ? smart.tap : undefined}
+        busyAt={mode.crop ? smart.busyAt : null}
+        revealOutside={mode.crop && (smart.overlaysOn || smart.selectedCount > 0)}
+        onOverlayActivate={mode.crop ? smart.activate : undefined}
         cropEnabled={mode.crop}
         isCropped={isCropped}
         expand={mode.expand}
@@ -415,11 +505,21 @@ export default function PdfEditorScreen() {
         <Pressable onPress={goBack} hitSlop={8} style={styles.headerBtn}>
           <AppIcon name="chevron.left" size={22} tintColor={C.onAccent} />
         </Pressable>
-        <Text style={styles.headerTitle}>{STEP_TITLE[step]}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {STEP_TITLE[step]}
+        </Text>
+        {step === 'edit' && session ? (
+          <Pressable
+            onPress={() => setStep('print')}
+            hitSlop={8}
+            style={({ pressed }) => [styles.headerNext, pressed && styles.pressed]}>
+            <Text style={styles.headerNextText}>Next</Text>
+          </Pressable>
+        ) : null}
         <PrinterConnectionPill />
       </View>
 
-      {step !== 'pick' && session ? (
+      {step !== 'pick' && step !== 'edit' && session ? (
         <View style={styles.stepBar}>
           {(['size', 'edit', 'print'] as const).map((id, i) => {
             const order = ['size', 'edit', 'print'];
@@ -453,7 +553,7 @@ export default function PdfEditorScreen() {
           </Text>
         </View>
       ) : step === 'size' ? (
-        <ScrollView
+        <FormScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -475,44 +575,33 @@ export default function PdfEditorScreen() {
             </Pressable>
           </View>
           <PdfOutputSizeRow value={session.outputSize} onChange={setOutputSize} preview={sizePreview} />
-        </ScrollView>
+        </FormScrollView>
       ) : step === 'edit' ? (
         <View style={styles.editColumn}>
-          {tool === 'crop' ? (
-            <View style={styles.cropStage}>
-              {renderViewer({ crop: true, watermark: false, expand: true })}
-              {loading ? <ActivityIndicator color={C.accent} style={{ marginVertical: 8 }} /> : null}
-            </View>
-          ) : (
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.editContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}>
-              <View style={styles.previewArea}>
-                <View style={styles.previewShadow}>
-                  {renderViewer({ crop: false, watermark: tool === 'watermark', hideHint: true })}
-                </View>
-                <View style={styles.sizeBadge}>
-                  <Text style={styles.sizeBadgeText}>
-                    {isCropped ? 'Cropped · ' : ''}
-                    {session.outputSize.widthMm} × {session.outputSize.heightMm} mm
-                  </Text>
-                </View>
-                {loading ? <ActivityIndicator color={C.onAccent} style={{ marginTop: 8 }} /> : null}
+          <View style={styles.cropStage}>
+            {renderViewer({
+              crop: tool === 'crop',
+              watermark: tool === 'watermark',
+              expand: true,
+              hideHint: true,
+            })}
+            {loading ? (
+              <View pointerEvents="none" style={styles.pageLoading}>
+                <ActivityIndicator color={C.accent} />
               </View>
-            </ScrollView>
-          )}
-          {session.pageCount > 1 ? (
-            <PdfPageNav
-              index={session.currentPageIndex}
-              total={session.pageCount}
-              onPrev={() => setCurrentPage(session.currentPageIndex - 1)}
-              onNext={() => setCurrentPage(session.currentPageIndex + 1)}
-            />
-          ) : null}
+            ) : null}
+          </View>
           <PdfToolPanel
             active={tool}
+            bottomInset={Math.max(insets.bottom, 8)}
+            accessory={
+              <PdfPageNav
+                index={session.currentPageIndex}
+                total={session.pageCount}
+                onPrev={() => setCurrentPage(session.currentPageIndex - 1)}
+                onNext={() => setCurrentPage(session.currentPageIndex + 1)}
+              />
+            }
             onChange={(id) => {
               const nextTool = tool === id ? null : id;
               setTool(nextTool);
@@ -533,12 +622,28 @@ export default function PdfEditorScreen() {
                     : null
                 }
                 outputSize={session.outputSize}
+                pendingOutput={draftOutput}
                 matchLabel={matchLabel}
                 onMatchLabel={toggleMatchLabel}
                 onResetCrop={removeCrop}
                 onApplyCrop={applyCrop}
-                onCancel={() => setTool(null)}
+                onCancel={() => {
+                  setDraftOutput(null);
+                  setTool(null);
+                }}
                 onScope={setDraftScope}
+                smart={{
+                  status: smart.status,
+                  notice: smart.notice ?? cropNotice,
+                  selectedCount: smart.selectedCount,
+                  selectedLabel: smart.selectedLabel,
+                  hiddenCount: smart.hiddenCount,
+                  canStep: smart.canStep,
+                  onSmartCrop: smart.showAll,
+                  onPrev: () => smart.step(-1),
+                  onNext: () => smart.step(1),
+                  onClear: smart.clear,
+                }}
               />
             ) : null}
             {tool === 'rotate' ? (
@@ -585,8 +690,9 @@ export default function PdfEditorScreen() {
           </PdfToolPanel>
         </View>
       ) : (
-        <ScrollView
+        <FormScrollView
           style={styles.scroll}
+          bottomOffset={100}
           contentContainerStyle={styles.printContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
@@ -622,9 +728,10 @@ export default function PdfEditorScreen() {
               }}
             />
           </View>
-        </ScrollView>
+        </FormScrollView>
       )}
 
+      {step === 'edit' ? null : (
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 8) + Spacing.two + 6 }]}>
         {step === 'print' && session ? (
           <View style={styles.printActions}>
@@ -669,7 +776,6 @@ export default function PdfEditorScreen() {
                 return;
               }
               if (step === 'size') setStep('edit');
-              else if (step === 'edit') setStep('print');
             }}
             disabled={loading && (step === 'pick' || !session)}
             style={({ pressed }) => [
@@ -685,6 +791,7 @@ export default function PdfEditorScreen() {
           </Pressable>
         )}
       </View>
+      )}
       {documentSourceSheet}
     </View>
   );
@@ -706,6 +813,13 @@ const styles = themedStyles((c, scheme) => ({
     color: c.onAccent,
     fontSize: 17,
     fontWeight: '600',
+  },
+  headerNext: { paddingHorizontal: 8, paddingVertical: 6, marginRight: 4 },
+  headerNextText: { color: c.onAccent, fontSize: 16, fontWeight: '700' },
+  pageLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stepBar: {
     flexDirection: 'row',
@@ -761,7 +875,6 @@ const styles = themedStyles((c, scheme) => ({
   printSettings: { paddingHorizontal: 12, paddingTop: 12 },
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24, gap: 12 },
-  editContent: { paddingBottom: 24 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: c.text },
   emptyBody: { fontSize: 14, color: c.textMuted, textAlign: 'center', lineHeight: 20 },

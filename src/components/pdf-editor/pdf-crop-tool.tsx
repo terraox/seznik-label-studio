@@ -1,10 +1,40 @@
-import { Pressable, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 
 import { PdfScopeSelector } from '@/components/pdf-editor/pdf-scope-selector';
+import type { SmartCropNotice, SmartCropStatus } from '@/components/pdf-editor/use-smart-crop';
 import { parsePageRange, type OutputSize, type PageScope } from '@/lib/pdf-editor/session';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
+
+/** What the screen adds to the Smart Crop notices. */
+export type PdfCropScreenNotice = 'match-off';
+
+export type PdfCropSmart = {
+  status: SmartCropStatus;
+  notice: SmartCropNotice | PdfCropScreenNotice | null;
+  selectedCount: number;
+  /** Badge text of the single selected section, e.g. "Section 2 · 86%". */
+  selectedLabel: string | null;
+  hiddenCount: number;
+  canStep: boolean;
+  onSmartCrop: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+  onClear: () => void;
+};
+
+const NOTICE_TEXT: Record<SmartCropNotice | PdfCropScreenNotice, string> = {
+  'none-found': "Couldn't find clear sections on this page. Tap a block, or drag the window.",
+  'low-confidence': 'The sections on this page are unclear. Tap a block, or drag the window.',
+  'nothing-here': 'Nothing to select there.',
+  'big-block': 'This looks like one big block. Drag the window edges to trim it.',
+  capped: 'That block runs into most of the page, so its whole section was picked. Drag the edges to trim.',
+  'too-small': "That's a very small block. Drag the window to adjust.",
+  'hint-step': 'Tap the same spot again to select the bigger block around it.',
+  error: "Couldn't read this page for Smart Crop. Manual crop still works.",
+  'match-off': 'Match label shape is off so the window fits the section exactly.',
+};
 
 export function PdfCropTool({
   scope,
@@ -18,6 +48,8 @@ export function PdfCropTool({
   onResetCrop,
   onApplyCrop,
   onCancel,
+  smart,
+  pendingOutput,
 }: {
   scope: PageScope;
   pageCount: number;
@@ -31,53 +63,106 @@ export function PdfCropTool({
   onResetCrop?: () => void;
   onApplyCrop: () => void;
   onCancel: () => void;
+  /** Smart Crop controls. Absent = the plain manual crop panel. */
+  smart?: PdfCropSmart;
+  /** Label size a selection will set when Apply Crop is pressed. */
+  pendingOutput?: { widthMm: number; heightMm: number } | null;
 }) {
   useThemeRefresh();
   const rangeError =
     scope.mode === 'range' ? parsePageRange(String(scope.start), String(scope.end), pageCount).error : undefined;
 
+  const reading = smart ? smart.status === 'loading' || smart.status === 'ready' : false;
+  const fitsW = pendingOutput?.widthMm ?? outputSize.widthMm;
+  const fitsH = pendingOutput?.heightMm ?? outputSize.heightMm;
+  const selected = selectionMm ? `${selectionMm.w.toFixed(1)} × ${selectionMm.h.toFixed(1)} mm` : '-';
+  const fitsLabel = pendingOutput ? `${fitsW.toFixed(1)} × ${fitsH.toFixed(1)} mm` : `${fitsW} × ${fitsH} mm`;
+
   return (
     <View style={styles.wrap}>
-      <View style={styles.infoRow}>
-        <View style={styles.infoCell}>
-          <Text style={styles.infoLabel}>Selected area</Text>
-          <Text style={styles.infoValue}>
-            {selectionMm ? `${selectionMm.w.toFixed(1)} × ${selectionMm.h.toFixed(1)} mm` : '-'}
-          </Text>
+      {smart ? (
+        <View style={styles.smartRow}>
+          <Pressable
+            onPress={smart.onSmartCrop}
+            accessibilityRole="button"
+            accessibilityLabel="Smart Crop: show the sections found on this page"
+            style={({ pressed }) => [styles.smartBtn, pressed && styles.pressed]}>
+            {reading ? (
+              <ActivityIndicator size="small" color={C.accentInk} />
+            ) : (
+              <AppIcon name="viewfinder" size={15} tintColor={C.accentInk} />
+            )}
+            <Text style={styles.smartText}>Smart Crop</Text>
+          </Pressable>
+          <Pressable
+            onPress={smart.onPrev}
+            disabled={!smart.canStep}
+            accessibilityRole="button"
+            accessibilityLabel="Previous section"
+            hitSlop={4}
+            style={({ pressed }) => [styles.stepBtn, !smart.canStep && styles.disabled, pressed && styles.pressed]}>
+            <AppIcon name="chevron.left" size={16} tintColor={C.text} />
+          </Pressable>
+          <Pressable
+            onPress={smart.onNext}
+            disabled={!smart.canStep}
+            accessibilityRole="button"
+            accessibilityLabel="Next section"
+            hitSlop={4}
+            style={({ pressed }) => [styles.stepBtn, !smart.canStep && styles.disabled, pressed && styles.pressed]}>
+            <AppIcon name="chevron.right" size={16} tintColor={C.text} />
+          </Pressable>
         </View>
-        <AppIcon name="arrow.right.to.line" size={14} tintColor={C.textMuted} />
-        <View style={styles.infoCell}>
-          <Text style={styles.infoLabel}>Fits label</Text>
-          <Text style={styles.infoValue}>
-            {outputSize.widthMm} × {outputSize.heightMm} mm
-          </Text>
-        </View>
-      </View>
+      ) : null}
 
-      <View style={styles.matchRow}>
-        <View style={styles.matchText}>
-          <Text style={styles.matchTitle}>Match label shape</Text>
-          <Text style={styles.matchSub}>
-            {matchLabel ? 'Locked to the label shape, so the crop fills the label.' : 'Off: width and height crop freely.'}
+      {smart && smart.selectedCount > 0 ? (
+        <View style={styles.chip}>
+          <Text style={styles.chipText} numberOfLines={1}>
+            {smart.selectedCount === 1
+              ? smart.selectedLabel ?? '1 section selected'
+              : `${smart.selectedCount} sections selected · window fits all`}
+          </Text>
+          <Pressable onPress={smart.onClear} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear selection">
+            <Text style={styles.chipClear}>Clear</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {smart && (smart.notice || smart.hiddenCount > 0) ? (
+        <Text style={styles.notice} accessibilityLiveRegion="polite">
+          {smart.notice
+            ? NOTICE_TEXT[smart.notice]
+            : `${smart.hiddenCount} more small ${smart.hiddenCount === 1 ? 'block' : 'blocks'} hidden. Tap one to select it.`}
+        </Text>
+      ) : null}
+
+      <View style={styles.row}>
+        <View style={styles.sizeCell}>
+          <Text style={styles.sizeValue} numberOfLines={1}>
+            {selected}
+          </Text>
+          <Text style={styles.sizeSub} numberOfLines={1}>
+            {pendingOutput ? 'On apply' : 'Label'} {fitsLabel}
           </Text>
         </View>
+        <Text style={styles.matchLabel}>Match label</Text>
         <Switch value={matchLabel} onValueChange={onMatchLabel} trackColor={{ true: C.accent }} />
       </View>
 
-      <View style={styles.actionRow}>
+      <View style={styles.row}>
         <Pressable onPress={onCancel} style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}>
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
         <Pressable onPress={onApplyCrop} style={({ pressed }) => [styles.applyBtn, pressed && styles.pressed]}>
           <AppIcon name="checkmark" size={15} tintColor={C.onAccent} />
-          <Text style={styles.applyText}>Apply Crop</Text>
+          <Text style={styles.applyText}>Apply</Text>
         </Pressable>
+        {hasCrop && onResetCrop ? (
+          <Pressable onPress={onResetCrop} style={({ pressed }) => [styles.removeBtn, pressed && styles.pressed]}>
+            <Text style={styles.removeText}>Remove</Text>
+          </Pressable>
+        ) : null}
       </View>
-      {hasCrop && onResetCrop ? (
-        <Pressable onPress={onResetCrop} hitSlop={6} style={styles.resetBtn}>
-          <Text style={styles.resetText}>Remove crop (use full page)</Text>
-        </Pressable>
-      ) : null}
 
       <PdfScopeSelector
         scope={scope}
@@ -97,7 +182,49 @@ export function PdfCropTool({
 }
 
 const styles = themedStyles((c) => ({
-  wrap: { gap: 10 },
+  wrap: { gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sizeCell: { flex: 1, gap: 1 },
+  sizeValue: { fontSize: 14, fontWeight: '700', color: c.text },
+  sizeSub: { fontSize: 11, color: c.textMuted },
+  matchLabel: { fontSize: 13, fontWeight: '600', color: c.text },
+  smartRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  smartBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
+  },
+  smartText: { fontSize: 14, fontWeight: '700', color: c.accentInk },
+  stepBtn: {
+    width: 42,
+    minHeight: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  disabled: { opacity: 0.4 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: c.accentSoft,
+  },
+  chipText: { flex: 1, fontSize: 13, fontWeight: '600', color: c.text },
+  chipClear: { fontSize: 13, fontWeight: '700', color: c.accentInk },
+  notice: { fontSize: 12, color: c.textSecondary },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -119,13 +246,13 @@ const styles = themedStyles((c) => ({
   matchSub: { fontSize: 11, color: c.textMuted },
   actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   applyBtn: {
-    flex: 1.6,
+    flex: 1.4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     backgroundColor: c.accentFill,
-    minHeight: 42,
+    minHeight: 36,
     borderRadius: 10,
   },
   applyText: { color: c.onAccent, fontWeight: '700', fontSize: 14 },
@@ -133,14 +260,20 @@ const styles = themedStyles((c) => ({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 42,
+    minHeight: 36,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: c.border,
     backgroundColor: c.surface,
   },
   cancelText: { fontSize: 14, fontWeight: '600', color: c.textSecondary },
-  resetBtn: { alignSelf: 'center', paddingVertical: 2 },
-  resetText: { fontSize: 12, fontWeight: '600', color: c.danger },
+  removeBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  removeText: { fontSize: 13, fontWeight: '600', color: c.danger },
   pressed: { opacity: 0.72 },
 }));

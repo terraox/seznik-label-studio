@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/text-input';
 
 import { AppIcon } from '@/components/app-icon';
 import { QualityControl, type QualityStepperProps } from '@/components/quality-control';

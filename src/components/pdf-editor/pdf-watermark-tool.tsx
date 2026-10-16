@@ -1,4 +1,5 @@
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/text-input';
 
 import { PdfScopeSelector } from '@/components/pdf-editor/pdf-scope-selector';
 import {

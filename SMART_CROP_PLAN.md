@@ -10,9 +10,9 @@ Status: **plan only, nothing implemented.** Build phase by phase, stop after eac
 
 ## Phase tracker
 
-- [ ] **Phase 0** — Current-state report (this document, section 1)
-- [ ] **Phase 1** — Detector + node tests (`src/lib/pdf-editor/smart-crop/`), no UI
-- [ ] **Phase 2** — Tap-to-select + region-grow + multi-select on the current page
+- [x] **Phase 0** — Current-state report (this document, section 1)
+- [ ] **Phase 1** — Detector + node tests (`src/lib/pdf-editor/smart-crop/`), no UI — *code and tests done (R2.10); waiting on on-device probe numbers to close*
+- [ ] **Phase 2** — Tap-to-select + region-grow + multi-select on the current page — *built (Revision 3), node-tested; waiting on the phone test of gestures and overlays*
 - [ ] **Phase 3** — Per-page matching for All pages / Range (`cropByPage`)
 - [ ] **Phase 4** — Rotation (/Rotate vs MediaBox) and skew handling
 - [ ] **Phase 5** — Performance and background scheduling
@@ -546,3 +546,302 @@ All listed in §6.3 — hit-test (inside / edge / outside / nested / repeat-tap 
    - **Adds** `growRegionAt` (§2.4), the grow parameters in §2.3, `smart-crop/grow.ts`, `hit-test.ts` and `map.ts`, and the hit-test / grow / mapping tests in §6.3.
    - **Decides** that selection is separate from the crop window and drives it; that overlays are off by default; that there is no multi-select toggle unless device testing forces one.
    - **Names the reused gesture pattern:** `src/components/editor/skia-canvas.tsx:517-553`.
+
+---
+---
+
+# Revision 2: Approval changes
+
+Approved from Revision 1, with the changes below. **Where this section conflicts with anything above, this section wins.** Earlier sections are left as written.
+
+## R2.1 Confirmed, kept as written
+
+- The crop window already resizes freely (grab-zone bitmask). Smart Crop uses free-size windows.
+- Crop fractions are measured on the rendered bitmap (`cropRgbaNorm`, `rasterPt` preferred over `pageSizesPt`), so detected rects need no remap.
+- Each page keeps its own matched rect. The document's output size comes from the page the user tapped; differently sized regions are letterboxed with a warning (`containInBox`).
+- The pixel buffer comes from the existing 100-DPI raster plus `pngBase64ToGray`. No new dependency and no native change in Phase 1.
+- The text layer stays Phase 6 — iOS only, confidence bonus only.
+
+## R2.2 Separator classification must reject ordinary text
+
+Replaces the thin-rule and band tests in §2.2 step 6.
+
+**Dashed** requires *thin* **and** *regular*. Counting gaps is not enough:
+
+- thickness ≤ `thinT`;
+- ≥ `dashMinRuns` ink runs along the line before closing;
+- duty cycle `sum(dashes) / span` inside [`dashDutyMin`, `dashDutyMax`];
+- **dash regularity** — the relative standard deviation of the dash+gap *period* **and** of the dash lengths are both ≤ `dashRegularity`.
+
+A text line fails regularity: word lengths and spaces vary far more than a dash pattern.
+
+**Solid rule** requires thickness ≤ `thinT` **and** `solidity ≥ bandSolidity`, where solidity is the **pre-closing** ink density across the candidate's full thickness. A thin text line has solidity ≈ 0.2-0.35 and is rejected.
+
+**Ink band** requires `thinT < thickness ≤ bandTMax` **and** `solidity ≥ bandSolidity`. **A text line can never qualify as a band** — it fails solidity, and in most fonts it also fails `thinT` from below, so there are two independent defences.
+
+Anything in the thin or band thickness range that passes neither test is rejected with reason `'text'`.
+
+**New "must not split" fixtures** (§R2.7): a lone text line with blank space above and below; a centred heading; a footer line at the bottom of a block.
+
+## R2.3 Tone-step band candidates (pale title bands)
+
+A pale grey band such as Valmo's "TAX INVOICE" strip is **lighter than the ink threshold** (which is capped at 236), so it produces no ink at all and the ink-based candidate scan in §2.2 step 5 can never see it. A second, independent candidate generator is added:
+
+- maximal runs of scan lines where all of:
+  - `|lineMid − paperLevel| ≥ toneStep`,
+  - `uniform ≥ toneUniformMin`,
+  - raw ink coverage ≤ `toneBandInkMax`,
+  - thickness in [`toneBandTMin`, `toneBandTMax`];
+- plus a neighbour check: at least one of the two `clear`-thick neighbouring bands differs from the band by ≥ `toneStepNeighbour`.
+
+Accepted candidates become separators of kind `'band'` with `distinct = true`.
+
+**Correction to the instruction — the test uses the per-line MEDIAN gray, not the mean.** A pale band with dark text in it (Valmo's band carries the words "TAX INVOICE") has its *mean* dragged far out of range: a 242-grey band with 15% black text has a mean of ~206, which reads as neither paper nor band, and whose pixels then sit 36 levels away from that mean so a uniformity-about-the-mean test scores ~0. The **median** of the same line is 242, and uniformity about the median is ~0.85. Every tone test in the detector therefore uses the median of the scan line (`mid`), computed from a 256-bin histogram per line. `uniform` is the fraction of the line within ±`toneTol` of `mid`.
+
+A text row on white paper has `mid = 255`, so `|mid − paperLevel| = 0` and it is never a tone candidate. That is the third independent defence against text.
+
+**Fixture:** a synthetic light-grey band at gray 238-245 with dark text inside it must split. Confirmed on the real `valmo-tb` fixture once it exists.
+
+## R2.4 Correction — the accept rule, and what `minArea` is relative to
+
+Two corrections to Revision 1 that the change above forces into the open. Neither is decided silently.
+
+**1. The accept rule is loosened to match the brief.** Revision 1 §2.2 step 6 said accept if `clearSides === 2`, or (`clearSides ≥ 1` **and** distinct). That is **stricter than the brief** and it would reject Valmo's title band, because the band has ink immediately above it (the product-details row) and immediately below it (the invoice), giving `clearSides === 0`. The brief's rule is:
+
+> a separator only if it is visually distinct (dashed, much thicker, or a filled band) **or** has blank clearance on at least one side, **AND** each region it creates is at least a minimum fraction of the page area
+
+So the implemented rule is:
+
+```
+accept  ⇔  (distinct OR clearSides ≥ 1)  AND  both regions ≥ minArea
+distinct ⇔  dashed  OR  thickness ≥ thickMult × median candidate thickness  OR  band (ink or tone)
+```
+
+A table rule is thin, solid, the same thickness as its neighbours, and has text on both sides — not distinct, `clearSides === 0` — so it is still rejected, which is what the brief's last sentence demands. A table's *outermost* rule often does have blank on one side and will split the table away from the block above it; that is a real visual boundary, and `minArea` plus `maxDepth` bound the damage.
+
+**2. `minArea` is relative to the CONTENT rect, not the full page.** Revision 1 said "fraction of the page area". On sample A the content is the top half of the sheet, so a page-area reference would make every real section look half as big as it is, and on a page holding one small label with a wide blank margin it would drop everything. Area, ink and thickness thresholds are all measured against the **trimmed content rect**; only the returned `rect` values are fractions of the full page.
+
+## R2.5 Phase 2 changes — recorded now, built later
+
+**Taps inside the crop window.** A stationary tap **inside** the current crop window must select the section under it; only a drag moves or resizes the window. This **replaces** Revision 1 item R1.1.5's "gate the tap to points outside the grab zones", which is withdrawn — it made the window a dead zone, which is exactly where the user tends to tap.
+
+Final composition to build:
+
+```ts
+// pdf-page-viewer.tsx
+const cropGesture = Gesture.Pan().minDistance(CROP_DRAG_MIN)   // was .minDistance(0); 8–10 px
+const tapSelect  = Gesture.Tap().maxDuration(300).maxDistance(CROP_DRAG_MIN)
+const stage      = Gesture.Exclusive(tapSelect, cropGesture)
+```
+
+`CROP_DRAG_MIN = 9` screen px, sitting between the two: a touch that moves less than that resolves as a tap no matter where it lands, and a touch that moves more becomes a pan and the tap never fires. `Gesture.Exclusive` puts the tap first so it wins the ambiguous case. The grab-zone bitmask in `onBegin` is unchanged — it still decides *what* a drag moves — and `CROP_MIN`, `CROP_GRAB`, `CROP_SLOP` are unchanged. The reused pattern is still `src/components/editor/skia-canvas.tsx:517-553`. The exact value of `CROP_DRAG_MIN` is confirmed on a real device, not asserted here.
+
+**The analysis buffer is built when the crop tool opens**, not when Smart Crop is pressed. `openCrop()` kicks off the 100-DPI render, decode and downscale for the current page immediately, so a tap almost always has a buffer waiting. A tap arriving before the buffer exists shows a brief busy state on the selection overlay and is then served when the buffer lands — **never a dead tap**, and never a silently ignored one.
+
+## R2.6 Phase 1 additions
+
+- **Dev-only probe.** Phase 1 ends with a `__DEV__`-guarded call that runs `detectSections` on the current page of the open PDF and logs the section boxes plus the time split — render, decode, downscale, detect — as real on-device numbers. No UI. Implemented as `src/lib/pdf-editor/smart-crop/dev-probe.ts` plus one small effect in `src/app/pdf.tsx`, so the detector itself stays free of React and React Native imports.
+- **npm scripts** `test:smart-crop` and `test:pdf-editor`.
+
+## R2.7 Fixtures
+
+The real redacted PDFs are not ready. Phase 1 is built and verified against the synthetic fixtures.
+
+**The three real-fixture tolerances are PROVISIONAL** and are locked once the user gives the folder path:
+
+| Fixture | Status | Expected |
+|---|---|---|
+| `amazon-lr` | **PROVISIONAL** | 2 sections — left label, right invoice; label `hasCodeLike` |
+| `flipkart-tb` | **PROVISIONAL** | bordered label box `w ≤ 0.80`, centred ±0.03, plus the invoice |
+| `valmo-tb` | **PROVISIONAL** | ≥ 3 sections; label/invoice boundary at the title band; label and details row merge with a gap ≤ 0.01 |
+
+Rules, unchanged from §6.2 and tightened here:
+
+- **No PDF is ever committed.** `.gitignore` carries `fixtures/smart-crop/*.pdf`.
+- Committed fixtures are **pre-rendered 100-DPI grayscale PNGs**, visually checked for residual text before the first commit.
+- **Redaction replaces text with same-length placeholders** so block shapes and spacing are preserved, and **barcodes and QR codes are swapped for dummy codes of the same size**. This matters to the detector: shortening a redacted line would change the dash-gap and coverage statistics the classifier reads, and blanking a barcode would remove the `hasCodeLike` signal that drives the default suggestion.
+- The committed PNG is produced by the **dev probe itself**, which writes the exact 100-DPI grayscale buffer the detector sees and logs its path. There is no node-side PDF renderer in this project (`pdf-lib` cannot rasterize and nothing else in `devDependencies` can), so generating the fixture on device through the real pipeline is both the only option and the more faithful one.
+- The real-fixture test **skips with a clear message** while the PNGs are absent, so the suite is green and honest rather than failing on missing data.
+
+**One synthetic expectation changed.** Revision 1 §6.1 expected the `noise-specks` fixture to put specks in `dropped[]` as `'below-min-ink'`. It does not, and should not: a cut that would isolate a speck is already refused because the speck side falls below `minArea`, so no speck ever becomes a section to drop. Specks are instead removed by a **robust content trim** — a row or column must carry at least `edgeInkMin` ink pixels to count as content, so a 1-3 pixel speck never stretches the content rect or a tightened leaf. The fixture asserts the section count and the content rect instead of a `dropped` entry.
+
+## R2.8 Open questions — answered
+
+- **Q1** `package.json` is authoritative (Expo ~54). `AGENTS.md`'s v57 pointer is ignored.
+- **Q2** Real PDFs come later; see R2.7.
+- **Q3** `VISIBLE_CAP` stays 8, tuned after device testing.
+- **Q4** Pages with no confident match **must not export silently uncropped**. Before export, a confirm lists those pages with **Review** and **Export those uncropped**. (Phase 3.)
+- **Q5** The size-mismatch warning is an inline note, also listed in that same confirm. No separate blocking dialog. (Phase 3.)
+- **Q6** Deferred.
+- **Q7** Yes — `test:pdf-editor` is added.
+
+## R2.9 Parameters added by this revision
+
+| Name | Value | Relative to | Why |
+|---|---|---|---|
+| `bandSolidity` | 0.72 | band pixels | pre-closing ink density; rejects text lines |
+| `dashDutyMin` / `dashDutyMax` | 0.25 / 0.90 | dash span | a dashed rule's ink duty cycle |
+| `dashRegularity` | 0.45 | rel. std dev | max variation of the dash+gap period **and** of dash lengths |
+| `toneStep` | 8 | gray levels | min \|lineMid − paperLevel\| for a tone band |
+| `toneStepNeighbour` | 5 | gray levels | min difference from at least one neighbouring band |
+| `toneTol` | 14 | gray levels | uniformity window about the line median |
+| `toneUniformMin` | 0.70 | line pixels | fraction within `toneTol` of the median |
+| `toneBandInkMax` | 0.35 | line pixels | max raw ink inside a tone band |
+| `toneBandTMin` / `toneBandTMax` | 0.008 / 0.060 × cross | content dimension | tone band thickness range |
+| `paperPctl` | 0.95 | sampled pixels | paper level estimate |
+| `edgeInkMin` | max(2, 0.002 × extent) | scan extent | robust content trim; kills specks |
+| `visibleCap` | 8 | — | unchanged (Q3) |
+| `CROP_DRAG_MIN` | 9 screen px | — | Phase 2 tap/drag threshold (R2.5) |
+
+
+## R2.10 Found while building Phase 1
+
+Building and testing Phase 1 showed problems in the R2.2-R2.9 design. Each one is listed here; none was changed silently. Where this subsection conflicts with R2.1-R2.9, **this subsection wins.**
+
+**1. Barcode detection is now local, on a tile grid** (`codes.ts`). Neither the per-scan-line transition *count* (Revision 1) nor transition *density* can tell text from a barcode at 100 DPI, because a full-width line of 10 pt text has *more* transitions than a barcode. A whole-line profile also cannot see a barcode that shares its rows with text, which is exactly how Valmo prints it. The new test splits the page into tiles of `codeTile` (× unit). A tile counts as code when it is **dense along one axis and nearly constant along the other**: bars repeat identically for the height of the code, while text rows change shape. Both orientations are checked, so a barcode on a label turned sideways is still found. A region has `hasCodeLike` when it contains at least `codeTilesMin` code tiles. A separator candidate is rejected as `'code'` when code tiles cover at least `codeCover` of it.
+   - **Stated gap:** QR and DataMatrix are *not* flagged as codes yet. They are constant only within one module row. They are still never split (tested); only the `hasCodeLike` signal and the suggestion bonus are missing for them.
+
+**2. Printed-mark thresholds are relative to the PAGE, not the content.** This **corrects R2.4**, which said thickness thresholds were relative to the content rect. On the Amazon shape the content is half a sheet, so `dashGap` shrank to 6 px — below the real 7 px dash gap — and the dashed divider never closed into a line. A dash gap, a rule's thickness, a clearance band and a gutter are physical print features. They do not shrink because half the paper is blank. The split is now:
+   - dash gap, `thinT`, `bandTMax`, clearance, gutter, tone band thickness, pad, code tile: **× unit**, the page's long edge in analysis px. Using the long edge also keeps every threshold the same under rotation.
+   - `minArea`: **× the content area**, unchanged from R2.4.
+   - `ruleSpan`: × the node being cut. `sepMinLen`: × the content extent.
+
+**3. `toneTol` 14 → 6.** The uniformity window has to stay narrower than `toneStep` (8). Otherwise the window around a pale band reaches paper white and any half-blank line scores as uniform.
+
+**4. Four rules added**, each found by a failing fixture:
+
+| Rule | Found by | What it does |
+|---|---|---|
+| `sepMinLen` (0.25 × content extent) | barcode-field | `ruleSpan` alone is relative to the node, and inside a 40 px node one barcode bar "spans" the whole node. Rules and bands now also need an absolute minimum length. |
+| Refuse a cut whose side is blank or a solid fill | black-banner | A solid block (ink ≥ `bandSolidity`) is content belonging to its neighbour, never a section on its own, so the Valmo banner stays inside the label. A blank side is refused too, so margins don't become groups. |
+| A gutter crossed end to end by a stroke is not a gutter | composite design | Whitespace inside a bordered box is crossed by the box's side borders, and on a wide box those borders can fall below `gutterInk`. Without this rule a box would be cut in half. |
+| Peel dashed cut-lines off the content edge | amazon-like | Amazon prints a dashed line along the bottom. With only blank paper beyond it, it is stripped before cutting, so it ends up in neither section. Solid edge rules are kept, because on a bordered label they are the box itself. |
+
+**5. `edgeInkMin` 2 → 4.** At 2, each row of a 2×2 speck counted as content.
+
+**6. Valmo "merges cleanly", re-specified.** Revision 1 asserted "gap ≤ 0.01". On the Valmo-shaped fixture the measured gap between label and details row is **0.0100** — the 6 px separator rule plus its own whitespace — which sits exactly on that boundary. That number was my guess at what "merges cleanly" means. The intent is that **nothing is lost** when the two are merged, so the assertion is now: the same drawn separator bounds both sections, and the strip between them is no more than that separator (≤ the ±0.02 edge tolerance). I did not just loosen the number.
+
+**7. Skew.** A 2° tilt still splits on whitespace gutters, both horizontally and vertically (tested). **A 2° tilt does hide a thin rule** from the row profile: the rule spreads across ~24 rows and no single row reaches `ruleCover`. This is a confirmed Phase 4 gap. It is pinned by a characterization test that asserts today's behaviour (1 section) and is expected to flip to 2 when Phase 4 adds deskew. The first version of the fixture helper sheared rows sideways, which leaves horizontal rules perfectly horizontal, so it could not have tested this; that is fixed.
+
+**8. Two composite synthetics added**, `amazon-like` and `valmo-like`, as stand-ins for the PROVISIONAL real fixtures. Both pass:
+   - amazon-like: label left (holds the barcode, suggested), invoice pieces right, bottom cut-line peeled.
+   - valmo-like: 3 sections — label (banner and barcode inside, suggested), details row, invoice — with the cut at the pale band.
+
+**9. Tests also assert *why* each trap is rejected** (`rules.test.ts`), not just the section count, so a text line rejected for the wrong reason would fail: text line → `'text'`, footer → `'text'`, barcode → `'code'`, tight table rules → `'no-clearance'`, pale band accepted with `clearSides 0` as a distinct band.
+
+**10. `npx tsc --noEmit` is not clean on this repo, independent of this work.** Before Phase 1 there were 245 errors (mostly the separate `admin/` Next.js app, plus existing app errors). Phase 1 adds **zero**: there are no errors in `smart-crop/`, `src/lib/pdf-editor/` or `src/app/pdf.tsx`. Verification compares against that baseline rather than claiming a clean run.
+
+### Parameters changed or added in R2.10
+
+| Name | Value | Relative to | Note |
+|---|---|---|---|
+| `unit` | page long edge, px | — | reference for every printed-mark threshold |
+| `dashGap`, `thinT`, `bandTMax`, `clear`, `gutterMin`, `toneBandTMin/Max`, `pad` | unchanged values | **× unit** (was × content) | item 2 |
+| `toneTol` | **6** (was 14) | gray levels | item 3 |
+| `sepMinLen` | 0.25 | content scan extent | item 4 |
+| `edgeInkMin` | **4** (was 2) | px | item 5 |
+| `codeTile` | 0.024 | × unit | item 1 |
+| `codeTransDensity` | 0.10 | bar starts / tile px | item 1 — replaces `codeTrans` |
+| `codeSteadyMax` | 0.06 | changes / ink px | item 1 |
+| `codeInkMin` / `codeInkMax` | 0.15 / 0.85 | tile ink ratio | item 1 |
+| `codeTilesMin` | 3 | tiles | item 1 |
+| `codeCover` | 0.30 | candidate area | item 1 |
+
+### What Phase 1 delivered
+
+- `src/lib/pdf-editor/smart-crop/` — `types.ts`, `params.ts`, `gray.ts`, `profile.ts`, `codes.ts`, `rules.ts`, `detector.ts`, `index.ts`, `dev-probe.ts`.
+- Tests — `__tests__/fixtures.ts`, `detector.test.ts`, `rules.test.ts`, `real-fixtures.test.ts`.
+- Dev probe — a `__DEV__`-only effect in `src/app/pdf.tsx` that loads the probe with a dynamic `import()`. 800 ms after each page change it logs `[smart-crop]` boxes and the render / decode / downscale / detect split, and writes the 100-DPI grayscale PNG used to make fixtures.
+- `test:smart-crop`, `test:pdf-editor` in `package.json`; `fixtures/smart-crop/README.md`; `fixtures/smart-crop/*.pdf` in `.gitignore`.
+- **Phase 1 closes** when on-device probe logs for the three sample PDFs are in, and the PROVISIONAL tolerances are locked against the real PNGs.
+
+---
+
+# Revision 3: Phase 2 build
+
+Phase 2 was started at the user's request before the Phase 1 device numbers came in, so **both phases now wait on one phone test**. Where this revision conflicts with anything above, **this revision wins.**
+
+## R3.1 What was built
+
+| Piece | File |
+|---|---|
+| Detector split into `prepareAnalysis` (cheap: threshold, integral image, code map) and `detectPrepared` (the cut), so region-grow can answer taps before detection finishes. `detectSections` keeps its old signature. | `smart-crop/detector.ts` |
+| Screen ↔ page mapping with rotation, zoom and pan terms | `smart-crop/map.ts` |
+| Hit chain: leaf under the point, then each enclosing group out to the root | `smart-crop/hit-test.ts` |
+| Region-grow on a cell grid, reusing the prepared buffers | `smart-crop/grow.ts` |
+| Tap resolver: detected leaf first, else grow | `smart-crop/resolve.ts` |
+| Pure selection reducer: add, remove, repeat-tap step-outward with wrap, union, select-only | `smart-crop/selection.ts` |
+| Shared 100-DPI page loader (the dev probe now uses it too) | `smart-crop/source.ts` |
+| Screen hook: reads the page **when the crop tool opens**, queues early taps with a busy spinner, detects in the background, builds overlays and notices, logs taps in dev | `components/pdf-editor/use-smart-crop.ts` |
+| Overlays and the tap-busy spinner | `components/pdf-editor/pdf-section-overlays.tsx` |
+| Tap gesture, drag threshold, overlays, dimmed-not-hidden mask | `components/pdf-editor/pdf-page-viewer.tsx` |
+| Smart Crop / Prev / Next row, selection chip with Clear, notice line, "Label size on Apply" | `components/pdf-editor/pdf-crop-tool.tsx` |
+| Wiring: staged label size, Match-label-off notice, nudge clears highlight, Apply writes size then crop | `app/pdf.tsx` |
+| Persisted one-time hint flag `smartCropHintSeen` | `stores/settings-store.ts` |
+
+**Final gesture composition** (as R2.5 specified): `cropGesture` is `Pan().minDistance(CROP_DRAG_MIN = 9)`. The tap is `Tap().maxDuration(300).maxDistance(9)`, and the stage gesture is `Gesture.Exclusive(tap, cropGesture)`. The pan's grab-zone bitmask is unchanged. Two details made it safe:
+
+- the pan commits only if it actually activated (`onStart` sets a flag), so a winning tap never counts as a nudge;
+- the tap releases the pan's "active" flag before the window snaps, so the layout sync can't skip the update.
+
+## R3.2 Decisions made while building — none silent
+
+1. **The label size is staged, and applied on Apply Crop.** Writing the size on tap (§4.2 as worded) would change the document size before the crop is applied. Cancel would then leave a changed size behind, which breaks "never applied silently". The size from a selection is shown in the panel as **"Label size on Apply W × H mm"** and written together with the crop. It snaps to a preset within 0.15 mm, using the same rule as the size row.
+2. **Clearing the selection drops the staged size; dragging the window keeps it.** Clear means "not this section", so its size should not stick. A nudge is a refinement of the selection the user chose (R1.2.1), so it keeps the size.
+3. **The crop mask is dimmed instead of solid while Smart Crop is in use.** Commit `939ea33` changed the mask from `rgba(0,0,0,0.62)` to solid `#0A0A0A`, which hides the whole page outside the window. Tap-to-select needs that part of the page to be visible: the user can't add the invoice to a selection they can't see. The solid mask is kept as the default. A 62% dim (the old value) is used only while overlays are shown or something is selected. **This touches a deliberate design choice; to be confirmed on device.**
+4. **The "touches 3+ content edges" grow cap from §2.4 step 4 is dropped**, and the area cap (`maxArea` 0.6) is kept. A label that fills the left half of a page with no bottom cut-line touches top, left and bottom — three edges — and would have been capped wrongly.
+5. **Repeat tap and removal are separated by timing.** A second tap within 1.2 s and 8 screen px steps outward through the chain and wraps back to the smallest. A slower tap on a selected section removes it. That is the only way both R1.1.2 and R1.1.4 can hold for the same spot.
+6. **Prev / Next replace the selection with one section.** They are the precise-tap-free path (R1.2.5); multi-select stays a tap gesture.
+7. **Overlays turn on when a tap resolves onto a *detected* section**, or when Smart Crop is pressed (R1.2.4). Grown-only taps leave them off.
+8. **With scope "All pages" or "Range", Phase 2 applies the selected rect to every page in scope.** That is the existing shared-rect behaviour. Per-page matching is Phase 3.
+9. **The Smart Crop button uses the `viewfinder` icon.** `sparkles` has no Android mapping in `AppIcon`.
+10. **Overlays are screen-reader buttons, but this is unverified on device.** They are `accessible` with a spoken label and an `activate` action, while `pointerEvents="none"` keeps them from taking touches. Whether TalkBack still focuses a `pointerEvents="none"` view is not confirmed. Prev/Next are the guaranteed accessible path.
+
+## R3.3 Tests added
+
+`select.test.ts`, 21 tests:
+- **mapping:** plain scale; corner placement at 90/180/270; 36 round trips across 4 rotations × 3 zoom levels with pan; rotated rect size
+- **hit-test:** inside, on the edge, outside
+- **grow:** a text block; a barcode (with `hasCodeLike`); a half-page table → the table; a full-page table → `capped`, never silent; empty background → nothing; an isolated block; a speck → `too-small`; a grown block that is a detected section → that section
+- **resolve:** a detected leaf wins; a tap before detection still grows
+- **selection:** add, remove, union, select none; repeat tap steps outward and wraps; a slow repeat removes; Prev/Next; tapping nothing
+
+The gesture composition, overlays, busy state and notices are UI. They are type- and lint-checked, but **only the phone test exercises them.**
+
+## R3.4 Phase 2 closes when
+
+On-device logs for each of the three sample PDFs show the tapped point, whether it resolved to a detected or a grown section, and that section's box (`[smart-crop] tap (x, y) → added detected #2 … · via detected`). In addition:
+- a tap inside the window selects, and a drag of the window, an edge or a corner still moves or resizes it;
+- the dimmed mask (R3.2.3) is accepted.
+
+---
+
+## Revision log (continued)
+
+2. **Revision 2 — Approval changes** (2026-10-16). Plan approved; Phase 1 implemented, Phase 2 not started. Changes from the earlier sections:
+   - **Tightens separator classification so ordinary text cannot be a separator** (R2.2): dashed now requires duty cycle and period/length regularity, not just a gap count; solid rules and ink bands now require a pre-closing solidity test. Three new "must not split" fixtures.
+   - **Adds tone-step band candidates** (R2.3) so a pale grey title band lighter than the ink threshold is still found, and **corrects the instruction's "row mean" to the per-line median**, because dark text inside a pale band drags the mean out of range.
+   - **Corrects Revision 1's accept rule** (R2.4) to `(distinct OR clearSides ≥ 1) AND minArea`, matching the brief. Revision 1's stricter rule would have rejected Valmo's title band, which has ink on both sides.
+   - **Corrects the reference for `minArea`, `minInk` and thickness thresholds** from full-page area to the **trimmed content rect** (R2.4).
+   - **Supersedes Revision 1 item R1.1.5's "gate taps outside the grab zones"** (R2.5): a stationary tap inside the crop window now selects; `cropGesture.minDistance(0)` becomes `CROP_DRAG_MIN ≈ 9 px` and the tap is first in `Gesture.Exclusive`. Phase 2.
+   - **Moves analysis-buffer construction to crop-tool open** rather than Smart Crop press, with a busy state instead of a dead tap (R2.5). Phase 2.
+   - **Adds the Phase 1 dev probe and the two npm scripts** (R2.6).
+   - **Marks the three real-fixture tolerances PROVISIONAL**, fixes the redaction rules, and makes the dev probe the fixture generator since no node-side PDF renderer exists (R2.7).
+   - **Changes the `noise-specks` expectation** from a `dropped[]` entry to a robust content trim (R2.7).
+   - **Answers Q1-Q7** (R2.8) and adds the parameters in R2.9.
+3. **Revision 2, R2.10 — Phase 1 build findings** (2026-10-16). Changes from R2.1-R2.9, all found by failing fixtures while building:
+   - **Replaces the transition-count code guard with a local tile-grid code map** (density along one axis, constancy along the other). QR/DataMatrix are not flagged as codes yet; stated as a gap.
+   - **Corrects R2.4:** printed-mark thresholds (dash gap, thickness, clearance, gutter, pad, tone band, code tile) are relative to the page long edge, not the content. `minArea` stays content-relative.
+   - **Changes `toneTol` 14 → 6 and `edgeInkMin` 2 → 4.**
+   - **Adds four rules:** separator minimum length; refuse cuts with a blank or solid-fill side; crossed gutters are not gutters; peel dashed cut-lines off the content edge.
+   - **Re-specifies Valmo "merges cleanly"** from "gap ≤ 0.01" (measured 0.0100, on the boundary) to "the strip between them is only the separator".
+   - **Confirms the thin-rule-under-skew Phase 4 gap** with a characterization test, and fixes the shear helper that could not tilt horizontal rules.
+   - **Adds** the `amazon-like` and `valmo-like` composite synthetics and the rejection-reason tests.
+   - **Records** the pre-existing 245-error `tsc` baseline; Phase 1 adds zero.
+4. **Revision 3 — Phase 2 build** (2026-10-16). Phase 2 started at the user's request before the Phase 1 device numbers. Changes from earlier sections:
+   - **Refines §4.2:** the label size from a selection is staged and applied with the crop on Apply, not written on tap. Clear drops the staged size; a nudge keeps it.
+   - **Changes the crop mask while Smart Crop is in use** from solid to a 62% dim, so sections outside the window can be seen and tapped. The solid mask from commit `939ea33` stays the default.
+   - **Drops the "touches 3+ content edges" grow cap from §2.4**; the area cap stays.
+   - **Pins down R1.1.2 against R1.1.4:** a repeat within 1.2 s / 8 px steps outward; a slower tap removes.
+   - **Splits the detector** into `prepareAnalysis` + `detectPrepared` so taps are served before detection ends; `detectSections` is unchanged for callers.
+   - **Records** that All pages / Range still share one rect until Phase 3, and that overlay screen-reader access is unverified.

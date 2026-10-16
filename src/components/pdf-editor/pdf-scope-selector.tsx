@@ -1,4 +1,6 @@
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { useRef } from 'react';
+import { Keyboard, Pressable, Text, View } from 'react-native';
+import { TextInput, type TextInput as TextInputRef } from '@/components/ui/text-input';
 
 import type { PageScope } from '@/lib/pdf-editor/session';
 import { themedStyles, useThemeRefresh } from '@/theme';
@@ -15,6 +17,8 @@ export function PdfScopeSelector({
   onChange: (scope: PageScope) => void;
 }) {
   useThemeRefresh();
+  const startRef = useRef<TextInputRef>(null);
+  const endRef = useRef<TextInputRef>(null);
   if (pageCount < 2) return null;
 
   return (
@@ -38,14 +42,22 @@ export function PdfScopeSelector({
       {scope.mode === 'range' ? (
         <View style={styles.rangeRow}>
           <TextInput
-            keyboardType="number-pad"
+            ref={startRef}
+            keyboardType="numeric"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => endRef.current?.focus()}
             value={String(scope.start)}
             onChangeText={(t) => onChange({ mode: 'range', start: Number(t) || 0, end: scope.end })}
             style={styles.input}
           />
           <Text style={styles.to}>to</Text>
           <TextInput
-            keyboardType="number-pad"
+            ref={endRef}
+            keyboardType="numeric"
+            returnKeyType="done"
+            blurOnSubmit
+            onSubmitEditing={() => Keyboard.dismiss()}
             value={String(scope.end)}
             onChangeText={(t) => onChange({ mode: 'range', start: scope.start, end: Number(t) || 0 })}
             style={styles.input}
