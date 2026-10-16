@@ -1,0 +1,1334 @@
+{
+  "generatedAt": "2026-10-16T09:50:21.924Z",
+  "source": "scripts/shop/pro-list.xlsx#Roll Products",
+  "labels": [
+    {
+      "id": "100x150mm-1200",
+      "name": "100 x 150mm - (1200 Labels/Roll) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71An8yARpNL._SL1500.jpg?v=1785403855",
+      "amazonUrl": "https://www.amazon.in/dp/B0GT9ZZFCC",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "100x150mm",
+      "quantityLabel": "1200 Labels/Roll",
+      "widthMm": 100,
+      "heightMm": 150,
+      "quantity": 1200,
+      "detailLabel": "100x150mm · 1200 Labels/Roll",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0GT9ZZFCC",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "100x150mm-1600",
+      "name": "100 x 150mm - (1600 Labels/Roll) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71CIUGS94WL._SL1500.jpg?v=1785403855",
+      "amazonUrl": "https://www.amazon.in/dp/B0GWV7V493",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "100x150mm",
+      "quantityLabel": "1600 Labels/Roll",
+      "widthMm": 100,
+      "heightMm": 150,
+      "quantity": 1600,
+      "detailLabel": "100x150mm · 1600 Labels/Roll",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0GWV7V493",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "100x150mm-400",
+      "name": "100 x 150mm - (400 Labels/Roll) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61wiqaz_a5L._SL1500.jpg?v=1785403856",
+      "amazonUrl": "https://www.amazon.in/dp/B0GWV9KP5R",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "100x150mm",
+      "quantityLabel": "400 Labels/Roll",
+      "widthMm": 100,
+      "heightMm": 150,
+      "quantity": 400,
+      "detailLabel": "100x150mm · 400 Labels/Roll",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0GWV9KP5R",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "100x150mm-800",
+      "name": "100 x 150mm - (800 Labels/Roll) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71PXBK2uSGL._SL1500.jpg?v=1785403856",
+      "amazonUrl": "https://www.amazon.in/dp/B0GT9XMSLS",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "100x150mm",
+      "quantityLabel": "800 Labels/Roll",
+      "widthMm": 100,
+      "heightMm": 150,
+      "quantity": 800,
+      "detailLabel": "100x150mm · 800 Labels/Roll",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0GT9XMSLS",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "25x15-2500",
+      "name": "25 x 15mm - (500 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61QdFLnZ95L._SX679.jpg?v=1784132566",
+      "amazonUrl": "https://amzn.in/d/00Yi9C8X",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "25x15mm",
+      "quantityLabel": "500 Labels/Roll",
+      "widthMm": 25,
+      "heightMm": 15,
+      "quantity": 500,
+      "detailLabel": "25x15mm · 500 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "new-waterproof-amazon-product",
+      "name": "25 x 25mm - (2500 Labels) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/Screenshot_2026-10-14_103408_png.jpg?v=1791954270",
+      "amazonUrl": "https://amzn.in/d/0cagr3Sl",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "25x25mm",
+      "quantityLabel": "2500 Labels",
+      "widthMm": 25,
+      "heightMm": 25,
+      "quantity": 2500,
+      "detailLabel": "25x25mm · 2500 Labels",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "50-diameter-500",
+      "name": "50 Diameter - (100 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61byYxb9FQL._SX679.jpg?v=1784135595",
+      "amazonUrl": "https://amzn.in/d/0hq7WwKi",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50 Diameter",
+      "quantityLabel": "100 Labels/Roll",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 100,
+      "detailLabel": "50 Diameter · 100 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "white-50x15-500",
+      "name": "50 x 15mm - (100 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/51xaOJFURRL._SX679.jpg?v=1784131066",
+      "amazonUrl": "https://amzn.in/d/0gyhCgMs",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x15mm",
+      "quantityLabel": "100 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 15,
+      "quantity": 100,
+      "detailLabel": "50x15mm · 100 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "50x15-1250",
+      "name": "50 x 15mm - (250 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/51C2oGnSgiL._SX679.jpg?v=1784132781",
+      "amazonUrl": "https://amzn.in/d/0hHqP8SQ",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x15mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 15,
+      "quantity": 250,
+      "detailLabel": "50x15mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "blue-50x15-250",
+      "name": "50 x 15mm - (250 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71grJWNANcL._SX679.jpg?v=1784137412",
+      "amazonUrl": "https://link.amazon/B04nK2SFU",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x15mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 15,
+      "quantity": 250,
+      "detailLabel": "50x15mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "unusual_domain",
+        "host": "link.amazon",
+        "asin": null,
+        "flags": [
+          "unusual_amazon_host",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "red-50x15-250",
+      "name": "50 x 15mm - (250 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/7127sRdM65L._SX679.jpg?v=1784137503",
+      "amazonUrl": "https://link.amazon/B0hfoBhWt",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x15mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 15,
+      "quantity": 250,
+      "detailLabel": "50x15mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "unusual_domain",
+        "host": "link.amazon",
+        "asin": null,
+        "flags": [
+          "unusual_amazon_host",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "yellow-50x15-250",
+      "name": "50 x 15mm - (250 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71lrycyuvaL._SX466.jpg?v=1784115215",
+      "amazonUrl": "https://amzn.in/d/01UuuiUl",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x15mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 15,
+      "quantity": 250,
+      "detailLabel": "50x15mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "50x15-2000",
+      "name": "50 x 15mm - (400 Labels/Roll) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/50mm_x_15mm_-_2000_Labels.jpg?v=1785474166",
+      "amazonUrl": "https://amzn.in/d/09OfaJBO",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x15mm",
+      "quantityLabel": "400 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 15,
+      "quantity": 400,
+      "detailLabel": "50x15mm · 400 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "white-50x25-500",
+      "name": "50 x 25mm - (100 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/51VbzH6aodL._SX679.jpg?v=1784131289",
+      "amazonUrl": "https://amzn.in/d/0ikqSF1E",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x25mm",
+      "quantityLabel": "100 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 25,
+      "quantity": 100,
+      "detailLabel": "50x25mm · 100 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "50x25-1250",
+      "name": "50 x 25mm - (250 Labels/Roll) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/50_x_25mm.jpg?v=1786014592",
+      "amazonUrl": "https://amzn.in/d/045rqAgW",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x25mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 25,
+      "quantity": 250,
+      "detailLabel": "50x25mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "blue-50x25-250",
+      "name": "50 x 25mm - (250 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71cdpX-776L._SL1500.jpg?v=1784137855",
+      "amazonUrl": "https://link.amazon/B0ielrhDc",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x25mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 25,
+      "quantity": 250,
+      "detailLabel": "50x25mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "unusual_domain",
+        "host": "link.amazon",
+        "asin": null,
+        "flags": [
+          "unusual_amazon_host",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "red-50x25-250",
+      "name": "50 x 25mm - (250 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71dhQPkK-bL._SL1500.jpg?v=1784138039",
+      "amazonUrl": "https://link.amazon/B0dhQPkK-bL",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x25mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 25,
+      "quantity": 250,
+      "detailLabel": "50x25mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "unusual_domain",
+        "host": "link.amazon",
+        "asin": null,
+        "flags": [
+          "unusual_amazon_host",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "white-50x25-1250waterproof",
+      "name": "50 x 25mm - (250 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/50x25waterproof1250_labels.jpg?v=1785737211",
+      "amazonUrl": "https://www.amazon.in/dp/B0F11V7KMW",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x25mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 25,
+      "quantity": 250,
+      "detailLabel": "50x25mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0F11V7KMW",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "yellow-50x25-250",
+      "name": "50 x 25mm - (250 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71OOjMZTQwL._SL1500.jpg?v=1784137683",
+      "amazonUrl": "https://link.amazon/B0ggpzJL8",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x25mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 25,
+      "quantity": 250,
+      "detailLabel": "50x25mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "unusual_domain",
+        "host": "link.amazon",
+        "asin": null,
+        "flags": [
+          "unusual_amazon_host",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "50x30-1000",
+      "name": "50 x 30mm - (200 Labels/Roll) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/50x30_1000normal.jpg?v=1785737446",
+      "amazonUrl": "https://amzn.in/d/0gJrxDuq",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x30mm",
+      "quantityLabel": "200 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 30,
+      "quantity": 200,
+      "detailLabel": "50x30mm · 200 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "white-50x30-1000waterproof",
+      "name": "50 x 30mm - (200 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/50x30_1000waterproof.jpg?v=1785737211",
+      "amazonUrl": "https://www.amazon.in/dp/B0GX6NG4Y6",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x30mm",
+      "quantityLabel": "200 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 30,
+      "quantity": 200,
+      "detailLabel": "50x30mm · 200 Labels/Roll",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0GX6NG4Y6",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "silver-50x30-1250",
+      "name": "50 x 30mm - (250 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61SQnqSrLwL._SX679.jpg?v=1784134592",
+      "amazonUrl": "https://amzn.in/d/05gw6YFL",
+      "type": "Special",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x30mm",
+      "quantityLabel": "250 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 30,
+      "quantity": 250,
+      "detailLabel": "50x30mm · 250 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "multicolor-50x30-450",
+      "name": "50 x 30mm - (450 Labels) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71qHHNdc4-L._SX679.jpg?v=1784131523",
+      "amazonUrl": "https://amzn.in/d/0aPrgvHm",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x30mm",
+      "quantityLabel": "450 Labels",
+      "widthMm": 50,
+      "heightMm": 30,
+      "quantity": 450,
+      "detailLabel": "50x30mm · 450 Labels",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "blue-50x50-150",
+      "name": "50 x 50mm - (100 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71iU3CcmxsL._SL1500.jpg?v=1784137010",
+      "amazonUrl": "https://www.amazon.in/dp/B0F8N2XKW1",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x50mm",
+      "quantityLabel": "100 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 50,
+      "quantity": 100,
+      "detailLabel": "50x50mm · 100 Labels/Roll",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0F8N2XKW1",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "green-50x50-150",
+      "name": "50 x 50mm - (100 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71k38jS-ddL._SL1500.jpg?v=1784136739",
+      "amazonUrl": "https://link.amazon/B08ECMqTe",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x50mm",
+      "quantityLabel": "100 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 50,
+      "quantity": 100,
+      "detailLabel": "50x50mm · 100 Labels/Roll",
+      "linkAudit": {
+        "kind": "unusual_domain",
+        "host": "link.amazon",
+        "asin": null,
+        "flags": [
+          "unusual_amazon_host",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "pink-50x50-250",
+      "name": "50 x 50mm - (100 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71vobh6nySL._SL1500.jpg?v=1784137195",
+      "amazonUrl": "https://link.amazon/B09uTF0Iu",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x50mm",
+      "quantityLabel": "100 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 50,
+      "quantity": 100,
+      "detailLabel": "50x50mm · 100 Labels/Roll",
+      "linkAudit": {
+        "kind": "unusual_domain",
+        "host": "link.amazon",
+        "asin": null,
+        "flags": [
+          "unusual_amazon_host",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "yellow-50x50-150",
+      "name": "50 x 50mm - (100 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71fbqxM-OkL._SL1500.jpg?v=1784136554",
+      "amazonUrl": "https://amzn.to/3QYAWgr",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x50mm",
+      "quantityLabel": "100 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 50,
+      "quantity": 100,
+      "detailLabel": "50x50mm · 100 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.to",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "50x50-750",
+      "name": "50 x 50mm - (150 Labels/Roll) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/51bshDAVV5L._SX679.jpg?v=1784134105",
+      "amazonUrl": "https://amzn.in/d/0bAiJGkc",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x50mm",
+      "quantityLabel": "150 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 50,
+      "quantity": 150,
+      "detailLabel": "50x50mm · 150 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "50x50-waterproof-750",
+      "name": "50 x 50mm - (150 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/51hJ0ImUbzL._SL1000.jpg?v=1784135073",
+      "amazonUrl": "https://amzn.in/d/00VRuKJl",
+      "type": "Waterproof",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x50mm",
+      "quantityLabel": "150 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 50,
+      "quantity": 150,
+      "detailLabel": "50x50mm · 150 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "silver-50x75-500",
+      "name": "50 x 75mm - (100 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/612Y1qIpkdL._SX679.jpg?v=1784135276",
+      "amazonUrl": "https://amzn.in/d/0751SvV3",
+      "type": "Special",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x75mm",
+      "quantityLabel": "100 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 75,
+      "quantity": 100,
+      "detailLabel": "50x75mm · 100 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "50x75-450",
+      "name": "50 x 75mm - (90 Labels/Roll) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/51QdwDN1SCL._SX679.jpg?v=1784134808",
+      "amazonUrl": "https://amzn.in/d/05Jmzn4V",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": "50x75mm",
+      "quantityLabel": "90 Labels/Roll",
+      "widthMm": 50,
+      "heightMm": 75,
+      "quantity": 90,
+      "detailLabel": "50x75mm · 90 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "assorted-sticky-6roll",
+      "name": "Assorted Colored Sticky - (6 Rolls) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61N9aPnpN5L._SX679.jpg?v=1784130276",
+      "amazonUrl": "https://amzn.in/d/0cbQHpZv",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "6 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 6,
+      "detailLabel": "6 Rolls",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "cable-750",
+      "name": "Cable - (150 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61J_AhvHaBL._SX679.jpg?v=1784135970",
+      "amazonUrl": "https://amzn.in/d/07nrAyJp",
+      "type": "Special",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "150 Labels/Roll",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 150,
+      "detailLabel": "150 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "jewellery-750",
+      "name": "Jewellery - (150 Labels/Roll) - Waterproof",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61BsN6XL8jL._SX679.jpg?v=1784136251",
+      "amazonUrl": "https://amzn.in/d/0cDSg8ru",
+      "type": "Special",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "150 Labels/Roll",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 150,
+      "detailLabel": "150 Labels/Roll",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "magic-sticky-3rolls",
+      "name": "Magic Sticky - (3 Rolls) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61jhiJ_zMtL._SX466.jpg?v=1784129637",
+      "amazonUrl": "https://amzn.in/d/09ilynRs",
+      "type": "Normal, Special",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "3 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 3,
+      "detailLabel": "3 Rolls",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "translucent-sticky-3rolls",
+      "name": "Magic-Sticky - 3 Rolls",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61jhiJ_zMtL._SX466.jpg?v=1784129637",
+      "amazonUrl": "https://amzn.in/d/09ilynRs",
+      "type": "Sticky",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "3 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 3,
+      "detailLabel": "3 Rolls",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "nonsticky-10roll",
+      "name": "NonSticky - (10 Rolls) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/51PIevkRfML._SX679.jpg?v=1784130723",
+      "amazonUrl": "https://amzn.in/d/03ph3VZq",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "10 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 10,
+      "detailLabel": "10 Rolls",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "seznik-bundle",
+      "name": "SEZNIK Multi-Type Thermal Roll Paper Bundle - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/51XavKjq2NL.jpg?v=1784132092",
+      "amazonUrl": "https://amzn.in/d/0a3JeL2C",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "SEZNIK Multi-Type Thermal Roll Paper Bundle - Normal",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "study-paper-5rolls",
+      "name": "Study Paper - (5 Rolls) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71UXk4voJyL._SX679.jpg?v=1784131817",
+      "amazonUrl": "https://amzn.in/d/0iIuyOXi",
+      "type": "Normal, Special",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "5 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 5,
+      "detailLabel": "5 Rolls",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "transparent-sticky-3rolls",
+      "name": "Transparent Sticky - (3 Rolls) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61s8G5RUe5L._SL1000.jpg?v=1784110957",
+      "amazonUrl": "https://amzn.in/d/0hFLWDGF",
+      "type": "Normal, Special",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "3 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 3,
+      "detailLabel": "3 Rolls",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "white-nonsticky-5rolls",
+      "name": "White NonSticky - (5 Rolls) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/51PIevkRfML._SX679.jpg?v=1784130723",
+      "amazonUrl": "https://amzn.in/d/019EOo0A",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "5 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 5,
+      "detailLabel": "5 Rolls",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "white-sticky-5rolls",
+      "name": "White Sticky - (5 Rolls) - Normal",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/whitesticky10rollsnormal.jpg?v=1785736186",
+      "amazonUrl": "https://amzn.in/d/05KerEw5",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "5 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 5,
+      "detailLabel": "5 Rolls",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "nonsticky-10rolls",
+      "name": "White-NonSticky - 10 Rolls",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/61lAtYZvx0L._SX679.jpg?v=1787376048",
+      "amazonUrl": "https://www.amazon.in/dp/B0HBFXGMR3",
+      "type": "Non-Sticky",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "10 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 10,
+      "detailLabel": "10 Rolls",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0HBFXGMR3",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "white-sticky-10rolls",
+      "name": "White-Sticky Continuous- 10 Rolls",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/71_bkJT1BOL._SL1500_c21ac9b7-e9e3-4b0f-a059-8b85749bbb08.jpg?v=1785742185",
+      "amazonUrl": "https://www.amazon.in/dp/B0D8N8G1L7",
+      "type": "Normal",
+      "imageSource": "Product image map",
+      "category": "labels",
+      "sizeLabel": null,
+      "quantityLabel": "10 Rolls",
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": 10,
+      "detailLabel": "10 Rolls",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0D8N8G1L7",
+        "flags": [],
+        "openable": true
+      }
+    }
+  ],
+  "printers": [],
+  "flags": [
+    {
+      "id": "25x15-2500",
+      "name": "25 x 15mm - (500 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "new-waterproof-amazon-product",
+      "name": "25 x 25mm - (2500 Labels) - Waterproof",
+      "kind": "placeholder_id",
+      "detail": "new-waterproof-amazon-product"
+    },
+    {
+      "id": "new-waterproof-amazon-product",
+      "name": "25 x 25mm - (2500 Labels) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "50-diameter-500",
+      "name": "50 Diameter - (100 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "white-50x15-500",
+      "name": "50 x 15mm - (100 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "50x15-1250",
+      "name": "50 x 15mm - (250 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "blue-50x15-250",
+      "name": "50 x 15mm - (250 Labels/Roll) - Waterproof",
+      "kind": "unusual_domain",
+      "detail": "link.amazon"
+    },
+    {
+      "id": "red-50x15-250",
+      "name": "50 x 15mm - (250 Labels/Roll) - Waterproof",
+      "kind": "unusual_domain",
+      "detail": "link.amazon"
+    },
+    {
+      "id": "yellow-50x15-250",
+      "name": "50 x 15mm - (250 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "50x15-2000",
+      "name": "50 x 15mm - (400 Labels/Roll) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "white-50x25-500",
+      "name": "50 x 25mm - (100 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "50x25-1250",
+      "name": "50 x 25mm - (250 Labels/Roll) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "blue-50x25-250",
+      "name": "50 x 25mm - (250 Labels/Roll) - Waterproof",
+      "kind": "unusual_domain",
+      "detail": "link.amazon"
+    },
+    {
+      "id": "red-50x25-250",
+      "name": "50 x 25mm - (250 Labels/Roll) - Waterproof",
+      "kind": "unusual_domain",
+      "detail": "link.amazon"
+    },
+    {
+      "id": "yellow-50x25-250",
+      "name": "50 x 25mm - (250 Labels/Roll) - Waterproof",
+      "kind": "unusual_domain",
+      "detail": "link.amazon"
+    },
+    {
+      "id": "50x30-1000",
+      "name": "50 x 30mm - (200 Labels/Roll) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "silver-50x30-1250",
+      "name": "50 x 30mm - (250 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "silver-50x30-1250",
+      "name": "50 x 30mm - (250 Labels/Roll) - Waterproof",
+      "kind": "type_name_mismatch",
+      "detail": "Type=Special"
+    },
+    {
+      "id": "multicolor-50x30-450",
+      "name": "50 x 30mm - (450 Labels) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "green-50x50-150",
+      "name": "50 x 50mm - (100 Labels/Roll) - Waterproof",
+      "kind": "unusual_domain",
+      "detail": "link.amazon"
+    },
+    {
+      "id": "pink-50x50-250",
+      "name": "50 x 50mm - (100 Labels/Roll) - Waterproof",
+      "kind": "unusual_domain",
+      "detail": "link.amazon"
+    },
+    {
+      "id": "yellow-50x50-150",
+      "name": "50 x 50mm - (100 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.to"
+    },
+    {
+      "id": "50x50-750",
+      "name": "50 x 50mm - (150 Labels/Roll) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "50x50-waterproof-750",
+      "name": "50 x 50mm - (150 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "silver-50x75-500",
+      "name": "50 x 75mm - (100 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "silver-50x75-500",
+      "name": "50 x 75mm - (100 Labels/Roll) - Waterproof",
+      "kind": "type_name_mismatch",
+      "detail": "Type=Special"
+    },
+    {
+      "id": "50x75-450",
+      "name": "50 x 75mm - (90 Labels/Roll) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "assorted-sticky-6roll",
+      "name": "Assorted Colored Sticky - (6 Rolls) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "cable-750",
+      "name": "Cable - (150 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "cable-750",
+      "name": "Cable - (150 Labels/Roll) - Waterproof",
+      "kind": "type_name_mismatch",
+      "detail": "Type=Special"
+    },
+    {
+      "id": "jewellery-750",
+      "name": "Jewellery - (150 Labels/Roll) - Waterproof",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "jewellery-750",
+      "name": "Jewellery - (150 Labels/Roll) - Waterproof",
+      "kind": "type_name_mismatch",
+      "detail": "Type=Special"
+    },
+    {
+      "id": "magic-sticky-3rolls",
+      "name": "Magic Sticky - (3 Rolls) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "translucent-sticky-3rolls",
+      "name": "Magic-Sticky - 3 Rolls",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "nonsticky-10roll",
+      "name": "NonSticky - (10 Rolls) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "seznik-bundle",
+      "name": "SEZNIK Multi-Type Thermal Roll Paper Bundle - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "study-paper-5rolls",
+      "name": "Study Paper - (5 Rolls) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "transparent-sticky-3rolls",
+      "name": "Transparent Sticky - (3 Rolls) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "white-nonsticky-5rolls",
+      "name": "White NonSticky - (5 Rolls) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "white-sticky-5rolls",
+      "name": "White Sticky - (5 Rolls) - Normal",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "magic-sticky-3rolls",
+      "name": "Magic Sticky - (3 Rolls) - Normal",
+      "kind": "duplicate_amazon_url",
+      "detail": "https://amzn.in/d/09ilynRs"
+    },
+    {
+      "id": "translucent-sticky-3rolls",
+      "name": "Magic-Sticky - 3 Rolls",
+      "kind": "duplicate_amazon_url",
+      "detail": "https://amzn.in/d/09ilynRs"
+    }
+  ]
+}

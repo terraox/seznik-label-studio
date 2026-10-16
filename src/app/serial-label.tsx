@@ -2,11 +2,11 @@
  * SerialLabelScreen / serial-label.tsx
  *
  * Screen for the "Serial Labels" feature.
- * Generates sequences of labels & barcodes from a single sample + range,
- * previews them, and prints the batch directly to connected thermal printers (TD-404, Josh, Tez, Dev, LabelX).
+ * Generates a numbered series from a sample pattern, then opens that series
+ * on the editor canvas so layout and print use the normal label pipeline.
  */
 
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,14 +17,11 @@ import {
   Alert,
   ScrollView,
   Pressable,
-  Modal,
-  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
-import { usePrinterStore } from '@/stores/printer-store';
-import { getPrinterManager } from '@/lib/printer/printer-manager';
+import { validateLabelSize } from '@/lib/label-geometry';
 import {
   generateSerialLabelsFromSample,
   validateRange,
@@ -33,30 +30,11 @@ import {
   SequenceRuleConfig,
   BarcodeSymbology,
 } from '@/lib/printer/SerialLabelEngine';
+import { createSerialLabelDocument, serialDocumentName } from '@/lib/serial-label-document';
+import { useDataStore } from '@/stores/data-store';
+import { useLabelStore } from '@/stores/label-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
-
-function encodeTsplSerialLabel(
-  text: string,
-  barcodeValue: string,
-  widthMm = 50,
-  heightMm = 30,
-): Uint8Array {
-  const lines = [
-    `SIZE ${widthMm} mm,${heightMm} mm`,
-    `GAP 2 mm,0 mm`,
-    `DIRECTION 1`,
-    `CLS`,
-    `TEXT 30,25,"3",0,1,1,"${text}"`,
-    `BARCODE 30,75,"128",45,1,0,2,4,"${barcodeValue}"`,
-    `PRINT 1`,
-    ``,
-  ].join('\r\n');
-  const buf = new Uint8Array(lines.length);
-  for (let i = 0; i < lines.length; i++) {
-    buf[i] = lines.charCodeAt(i) & 0xff;
-  }
-  return buf;
-}
 
 function LabelPreview({
   item,
@@ -88,15 +66,9 @@ function LabelPreview({
 export default function SerialLabelScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
-  const status = usePrinterStore((s) => s.status);
-  const deviceName = usePrinterStore((s) => s.deviceName);
-  const deviceId = usePrinterStore((s) => s.deviceId);
-  const isConnected =
-    status === 'connected' ||
-    status === 'printing' ||
-    Boolean(deviceId) ||
-    getPrinterManager().isConnected;
-  const connectedName = deviceName || (getPrinterManager().isConnected ? 'Connected Printer' : 'Thermal Printer');
+  const addExcelFile = useDataStore((s) => s.addExcelFile);
+  const upsertDocument = useLabelStore((s) => s.upsertDocument);
+  const defaults = useSettingsStore((s) => s.defaults);
 
   const [sampleText, setSampleText] = useState('Desk1');
   const [endNumber, setEndNumber] = useState('20');
@@ -107,11 +79,7 @@ export default function SerialLabelScreen() {
   const [barcodeSymbology, setBarcodeSymbology] = useState<BarcodeSymbology>('CODE128');
   const [generated, setGenerated] = useState<GeneratedLabel[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  // Printing state
-  const [isPrinting, setIsPrinting] = useState(false);
-  const [printProgress, setPrintProgress] = useState({ current: 0, total: 0, label: '' });
-  const cancelPrintRef = useRef(false);
+  const [opening, setOpening] = useState(false);
 
   const template: LabelTemplate = {
     fields: {},
@@ -134,127 +102,84 @@ export default function SerialLabelScreen() {
     return validateRange(cfg);
   }, [sampleText, endNumber, step, padding, barcodeSymbology, startNumberMatch, startNumber]);
 
-  function handlePreview() {
-    setError(null);
+  function sequenceConfig(): SequenceRuleConfig {
+    return {
+      startNumber,
+      endNumber: Number(endNumber),
+      step: Number(step) || 1,
+      textPadding: padding ? Number(padding) : undefined,
+      barcodeSymbology,
+    };
+  }
+
+  function buildSequence(): GeneratedLabel[] | null {
     try {
-      const cfg: SequenceRuleConfig = {
-        startNumber,
-        endNumber: Number(endNumber),
-        step: Number(step) || 1,
-        textPadding: padding ? Number(padding) : undefined,
-        barcodeSymbology,
-      };
-      const labels = generateSerialLabelsFromSample(sampleText, template, cfg);
+      const labels = generateSerialLabelsFromSample(sampleText, template, sequenceConfig());
       setGenerated(labels);
-    } catch (e: any) {
-      setError(e.message);
+      setError(null);
+      return labels;
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Could not generate the series.';
+      setError(message);
       setGenerated([]);
+      return null;
     }
   }
 
-  async function handleGenerateAndPrint() {
-    const isConn =
-      usePrinterStore.getState().status === 'connected' ||
-      usePrinterStore.getState().status === 'printing' ||
-      Boolean(usePrinterStore.getState().deviceId) ||
-      getPrinterManager().isConnected;
-    if (!isConn) {
-      Alert.alert(
-        'Printer Not Connected',
-        'Connect a Tejas, Rudra, or Josh printer before printing.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Connect Printer', onPress: () => router.push('/printer-connect') },
-        ],
-      );
+  function handlePreview() {
+    setError(null);
+    buildSequence();
+  }
+
+  function handleOpenInCanvas() {
+    if (opening || rangeError) return;
+    const sizeError = validateLabelSize(Number(widthMm), Number(heightMm));
+    if (sizeError) {
+      Alert.alert('Label size', sizeError);
       return;
     }
 
-    let labelsToPrint = generated;
-    if (labelsToPrint.length === 0) {
-      try {
-        const cfg: SequenceRuleConfig = {
-          startNumber,
-          endNumber: Number(endNumber),
-          step: Number(step) || 1,
-          textPadding: padding ? Number(padding) : undefined,
-          barcodeSymbology,
-        };
-        labelsToPrint = generateSerialLabelsFromSample(sampleText, template, cfg);
-        setGenerated(labelsToPrint);
-      } catch (e: any) {
-        Alert.alert('Error', e.message);
-        return;
-      }
+    const labels = buildSequence();
+    if (!labels || labels.length === 0) {
+      Alert.alert('Serial labels', error ?? rangeError ?? 'Generate a valid series first.');
+      return;
     }
 
-    Alert.alert(
-      'Confirm Batch Print',
-      `Print ${labelsToPrint.length} sequential labels from "${labelsToPrint[0].text}" to "${labelsToPrint[labelsToPrint.length - 1].text}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Start Printing',
-          onPress: () => void executeBatchPrint(labelsToPrint),
-        },
-      ],
-    );
-  }
-
-  async function executeBatchPrint(labels: GeneratedLabel[]) {
-    const pm = getPrinterManager();
-    const w = parseFloat(widthMm) || 50;
-    const h = parseFloat(heightMm) || 30;
-
-    cancelPrintRef.current = false;
-    setIsPrinting(true);
-    setPrintProgress({ current: 0, total: labels.length, label: labels[0]?.text || '' });
-
-    let successCount = 0;
-
+    setOpening(true);
     try {
-      for (let i = 0; i < labels.length; i++) {
-        if (cancelPrintRef.current) {
-          console.info('[SERIAL-PRINT] Batch cancelled by user at label index', i);
-          break;
-        }
-
-        const item = labels[i];
-        setPrintProgress({
-          current: i + 1,
-          total: labels.length,
-          label: item.text,
-        });
-
-        if (pm.usesTd404CommandSet) {
-          const bytes = encodeTsplSerialLabel(item.text, item.barcodeValue, w, h);
-          await pm.print(bytes);
-        } else {
-          // Universal driver dispatch for Josh, Tez, Dev, LabelX, Wi-Fi
-          await pm.printTestLabel(`${item.text}\n${item.barcodeValue}`);
-        }
-
-        successCount++;
-
-        // Brief delay between labels to allow hardware buffers to breathe
-        await new Promise((resolve) => setTimeout(resolve, 350));
+      const file = addExcelFile({
+        name: serialDocumentName(labels),
+        uri: `serial://label/${Date.now()}`,
+        sheets: [
+          {
+            name: 'Serial',
+            columns: ['Text', 'Barcode'],
+            rows: labels.map((label) => [label.text, label.barcodeValue]),
+          },
+        ],
+        activeSheetIndex: 0,
+        hasHeaderRow: true,
+        dataStartRow: 1,
+      });
+      const doc = createSerialLabelDocument({
+        labels,
+        excelFileId: file.id,
+        widthMm: Number(widthMm),
+        heightMm: Number(heightMm),
+        barcodeSymbology,
+        orientation: defaults.orientation,
+        paperType: defaults.paperType,
+      });
+      if (!doc) {
+        Alert.alert('Serial labels', 'The series could not be opened on the canvas.');
+        return;
       }
-
-      if (!cancelPrintRef.current) {
-        Alert.alert(
-          'Batch Complete! 🎉',
-          `Successfully sent ${successCount} serial labels to ${connectedName}.`,
-        );
-      } else {
-        Alert.alert('Printing Stopped', `Stopped after printing ${successCount} labels.`);
-      }
-    } catch (err: any) {
-      Alert.alert(
-        'Print Error',
-        err instanceof Error ? err.message : 'An error occurred during batch printing.',
-      );
+      upsertDocument(doc);
+      router.replace({ pathname: '/edit', params: { labelId: doc.id } });
+    } catch (e: unknown) {
+      Alert.alert('Serial labels', e instanceof Error ? e.message : 'Could not open the canvas.');
     } finally {
-      setIsPrinting(false);
+      setOpening(false);
     }
   }
 
@@ -272,35 +197,14 @@ export default function SerialLabelScreen() {
           <Text style={styles.backText}>Back</Text>
         </Pressable>
         <Text style={styles.navTitle}>Serial Labels</Text>
-        <Pressable hitSlop={12} onPress={() => router.push('/printer-connect')} style={styles.connectIconBtn}>
-          <AppIcon name="antenna.radiowaves.left.and.right" tintColor={C.link} size={20} />
-        </Pressable>
+        <View style={styles.connectIconBtn} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Printer Status Banner */}
-        <Pressable
-          onPress={() => router.push('/printer-connect')}
-          style={[styles.statusBanner, isConnected ? styles.statusBannerOnline : styles.statusBannerOffline]}
-        >
-          <View style={styles.statusLeft}>
-            <View style={[styles.statusDot, isConnected ? styles.dotOnline : styles.dotOffline]} />
-            <View>
-              <Text style={styles.statusTitle}>
-                {isConnected ? `Printer: ${connectedName}` : 'No Printer Connected'}
-              </Text>
-              <Text style={styles.statusSubtitle}>
-                {isConnected ? 'Ready for serial batch printing' : 'Tap to scan and connect Bluetooth printer'}
-              </Text>
-            </View>
-          </View>
-          <AppIcon name="chevron.right" tintColor={C.textSecondary} size={16} />
-        </Pressable>
-
-        {/* Title & Description */}
         <Text style={styles.heading}>Serial Label Generator</Text>
         <Text style={styles.subheading}>
-          Generate sequential numbers and barcodes automatically from a single sample label.
+          Set the pattern, range, and size. The series opens on the canvas so you can place text
+          and barcode, then print every label.
         </Text>
 
         {/* Configuration Section */}
@@ -403,6 +307,17 @@ export default function SerialLabelScreen() {
           >
             <Text style={styles.buttonText}>Preview Sequence</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, (!!rangeError || opening) && styles.btnDisabled]}
+            onPress={handleOpenInCanvas}
+            disabled={!!rangeError || opening}
+          >
+            <AppIcon name="square.and.pencil" tintColor={C.onAccent} size={18} />
+            <Text style={[styles.buttonText, { marginLeft: 8 }]}>
+              {opening ? 'Opening canvas…' : 'Open series on canvas'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Results & Action */}
@@ -410,7 +325,7 @@ export default function SerialLabelScreen() {
           <View style={styles.resultsContainer}>
             <View style={styles.resultsHeader}>
               <Text style={styles.previewCount}>
-                ✨ {generated.length} labels ready to print
+                {generated.length} labels ready for canvas
               </Text>
               <Text style={styles.previewRange}>
                 {generated[0].text} → {generated[generated.length - 1].text}
@@ -428,51 +343,20 @@ export default function SerialLabelScreen() {
               showsHorizontalScrollIndicator={false}
             />
 
-            <TouchableOpacity style={styles.button} onPress={handleGenerateAndPrint}>
-              <AppIcon name="printer.fill" tintColor={C.onAccent} size={18} />
+            <TouchableOpacity
+              style={[styles.button, opening && styles.btnDisabled]}
+              onPress={handleOpenInCanvas}
+              disabled={opening}
+            >
+              <AppIcon name="square.and.pencil" tintColor={C.onAccent} size={18} />
               <Text style={[styles.buttonText, { marginLeft: 8 }]}>
-                Print Batch ({generated.length} Labels)
+                Open {generated.length} labels on canvas
               </Text>
             </TouchableOpacity>
+            <Text style={styles.printHint}>Print from the editor to send the full series.</Text>
           </View>
         )}
       </ScrollView>
-
-      {/* Printing Modal */}
-      <Modal visible={isPrinting} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.progressCard}>
-            <ActivityIndicator size="large" color={C.link} />
-            <Text style={styles.modalHeading}>Printing Serial Labels</Text>
-            <Text style={styles.modalProgressText}>
-              Label {printProgress.current} of {printProgress.total}
-            </Text>
-            <Text style={styles.modalCurrentLabel}>"{printProgress.label}"</Text>
-
-            <View style={styles.progressBarBg}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  {
-                    width: `${Math.round(
-                      (printProgress.current / Math.max(1, printProgress.total)) * 100,
-                    )}%`,
-                  },
-                ]}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => {
-                cancelPrintRef.current = true;
-              }}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -494,23 +378,6 @@ const styles = themedStyles((c) => ({
   navTitle: { fontSize: 17, fontWeight: '700', color: c.text },
   connectIconBtn: { width: 60, alignItems: 'flex-end', justifyContent: 'center' },
   scrollContent: { padding: 16 },
-  statusBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  statusBannerOnline: { backgroundColor: c.successSoft, borderColor: c.border },
-  statusBannerOffline: { backgroundColor: c.dangerSoft, borderColor: c.dangerSoft },
-  statusLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  dotOnline: { backgroundColor: c.successFill },
-  dotOffline: { backgroundColor: c.dangerFill },
-  statusTitle: { fontSize: 14, fontWeight: '700', color: c.text },
-  statusSubtitle: { fontSize: 12, color: c.textSecondary, marginTop: 2 },
   heading: { fontSize: 22, fontWeight: '800', color: c.text, marginBottom: 4 },
   subheading: { fontSize: 13, color: c.textSecondary, lineHeight: 18, marginBottom: 16 },
   card: {
@@ -583,6 +450,13 @@ const styles = themedStyles((c) => ({
   previewCount: { fontSize: 15, fontWeight: '700', color: c.text },
   previewRange: { fontSize: 13, color: c.textSecondary, fontWeight: '600' },
   previewList: { marginBottom: 8 },
+  printHint: {
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 16,
+    color: c.textSecondary,
+    textAlign: 'center',
+  },
   previewCard: {
     backgroundColor: '#FFFFFF', // theme-fixed: light preview (previewCard)
     borderWidth: 1,
@@ -610,37 +484,4 @@ const styles = themedStyles((c) => ({
   barcodeBox: { alignItems: 'center', width: '100%', backgroundColor: c.fill, padding: 6, borderRadius: 6 },
   barcodeBars: { fontSize: 12, letterSpacing: 2, color: c.text, fontWeight: '900' },
   barcodeText: { fontSize: 10, color: c.textSecondary, marginTop: 2, fontWeight: '600' },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: c.scrim,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  progressCard: {
-    backgroundColor: c.surface,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 320,
-    alignItems: 'center',
-    shadowColor: c.shadow,
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  modalHeading: { fontSize: 18, fontWeight: '700', color: c.text, marginTop: 14, marginBottom: 6 },
-  modalProgressText: { fontSize: 14, color: c.textSecondary, fontWeight: '500' },
-  modalCurrentLabel: { fontSize: 16, fontWeight: '700', color: c.link, marginTop: 4, marginBottom: 16 },
-  progressBarBg: {
-    width: '100%',
-    height: 8,
-    backgroundColor: c.fillStrong,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  progressBarFill: { height: '100%', backgroundColor: '#2563EB' }, // theme-fixed: progress fill
-  cancelBtn: { paddingVertical: 8, paddingHorizontal: 20 },
-  cancelBtnText: { color: c.danger, fontWeight: '700', fontSize: 14 },
 }));

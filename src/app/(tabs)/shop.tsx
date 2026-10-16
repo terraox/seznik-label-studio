@@ -1,82 +1,210 @@
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
+import { ProductCard } from '@/components/shop/product-card';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
-import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
+import {
+  filterShopProducts,
+  formatSizeKey,
+  groupShopProducts,
+  uniqueSizes,
+  uniqueTypes,
+  type ShopProductGroup,
+} from '@/lib/shop/filter-catalog';
+import { loadShopCatalog } from '@/lib/shop/load-catalog';
+import type { ShopCatalog, ShopCategory } from '@/lib/shop/types';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-type ShopCategory = 'all' | 'rolls' | 'specialty';
+const GRID_COLUMNS = 2;
+const GRID_GAP = 12;
+const GRID_PAD = Spacing.three;
 
 const CATEGORIES: { id: ShopCategory; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'rolls', label: 'Rolls' },
-  { id: 'specialty', label: 'Specialty' },
-];
-
-const PRODUCTS = [
-  {
-    id: 'rolls',
-    category: 'rolls' as const,
-    title: 'Label rolls',
-    size: 'Continuous & die-cut',
-    blurb: 'Everyday thermal stock for receipts, prices, and short runs.',
-    icon: 'square.stack.3d.up.fill' as const,
-    tone: '#E7F6F8', // theme-fixed: product art tint
-    ink: '#17A6B8', // theme-fixed: product art ink
-  },
-  {
-    id: 'ribbon',
-    category: 'rolls' as const,
-    title: 'TD-404 ribbon',
-    size: 'Matched packs',
-    blurb: 'Ribbon sized for Seznik TD-404 so density stays even.',
-    icon: 'arrow.clockwise' as const,
-    tone: '#E8EEF6', // theme-fixed: product art tint
-    ink: '#214668', // theme-fixed: product art ink
-  },
-  {
-    id: 'shipping',
-    category: 'specialty' as const,
-    title: 'Shipping labels',
-    size: '100 × 150 mm',
-    blurb: 'Wide stock for barcodes, addresses, and dispatch slips.',
-    icon: 'tray.and.arrow.down.fill' as const,
-    tone: '#F3EEE6', // theme-fixed: product art tint
-    ink: '#8A5A2B', // theme-fixed: product art ink
-  },
-  {
-    id: 'jewellery',
-    category: 'specialty' as const,
-    title: 'Jewellery tags',
-    size: 'Hang tags',
-    blurb: 'Small tags that still hold a SKU and a price.',
-    icon: 'tag' as const,
-    tone: '#F8E8EC', // theme-fixed: product art tint
-    ink: '#9B3D55', // theme-fixed: product art ink
-  },
-  {
-    id: 'care',
-    category: 'specialty' as const,
-    title: 'Care labels',
-    size: 'Apparel',
-    blurb: 'Soft care labels for wash instructions and fibre content.',
-    icon: 'doc.text' as const,
-    tone: '#E8F3EC', // theme-fixed: product art tint
-    ink: '#1F7A45', // theme-fixed: product art ink
-  },
+  { id: 'printers', label: 'Printers' },
+  { id: 'labels', label: 'Labels' },
 ];
 
 export default function ShopScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const tabPad = useTabBarPadding(Spacing.four);
-  const [category, setCategory] = useState<ShopCategory>('all');
+  const listWidth = Math.min(windowWidth, MaxContentWidth);
+  const cardWidth =
+    (listWidth - GRID_PAD * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+  const [catalog, setCatalog] = useState<ShopCatalog | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [category, setCategory] = useState<ShopCategory>('labels');
+  const [query, setQuery] = useState('');
+  const [type, setType] = useState<string | null>(null);
+  const [size, setSize] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void loadShopCatalog()
+      .then((data) => {
+        if (active) {
+          setCatalog(data);
+          setLoadError(null);
+        }
+      })
+      .catch(() => {
+        if (active) setLoadError('The shop catalogue could not be loaded.');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const sourceProducts = catalog
+    ? category === 'printers'
+      ? catalog.printers
+      : catalog.labels
+    : [];
+  const types = useMemo(() => uniqueTypes(sourceProducts), [sourceProducts]);
+  const sizes = useMemo(() => uniqueSizes(sourceProducts), [sourceProducts]);
   const products = useMemo(
-    () => PRODUCTS.filter((item) => category === 'all' || item.category === category),
-    [category],
+    () =>
+      catalog
+        ? filterShopProducts(category === 'printers' ? catalog.printers : catalog.labels, {
+            category,
+            query,
+            type,
+            size,
+          })
+        : [],
+    [catalog, category, query, type, size],
+  );
+  const groups = useMemo(() => groupShopProducts(products), [products]);
+
+  function renderEmpty() {
+    if (category === 'printers') {
+      return (
+        <View style={styles.empty}>
+          <AppIcon name="bag" tintColor={C.brandInk} size={22} />
+          <Text style={styles.emptyTitle}>Printer catalogue coming soon</Text>
+          <Text style={styles.emptyBody}>
+            This tab is ready for printer listings. Label rolls are in Labels.
+          </Text>
+        </View>
+      );
+    }
+    if (query || type || size) {
+      return (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>No matching labels</Text>
+          <Text style={styles.emptyBody}>Clear search or filters to see the full catalogue.</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyTitle}>No products</Text>
+        <Text style={styles.emptyBody}>The label catalogue is empty.</Text>
+      </View>
+    );
+  }
+
+  const header = (
+    <View style={styles.headerBlock}>
+      <View style={styles.hero}>
+        <View style={styles.heroCopy}>
+          <Text style={styles.heroEyebrow}>Supplies</Text>
+          <Text style={styles.heroTitle}>Label rolls on Amazon.</Text>
+          <Text style={styles.heroBody}>
+            Browse Seznik stock and open the product page. Printers will land in this shop when
+            that catalogue is added.
+          </Text>
+        </View>
+        <View style={styles.heroMark}>
+          <AppIcon name="bag.fill" tintColor={C.onAccent} size={22} />
+        </View>
+      </View>
+
+      <View style={styles.pills}>
+        {CATEGORIES.map((item) => {
+          const active = item.id === category;
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => {
+                setCategory(item.id);
+                setType(null);
+                setSize(null);
+                setQuery('');
+              }}
+              android_ripple={androidRipple}
+              style={[styles.pill, active && styles.pillActive]}>
+              <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {category === 'labels' ? (
+        <>
+          <View style={styles.searchWrap}>
+            <AppIcon name="magnifyingglass" tintColor={C.textMuted} size={16} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search name, type, or size"
+              placeholderTextColor={C.textMuted}
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+            />
+          </View>
+          <Text style={styles.filterHeading}>Type</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}>
+            <FilterChip label="All" active={type == null} onPress={() => setType(null)} />
+            {types.map((item) => (
+              <FilterChip
+                key={item}
+                label={item}
+                active={type === item}
+                onPress={() => setType(item === type ? null : item)}
+              />
+            ))}
+          </ScrollView>
+          <Text style={styles.filterHeading}>Size</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}>
+            <FilterChip label="All" active={size == null} onPress={() => setSize(null)} />
+            {sizes.map((item) => (
+              <FilterChip
+                key={item}
+                label={formatSizeKey(item)}
+                active={size === item}
+                onPress={() => setSize(item === size ? null : item)}
+              />
+            ))}
+          </ScrollView>
+          <Text style={styles.count}>
+            {products.length} of {sourceProducts.length} labels
+          </Text>
+        </>
+      ) : null}
+    </View>
   );
 
   return (
@@ -86,69 +214,60 @@ export default function ShopScreen() {
         <Text style={styles.headerTitle}>Shop</Text>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: tabPad }]}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroEyebrow}>Supplies</Text>
-            <Text style={styles.heroTitle}>Stock the press before the next run.</Text>
-            <Text style={styles.heroBody}>
-              Rolls, ribbon, and specialty tags matched to Seznik printers.
-            </Text>
-          </View>
-          <View style={styles.heroMark}>
-            <AppIcon name="bag.fill" tintColor={C.onAccent} size={22} />
-          </View>
+      {!catalog && !loadError ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color={C.accent} />
+          <Text style={styles.centeredText}>Loading catalogue…</Text>
         </View>
-
-        <View style={styles.pills}>
-          {CATEGORIES.map((item) => {
-            const active = item.id === category;
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => setCategory(item.id)}
-                android_ripple={androidRipple}
-                style={[styles.pill, active && styles.pillActive]}>
-                <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>{item.label}</Text>
-              </Pressable>
-            );
-          })}
+      ) : loadError ? (
+        <View style={styles.centered}>
+          <Text style={styles.emptyTitle}>{loadError}</Text>
         </View>
-
-        <View style={styles.list}>
-          {products.map((product) => (
-            <View key={product.id} style={styles.card}>
-              <View style={[styles.iconWrap, { backgroundColor: product.tone }]}>
-                <AppIcon name={product.icon} tintColor={product.ink} size={20} />
+      ) : (
+        <FlatList
+          style={styles.scroll}
+          data={groups}
+          keyExtractor={(item: ShopProductGroup) => item.key}
+          renderItem={({ item }) => (
+            <View style={styles.group}>
+              <Text style={styles.groupTitle}>{item.title}</Text>
+              <View style={styles.grid}>
+                {item.products.map((product) => (
+                  <ProductCard key={product.id} product={product} width={cardWidth} />
+                ))}
               </View>
-              <View style={styles.cardBody}>
-                <Text style={styles.cardTitle} numberOfLines={1}>
-                  {product.title}
-                </Text>
-                <Text style={styles.cardBlurb} numberOfLines={2}>
-                  {product.size} · {product.blurb}
-                </Text>
-              </View>
-              <Text style={styles.askLabel}>Ask</Text>
             </View>
-          ))}
-        </View>
-
-        <View style={styles.note}>
-          <AppIcon name="info.circle" tintColor={C.brandInk} size={18} />
-          <Text style={styles.noteText}>
-            Checkout in the app is not open yet. Contact Seznik support and we will pack the stock.
-          </Text>
-        </View>
-      </ScrollView>
+          )}
+          ListHeaderComponent={header}
+          ListEmptyComponent={renderEmpty}
+          contentContainerStyle={[styles.content, { paddingBottom: tabPad }]}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 }
 
-const styles = themedStyles((c, scheme) => ({
+function FilterChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      android_ripple={androidRipple}
+      style={[styles.chip, active && styles.chipActive]}>
+      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const styles = themedStyles((c) => ({
   root: {
     flex: 1,
     backgroundColor: c.bg,
@@ -159,12 +278,11 @@ const styles = themedStyles((c, scheme) => ({
     maxWidth: MaxContentWidth,
     backgroundColor: c.header,
     paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.three,
     paddingBottom: 12,
     justifyContent: 'flex-end',
   },
   headerKicker: {
-    color: 'rgba(255,255,255,0.62)', // theme-fixed: white text on the dark banner
+    color: 'rgba(255,255,255,0.62)',
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.4,
@@ -184,15 +302,33 @@ const styles = themedStyles((c, scheme) => ({
   content: {
     width: '100%',
     maxWidth: MaxContentWidth,
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: GRID_PAD,
     paddingTop: Spacing.three,
+  },
+  headerBlock: {
     gap: Spacing.three,
+    paddingBottom: Spacing.three,
+  },
+  group: {
+    gap: 10,
+    marginBottom: Spacing.three,
+  },
+  groupTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: c.text,
+    letterSpacing: -0.1,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GRID_GAP,
   },
   hero: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    backgroundColor: '#16324C', // theme-fixed: dark banner, same in both themes
+    backgroundColor: '#16324C',
     borderRadius: 22,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -203,7 +339,7 @@ const styles = themedStyles((c, scheme) => ({
     gap: 6,
   },
   heroEyebrow: {
-    color: '#7ED4DE', // theme-fixed: text on the dark banner
+    color: '#7ED4DE',
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
@@ -217,7 +353,7 @@ const styles = themedStyles((c, scheme) => ({
     letterSpacing: -0.3,
   },
   heroBody: {
-    color: 'rgba(255,255,255,0.72)', // theme-fixed: white text on the dark banner
+    color: 'rgba(255,255,255,0.72)',
     fontSize: 13,
     lineHeight: 18,
   },
@@ -233,7 +369,6 @@ const styles = themedStyles((c, scheme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    height: 36,
   },
   pill: {
     height: 36,
@@ -257,61 +392,89 @@ const styles = themedStyles((c, scheme) => ({
   pillLabelActive: {
     color: c.onAccent,
   },
-  list: {
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: c.surface,
-    borderRadius: 14,
+    minHeight: 44,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 68,
-    ...cardElevation(c, scheme),
-  },
-  iconWrap: {
-    width: 40,
-    height: 40,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: c.text,
-  },
-  cardBlurb: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: c.textSecondary,
-  },
-  askLabel: {
-    color: c.accentInk,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  note: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-start',
     backgroundColor: c.surface,
-    borderRadius: 16,
-    padding: 14,
     borderWidth: 1,
     borderColor: c.hairline,
   },
-  noteText: {
+  searchInput: {
     flex: 1,
+    fontSize: 15,
+    color: c.text,
+    paddingVertical: 8,
+  },
+  filterHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: c.textMuted,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 8,
+  },
+  chip: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.hairline,
+  },
+  chipActive: {
+    backgroundColor: c.header,
+    borderColor: c.brandInk,
+  },
+  chipLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: c.text,
+  },
+  chipLabelActive: {
+    color: c.onAccent,
+  },
+  count: {
+    fontSize: 12,
+    color: c.textSecondary,
+  },
+  empty: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 28,
+    paddingHorizontal: 16,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: c.text,
+    textAlign: 'center',
+  },
+  emptyBody: {
     fontSize: 13,
     lineHeight: 18,
-    color: c.text,
+    color: c.textSecondary,
+    textAlign: 'center',
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    padding: 24,
+  },
+  centeredText: {
+    fontSize: 13,
+    color: c.textSecondary,
   },
 }));

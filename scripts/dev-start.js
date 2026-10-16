@@ -1,36 +1,26 @@
 /**
  * Start Metro for the Expo development build.
  *
+ * The development client remembers the last packager URL (`launchMode: most-recent`).
+ * `--localhost` writes 127.0.0.1:8081 onto the phone, which only works while
+ * `adb reverse` is active — and Android drops that map on every USB disconnect.
+ *
+ * Default: advertise the LAN IP so the saved URL survives unplug, and keep a
+ * reverse watcher so leftover localhost sessions still recover over USB.
+ * Pass `--usb` to force localhost when Wi‑Fi is blocked.
+ *
  * The terminal QR uses exp+gesu:// — the stock Camera app cannot open it.
  * Connect from inside the sez-print development app instead.
  */
 const { spawn, spawnSync } = require('child_process');
-const os = require('os');
 const path = require('path');
+const { lanIp } = require('./keep-adb-reverse');
 
 const projectRoot = path.resolve(__dirname, '..');
 const METRO_PORT = 8081;
-const forceLan = process.argv.includes('--lan');
+const forceUsb = process.argv.includes('--usb');
 const clearCache = process.argv.includes('-c') || process.argv.includes('--clear');
-
-function hasAdbDevice() {
-  const result = spawnSync('adb', ['devices'], { encoding: 'utf8', shell: true });
-  if (result.status !== 0) return false;
-  return result.stdout.split('\n').some((line) => /\tdevice\s*$/.test(line.trim()));
-}
-
-/** USB + localhost avoids Wi‑Fi/firewall failures; auto when a phone is plugged in. */
-const useUsb =
-  process.argv.includes('--usb') || (!forceLan && hasAdbDevice());
-
-function lanIp() {
-  for (const nets of Object.values(os.networkInterfaces())) {
-    for (const net of nets ?? []) {
-      if (net.family === 'IPv4' && !net.internal) return net.address;
-    }
-  }
-  return 'YOUR_PC_IP';
-}
+const useLocalhost = forceUsb && !process.argv.includes('--lan');
 
 function freePort(port) {
   if (process.platform === 'win32') {
@@ -64,25 +54,11 @@ function freePort(port) {
   }
 }
 
-function runAdbReverse(port) {
-  const result = spawnSync('adb', ['reverse', `tcp:${port}`, `tcp:${port}`], {
-    shell: true,
-    encoding: 'utf8',
-  });
-  if (result.status === 0) {
-    console.log(`\n✓ USB: adb reverse tcp:${port} tcp:${port}\n`);
-    return true;
-  }
-  console.warn(
-    `\n⚠ USB: adb reverse failed. Plug in the phone, enable USB debugging, then run:\n` +
-      `   adb reverse tcp:${port} tcp:${port}\n`,
-  );
-  return false;
-}
-
 function printConnectHelp(port) {
   const ip = lanIp();
-  const manualUrl = useUsb ? `http://localhost:${port}` : `http://${ip}:${port}`;
+  const lanUrl = `http://${ip}:${port}`;
+  const usbUrl = `http://localhost:${port}`;
+  const manualUrl = useLocalhost ? usbUrl : lanUrl;
   console.log(`
 ╔══════════════════════════════════════════════════════════════════╗
 ║  DO NOT scan the terminal QR with the Camera app.                ║
@@ -94,21 +70,44 @@ function printConnectHelp(port) {
 ║     (Do NOT use the phone Camera app or Expo Go.)                ║
 ║  3. Scan the QR shown in this terminal, OR enter manually:        ║
 ║     ${manualUrl.padEnd(52)}║
+║  USB fallback (kept alive automatically): ${usbUrl.padEnd(22)}║
 ║                                                                  ║
 ║  Standalone testing (no Metro): npm run build:android            ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
 }
 
-freePort(METRO_PORT);
-if (useUsb) {
-  runAdbReverse(METRO_PORT);
-  runAdbReverse(8083);
-} else {
-  console.warn(
-    '\n⚠ Wi‑Fi mode: phone and PC must be on the same network and Windows Firewall must allow Node on port 8081.\n' +
-      '   If connection fails, plug in USB and run: npm run start:usb\n',
+function startReverseKeeper(packagerUrl) {
+  const keeper = spawn(
+    process.execPath,
+    [
+      path.join(__dirname, 'keep-adb-reverse.js'),
+      '--open',
+      `--url=${packagerUrl}`,
+    ],
+    {
+      cwd: projectRoot,
+      stdio: 'inherit',
+      windowsHide: true,
+    },
   );
+  keeper.on('error', (err) => {
+    console.warn(`USB: reverse keeper failed to start: ${err.message}`);
+  });
+  return keeper;
+}
+
+freePort(METRO_PORT);
+
+const ip = lanIp();
+const advertisedUrl = useLocalhost ? `http://127.0.0.1:${METRO_PORT}` : `http://${ip}:${METRO_PORT}`;
+
+if (useLocalhost) {
+  console.log('\nUSB localhost mode: adb reverse is watched for the life of Metro.');
+  console.log('   If the phone still red-screens after unplug, use npm start (LAN) instead.\n');
+} else {
+  console.log(`\nLAN mode: phone should load ${advertisedUrl}`);
+  console.log('   adb reverse is still watched so leftover 127.0.0.1 sessions recover on USB.\n');
 }
 
 printConnectHelp(METRO_PORT);
@@ -119,7 +118,7 @@ const expoArgs = [
   '--dev-client',
   '--port',
   String(METRO_PORT),
-  useUsb ? '--localhost' : '--lan',
+  useLocalhost ? '--localhost' : '--lan',
 ];
 if (process.platform === 'win32') {
   expoArgs.push('--max-workers', '2');
@@ -131,6 +130,8 @@ if (clearCache) {
 const preload = path.join(projectRoot, 'scripts', 'preload-graceful-fs.js').replace(/\\/g, '/');
 const nodeOptions = [process.env.NODE_OPTIONS, `-r ${preload}`].filter(Boolean).join(' ');
 
+const keeper = startReverseKeeper(advertisedUrl);
+
 const child = spawn('npx', expoArgs, {
   cwd: projectRoot,
   stdio: 'inherit',
@@ -138,7 +139,37 @@ const child = spawn('npx', expoArgs, {
   env: {
     ...process.env,
     NODE_OPTIONS: nodeOptions,
+    REACT_NATIVE_PACKAGER_HOSTNAME: useLocalhost ? '127.0.0.1' : ip,
   },
 });
 
-child.on('exit', (code) => process.exit(code ?? 0));
+function shutdown(code) {
+  try {
+    keeper.kill();
+  } catch {
+    // ignore
+  }
+  process.exit(code ?? 0);
+}
+
+child.on('exit', (code) => shutdown(code));
+child.on('error', (err) => {
+  console.error(err);
+  shutdown(1);
+});
+process.on('SIGINT', () => {
+  try {
+    child.kill();
+  } catch {
+    // ignore
+  }
+  shutdown(0);
+});
+process.on('SIGTERM', () => {
+  try {
+    child.kill();
+  } catch {
+    // ignore
+  }
+  shutdown(0);
+});

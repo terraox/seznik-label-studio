@@ -14,12 +14,12 @@ import { androidRipple, HomeLayout } from '@/constants/ui';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const ITEMS = [
-  'Label rolls',
-  'TD-404 ribbon',
-  'Shipping labels',
-  'Jewellery tags',
-  'Thermal paper',
-  'Care labels',
+  '50 × 25 mm',
+  'Waterproof',
+  '100 × 150 mm',
+  'Jewellery',
+  'Sticky rolls',
+  '50 × 50 mm',
 ];
 
 const LOOP_WIDTH = 780;

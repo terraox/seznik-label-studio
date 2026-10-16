@@ -20,6 +20,12 @@
       ],
       "pdf-raster": [
         "./modules/pdf-raster/src/index.ts"
+      ],
+      "share-target": [
+        "./modules/share-target/src/index.ts"
+      ],
+      "local-file-picker": [
+        "./modules/local-file-picker/src/index.ts"
       ]
     }
   },

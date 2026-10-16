@@ -3919,6 +3919,15 @@ export default function EditScreen() {
     <View style={styles.contextualTopBar}>
       <Pressable
         style={({ pressed }) => [styles.contextualBarBtn, pressed && styles.pressed]}
+        onPress={handleDeselectAll}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Back">
+        <AppIcon name="chevron.left" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on the dark contextual bar */ />
+      </Pressable>
+      <View style={styles.contextualBarDivider} />
+      <Pressable
+        style={({ pressed }) => [styles.contextualBarBtn, pressed && styles.pressed]}
         onPress={deleteSelected}
         hitSlop={12}
         accessibilityRole="button"
@@ -4468,7 +4477,7 @@ export default function EditScreen() {
                 {isRatTail143Document(doc)
                   ? 'Prints 14.3 × 101.6 mm wrap stock · content locked on the paddle'
                   : doc.bulk
-                    ? 'Tap to change size for every label in this Excel set'
+                    ? 'Tap to change size for every label in this series'
                     : 'Tap to customize size'}
               </Text>
             </Pressable>
