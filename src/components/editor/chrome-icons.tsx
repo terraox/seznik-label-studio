@@ -1,4 +1,4 @@
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 import { C, useThemeRefresh } from '@/theme';
 
 const SHIELD = 'M12 2.5 L19.5 5.4 V11 C19.5 15.9 16.4 19.8 12 21.5 C7.6 19.8 4.5 15.9 4.5 11 V5.4 Z';
@@ -56,20 +56,24 @@ export function PrintRulerIcon({ active, color, size = 18 }: { active: boolean; 
 export function PrintGridIcon({ active, color, size = 18 }: { active: boolean; color: string; size?: number }) {
   useThemeRefresh();
   const rule = active ? '#FFFFFF' : color; // theme-fixed: white on active accent
+  // A label sheet with a dashed grid and four corner ticks: "the grid that gets printed".
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M7 2.5 H14.5 L19.5 7.5 V19.5 A2 2 0 0 1 17.5 21.5 H7 A2 2 0 0 1 5 19.5 V4.5 A2 2 0 0 1 7 2.5 Z"
+      <Rect
+        x={3.5}
+        y={3.5}
+        width={17}
+        height={17}
+        rx={2.5}
         fill={active ? color : 'none'}
         stroke={color}
         strokeWidth={1.8}
-        strokeLinejoin="round"
       />
-      <Path d="M14.5 2.5 V7.5 H19.5" fill="none" stroke={rule} strokeWidth={1.4} strokeLinejoin="round" />
       <Path
-        d="M9.8 10.5 V20.6 M14.6 10.5 V20.6 M5.8 12.2 H18.7 M5.8 16.6 H18.7"
+        d="M9.2 3.5 V20.5 M14.8 3.5 V20.5 M3.5 9.2 H20.5 M3.5 14.8 H20.5"
         stroke={rule}
-        strokeWidth={1.3}
+        strokeWidth={1.2}
+        strokeDasharray="1.6 1.6"
         strokeLinecap="round"
       />
     </Svg>

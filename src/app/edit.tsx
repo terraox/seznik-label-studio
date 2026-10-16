@@ -9,6 +9,7 @@ import {
   Dimensions,
   InteractionManager,
   LayoutAnimation,
+  BackHandler,
   Modal,
   Platform,
   Pressable,
@@ -586,6 +587,8 @@ export default function EditScreen() {
     labelHeight?: string;
     orientation?: string;
     paperType?: string;
+    /** From New Label: 'circle' makes a round label (width and height are the diameter). */
+    mediaShape?: string;
     templateCategory?: string;
     templatePreviewType?: string;
     cloneFromId?: string;
@@ -694,6 +697,7 @@ export default function EditScreen() {
       heightMm,
       orientation: parseOrientation(params.orientation),
       paperType: parsePaperType(params.paperType),
+      mediaShape: params.mediaShape === 'circle' ? 'circle' : undefined,
       elements,
     });
     return { ...created, elements: normalizeDocumentElements(created) };
@@ -3072,6 +3076,29 @@ export default function EditScreen() {
     return () => sub.remove();
   }, [upsertDocument]);
 
+  /** Back (header or hardware): prompt Save / Discard / Cancel when there are unsaved edits. */
+  const requestLeave = useCallback(() => {
+    if (!dirtyRef.current) {
+      router.back();
+      return;
+    }
+    Alert.alert('Unsaved changes', 'Save this label before leaving?', [
+      { text: 'Save', onPress: () => { saveDocument(false); router.back(); } },
+      { text: 'Discard', style: 'destructive', onPress: () => router.back() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [saveDocument]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        requestLeave();
+        return true;
+      });
+      return () => sub.remove();
+    }, [requestLeave]),
+  );
+
   const handleSaveAs = useCallback(() => {
     setSaveAsName(doc.name);
     setSaveAsVisible(true);
@@ -4513,23 +4540,7 @@ export default function EditScreen() {
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <View style={styles.headerLeft}>
           <Pressable
-            onPress={() => {
-              if (dirty) {
-                Alert.alert('Unsaved Changes', 'Save this label before leaving?', [
-                  { text: 'Discard', style: 'destructive', onPress: () => router.back() },
-                  {
-                    text: 'Save',
-                    onPress: () => {
-                      saveDocument(false);
-                      router.back();
-                    },
-                  },
-                  { text: 'Cancel', style: 'cancel' },
-                ]);
-              } else {
-                router.back();
-              }
-            }}
+            onPress={requestLeave}
             hitSlop={12}
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
             <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
@@ -4653,11 +4664,6 @@ export default function EditScreen() {
                   color={printGridOn ? C.accent : C.textMuted}
                   size={16}
                 />
-                <Text
-                  numberOfLines={1}
-                  style={[styles.printGridBtnText, printGridOn && styles.printGridBtnTextOn]}>
-                  Print grid
-                </Text>
               </Pressable>
 
               <Pressable
@@ -5307,9 +5313,8 @@ const styles = themedStyles((c, scheme) => ({
     backgroundColor: c.accentSoft,
   },
   printGridBtn: {
-    minWidth: 52,
+    width: 44,
     height: 44,
-    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 1,
