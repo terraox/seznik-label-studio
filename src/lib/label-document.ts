@@ -295,7 +295,7 @@ export function createUpsConfig(params: {
   batchEdit?: boolean;
   seedElements?: LabelElement[];
 }): LabelUpsConfig {
-  const columns = Math.max(2, Math.min(4, Math.round(params.columns)));
+  const columns = Math.max(2, Math.min(6, Math.round(params.columns)));
   const seed = params.seedElements ?? [];
   const panels = Array.from({ length: columns }, (_, i) =>
     i === 0 ? cloneElementsFreshIds(seed) : params.batchEdit ? cloneElementsFreshIds(seed) : [],

@@ -127,6 +127,7 @@
     "shop:catalog": "node scripts/shop/generate-catalog.mjs",
     "test:smart-crop": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/pdf-editor/smart-crop/__tests__/detector.test.ts src/lib/pdf-editor/smart-crop/__tests__/rules.test.ts src/lib/pdf-editor/smart-crop/__tests__/real-fixtures.test.ts src/lib/pdf-editor/smart-crop/__tests__/select.test.ts",
     "test:pdf-editor": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/pdf-editor/__tests__/session.test.ts",
+    "test:new-label": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/__tests__/new-label-form.test.ts",
     "print:calibration": "npx --yes tsx --tsconfig tsconfig.json scripts/print-calibration-box.ts",
     "print:phase1": "npx --yes tsx --tsconfig tsconfig.json scripts/print-phase1-demo.ts",
     "print:phase2": "npx --yes tsx --tsconfig tsconfig.json scripts/print-phase2-demo.ts",

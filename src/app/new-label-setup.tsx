@@ -1,60 +1,56 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, Switch, Text, View } from 'react-native';
+import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LabelDimensionModal } from '@/components/label-dimension-modal';
-import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
+import {
+  CollapsibleBar,
+  LabelPreview,
+  NumberField,
+  SegmentedControl,
+  StepperRow,
+} from '@/components/new-label/new-label-parts';
+import { TextInput } from '@/components/ui/text-input';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { JEWELRY_DIECUT, JEWELRY_DIECUT_PREVIEW_SINGLE } from '@/constants/jewelry-diecut';
 import { Spacing } from '@/constants/theme';
 
 import { useTranslation } from '@/lib/i18n';
 import {
-    createLabelDocument,
-    createUpsConfig,
-    generateId,
-    type LabelElement,
+  createLabelDocument,
+  createUpsConfig,
+  generateId,
+  type LabelElement,
 } from '@/lib/label-document';
+import { clampLabelMm, containFitImageOnLabel } from '@/lib/label-geometry';
 import {
-    clampLabelMm,
-    containFitImageOnLabel,
-    fromMm,
-    validateLabelSize,
-    type LabelUnit,
-} from '@/lib/label-geometry';
+  GAP_MAX_MM,
+  GAP_MIN_MM,
+  MAX_COLUMNS,
+  NAME_MAX,
+  NEW_LABEL_PRESETS,
+  cellSize,
+  clampColumns,
+  fmtMm,
+  initialFormState,
+  parseGapMm,
+  presetLabelFor,
+  resolvedName,
+  stepGap,
+  switchShape,
+  totalWidthMm,
+  validateForm,
+  widthWarning,
+  type FormState,
+  type Shape,
+} from '@/lib/new-label-form';
 import { scaleDocumentToSize } from '@/lib/element-sizing';
+import { resolveProfile } from '@/printer-core/profiles';
 import { useLabelStore } from '@/stores/label-store';
+import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { Image } from 'expo-image';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
-
-const SETUP_PRESETS = [
-  { label: '50 × 25', width: 50, height: 25 },
-  { label: '50 × 50', width: 50, height: 50 },
-  { label: '50 × 30', width: 50, height: 30 },
-  { label: '50 × 75', width: 50, height: 75 },
-  { label: '50 × 15', width: 50, height: 15 },
-  { label: '100 × 150', width: 100, height: 150 },
-];
-
-function formatDimension(mm: number, unit: LabelUnit): string {
-  const v = fromMm(mm, unit);
-  if (unit === 'in') return String(Math.round(v * 100) / 100);
-  if (unit === 'cm') return String(Math.round(v * 10) / 10);
-  return String(Math.round(v * 100) / 100);
-}
-
-function unitSuffix(unit: LabelUnit): string {
-  return unit === 'in' ? 'in' : unit;
-}
 
 export default function NewLabelSetupScreen() {
   useThemeRefresh();
@@ -78,71 +74,66 @@ export default function NewLabelSetupScreen() {
     isJewelleryTag?: string;
   }>();
   const isImportImage = Boolean(params.importImageUri);
-  const isSingleCanvas = params.isSingleCanvas === 'true' || isImportImage;
   const isClone = params.isClone === 'true';
-  const isTwoUps = !isSingleCanvas && params.isTwoUps === 'true';
-  const isJewellery3Up = !isSingleCanvas && params.isJewellery3Up === 'true';
   const defaults = useSettingsStore((s) => s.defaults);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
 
-  const [labelName, setLabelName] = useState(
-    isImportImage
-      ? params.isJewelleryTag === 'true'
-        ? 'Jewellery Image Label'
-        : 'Imported Image Label'
-      : isJewellery3Up
-        ? 'Jewellery Label'
-        : isClone
-          ? params.cloneName
-            ? `${params.cloneName} Copy`
-            : 'Label Copy'
-          : isTwoUps
-            ? params.cloneName
-              ? `${params.cloneName} · 2ups`
-              : '2ups label'
-            : 'Default label',
-  );
-  const [labelWidth, setLabelWidth] = useState(
-    params.defaultWidth
-      ? parseFloat(params.defaultWidth)
-      : isJewellery3Up
-        ? JEWELRY_DIECUT.tagWidthMm
-        : params.cloneWidth
-          ? parseFloat(params.cloneWidth)
-          : 50,
-  );
-  const [labelHeight, setLabelHeight] = useState(
-    params.defaultHeight
-      ? parseFloat(params.defaultHeight)
-      : isJewellery3Up
-        ? JEWELRY_DIECUT.tagHeightMm
-        : params.cloneHeight
-          ? parseFloat(params.cloneHeight)
-          : 30,
-  );
-  const [columns, setColumns] = useState(
-    isSingleCanvas ? 1 : isJewellery3Up ? JEWELRY_DIECUT.columns : isTwoUps ? 2 : 1,
-  );
-  // Stick 2-up: labels sit flush (0 mm). Jewellery 3-up: 3 mm gaps.
-  const [columnSpacing, setColumnSpacing] = useState(isJewellery3Up ? JEWELRY_DIECUT.gapMm : isTwoUps ? 0 : 1);
-  const [batchEdit, setBatchEdit] = useState(false);
+  // Connected printer's head width, for the total-width warning. Null when none is connected.
+  const printerStatus = usePrinterStore((s) => s.status);
+  const printerSdk = usePrinterStore((s) => s.sdkId);
+  const printerName = usePrinterStore((s) => s.deviceName);
+  const printerMaxMm = useMemo(() => {
+    if (printerStatus !== 'connected' || !printerSdk) return null;
+    try {
+      return resolveProfile(printerSdk, printerName)?.maxWidthMm ?? null;
+    } catch {
+      return null;
+    }
+  }, [printerName, printerSdk, printerStatus]);
 
-  const [labelUnit, setLabelUnit] = useState<LabelUnit>('mm');
-  const [nameModalVisible, setNameModalVisible] = useState(false);
-  const [widthModalVisible, setWidthModalVisible] = useState(params.focusSize === '1');
-  const [heightModalVisible, setHeightModalVisible] = useState(false);
-  const [tempName, setTempName] = useState('');
+  const [form, setForm] = useState<FormState>(() => initialFormState(params));
+  const patch = useCallback((p: Partial<FormState>) => setForm((f) => ({ ...f, ...p })), []);
+  const [presetsOpen, setPresetsOpen] = useState(false);
+  const [triedCreate, setTriedCreate] = useState(false);
 
+  const firstField = useRef<import('react-native').TextInput>(null);
+  const secondField = useRef<import('react-native').TextInput>(null);
+  const gapField = useRef<import('react-native').TextInput>(null);
+  const nameField = useRef<import('react-native').TextInput>(null);
+
+  // Custom Size asks for the size to be focused once the page has laid out.
   useEffect(() => {
-    if (params.focusSize === '1') setWidthModalVisible(true);
+    if (params.focusSize !== '1') return;
+    const id = setTimeout(() => firstField.current?.focus(), 400);
+    return () => clearTimeout(id);
   }, [params.focusSize]);
 
+  const { errors, canCreate } = validateForm(form);
+  const cell = cellSize(form);
+  const gapMm = parseGapMm(form.gap) ?? 0;
+  const multi = form.columns > 1;
+  const showLayout = !isImportImage;
+  const total = cell.w != null ? totalWidthMm(cell.w, form.columns, gapMm) : null;
+  const warning = multi && total != null ? widthWarning(total, printerMaxMm) : null;
+  const presetValue = presetLabelFor(form.shape, cell.w, cell.h);
+  const err = (key: keyof typeof errors) => (triedCreate ? errors[key] ?? 'Enter a number' : errors[key]);
+
+  const setColumns = (n: number) => {
+    patch({ columns: Math.max(2, clampColumns(n)) });
+  };
+
   const handleCreateLabel = () => {
-    const size = clampLabelMm(labelWidth, labelHeight);
-    const error = validateLabelSize(size.widthMm, size.heightMm);
-    if (error) {
-      Alert.alert('Invalid size', error);
-      return;
+    setTriedCreate(true);
+    if (!canCreate) return;
+    const name = resolvedName(form.name);
+    const wMm = cell.w ?? 50;
+    const hMm = cell.h ?? 30;
+    const size = clampLabelMm(wMm, hMm);
+    const circle = form.shape === 'circle';
+    if (__DEV__) {
+      console.log(
+        `[new-label] create shape=${form.shape} columns=${form.columns} size=${size.widthMm}x${size.heightMm} gap=${gapMm} image=${isImportImage}`,
+      );
     }
 
     if (params.importImageUri) {
@@ -176,9 +167,9 @@ export default function NewLabelSetupScreen() {
         originalAspect: assetW / assetH,
       };
 
-      // Nested image canvas on the selected label size. Phone pad stays constant.
+      // Nested image canvas on the selected label size.
       const doc = createLabelDocument({
-        name: labelName,
+        name: name,
         widthMm: size.widthMm,
         heightMm: size.heightMm,
         orientation: defaults.orientation,
@@ -221,15 +212,15 @@ export default function NewLabelSetupScreen() {
       }
     }
 
-    if (columns > 1) {
+    if (form.columns > 1) {
       const ups = createUpsConfig({
-        columns,
-        columnSpacingMm: columnSpacing,
-        batchEdit,
+        columns: form.columns,
+        columnSpacingMm: gapMm,
+        batchEdit: form.batchEdit,
         seedElements,
       });
       const doc = createLabelDocument({
-        name: labelName,
+        name,
         widthMm: size.widthMm,
         heightMm: size.heightMm,
         orientation: defaults.orientation,
@@ -247,15 +238,18 @@ export default function NewLabelSetupScreen() {
     router.replace({
       pathname: '/edit',
       params: {
-        labelName,
+        labelName: name,
         labelWidth: String(size.widthMm),
         labelHeight: String(size.heightMm),
         orientation: `${defaults.orientation}°`,
         paperType: defaults.paperType,
+        ...(circle ? { mediaShape: 'circle' } : {}),
         ...(params.cloneFromId ? { cloneFromId: params.cloneFromId } : {}),
       },
     });
   };
+
+  const sizeTitle = multi ? 'Size of each label' : 'Size';
 
   return (
     <View style={styles.root}>
@@ -263,13 +257,15 @@ export default function NewLabelSetupScreen() {
         <Pressable
           onPress={() => router.back()}
           hitSlop={14}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <Text style={styles.backChevron}>‹</Text>
         </Pressable>
         <Text style={styles.headerTitle}>
           {isImportImage
             ? 'Label Sizing Setup'
-            : isTwoUps
+            : params.isTwoUps === 'true' && form.columns === 2 && !isClone
               ? '2ups label'
               : isClone
                 ? 'Label Clone'
@@ -278,284 +274,212 @@ export default function NewLabelSetupScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView
+      <FormScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 110 }]}
+        bottomOffset={96}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.previewPad}>
-          <View style={styles.previewRow}>
-            {Array.from({ length: Math.max(1, columns) }).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.previewCell,
-                  {
-                    marginRight: i < columns - 1 ? Math.max(0, columnSpacing * 4) : 0,
-                    aspectRatio: isImportImage
-                      ? Math.max(0.6, Math.min(2.2, labelWidth / Math.max(labelHeight, 1)))
-                      : labelWidth / Math.max(labelHeight, 1),
-                    minWidth: isImportImage ? 160 : undefined,
-                    minHeight: isImportImage ? 110 : 48,
-                  },
-                ]}>
-                {isImportImage && params.importImageUri ? (
-                  <Image
-                    source={{ uri: params.importImageUri }}
-                    style={StyleSheet.absoluteFillObject}
-                    contentFit="contain"
-                  />
-                ) : columns > 1 ? (
-                  <Text style={styles.previewCellLabel}>{i + 1}</Text>
-                ) : null}
-              </View>
-            ))}
+        <LabelPreview
+          shape={form.shape}
+          columns={form.columns}
+          cellW={cell.w}
+          cellH={cell.h}
+          gap={gapMm}
+          imageUri={isImportImage ? params.importImageUri : null}
+        />
+
+        {showLayout ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading}>Shape</Text>
+            <SegmentedControl<Shape>
+              value={form.shape}
+              onChange={(s) => setForm((f) => switchShape(f, s))}
+              options={[
+                { id: 'rectangle', label: 'Rectangle' },
+                { id: 'circle', label: 'Circle' },
+              ]}
+            />
           </View>
-          {columns > 1 ? (
-            <Text style={styles.previewHint}>
-              Each panel is {labelWidth}×{labelHeight} mm — edit one at a time. Print strip ≈{' '}
-              {Math.max(
-                labelWidth,
-                Math.round((labelWidth * columns + columnSpacing * (columns - 1)) * 10) / 10,
-              )}
-              ×{labelHeight} mm.
+        ) : null}
+
+        {showLayout ? (
+          <View style={styles.section}>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>Labels across</Text>
+              <Switch
+                value={multi}
+                onValueChange={(on) => patch({ columns: on ? 2 : 1 })}
+                trackColor={{ false: C.border, true: C.accent }}
+                thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+              />
+            </View>
+            <Text style={styles.note}>
+              Use this when your roll is wide enough to print two or more labels side by side in one pass, such as 2-up tags or small stickers. Off prints one label per feed.
             </Text>
+            {multi ? (
+              <StepperRow
+                label="Number of columns"
+                valueText={String(form.columns)}
+                onMinus={() => setColumns(form.columns - 1)}
+                onPlus={() => setColumns(form.columns + 1)}
+                minusDisabled={form.columns <= 2}
+                plusDisabled={form.columns >= MAX_COLUMNS}
+                disabled={false}
+                chips={[2, 3, 4].map((n) => ({
+                  text: String(n),
+                  active: form.columns === n,
+                  onPress: () => setColumns(n),
+                }))}
+              />
+            ) : null}
+          </View>
+        ) : null}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionHeading}>{sizeTitle}</Text>
+          {form.shape === 'circle' ? (
+            <NumberField
+              ref={firstField}
+              label="Diameter"
+              value={form.diameter}
+              onChangeText={(v) => patch({ diameter: v })}
+              error={err('diameter')}
+              returnKeyType="done"
+            />
           ) : (
-            <Text style={styles.previewHint}>
-              Phone pad stays the same size. Label canvas: {labelWidth} × {labelHeight} mm
-              {isImportImage ? ' · imported image sits on that canvas' : ''}
-            </Text>
+            <>
+              <NumberField
+                ref={firstField}
+                label="Width"
+                value={form.width}
+                onChangeText={(v) => patch({ width: v })}
+                error={err('width')}
+                onSubmitEditing={() => secondField.current?.focus()}
+              />
+              <NumberField
+                ref={secondField}
+                label="Height"
+                value={form.height}
+                onChangeText={(v) => patch({ height: v })}
+                error={err('height')}
+                returnKeyType={multi ? 'next' : 'done'}
+                onSubmitEditing={() => (multi ? gapField.current?.focus() : nameField.current?.focus())}
+              />
+            </>
           )}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionHeading}>Size presets</Text>
-          <View style={styles.presetFormatCard}>
-            <Text style={styles.presetFormatTitle}>Size format</Text>
-            <View style={styles.presetFormatRow}>
-              <View style={styles.presetFormatPill}>
-                <Text style={styles.presetFormatPillLabel}>Width</Text>
-              </View>
-              <Text style={styles.presetFormatTimes}>×</Text>
-              <View style={styles.presetFormatPill}>
-                <Text style={styles.presetFormatPillLabel}>Height</Text>
-              </View>
-              <Text style={styles.presetFormatUnit}>mm</Text>
+        {showLayout && multi ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading}>Gap between columns</Text>
+            <StepperRow
+              label="Gap"
+              valueText={`${fmtMm(gapMm)} mm`}
+              onMinus={() => patch({ gap: stepGap(form.gap, -1) })}
+              onPlus={() => patch({ gap: stepGap(form.gap, 1) })}
+              minusDisabled={gapMm <= GAP_MIN_MM}
+              plusDisabled={gapMm >= GAP_MAX_MM}
+            />
+            <NumberField
+              ref={gapField}
+              label="Gap (type 0 or more)"
+              value={form.gap.startsWith('-') ? '' : form.gap}
+              onChangeText={(v) => patch({ gap: v })}
+              error={err('gap')}
+              returnKeyType="done"
+            />
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total width</Text>
+              <Text style={styles.totalValue}>
+                {form.columns} × {fmtMm(cell.w ?? 0)} + {form.columns - 1} × {fmtMm(gapMm)} = {total != null ? fmtMm(total) : '-'} mm
+              </Text>
             </View>
-            <Text style={styles.presetFormatHint}>Each preset is shown as width × height in millimetres.</Text>
+            {warning ? <Text style={styles.warn}>{warning}</Text> : null}
           </View>
-          <View style={styles.presetGrid}>
-            {SETUP_PRESETS.map((p) => {
-              const active =
-                Math.abs(labelWidth - p.width) < 0.1 && Math.abs(labelHeight - p.height) < 0.1;
-              return (
-                <Pressable
-                  key={p.label}
-                  onPress={() => {
-                    setLabelWidth(p.width);
-                    setLabelHeight(p.height);
-                  }}
-                  style={[styles.presetChip, active && styles.presetChipActive]}>
-                  <Text
-                    style={[styles.presetChipText, active && styles.presetChipTextActive]}
-                    numberOfLines={1}>
-                    {p.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+        ) : null}
 
+        <View style={styles.section}>
+          <CollapsibleBar title="Size presets" open={presetsOpen} onToggle={() => setPresetsOpen((o) => !o)}>
+            <View style={styles.presetGrid}>
+              {NEW_LABEL_PRESETS.map((p) => {
+                const active = presetValue === p.label;
+                return (
+                  <Pressable
+                    key={p.label}
+                    onPress={() =>
+                      setForm((f) => ({
+                        ...f,
+                        shape: 'rectangle',
+                        width: fmtMm(p.width),
+                        height: fmtMm(p.height),
+                        lastRect: { width: fmtMm(p.width), height: fmtMm(p.height) },
+                      }))
+                    }
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={({ pressed }) => [styles.presetChip, active && styles.presetChipActive, pressed && styles.pressed]}>
+                    <Text style={[styles.presetChipText, active && styles.presetChipTextActive]} numberOfLines={1}>
+                      {p.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </CollapsibleBar>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionHeading}>{t('editor.labelName')}</Text>
+          <TextInput
+            ref={nameField}
+            value={form.name}
+            onChangeText={(v) => patch({ name: v.slice(0, NAME_MAX) })}
+            placeholder="Default label"
+            placeholderTextColor={C.textMuted}
+            returnKeyType="done"
+            accessibilityLabel="Label name"
+            style={styles.nameInput}
+          />
+        </View>
+
+        {showLayout && multi ? (
+          <View style={[styles.switchRow]}>
+            <Text style={styles.switchLabel}>{t('editor.batchEdit')}</Text>
+            <Switch
+              value={form.batchEdit}
+              onValueChange={(v) => patch({ batchEdit: v })}
+              trackColor={{ false: C.border, true: C.accent }}
+              thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+            />
+          </View>
+        ) : null}
+
+        <Pressable
+          onPress={() => router.push('/(tabs)/template')}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.templatesLink, pressed && styles.pressed]}>
+          <Text style={styles.templatesLinkText}>Browse our templates</Text>
+          <Text style={styles.chevronRight}>›</Text>
+        </Pressable>
+      </FormScrollView>
+
+      <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }} style={styles.stickyHost}>
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.two + 6 }]}>
           <Pressable
-            onPress={() => router.push('/(tabs)/template')}
-            style={({ pressed }) => [styles.templatesLink, pressed && styles.cardPressed]}>
-            <Text style={styles.templatesLinkText}>Browse our templates</Text>
-            <Text style={styles.chevronRight}>›</Text>
+            onPress={handleCreateLabel}
+            disabled={!canCreate}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canCreate }}
+            style={({ pressed }) => [styles.newButton, !canCreate && styles.newButtonOff, pressed && styles.pressed]}>
+            <Text style={styles.newButtonText}>{isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
           </Pressable>
         </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionHeading}>Custom size</Text>
-          <View style={styles.groupCard}>
-            <Pressable
-              onPress={() => {
-                setTempName(labelName);
-                setNameModalVisible(true);
-              }}
-              style={({ pressed }) => [styles.groupRow, pressed && styles.cardPressed]}>
-              <Text style={styles.fieldLabel}>{t('editor.labelName')}</Text>
-              <View style={styles.fieldValueWrap}>
-                <Text style={styles.fieldValueText} numberOfLines={1}>
-                  {labelName}
-                </Text>
-                <Text style={styles.chevronRight}>›</Text>
-              </View>
-            </Pressable>
-
-            <View style={styles.groupDivider} />
-
-            <Pressable
-              onPress={() => setWidthModalVisible(true)}
-              style={({ pressed }) => [styles.groupRow, pressed && styles.cardPressed]}>
-              <Text style={styles.fieldLabel}>Width</Text>
-              <View style={styles.fieldValueWrap}>
-                <Text style={styles.fieldValueText}>
-                  {formatDimension(labelWidth, labelUnit)} {unitSuffix(labelUnit)}
-                </Text>
-                <Text style={styles.chevronRight}>›</Text>
-              </View>
-            </Pressable>
-
-            <View style={styles.groupDivider} />
-
-            <Pressable
-              onPress={() => setHeightModalVisible(true)}
-              style={({ pressed }) => [styles.groupRow, pressed && styles.cardPressed]}>
-              <Text style={styles.fieldLabel}>Height</Text>
-              <View style={styles.fieldValueWrap}>
-                <Text style={styles.fieldValueText}>
-                  {formatDimension(labelHeight, labelUnit)} {unitSuffix(labelUnit)}
-                </Text>
-                <Text style={styles.chevronRight}>›</Text>
-              </View>
-            </Pressable>
-          </View>
-        </View>
-
-        {!isSingleCanvas && (
-          <View style={styles.section}>
-            <Text style={styles.sectionHeading}>Multi-up layout</Text>
-            <View style={styles.groupCard}>
-            <View style={styles.groupRow}>
-              <Text style={styles.fieldLabel}>{columns > 1 ? 'Labels across' : t('editor.columns')}</Text>
-              <View style={styles.stepper}>
-                <Pressable
-                  onPress={() => setColumns((c) => Math.max(1, c - 1))}
-                  style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}>
-                  <Text style={styles.stepBtnText}>−</Text>
-                </Pressable>
-                <Text style={styles.stepValue}>{columns}</Text>
-                <Pressable
-                  onPress={() => setColumns((c) => Math.min(4, c + 1))}
-                  style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}>
-                  <Text style={styles.stepBtnText}>+</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {columns > 1 ? (
-              <>
-              <View style={styles.groupDivider} />
-              <View style={styles.groupRow}>
-                <Text style={styles.fieldLabel}>{t('editor.columnSpacing')}</Text>
-                <View style={styles.stepper}>
-                  <Pressable
-                    onPress={() => setColumnSpacing((s) => Math.max(-4, Math.round((s - 0.5) * 10) / 10))}
-                    style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}>
-                    <Text style={styles.stepBtnText}>−</Text>
-                  </Pressable>
-                  <Text style={styles.stepValue}>{columnSpacing}</Text>
-                  <Pressable
-                    onPress={() => setColumnSpacing((s) => Math.min(8, Math.round((s + 0.5) * 10) / 10))}
-                    style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}>
-                    <Text style={styles.stepBtnText}>+</Text>
-                </Pressable>
-              </View>
-            </View>
-              </>
-            ) : null}
-
-            {columns > 1 ? (
-              <>
-              <View style={styles.groupDivider} />
-              <View style={styles.groupRow}>
-                <View style={styles.batchRow}>
-                  <Text style={styles.fieldLabel}>{t('editor.batchEdit')}</Text>
-                  <Pressable
-                    hitSlop={8}
-                    onPress={() =>
-                      Alert.alert(
-                        t('editor.batchEdit'),
-                        'When enabled, edits on one label are mirrored to every label in the series.',
-                      )
-                    }>
-                    <Text style={styles.infoHint}>?</Text>
-                  </Pressable>
-                </View>
-                <Switch
-                  value={batchEdit}
-                  onChange={() => setBatchEdit((b) => !b)}
-                  trackColor={{ false: C.border, true: C.accent }}
-                  thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
-                />
-              </View>
-              </>
-            ) : null}
-            </View>
-          </View>
-        )}
-      </ScrollView>
-
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.two + 6 }]}>
-        <Pressable
-          onPress={handleCreateLabel}
-          style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}>
-          <Text style={styles.newButtonText}>
-            {isImportImage ? 'Open in Editor' : 'New'}
-          </Text>
-        </Pressable>
-      </View>
-
-      <IosAlertModal
-        visible={nameModalVisible}
-        onClose={() => setNameModalVisible(false)}
-        title={t('editor.labelName')}
-        buttons={[
-          { text: t('common.cancel'), style: 'cancel', onPress: () => setNameModalVisible(false) },
-          {
-            text: t('common.confirm'),
-            style: 'default',
-            bold: true,
-            onPress: () => {
-              if (tempName.trim()) setLabelName(tempName.trim());
-              setNameModalVisible(false);
-            },
-          },
-        ]}>
-        <IosAlertInput
-          value={tempName}
-          onChangeText={setTempName}
-          autoFocus
-        />
-      </IosAlertModal>
-
-      <LabelDimensionModal
-        visible={widthModalVisible}
-        title="Set width"
-        axis="width"
-        valueMm={labelWidth}
-        otherMm={labelHeight}
-        unit={labelUnit}
-        onUnitChange={setLabelUnit}
-        onClose={() => setWidthModalVisible(false)}
-        onConfirm={setLabelWidth}
-      />
-
-      <LabelDimensionModal
-        visible={heightModalVisible}
-        title="Set height"
-        axis="height"
-        valueMm={labelHeight}
-        otherMm={labelWidth}
-        unit={labelUnit}
-        onUnitChange={setLabelUnit}
-        onClose={() => setHeightModalVisible(false)}
-        onConfirm={setLabelHeight}
-      />
+      </KeyboardStickyView>
     </View>
   );
 }
 
-const styles = themedStyles((c, scheme) => ({
+const styles = themedStyles((c) => ({
   root: { flex: 1, backgroundColor: c.bg },
   header: {
     backgroundColor: c.header,
@@ -566,52 +490,11 @@ const styles = themedStyles((c, scheme) => ({
   },
   backBtn: { width: 36, alignItems: 'flex-start' },
   backChevron: { color: c.onAccent, fontSize: 32, fontWeight: '300', lineHeight: 36 },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    color: c.onAccent,
-    fontSize: 17,
-    fontWeight: '500',
-  },
+  headerTitle: { flex: 1, textAlign: 'center', color: c.onAccent, fontSize: 17, fontWeight: '500' },
   headerSpacer: { width: 36 },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 12, paddingTop: 14, gap: 12 },
-  previewPad: {
-    backgroundColor: scheme === 'light' ? '#D5DCE4' : c.canvasArea, // theme-fixed: light keeps its grey stage around the white label
-    borderRadius: 10,
-    minHeight: 140,
-    paddingVertical: 28,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  previewRow: { flexDirection: 'row', alignItems: 'stretch', maxWidth: '100%' },
-  previewCell: {
-    flex: 1,
-    maxWidth: 120,
-    minHeight: 48,
-    backgroundColor: '#FFFFFF', // theme-fixed: light preview (previewCell)
-    borderRadius: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C8D0D8', // theme-fixed: light preview (previewCell)
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewCellLabel: {
-    color: '#94A3B8', // theme-fixed: light preview (previewCellLabel)
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  previewHint: {
-    color: c.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  section: {
-    gap: 8,
-  },
+  scrollContent: { paddingHorizontal: 12, paddingTop: 14, gap: 14 },
+  section: { gap: 8 },
   sectionHeading: {
     fontSize: 13,
     fontWeight: '600',
@@ -620,79 +503,18 @@ const styles = themedStyles((c, scheme) => ({
     letterSpacing: 0.5,
     marginLeft: 2,
   },
-  presetFormatCard: {
-    backgroundColor: c.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: c.hairline,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  presetFormatTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: c.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  presetFormatRow: {
+  note: { fontSize: 12, color: c.textSecondary, marginLeft: 2 },
+  warn: { fontSize: 13, fontWeight: '600', color: c.danger, marginLeft: 2 },
+  totalRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  presetFormatPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: c.fill,
-    borderWidth: 1,
-    borderColor: c.hairline,
-  },
-  presetFormatPillLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: c.text,
-  },
-  presetFormatTimes: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: c.textMuted,
-  },
-  presetFormatUnit: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: c.textSecondary,
-  },
-  presetFormatHint: {
-    fontSize: 12,
-    color: c.textMuted,
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  presetGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  templatesLink: {
-    marginTop: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.hairline,
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 4,
   },
-  templatesLinkText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: c.accent,
-  },
+  totalLabel: { fontSize: 14, fontWeight: '600', color: c.text },
+  totalValue: { fontSize: 13, color: c.textSecondary, flexShrink: 1, textAlign: 'right' },
+  presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   presetChip: {
     width: '31.5%',
     minHeight: 44,
@@ -705,85 +527,48 @@ const styles = themedStyles((c, scheme) => ({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  presetChipActive: {
-    backgroundColor: c.accentSoft,
-    borderColor: c.accent,
-  },
-  presetChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: c.textSecondary,
-    lineHeight: 16,
-    textAlign: 'center',
-  },
-  presetChipTextActive: {
-    color: c.accent,
-    fontWeight: '600',
-  },
-  groupCard: {
-    backgroundColor: c.surface,
+  presetChipActive: { backgroundColor: c.accentSoft, borderColor: c.accent },
+  presetChipText: { fontSize: 12, fontWeight: '600', color: c.textSecondary, lineHeight: 16, textAlign: 'center' },
+  presetChipTextActive: { color: c.accent },
+  nameInput: {
+    minHeight: 52,
+    paddingHorizontal: 14,
     borderRadius: 12,
-    overflow: 'hidden',
+    backgroundColor: c.surface,
     borderWidth: 1,
     borderColor: c.hairline,
+    fontSize: 16,
+    color: c.text,
   },
-  groupRow: {
+  switchRow: {
+    minHeight: 52,
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.hairline,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
   },
-  groupDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: c.hairline,
-    marginLeft: 14,
-  },
-  cardPressed: { opacity: 0.88 },
-  fieldLabel: { color: c.text, fontSize: 15, fontWeight: '500', flexShrink: 1 },
-  fieldValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
-  fieldValueText: { color: c.textSecondary, fontSize: 14, fontWeight: '400', maxWidth: 160 },
-  chevronRight: { color: c.textMuted, fontSize: 22, fontWeight: '300' },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  stepBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: c.fillStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBtnText: { fontSize: 20, color: c.text, fontWeight: '400', lineHeight: 22 },
-  stepValue: { minWidth: 28, textAlign: 'center', fontSize: 16, fontWeight: '500', color: c.text },
-  batchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
-  infoHint: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: c.border,
-    textAlign: 'center',
-    fontSize: 11,
-    color: c.textSecondary,
-    overflow: 'hidden',
-    lineHeight: 16,
-  },
-  bottomBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    backgroundColor: c.bg,
-  },
-  newButton: {
-    backgroundColor: c.accentFill,
+  switchLabel: { fontSize: 15, fontWeight: '500', color: c.text },
+  templatesLink: {
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     borderRadius: 12,
-    paddingVertical: 14,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.hairline,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
+  templatesLinkText: { fontSize: 15, fontWeight: '500', color: c.accent },
+  chevronRight: { color: c.textMuted, fontSize: 22, fontWeight: '300' },
+  stickyHost: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  bottomBar: { paddingHorizontal: 16, paddingTop: 10, backgroundColor: c.bg },
+  newButton: { backgroundColor: c.accentFill, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  newButtonOff: { opacity: 0.4 },
   newButtonText: { color: c.onAccent, fontSize: 17, fontWeight: '500' },
   pressed: { opacity: 0.75 },
 }));
