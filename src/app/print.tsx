@@ -605,7 +605,7 @@ export default function PrintScreen() {
   const [sizeSheetOpen, setSizeSheetOpen] = useState(false);
   const [printSize, setPrintSize] = useState<LabelSizeMm>(defaultPrintSize);
   const [printPreset, setPrintPreset] = useState<PrintSizePreset | null>(defaultPreset);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(true);
   const printingLockRef = useRef(false);
   const labelSettingsInitialized = useRef(false);
 
