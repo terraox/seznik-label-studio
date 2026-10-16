@@ -3,9 +3,9 @@ import {
   ActivityIndicator,
   Pressable,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { TextInput } from '@/components/ui/text-input';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type OcrResultPanelProps = {

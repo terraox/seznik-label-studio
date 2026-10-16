@@ -5,10 +5,10 @@ import {
   FlatList,
   Pressable,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PhotoFramePreview } from '@/components/photo-frame-preview';

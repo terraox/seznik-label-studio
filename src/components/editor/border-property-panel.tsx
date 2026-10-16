@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/text-input';
 
 import { BORDER_LIBRARY } from '@/constants/border-library';
 import { borderBoxForCenterGap } from '@/lib/border-geometry';

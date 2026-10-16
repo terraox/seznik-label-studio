@@ -48,6 +48,7 @@ export function BuyFromUsStrip() {
   const chips = [...ITEMS, ...ITEMS];
 
   return (
+    <View style={styles.cardFrame}>
     <Pressable
       onPress={() => router.push('/shop')}
       android_ripple={androidRipple}
@@ -90,10 +91,21 @@ export function BuyFromUsStrip() {
         </Animated.View>
       </View>
     </Pressable>
+    </View>
   );
 }
 
 const styles = themedStyles((c, scheme) => ({
+  // Shadow stays on the outer view. overflow:hidden on the same view as the light-mode
+  // Android boxShadow hides the whole strip.
+  cardFrame: {
+    borderRadius: 16,
+    backgroundColor: c.surface,
+    ...cardElevation(c, scheme),
+    ...(scheme === 'light'
+      ? { borderWidth: StyleSheet.hairlineWidth, borderColor: c.border }
+      : null),
+  },
   card: {
     minHeight: HomeLayout.buyStripHeight,
     backgroundColor: c.surface,
@@ -102,7 +114,6 @@ const styles = themedStyles((c, scheme) => ({
     paddingTop: 14,
     paddingBottom: 12,
     gap: 12,
-    ...cardElevation(c, scheme),
   },
   header: {
     flexDirection: 'row',
@@ -114,7 +125,7 @@ const styles = themedStyles((c, scheme) => ({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: c.accentFill,
+    backgroundColor: c.accentStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },

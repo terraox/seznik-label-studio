@@ -234,7 +234,17 @@ export default function SettingScreen() {
               icon="questionmark.circle.fill"
               onPress={() => {
                 router.navigate('/');
-                startWalkthrough();
+                startWalkthrough('home');
+              }}
+              showDivider
+            />
+            <SettingRow
+              label={t('setting.canvasWalkthrough')}
+              icon="square.dashed"
+              onPress={() => {
+                // Opens a blank label so the tour has a canvas to point at.
+                router.push('/edit');
+                startWalkthrough('canvas');
               }}
               showDivider
             />

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -130,7 +130,7 @@ export function PrintSizeSelector({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
         style={styles.overlay}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
         <Pressable style={styles.backdrop} onPress={onCancel} />
@@ -141,7 +141,7 @@ export function PrintSizeSelector({
               ? 'Pick the millimetre size of the roll in the printer — not the photo. 2-up jewellery is 37 × 96 mm; 3-up is 54 × 96 mm (3 mm gaps). The photo is mapped onto that rectangle so the outline sits on the die-cuts.'
               : `Label content is ${formatPrintSize(initialWidthMm, initialHeightMm)}. Choose This label size to match the editor. Other presets scale the design uniformly to fit that paper. Custom paper tiles when both sides are larger than the label.`}
           </Text>
-          <ScrollView
+          <FormScrollView
             style={styles.list}
             bounces={false}
             keyboardShouldPersistTaps="handled"
@@ -260,7 +260,7 @@ export function PrintSizeSelector({
                 </Pressable>
               </View>
             ) : null}
-          </ScrollView>
+          </FormScrollView>
           <Pressable
             onPress={onCancel}
             style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}>

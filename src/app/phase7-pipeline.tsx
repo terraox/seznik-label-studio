@@ -19,9 +19,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Rect, Line } from 'react-native-svg';
 import QRCode from 'react-native-qrcode-svg';
@@ -217,7 +218,7 @@ function Phase7PipelineScreenContent() {
         />
       </View>
 
-      <ScrollView
+      <FormScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}>
         {/* Status & Printer Banner */}
@@ -615,7 +616,7 @@ function Phase7PipelineScreenContent() {
             })}
           </View>
         )}
-      </ScrollView>
+      </FormScrollView>
 
       {/* Floating Action Bar */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(16, insets.bottom + 8) }]}>

@@ -19,9 +19,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Rect } from 'react-native-svg';
 import QRCode from 'react-native-qrcode-svg';
@@ -420,7 +421,7 @@ function Phase5BarcodeQrScreenContent() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <FormScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Dimension & Presets */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Label Size (mm)</Text>
@@ -888,7 +889,7 @@ function Phase5BarcodeQrScreenContent() {
             )}
           </Pressable>
         </View>
-      </ScrollView>
+      </FormScrollView>
     </View>
   );
 }

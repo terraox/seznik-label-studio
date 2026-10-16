@@ -61,7 +61,7 @@ export default function HomeScreen() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const maybeStart = () => {
       if (useSettingsStore.getState().tutorialSeen) return;
-      timer = setTimeout(startWalkthrough, 700);
+      timer = setTimeout(() => startWalkthrough('home'), 700);
     };
     if (useSettingsStore.persist.hasHydrated()) maybeStart();
     const unsub = useSettingsStore.persist.onFinishHydration(maybeStart);

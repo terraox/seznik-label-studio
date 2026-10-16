@@ -7,10 +7,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { TextInput } from '@/components/ui/text-input';
 
 import {
   fromMm,

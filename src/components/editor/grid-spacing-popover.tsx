@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 
 import { clampGridSpacingMm, GRID_SPACING_MAX_MM, GRID_SPACING_MIN_MM } from '@/lib/editor/canvas-grid';
 import {
@@ -56,7 +58,11 @@ export function GridSpacingPopover({
       transparent
       animationType="fade"
       onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button">
+      <FormScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.backdrop}
+        keyboardShouldPersistTaps="handled">
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" />
         <Pressable style={styles.panel} onPress={() => undefined}>
           <Text style={styles.title}>Grid spacing</Text>
           <Text style={styles.disclaimer}>{GRID_PRINT_DISCLAIMER}</Text>
@@ -120,12 +126,15 @@ export function GridSpacingPopover({
             <Text style={styles.doneText}>Done</Text>
           </Pressable>
         </Pressable>
-      </Pressable>
+      </FormScrollView>
     </Modal>
   );
 }
 
 const styles = themedStyles((c) => ({
+  scroll: {
+    flex: 1,
+  },
   backdrop: {
     flex: 1,
     backgroundColor: c.scrim,

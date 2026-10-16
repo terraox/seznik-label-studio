@@ -1,16 +1,8 @@
 import { Image } from 'expo-image';
 import { type ReactNode } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  type TextInputProps,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, type TextInputProps, View } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const AUTH_COLORS = {
@@ -36,26 +28,23 @@ export function AuthScreen({
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <KeyboardAvoidingView
+    <FormScrollView
       style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
-        <Image
-          source={require('../../../assets/images/logo.png')}
-          style={styles.logo}
-          contentFit="contain"
-        />
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
-        <View style={styles.form}>{children}</View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      contentContainerStyle={[
+        styles.scroll,
+        { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
+      ]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}>
+      <Image
+        source={require('../../../assets/images/logo.png')}
+        style={styles.logo}
+        contentFit="contain"
+      />
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.subtitle}>{subtitle}</Text>
+      <View style={styles.form}>{children}</View>
+    </FormScrollView>
   );
 }
 

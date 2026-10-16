@@ -4,17 +4,17 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image as RNImage,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image as RNImage,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  useWindowDimensions,
+  View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 
@@ -547,7 +547,7 @@ export default function PrintPhotoScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <FormScrollView
         style={styles.scroll}
         contentContainerStyle={{
           paddingBottom: footerHeight + Spacing.three,
@@ -758,7 +758,7 @@ export default function PrintPhotoScreen() {
         {antiColor ? (
           <Text style={styles.hint}>When the anti-color is opened, the barcode will not be recognized.</Text>
         ) : null}
-      </ScrollView>
+      </FormScrollView>
 
       {isFrame && frame ? (
       <ViewShot

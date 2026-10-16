@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { TextInput, type StyleProp, type TextStyle } from 'react-native';
+import { type StyleProp, type TextStyle } from 'react-native';
+import { TextInput } from '@/components/ui/text-input';
 
 /**
  * A number shown as text that opens the numeric keyboard when tapped.
@@ -37,7 +38,6 @@ export function EditableNumber({
     <TextInput
       value={draft ?? String(value)}
       onChangeText={(text) => setDraft(text.replace(/\D/g, '').slice(0, String(max).length))}
-      onFocus={() => setDraft('')}
       onBlur={commit}
       onSubmitEditing={commit}
       keyboardType="number-pad"

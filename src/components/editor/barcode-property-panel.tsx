@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useMemo } from 'react';
 
 import { FontSlider } from '@/components/editor/font-slider';
@@ -538,7 +540,7 @@ export function BarcodePropertyPanel({
         })}
       </ScrollView>
 
-      <ScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
+      <FormScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
         {activeTab === 'Regular' && (
           <>
             <SegmentRow
@@ -657,7 +659,7 @@ export function BarcodePropertyPanel({
         )}
 
         {activeTab === 'Font' && <FontSection state={state} patch={patch} />}
-      </ScrollView>
+      </FormScrollView>
     </View>
   );
 }

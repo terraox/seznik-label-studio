@@ -9,12 +9,12 @@ import {
   AppState,
   PixelRatio,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 
@@ -1876,7 +1876,7 @@ export default function PrintScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <FormScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: footerHeight + Spacing.three }}
         showsVerticalScrollIndicator={false}>
@@ -2262,7 +2262,7 @@ export default function PrintScreen() {
             ) : null}
           </View>
         </View>
-      </ScrollView>
+      </FormScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}>
         {/* Size picker — opens sheet to choose a different paper/label size. */}

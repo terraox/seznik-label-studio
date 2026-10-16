@@ -127,7 +127,7 @@ export const DarkColors: ThemeColors = {
   raised: '#1E1E1E',
   fill: '#1E1E1E',
   fillStrong: '#2A2A2A',
-  header: '#000000',
+  header: '#214668',
   headerBorder: '#2E2E2E',
   onHeader: '#FFFFFF',
   text: '#FFFFFF',

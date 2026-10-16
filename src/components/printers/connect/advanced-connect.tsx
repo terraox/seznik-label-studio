@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/text-input';
 
 import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';

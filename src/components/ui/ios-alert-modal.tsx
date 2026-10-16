@@ -1,17 +1,17 @@
 import React, { type ReactNode } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   type TextInputProps,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { TextInput } from '@/components/ui/text-input';
 
 import { makeStyles, useColors, useScheme } from '@/theme';
 
@@ -60,12 +60,12 @@ export function IosAlertModal({
       statusBarTranslucent
       onRequestClose={handleBack}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.overlay}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
         <Pressable style={styles.backdrop} onPress={handleBackdrop} />
         <View style={[styles.card, { maxWidth: cardMaxWidth, maxHeight: Math.round(windowHeight * 0.8) }]}>
-          <ScrollView
+          <FormScrollView
             bounces={false}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -74,7 +74,7 @@ export function IosAlertModal({
             {!!title && <Text style={styles.title}>{title}</Text>}
             {!!message && <Text style={styles.message}>{message}</Text>}
             {children}
-          </ScrollView>
+          </FormScrollView>
 
           {/* Buttons footer */}
           {buttons.length === 2 ? (

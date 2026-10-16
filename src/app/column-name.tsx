@@ -3,12 +3,12 @@ import { AppIcon } from '@/components/app-icon';
 import { useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { editorBridge } from '@/constants/editor-bridge';
@@ -60,7 +60,7 @@ export default function ColumnNameScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <FormScrollView
         style={styles.body}
         contentContainerStyle={[styles.bodyContent, { paddingBottom: insets.bottom + Spacing.four }]}
         keyboardShouldPersistTaps="handled">
@@ -101,7 +101,7 @@ export default function ColumnNameScreen() {
             </Pressable>
           ))}
         </View>
-      </ScrollView>
+      </FormScrollView>
     </View>
   );
 }

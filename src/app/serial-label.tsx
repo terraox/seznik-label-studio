@@ -10,14 +10,14 @@ import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   FlatList,
   StyleSheet,
   Alert,
-  ScrollView,
   Pressable,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
@@ -200,7 +200,7 @@ export default function SerialLabelScreen() {
         <View style={styles.connectIconBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <FormScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.heading}>Serial Label Generator</Text>
         <Text style={styles.subheading}>
           Set the pattern, range, and size. The series opens on the canvas so you can place text
@@ -356,7 +356,7 @@ export default function SerialLabelScreen() {
             <Text style={styles.printHint}>Print from the editor to send the full series.</Text>
           </View>
         )}
-      </ScrollView>
+      </FormScrollView>
     </View>
   );
 }

@@ -63,7 +63,7 @@ export const StaticToolPalette = memo(function StaticToolPalette({
   return (
     <View style={styles.toolsContainer} collapsable={false}>
       {TOOL_ROWS.map((row, rowIndex) => (
-        <View key={`row-${rowIndex}`} style={styles.toolRow}>
+        <View key={`row-${rowIndex}`} style={[styles.toolRow, rowIndex === 0 && styles.toolRowFirst]}>
           {row.map((t) => {
             const dropType = paletteDropTypeForLabel(t.label);
             return (
@@ -105,7 +105,8 @@ const styles = themedStyles((c) => ({
   toolsContainer: {
     width: '100%',
     height: STATIC_PALETTE_CONTENT_HEIGHT,
-    paddingVertical: 4,
+    paddingTop: 0,
+    paddingBottom: 4,
     backgroundColor: c.surface,
   },
   toolRow: {
@@ -114,6 +115,9 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 6,
+  },
+  toolRowFirst: {
+    paddingTop: 0,
   },
   toolCell: {
     flex: 1,

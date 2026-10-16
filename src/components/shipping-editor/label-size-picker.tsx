@@ -7,12 +7,12 @@ import React, { useState } from 'react';
 import {
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
@@ -119,7 +119,7 @@ export function LabelSizePicker({
             </View>
 
             {/* Preset Options */}
-            <ScrollView style={styles.presetList} showsVerticalScrollIndicator={false}>
+            <FormScrollView style={styles.presetList} showsVerticalScrollIndicator={false}>
               {presetList.map((preset) => {
                 const isSelected = selectedPreset.id === preset.id;
                 const pxDims = dpi === 203 ? preset.px203 : preset.px300;
@@ -206,7 +206,7 @@ export function LabelSizePicker({
                   <Text style={styles.applyBtnText}>Apply Custom Size</Text>
                 </Pressable>
               </View>
-            </ScrollView>
+            </FormScrollView>
           </View>
         </View>
       </Modal>

@@ -19,9 +19,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Rect } from 'react-native-svg';
 
@@ -287,7 +288,7 @@ function Phase2CanvasScreenContent() {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <FormScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* Connection status */}
         <View style={[styles.statusBadge, connected ? styles.statusConnected : styles.statusDisconnected]}>
           <Text style={styles.statusText}>
@@ -500,7 +501,7 @@ function Phase2CanvasScreenContent() {
             <Text style={styles.codeText}>{tsplPayload.trim()}</Text>
           </View>
         </View>
-      </ScrollView>
+      </FormScrollView>
 
       {/* Footer Print Button */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}>

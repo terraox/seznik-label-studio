@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Component, type ErrorInfo, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AnimatedSplash } from '@/components/animated-splash';
 import { NavigationBarScrim } from '@/components/navigation-bar-scrim';
@@ -218,10 +219,12 @@ export default function RootLayout() {
   return (
     <RootErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <AppThemeProvider>
-          <AppRoot />
-          <IosAlertHost />
-        </AppThemeProvider>
+        <KeyboardProvider statusBarTranslucent navigationBarTranslucent preserveEdgeToEdge preload={false}>
+          <AppThemeProvider>
+            <AppRoot />
+            <IosAlertHost />
+          </AppThemeProvider>
+        </KeyboardProvider>
       </GestureHandlerRootView>
     </RootErrorBoundary>
   );

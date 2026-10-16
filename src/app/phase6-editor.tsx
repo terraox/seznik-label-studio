@@ -21,9 +21,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Rect, Line } from 'react-native-svg';
 import QRCode from 'react-native-qrcode-svg';
@@ -524,7 +525,7 @@ function Phase6EditorScreenContent() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <FormScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Label Size Presets */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Label Size (mm)</Text>
@@ -920,7 +921,7 @@ function Phase6EditorScreenContent() {
             )}
           </Pressable>
         </View>
-      </ScrollView>
+      </FormScrollView>
     </View>
   );
 }

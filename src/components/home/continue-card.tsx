@@ -82,6 +82,7 @@ export function ContinueCard({ document, onDelete, onUpload }: ContinueCardProps
   };
 
   return (
+    <View style={styles.cardFrame}>
     <View style={styles.card}>
       <View style={[styles.headingBar, width < 360 && styles.headingBarStacked]}>
         <Text
@@ -139,15 +140,25 @@ export function ContinueCard({ document, onDelete, onUpload }: ContinueCardProps
         <ActionItem icon="icloud.and.arrow.up" label="Upload" onPress={onUpload} />
       </View>
     </View>
+    </View>
   );
 }
 
 const styles = themedStyles((c, scheme) => ({
+  // Shadow stays on the outer view. overflow:hidden on the same view as the light-mode
+  // Android boxShadow hides the whole card.
+  cardFrame: {
+    borderRadius: 16,
+    backgroundColor: c.surface,
+    ...cardElevation(c, scheme),
+    ...(scheme === 'light'
+      ? { borderWidth: StyleSheet.hairlineWidth, borderColor: c.border }
+      : null),
+  },
   card: {
     backgroundColor: c.surface,
     borderRadius: 16,
     overflow: 'hidden',
-    ...cardElevation(c, scheme),
   },
   headingBar: {
     flexDirection: 'row',

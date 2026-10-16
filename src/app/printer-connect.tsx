@@ -1,7 +1,8 @@
 import * as Linking from 'expo-linking';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Platform, ScrollView, Text, View } from 'react-native';
+import { Alert, AppState, Platform, Text, View } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -513,7 +514,7 @@ export default function PrinterConnectScreen() {
   return (
     <View style={styles.root}>
       <SettingsStackHeader title="Connect printer" />
-      <ScrollView
+      <FormScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}
         showsVerticalScrollIndicator={false}>
@@ -594,7 +595,7 @@ export default function PrinterConnectScreen() {
             onClose={() => setBluetoothOffDialog(false)}
           />
         </View>
-      </ScrollView>
+      </FormScrollView>
     </View>
   );
 }

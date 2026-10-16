@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { useCallback, useEffect, useRef } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 
 import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
@@ -386,7 +388,7 @@ export function TextPropertyPanel({
         })}
       </ScrollView>
 
-      <ScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
+      <FormScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
         {activeTab === 'Regular' && (
           <>
             <SegmentRow
@@ -694,7 +696,7 @@ export function TextPropertyPanel({
             </View>
           </>
         )}
-      </ScrollView>
+      </FormScrollView>
     </View>
   );
 }

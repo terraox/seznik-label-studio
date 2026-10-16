@@ -12,13 +12,13 @@ import {
   Modal,
   PanResponder,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
@@ -394,7 +394,7 @@ export function LabelEditor({
       </View>
 
       {/* Main Canvas Workspace */}
-      <ScrollView
+      <FormScrollView
         style={styles.workspace}
         contentContainerStyle={styles.workspaceContent}
         showsVerticalScrollIndicator={false}>
@@ -409,7 +409,7 @@ export function LabelEditor({
           showGrid={showGrid}
           showRulers={showRulers}
         />
-      </ScrollView>
+      </FormScrollView>
 
       {/* 1:1 Hardware Dot Print Artboard (captured at true printer DPI without screen scaling) */}
       <View
@@ -588,7 +588,7 @@ export function LabelEditor({
               </Pressable>
             </View>
 
-            <ScrollView style={{ maxHeight: 420 }}>
+            <FormScrollView style={{ maxHeight: 420 }}>
               <DataFieldRow
                 label="Sender Address"
                 value={orderData.senderAddress}
@@ -621,7 +621,7 @@ export function LabelEditor({
                 value={orderData.trackingNumber}
                 onChange={(t) => setOrderData((d) => ({ ...d, trackingNumber: t }))}
               />
-            </ScrollView>
+            </FormScrollView>
           </View>
         </View>
       </Modal>

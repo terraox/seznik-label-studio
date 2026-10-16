@@ -7,12 +7,12 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -307,7 +307,7 @@ export default function PrinterDiagnosticsScreen() {
     <View style={styles.root}>
       <SettingsStackHeader title="Diagnostics" />
 
-      <ScrollView
+      <FormScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}
         showsVerticalScrollIndicator={false}>
@@ -587,7 +587,7 @@ export default function PrinterDiagnosticsScreen() {
             </View>
           </View>
         </View>
-      </ScrollView>
+      </FormScrollView>
     </View>
   );
 }

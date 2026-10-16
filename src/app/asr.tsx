@@ -3,15 +3,14 @@ import { AppIcon } from '@/components/app-icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { editorBridge, type OcrResultType } from '@/constants/editor-bridge';
@@ -175,10 +174,10 @@ export default function AsrScreen() {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.transcriptSection}>
         <View style={styles.transcriptCard}>
-          <ScrollView
+          <FormScrollView
             style={styles.transcriptScroll}
             contentContainerStyle={styles.transcriptScrollContent}
             keyboardShouldPersistTaps="handled">
@@ -194,7 +193,7 @@ export default function AsrScreen() {
               multiline
               textAlignVertical="top"
             />
-          </ScrollView>
+          </FormScrollView>
 
           <View style={styles.actionRow}>
             <Pressable

@@ -28,9 +28,10 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
@@ -468,7 +469,7 @@ function Phase3ImageImportScreenContent() {
         </View>
       </View>
 
-      <ScrollView
+      <FormScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
       >
@@ -978,7 +979,7 @@ function Phase3ImageImportScreenContent() {
             </View>
           )}
         </View>
-      </ScrollView>
+      </FormScrollView>
 
       {/* Bottom Bar: Print Footprint Action */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(12, insets.bottom) }]}>

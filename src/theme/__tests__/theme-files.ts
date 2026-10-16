@@ -120,6 +120,7 @@ export const CONVERTED_FILES: string[] = [
   'src/components/pdf-editor/pdf-print-sheet.tsx',
   'src/components/pdf-editor/pdf-rotate-tool.tsx',
   'src/components/pdf-editor/pdf-scope-selector.tsx',
+  'src/components/pdf-editor/pdf-section-overlays.tsx',
   'src/components/pdf-editor/pdf-sharpness-tool.tsx',
   'src/components/pdf-editor/pdf-tool-panel.tsx',
   'src/components/pdf-editor/pdf-watermark-tool.tsx',

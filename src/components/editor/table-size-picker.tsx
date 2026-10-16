@@ -4,10 +4,11 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { TextInput } from '@/components/ui/text-input';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 const GRID_SIZE = 8;
@@ -118,7 +119,7 @@ export function TableSizePicker({
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView behavior="padding" style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onCancel} />
         <View style={[styles.modal, { width: modalWidth }]}>
           <Text style={styles.title}>
@@ -173,7 +174,7 @@ export function TableSizePicker({
             </Pressable>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

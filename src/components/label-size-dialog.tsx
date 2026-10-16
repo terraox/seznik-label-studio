@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { LabelSizeEditor } from '@/components/label-size-editor';
 import { IosAlertModal } from '@/components/ui/ios-alert-modal';
@@ -62,11 +62,11 @@ export function LabelSizeDialog({
     <>
     <Modal visible={visible && !pending} transparent animationType="fade" onRequestClose={onCancel}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
         style={styles.overlay}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityLabel="Close" />
-        <ScrollView
+        <FormScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scroll}
           bounces={false}
@@ -109,7 +109,7 @@ export function LabelSizeDialog({
               </Pressable>
             </View>
           </View>
-        </ScrollView>
+        </FormScrollView>
       </KeyboardAvoidingView>
     </Modal>
 

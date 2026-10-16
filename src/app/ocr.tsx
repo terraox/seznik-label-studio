@@ -12,14 +12,13 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { editorBridge, type OcrResultType } from '@/constants/editor-bridge';
@@ -424,7 +423,7 @@ export default function OcrScreen() {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={[styles.identifyWhiteSection, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.typeRow}>
           <RadioOption

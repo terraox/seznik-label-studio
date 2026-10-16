@@ -23,9 +23,10 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Rect, Circle, Polygon } from 'react-native-svg';
 
@@ -228,7 +229,7 @@ function Phase8ShapeDetectScreenContent() {
         />
       </View>
 
-      <ScrollView
+      <FormScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}>
         {/* Sample / Image Selector */}
@@ -519,7 +520,7 @@ function Phase8ShapeDetectScreenContent() {
             <Text style={styles.terminalCode}>{boundaryJob.tsplAscii.trimEnd()}</Text>
           </ScrollView>
         </View>
-      </ScrollView>
+      </FormScrollView>
 
       {/* Footer Action Bar */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(16, insets.bottom + 8) }]}>

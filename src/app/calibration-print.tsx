@@ -13,9 +13,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 
@@ -434,7 +435,7 @@ function CalibrationPrintScreenContent() {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView
+      <FormScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + 120, padding: 16 }}>
         {/* Label Size Selector Chips */}
@@ -534,7 +535,7 @@ function CalibrationPrintScreenContent() {
             {connected ? `Connected: ${deviceName ?? 'Printer'}` : 'Not Connected'}
           </Text>
         </View>
-      </ScrollView>
+      </FormScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}>
         <Pressable

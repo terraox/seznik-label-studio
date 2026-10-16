@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
 
 import {
   DRAWING_COLORS,
@@ -192,7 +194,7 @@ export function MultiSelectPropertyPanel({
   const displayRotation = rotationMixed ? rotation : rotationValues[0] ?? 0;
 
   return (
-    <ScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
+    <FormScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
       <SegmentRow
         label="Content Type"
         options={['Manual', 'Degrees', 'Data Source'] as const}
@@ -287,7 +289,7 @@ export function MultiSelectPropertyPanel({
       <Text style={styles.panelNote}>
         Position and content edits apply to the primary selected element. Rotation, lock, printing, and color apply to all selected.
       </Text>
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

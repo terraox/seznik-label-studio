@@ -1,18 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   InteractionManager,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { TextInput } from '@/components/ui/text-input';
 import type { ElementAnchorRect } from '@/lib/editor/quick-value';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
-
 
 /** Ignore backdrop taps briefly so the leftover double-tap doesn't dismiss or blur the input. */
 const BACKDROP_ARM_MS = 400;
@@ -133,7 +132,7 @@ export function QuickValueModal({
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
       style={styles.overlay}
       pointerEvents="box-none"
       keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>

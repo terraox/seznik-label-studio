@@ -17,7 +17,8 @@ const ACTIONS: { icon: AppIconName; label: string }[] = [
 export function SampleContinueCard() {
   useThemeRefresh();
   return (
-    <View style={styles.card} pointerEvents="none">
+    <View style={styles.cardFrame} pointerEvents="none">
+    <View style={styles.card}>
       <View style={styles.headingBar}>
         <Text style={styles.title}>Sample label</Text>
         <View style={styles.badge}>
@@ -40,10 +41,15 @@ export function SampleContinueCard() {
         ))}
       </View>
     </View>
+    </View>
   );
 }
 
 const styles = themedStyles((c, scheme) => ({
+  cardFrame: {
+    borderRadius: 16,
+    ...cardElevation(c, scheme),
+  },
   card: {
     backgroundColor: c.surface,
     borderRadius: 16,
@@ -51,7 +57,6 @@ const styles = themedStyles((c, scheme) => ({
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: c.accent,
-    ...cardElevation(c, scheme),
   },
   headingBar: {
     flexDirection: 'row',

@@ -26,7 +26,7 @@ const styles = themedStyles((c) => ({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
-    color: c.textMuted,
+    color: c.text,
     letterSpacing: 0.2,
   },
 }));
