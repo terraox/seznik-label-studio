@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { PrintGridIcon, PrintRulerIcon, SafeModeIcon } from '@/components/editor/chrome-icons';
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
   AppState,
@@ -803,8 +803,13 @@ export default function EditScreen() {
     panelDefaultBase +
     (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0) +
     Math.max(0, Math.round(insets.bottom));
+  // Smallest sheet = pinned toolbar row + system nav inset, so dragging the divider all the
+  // way down never pushes the toolbar (Label, Multiple, Undo…) under the nav/gesture bar.
+  const bottomInsetPx = Math.max(0, Math.round(insets.bottom));
   const panelMinForSplit =
-    PANEL_MIN_HEIGHT_PX + (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0);
+    PANEL_MIN_HEIGHT_PX +
+    bottomInsetPx +
+    (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0);
   const panelMinForSplitSv = useSharedValue(panelMinForSplit);
   const bulkNavReserveSv = useSharedValue(bulkNavReservePx);
 
@@ -916,6 +921,9 @@ export default function EditScreen() {
   } | null>(null);
 
   const initialSplitRestoredRef = useRef(false);
+  const fitSplitHRef = useRef(0);
+  const lastSplitSeenRef = useRef(0);
+  const skipNextRefitRef = useRef(false);
   const lastViewportHRef = useRef(0);
   const lastPanelMinRef = useRef(panelMinForSplit);
   const lastPanelDefaultRef = useRef(panelDefaultForSplit);
@@ -984,9 +992,21 @@ export default function EditScreen() {
   // Fit the artboard to the visible canvas stage (above the resize divider). Using the
   // whole split column height letterboxes the label with empty gray above and below.
   // Divider drags still scale live on the UI thread; settled height refits pxPerMM here.
+  // On divider release the board is NOT re-fitted: the live UI-thread scale keeps showing the final
+  // size from the same layout, so there is no commit/scale race (that race was the release flicker).
+  // Any other split change (first layout, viewport/panel resize) still re-fits.
+  if (canvasSplitH !== lastSplitSeenRef.current) {
+    lastSplitSeenRef.current = canvasSplitH;
+    if (skipNextRefitRef.current) {
+      skipNextRefitRef.current = false;
+    } else {
+      fitSplitHRef.current = canvasSplitH;
+    }
+  }
+  const fitSplitH = fitSplitHRef.current;
   const baseWorkspaceH =
-    canvasSplitH > 0
-      ? canvasSplitH
+    fitSplitH > 0
+      ? fitSplitH
       : splitViewportH > 0
         ? splitViewportH
         : Math.max(Dimensions.get('window').height, 560) * 0.62;
@@ -1002,7 +1022,7 @@ export default function EditScreen() {
         innerWidthPx: Math.max(1, fitted.innerWidthPx),
         innerHeightPx: Math.max(1, fitted.innerHeightPx),
       };
-    }, [workspaceW, baseWorkspaceH, doc.widthMm, doc.heightMm, canvasSplitH, rulerSize]);
+    }, [workspaceW, baseWorkspaceH, doc.widthMm, doc.heightMm, rulerSize]);
 
   const committedScale = useMemo(() => {
     if (pxPerMM <= 0) return 1;
@@ -1036,7 +1056,7 @@ export default function EditScreen() {
     [pxPerMM, committedScale, workspaceW, canvasSplitH, innerWidthPx, innerHeightPx, boardOffsetXPx, boardOffsetYPx, rulerSize],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!splitDragging) {
       canvasHeightSv.value = canvasSplitH;
     }
@@ -1050,7 +1070,10 @@ export default function EditScreen() {
     workspaceWSv.value = workspaceW;
   }, [workspaceW, workspaceWSv]);
 
-  useEffect(() => {
+  // Layout effect (not useEffect): on divider release the board re-fits to a new pxPerMM in the
+  // same commit that resets the live scale. The UI-thread base must update before paint or one
+  // frame shows the new layout with the old scale (visible flicker).
+  useLayoutEffect(() => {
     docWidthMmSv.value = doc.widthMm;
     docHeightMmSv.value = doc.heightMm;
     basePxPerMMSv.value = pxPerMM;
@@ -1189,6 +1212,7 @@ export default function EditScreen() {
         animateEditorSplit();
       }
       setCanvasFullscreen(result.fullscreen);
+      skipNextRefitRef.current = result.canvasPx !== lastSplitSeenRef.current;
       setCanvasSplitH(result.canvasPx);
       persistSplit(result.canvasPx, result.fullscreen);
     },
@@ -4754,7 +4778,7 @@ export default function EditScreen() {
 
           <View style={styles.sheet} pointerEvents="auto">
             {/* Pinned Toolbar Row - ALWAYS VISIBLE AT ALL SHEET HEIGHTS */}
-            <View style={styles.pinnedToolbar}>
+            <View style={[styles.pinnedToolbar, { paddingBottom: bottomInsetPx }]}>
               <View style={styles.panelHeader}>
                 {renderToolbar()}
                 <Animated.View style={panelCloseBtnAnimatedStyle}>
