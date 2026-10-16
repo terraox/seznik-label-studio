@@ -2024,6 +2024,7 @@ const styles = themedStyles((c) => ({
     height: CHROME_HANDLE_SIZE_PX,
     borderRadius: CHROME_HANDLE_RADIUS_PX,
     backgroundColor: CHROME_HANDLE_FILL,
+    opacity: 0.75, // slightly see-through so the content under the handle stays visible
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
@@ -2033,15 +2034,15 @@ const styles = themedStyles((c) => ({
     shadowRadius: 1.5,
     elevation: 2,
   },
-  // Handles sit just outside the box edge so they never cover the text inside it.
+  // Handles are centred on the box edge line (half in, half out); slightly transparent.
   handleS: {
-    bottom: -(CHROME_HANDLE_SIZE_PX + 1),
+    bottom: -CHROME_HANDLE_RADIUS_PX,
     left: '50%',
     marginLeft: -CHROME_HANDLE_RADIUS_PX,
   },
   handleE: {
     top: '50%',
-    right: -(CHROME_HANDLE_SIZE_PX + 1),
+    right: -CHROME_HANDLE_RADIUS_PX,
     marginTop: -CHROME_HANDLE_RADIUS_PX,
   },
   lockBadge: {

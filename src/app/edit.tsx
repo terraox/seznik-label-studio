@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Dimensions,
   InteractionManager,
-  KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
   Platform,
@@ -16,7 +15,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   UIManager,
   Vibration,
   useWindowDimensions,
@@ -24,6 +22,9 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import { TextInput } from '@/components/ui/text-input';
 import ViewShot from 'react-native-view-shot';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -588,7 +589,9 @@ export default function EditScreen() {
   const editorSettings = useSettingsStore((s) => s.editor);
   // The mm scale along the top and left edges; off frees that space for the canvas.
   const showRulers = editorSettings.showRulers !== false;
-  const rulerSize = showRulers ? RULER_SIZE : 0;
+  // Ruler space is always reserved; hiding the rulers only fades them, so the canvas never moves.
+  const rulerSize = RULER_SIZE;
+  const rulerOpacity = showRulers ? 1 : 0;
   const patchEditor = useSettingsStore((s) => s.patchEditor);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const savedDocuments = useLabelStore((s) => s.documents);
@@ -790,6 +793,7 @@ export default function EditScreen() {
     splitViewportH > 0 ? splitViewportH : Math.max(Dimensions.get('window').height, 560) * 0.62,
   );
   const workspaceWSv = useSharedValue(120);
+  const rulerSizeSv = useSharedValue(rulerSize);
   const docWidthMmSv = useSharedValue(doc.widthMm);
   const docHeightMmSv = useSharedValue(doc.heightMm);
   const basePxPerMMSv = useSharedValue(1);
@@ -1072,11 +1076,26 @@ export default function EditScreen() {
   // Layout effect (not useEffect): on divider release the board re-fits to a new pxPerMM in the
   // same commit that resets the live scale. The UI-thread base must update before paint or one
   // frame shows the new layout with the old scale (visible flicker).
+  // The ruler size and workspace width join them: toggling the on-screen ruler changes the layout
+  // and the fit in one commit, so all inputs to the live scale must change together.
   useLayoutEffect(() => {
     docWidthMmSv.value = doc.widthMm;
     docHeightMmSv.value = doc.heightMm;
     basePxPerMMSv.value = pxPerMM;
-  }, [doc.widthMm, doc.heightMm, pxPerMM, docWidthMmSv, docHeightMmSv, basePxPerMMSv]);
+    rulerSizeSv.value = rulerSize;
+    workspaceWSv.value = workspaceW;
+  }, [
+    doc.widthMm,
+    doc.heightMm,
+    pxPerMM,
+    rulerSize,
+    workspaceW,
+    docWidthMmSv,
+    docHeightMmSv,
+    basePxPerMMSv,
+    rulerSizeSv,
+    workspaceWSv,
+  ]);
 
   useEffect(() => {
     panelMinForSplitSv.value = panelMinForSplit;
@@ -1105,8 +1124,8 @@ export default function EditScreen() {
 
   const canvasAssemblyAnimatedStyle = useAnimatedStyle(() => {
     const liveH = canvasHeightSv.value;
-    const liveInnerH = Math.max(32, liveH - rulerSize - STAGE_PADDING_PX * 2);
-    const liveInnerW = Math.max(32, workspaceWSv.value - rulerSize - STAGE_PADDING_PX * 2);
+    const liveInnerH = Math.max(32, liveH - rulerSizeSv.value - STAGE_PADDING_PX * 2);
+    const liveInnerW = Math.max(32, workspaceWSv.value - rulerSizeSv.value - STAGE_PADDING_PX * 2);
     const wMm = docWidthMmSv.value > 0 ? docWidthMmSv.value : 1;
     const hMm = docHeightMmSv.value > 0 ? docHeightMmSv.value : 1;
     const livePxPerMM = Math.min(liveInnerW / wMm, liveInnerH / hMm);
@@ -4047,8 +4066,9 @@ export default function EditScreen() {
                   elevation: 0,
                 },
               ]}>
-              {showRulers ? (
-              <View style={styles.rulerTopRow}>
+              <View
+                style={[styles.rulerTopRow, { opacity: rulerOpacity }]}
+                pointerEvents="none">
                 <RulerCorner />
                 <HorizontalRuler
                   trackWidthPx={canvasWidthPx || 1}
@@ -4066,9 +4086,8 @@ export default function EditScreen() {
                   liveBounds={liveRulerBounds}
                 />
               </View>
-              ) : null}
               <View style={styles.rulerBodyRow}>
-                {showRulers ? (
+                <View style={{ opacity: rulerOpacity }} pointerEvents="none">
                 <VerticalRuler
                   trackHeightPx={canvasHeightPx || 1}
                   originPx={0}
@@ -4084,7 +4103,7 @@ export default function EditScreen() {
                   }
                   liveBounds={liveRulerBounds}
                 />
-                ) : null}
+                </View>
                 <View
                   style={[
                     styles.artboardSlot,
@@ -4460,9 +4479,7 @@ export default function EditScreen() {
         </View>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[styles.body, { maxWidth: MaxContentWidth }]}>
+      <View style={[styles.body, { maxWidth: MaxContentWidth }]}>
         <View style={styles.subToolbarSlot}>
           <View style={styles.subToolbarRow}>
             <Pressable
@@ -4566,30 +4583,6 @@ export default function EditScreen() {
                   numberOfLines={1}
                   style={[styles.printGridBtnText, printGridOn && styles.printGridBtnTextOn]}>
                   Print grid
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={togglePrintRuler}
-                hitSlop={10}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: printRulerOn }}
-                accessibilityLabel="Print scale"
-                accessibilityHint="Prints an mm edge scale on the top and left for alignment checks. Cannot be on with Print grid."
-                style={({ pressed }) => [
-                  styles.printGridBtn,
-                  printRulerOn && styles.canvasChromeBtnActive,
-                  pressed && styles.pressed,
-                ]}>
-                <PrintRulerIcon
-                  active={printRulerOn}
-                  color={printRulerOn ? C.accent : C.textMuted}
-                  size={16}
-                />
-                <Text
-                  numberOfLines={1}
-                  style={[styles.printGridBtnText, printRulerOn && styles.printGridBtnTextOn]}>
-                  Print scale
                 </Text>
               </Pressable>
 
@@ -4806,7 +4799,12 @@ export default function EditScreen() {
             </View>
 
             {/* Collapsible Reveal Window for Tool Grid / Property Panel */}
-            <Animated.View style={[styles.toolGridRevealWindow, toolGridAnimatedStyle]}>
+            <Animated.View
+              style={[
+                styles.toolGridRevealWindow,
+                toolGridAnimatedStyle,
+                { marginTop: -Math.max(0, bottomInsetPx - 8) },
+              ]}>
               <Animated.View style={[styles.staticPaletteContainer, staticPaletteAnimatedStyle]}>
                 <StaticToolPalette
                   onToolPress={handleToolPress}
@@ -4820,13 +4818,13 @@ export default function EditScreen() {
                 {referenceSelected && doc.referenceImage ? (
                   <ReferenceImagePanel image={doc.referenceImage} onChange={patchReferenceImage} />
                 ) : (
-                  <ScrollView
+                  <FormScrollView
                     style={styles.sheetScroll}
                     contentContainerStyle={{ paddingBottom: Math.max(Spacing.two, insets.bottom) }}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled">
                     {activePanelContent}
-                  </ScrollView>
+                  </FormScrollView>
                 )}
               </Animated.View>
             </Animated.View>
@@ -4834,29 +4832,31 @@ export default function EditScreen() {
         </View>
 
         {textEditId ? (
-          <View style={[styles.textEditBar, { paddingBottom: insets.bottom + Spacing.two }]}>
-            <TextInput
-              ref={textEditInputRef}
-              style={styles.textEditInput}
-              value={textEditDraft}
-              onChangeText={handleTextEditChange}
-              onSubmitEditing={commitTextEdit}
-              blurOnSubmit
-              multiline
-              autoFocus
-              placeholder="Type text…"
-              placeholderTextColor={C.textMuted}
-              returnKeyType="done"
-            />
-            <Pressable
-              onPress={commitTextEdit}
-              hitSlop={8}
-              style={({ pressed }) => [styles.textEditDoneBtn, pressed && styles.pressed]}>
-              <Text style={styles.textEditDoneText}>Done</Text>
-            </Pressable>
-          </View>
+          <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
+            <View style={[styles.textEditBar, { paddingBottom: insets.bottom + Spacing.two }]}>
+              <TextInput
+                ref={textEditInputRef}
+                style={styles.textEditInput}
+                value={textEditDraft}
+                onChangeText={handleTextEditChange}
+                onSubmitEditing={commitTextEdit}
+                blurOnSubmit
+                multiline
+                autoFocus
+                placeholder="Type text…"
+                placeholderTextColor={C.textMuted}
+                returnKeyType="done"
+              />
+              <Pressable
+                onPress={commitTextEdit}
+                hitSlop={8}
+                style={({ pressed }) => [styles.textEditDoneBtn, pressed && styles.pressed]}>
+                <Text style={styles.textEditDoneText}>Done</Text>
+              </Pressable>
+            </View>
+          </KeyboardStickyView>
         ) : null}
-      </KeyboardAvoidingView>
+      </View>
 
       <LabelSettingsMenu
         visible={showLabelMenu}
@@ -4957,7 +4957,7 @@ export default function EditScreen() {
             {savedDocuments.length === 0 ? (
               <Text style={styles.openEmptyText}>No saved labels yet.</Text>
             ) : (
-              <ScrollView style={styles.openList}>
+              <FormScrollView style={styles.openList}>
                 {savedDocuments.map((saved) => (
                   <Pressable
                     key={saved.id}
@@ -4975,7 +4975,7 @@ export default function EditScreen() {
                     </View>
                   </Pressable>
                 ))}
-              </ScrollView>
+              </FormScrollView>
             )}
             <View style={styles.openModalFooter}>
               <Pressable
