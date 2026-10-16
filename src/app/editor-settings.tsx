@@ -31,6 +31,7 @@ export default function EditorSettingsScreen() {
     highlightColumnName,
     pictureAdsorption,
     editorGrid,
+    showRulers,
     editorGridSpacingMm,
     editorGridColor,
     borderColorIndex: storedBorderColorIndex,
@@ -85,6 +86,14 @@ export default function EditorSettingsScreen() {
         onValueChange={(v) => patchEditor({ pictureAdsorption: v })}
         description="Place a Image or Logo close to the QR code and it will automatically be displayed in the center of the QR code."
       />
+
+      <SettingsCard>
+        <SettingsToggleRow
+          label="Show Ruler (mm scale)"
+          value={showRulers !== false}
+          onValueChange={(v) => patchEditor({ showRulers: v })}
+        />
+      </SettingsCard>
 
       <SettingsCard>
         <SettingsToggleRow

@@ -64,6 +64,7 @@ const BASE_STEPS: readonly WalkthroughStep[] = [
   },
   {
     id: 'tabs',
+    target: 'tabs.bar',
     title: 'Bottom tabs',
     body: 'Template has saved and industry templates, Shop has supplies, Help has guides, and Setting has fonts, clipart, language and printer options.',
   },
