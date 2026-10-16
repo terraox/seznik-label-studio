@@ -176,9 +176,9 @@ function ProfileCard() {
       <View style={styles.statsRow}>
         {(
           [
-            { label: 'Today', value: today, icon: 'sun.max', tint: '#F59E0B' },
+            { label: 'Today', value: today, icon: 'sun.max', tint: '#F59E0B' }, // theme-fixed: stat accent colour
             { label: 'Last 7 days', value: week, icon: 'calendar', tint: c.accentStrong },
-            { label: 'Lifetime', value: lifetime, icon: 'trophy', tint: '#8B5CF6' },
+            { label: 'Lifetime', value: lifetime, icon: 'trophy', tint: '#8B5CF6' }, // theme-fixed: stat accent colour
           ] as const
         ).map((st) => (
           <View key={st.label} style={styles.statTile}>

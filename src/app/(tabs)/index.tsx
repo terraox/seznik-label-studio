@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { BuyFromUsStrip } from '@/components/home/buy-from-us-strip';
@@ -16,6 +16,7 @@ import { MaxContentWidth } from '@/constants/theme';
 import { HomeLayout } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
+import { PrinterSupportNotice } from '@/components/home/printer-support-notice';
 import { SampleContinueCard } from '@/components/home/sample-continue-card';
 import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
 import { useLabelStore } from '@/stores/label-store';
@@ -55,25 +56,41 @@ export default function HomeScreen() {
     return () => setWalkthroughScroller(null);
   }, []);
 
-  // First launch: auto-start once persisted settings have loaded.
+  // First launch: show the supported-printers card, then auto-start the tour once settings have loaded.
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const startTourIfUnseen = useCallback(() => {
+    if (useSettingsStore.getState().tutorialSeen) return undefined;
+    return setTimeout(() => startWalkthrough('home'), 700);
+  }, [startWalkthrough]);
+  const tourTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const maybeStart = () => {
-      if (useSettingsStore.getState().tutorialSeen) return;
-      timer = setTimeout(() => startWalkthrough('home'), 700);
+      if (!useSettingsStore.getState().printerNoticeSeen) {
+        setNoticeOpen(true);
+        return;
+      }
+      tourTimer.current = startTourIfUnseen();
     };
     if (useSettingsStore.persist.hasHydrated()) maybeStart();
     const unsub = useSettingsStore.persist.onFinishHydration(maybeStart);
     return () => {
       unsub();
-      if (timer) clearTimeout(timer);
+      if (tourTimer.current) clearTimeout(tourTimer.current);
     };
-  }, [startWalkthrough]);
+  }, [startTourIfUnseen]);
+
+  const closeNotice = () => {
+    useSettingsStore.getState().setPrinterNoticeSeen(true);
+    setNoticeOpen(false);
+    tourTimer.current = startTourIfUnseen();
+  };
 
   const tourActive = useWalkthroughStore((s) => s.active);
 
   return (
     <View style={styles.root}>
+      <PrinterSupportNotice visible={noticeOpen} onClose={closeNotice} />
       <HomeHeader />
 
       <ScrollView

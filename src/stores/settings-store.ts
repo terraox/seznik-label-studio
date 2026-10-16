@@ -131,6 +131,8 @@ type SettingsStoreState = {
   printing: PrintingSettings;
   language: string;
   tutorialSeen: boolean;
+  /** First-launch "supported printers" welcome card has been dismissed. */
+  printerNoticeSeen: boolean;
   /** The label-canvas tour has been seen (or skipped) at least once. */
   canvasTutorialSeen: boolean;
   /** PDF crop: the one-time "tap again for the bigger block" hint has been shown. */
@@ -146,6 +148,7 @@ type SettingsStoreState = {
   patchPrinting: (updates: Partial<PrintingSettings>) => void;
   setLanguage: (language: string) => void;
   setTutorialSeen: (seen: boolean) => void;
+  setPrinterNoticeSeen: (seen: boolean) => void;
   setCanvasTutorialSeen: (seen: boolean) => void;
   setSmartCropHintSeen: (seen: boolean) => void;
   setAppearance: (appearance: AppearancePreference) => void;
@@ -160,6 +163,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       printing: DEFAULT_PRINTING_SETTINGS,
       language: 'en',
       tutorialSeen: false,
+      printerNoticeSeen: false,
       canvasTutorialSeen: false,
       smartCropHintSeen: false,
       appearance: 'light',
@@ -174,6 +178,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
         set((state) => ({ printing: { ...state.printing, ...updates } })),
       setLanguage: (language) => set({ language }),
       setTutorialSeen: (seen) => set({ tutorialSeen: seen }),
+      setPrinterNoticeSeen: (seen) => set({ printerNoticeSeen: seen }),
       setCanvasTutorialSeen: (seen) => set({ canvasTutorialSeen: seen }),
       setSmartCropHintSeen: (seen) => set({ smartCropHintSeen: seen }),
       setAppearance: (appearance) => set({ appearance }),
