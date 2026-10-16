@@ -13,7 +13,7 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.sezprint.app",
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow Sez Print to convert your speech into label text.",
         "NSMicrophoneUsageDescription": "Allow Sez Print to use the microphone for voice-to-text on labels.",
@@ -26,7 +26,7 @@
     "android": {
       "package": "com.sezprint.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -54,6 +54,7 @@
       "./plugins/with-google-code-scanner.js",
       "./plugins/with-android-packaging.js",
       "./plugins/with-local-file-picker-queries.js",
+      "./plugins/with-light-navigation-bar.js",
       "expo-router",
       [
         "expo-dev-client",
@@ -86,7 +87,10 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FEFEFE"
+          "backgroundColor": "#FEFEFE",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
         }
       ],
       [
