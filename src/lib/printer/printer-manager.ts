@@ -48,7 +48,11 @@ import {
   printLabelDocumentMainPipeline,
 } from '@/lib/printer/main-pipeline-print';
 import { encodeTscCompactTextSample } from '@/lib/printer/tsc';
-import { buildLabelSizeScaleJob } from '@/lib/printer/td404-label-size';
+import {
+  LABEL_SIZE_CALIBRATE_WAIT_MS,
+  buildLabelSizeCalibrateJob,
+  buildLabelSizeScaleJob,
+} from '@/lib/printer/td404-label-size';
 import { assertTd404MonoBuffer } from '@/printing/raster/td404-mono-validate';
 import { usePrinterStore, normalizePrinterMac, type PrinterTransport } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -3501,7 +3505,11 @@ class PrinterManager {
     if (!this.canPrintLabelSize) {
       throw new Error('Label size printing is available for Tejas and Rudra only.');
     }
-    await this.print(new TextEncoder().encode(buildLabelSizeScaleJob()));
+    const enc = new TextEncoder();
+    await this.print(enc.encode(buildLabelSizeCalibrateJob()));
+    // Calibration blocks the printer while it feeds; a ruler sent now would be dropped.
+    await new Promise<void>((resolve) => setTimeout(resolve, LABEL_SIZE_CALIBRATE_WAIT_MS));
+    await this.print(enc.encode(buildLabelSizeScaleJob()));
   }
 
   async printDiagnosticTestLabel(): Promise<void> {
