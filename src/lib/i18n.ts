@@ -22,6 +22,7 @@ export type TranslationKey =
   | 'setting.advancedSettings'
   | 'setting.appPermissions'
   | 'setting.walkthrough'
+  | 'setting.canvasWalkthrough'
   | 'setting.feedback'
   | 'setting.aboutUs'
   | 'setting.appearance'
@@ -63,6 +64,7 @@ const en: Record<TranslationKey, string> = {
   'setting.advancedSettings': 'Advanced Settings',
   'setting.appPermissions': 'App Permissions',
   'setting.walkthrough': 'App Walkthrough',
+  'setting.canvasWalkthrough': 'Canvas Walkthrough',
   'setting.feedback': 'Evaluation & Feedback',
   'setting.aboutUs': 'About Us',
   'setting.appearance': 'Appearance',
@@ -103,6 +105,7 @@ const hi: StringsTable = {
   'setting.advancedSettings': 'उन्नत सेटिंग्स',
   'setting.appPermissions': 'ऐप अनुमतियाँ',
   'setting.walkthrough': 'ऐप वॉकथ्रू',
+  'setting.canvasWalkthrough': 'कैनवास वॉकथ्रू',
   'setting.feedback': 'मूल्यांकन और प्रतिक्रिया',
   'setting.aboutUs': 'हमारे बारे में',
   'setting.appearance': 'दिखावट',

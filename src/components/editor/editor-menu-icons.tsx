@@ -261,6 +261,13 @@ export function TopToolbarIcon({
         </Svg>
       );
 
+    case 'Drag':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          <Path d="M 12 3 V 21 M 7.5 7.5 L 12 3 L 16.5 7.5 M 7.5 16.5 L 12 21 L 16.5 16.5" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </Svg>
+      );
+
     case 'Multiple':
       return (
         <Svg width={size} height={size} viewBox="0 0 24 24">

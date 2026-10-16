@@ -31,6 +31,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
 
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
+import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
+import { CANVAS_WALKTHROUGH } from '@/lib/walkthrough/canvas-steps';
+import { registerWalkthroughTarget } from '@/lib/walkthrough/registry';
+import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
 import {
   clampElementToLabel,
@@ -68,7 +72,7 @@ import {
 import {
   BULK_LABEL_NAV_HEIGHT_PX,
   BULK_PANEL_DEFAULT_HEIGHT_PX,
-  DIVIDER_HIT_SIZE_PX,
+  SPLIT_GAP_PX,
   NUDGE_PAD_SPLIT_EXTRA_PX,
   PANEL_DEFAULT_HEIGHT_PX,
   PANEL_MIN_HEIGHT_PX,
@@ -137,7 +141,12 @@ import type {
 } from '@/components/editor/konva-transformer';
 import { CanvasPanelDivider } from '@/components/editor/canvas-panel-divider';
 import { StaticToolPalette } from '@/components/editor/static-tool-palette';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 const smoothEasing = Easing.out(Easing.cubic);
 import {
@@ -242,7 +251,7 @@ import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore } from '@/stores/data-store';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
-import { CANVAS_BOTTOM_CHIP_CLEARANCE_PX, STAGE_PADDING_PX, clampLabelMm, containFitImageOnLabel, fitEditorPadBoard } from '@/lib/label-geometry';
+import { CANVAS_BOTTOM_CHIP_CLEARANCE_PX, EDITOR_STAGE_MARGIN_PX, clampLabelMm, containFitImageOnLabel, fitEditorPadBoard } from '@/lib/label-geometry';
 import { applyDocumentStockSize, type StockSizeHandling } from '@/lib/stock-size';
 import { sortLayers } from '@/lib/template-schema';
 import { useTranslation } from '@/lib/i18n';
@@ -589,10 +598,13 @@ export default function EditScreen() {
   const editorSettings = useSettingsStore((s) => s.editor);
   // The mm scale along the top and left edges; off frees that space for the canvas.
   const showRulers = editorSettings.showRulers !== false;
-  // Ruler space is always reserved; hiding the rulers only fades them, so the canvas never moves.
-  const rulerSize = RULER_SIZE;
-  const rulerOpacity = showRulers ? 1 : 0;
+  // Rulers off: no gutter and nothing rendered, so the board re-fits to the freed space. The
+  // layout effect below publishes the new gutter in the same commit as the fit, so it can't flicker.
+  const rulerSize = showRulers ? RULER_SIZE : 0;
   const patchEditor = useSettingsStore((s) => s.patchEditor);
+  const setCanvasTutorialSeen = useSettingsStore((s) => s.setCanvasTutorialSeen);
+  const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const stopWalkthrough = useWalkthroughStore((s) => s.stop);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const savedDocuments = useLabelStore((s) => s.documents);
   const excelFiles = useDataStore((s) => s.excelFiles);
@@ -731,6 +743,31 @@ export default function EditScreen() {
   const dirtyRef = useRef(false);
   const patchBurstTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bumpHistory = useCallback(() => setHistoryRev((n) => n + 1), []);
+
+  // First time the canvas is opened: run the canvas tour once persisted settings have loaded.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const maybeStart = () => {
+      if (useSettingsStore.getState().canvasTutorialSeen) return;
+      // Long enough for the split layout and tool palette to settle before measuring.
+      timer = setTimeout(() => startWalkthrough('canvas'), 900);
+    };
+    if (useSettingsStore.persist.hasHydrated()) maybeStart();
+    const unsub = useSettingsStore.persist.onFinishHydration(maybeStart);
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
+  }, [startWalkthrough]);
+
+  // Leaving the editor mid-tour must not leave the overlay armed for the next screen.
+  useEffect(
+    () => () => {
+      const { active, tour } = useWalkthroughStore.getState();
+      if (active && tour === 'canvas') useWalkthroughStore.getState().stop();
+    },
+    [],
+  );
 
   const toolbarRef = useRef<View>(null);
   const canvasShotRef = useRef<ViewShot>(null);
@@ -1015,7 +1052,7 @@ export default function EditScreen() {
         : Math.max(Dimensions.get('window').height, 560) * 0.62;
   const { canvasWidthPx, canvasHeightPx, pxPerMM, boardOffsetXPx, boardOffsetYPx, innerWidthPx, innerHeightPx } =
     useMemo(() => {
-      const fitted = fitEditorPadBoard(doc.widthMm, doc.heightMm, workspaceW, baseWorkspaceH, rulerSize);
+      const fitted = fitEditorPadBoard(doc.widthMm, doc.heightMm, workspaceW, baseWorkspaceH, rulerSize, EDITOR_STAGE_MARGIN_PX);
       return {
         canvasWidthPx: Math.max(1, fitted.widthPx),
         canvasHeightPx: Math.max(1, fitted.heightPx),
@@ -1029,14 +1066,23 @@ export default function EditScreen() {
 
   const committedScale = useMemo(() => {
     if (pxPerMM <= 0) return 1;
-    const liveInnerH = Math.max(32, canvasSplitH - rulerSize - STAGE_PADDING_PX * 2);
-    const liveInnerW = Math.max(32, workspaceW - rulerSize - STAGE_PADDING_PX * 2);
+    const liveInnerH = Math.max(32, canvasSplitH - rulerSize - EDITOR_STAGE_MARGIN_PX * 2);
+    const liveInnerW = Math.max(32, workspaceW - rulerSize - EDITOR_STAGE_MARGIN_PX * 2);
     const livePxPerMM = Math.min(
       liveInnerW / (doc.widthMm > 0 ? doc.widthMm : 1),
       liveInnerH / (doc.heightMm > 0 ? doc.heightMm : 1),
     );
     return livePxPerMM / pxPerMM;
   }, [canvasSplitH, workspaceW, doc.widthMm, doc.heightMm, pxPerMM, rulerSize]);
+
+  if (__DEV__) {
+    // TEMP (canvas-size audit): workspace/canvas numbers for the device log. Remove after review.
+    console.log(
+      `[canvas-fit] label=${doc.widthMm}x${doc.heightMm}mm rulers=${showRulers} workspace=${Math.round(workspaceW)}x${Math.round(canvasSplitH)} ` +
+        `gutter=${rulerSize} margin=${EDITOR_STAGE_MARGIN_PX} canvas=${Math.round(canvasWidthPx * committedScale)}x${Math.round(canvasHeightPx * committedScale)} ` +
+        `fill=${(Math.max((canvasWidthPx * committedScale) / Math.max(1, workspaceW), (canvasHeightPx * committedScale) / Math.max(1, canvasSplitH)) * 100).toFixed(1)}%`,
+    );
+  }
 
   const writeEditorView = useCallback(
     (zoom: number, panX: number, panY: number) => {
@@ -1113,7 +1159,7 @@ export default function EditScreen() {
     const vpH = splitViewportHSv.value > 0 ? splitViewportHSv.value : 600;
     const belowDividerH = Math.max(
       0,
-      vpH - canvasHeightSv.value - bulkNavReserveSv.value - DIVIDER_HIT_SIZE_PX,
+      vpH - canvasHeightSv.value - bulkNavReserveSv.value - SPLIT_GAP_PX,
     );
     const nudgeH = panelMinForSplitSv.value - PANEL_MIN_HEIGHT_PX;
     const gridH = Math.max(0, belowDividerH - nudgeH - PANEL_MIN_HEIGHT_PX);
@@ -1124,8 +1170,8 @@ export default function EditScreen() {
 
   const canvasAssemblyAnimatedStyle = useAnimatedStyle(() => {
     const liveH = canvasHeightSv.value;
-    const liveInnerH = Math.max(32, liveH - rulerSizeSv.value - STAGE_PADDING_PX * 2);
-    const liveInnerW = Math.max(32, workspaceWSv.value - rulerSizeSv.value - STAGE_PADDING_PX * 2);
+    const liveInnerH = Math.max(32, liveH - rulerSizeSv.value - EDITOR_STAGE_MARGIN_PX * 2);
+    const liveInnerW = Math.max(32, workspaceWSv.value - rulerSizeSv.value - EDITOR_STAGE_MARGIN_PX * 2);
     const wMm = docWidthMmSv.value > 0 ? docWidthMmSv.value : 1;
     const hMm = docHeightMmSv.value > 0 ? docHeightMmSv.value : 1;
     const livePxPerMM = Math.min(liveInnerW / wMm, liveInnerH / hMm);
@@ -3898,7 +3944,13 @@ export default function EditScreen() {
   const canRedo = historyRev >= 0 && historyRef.current.canRedo;
 
   const renderToolbar = () => (
-    <View ref={toolbarRef} collapsable={false} style={styles.toolbarRow}>
+    <View
+      ref={(node) => {
+        toolbarRef.current = node;
+        registerWalkthroughTarget('edit.toolbar', node);
+      }}
+      collapsable={false}
+      style={styles.toolbarRow}>
       <ToolbarItem
         name="Label"
         label="Label"
@@ -3934,6 +3986,21 @@ export default function EditScreen() {
         label="UnLock"
         disabled={selectedIds.length === 0}
         onPress={() => setLockOnSelection(false)}
+      />
+      <CanvasPanelDivider
+        variant="toolbar"
+        canvasHeightPx={canvasSplitH}
+        canvasHeightSv={canvasHeightSv}
+        isDraggingSv={isDividerDraggingSv}
+        viewportPx={
+          splitViewportForCanvas > 0
+            ? splitViewportForCanvas
+            : canvasSplitH + panelMinForSplit
+        }
+        panelMinPx={panelMinForSplit}
+        onDragStart={handleSplitDragStart}
+        onDragEnd={handleSplitDragEnd}
+        onDragCancel={handleSplitDragCancel}
       />
     </View>
   );
@@ -4066,9 +4133,8 @@ export default function EditScreen() {
                   elevation: 0,
                 },
               ]}>
-              <View
-                style={[styles.rulerTopRow, { opacity: rulerOpacity }]}
-                pointerEvents="none">
+              {showRulers ? (
+              <View style={styles.rulerTopRow} pointerEvents="none">
                 <RulerCorner />
                 <HorizontalRuler
                   trackWidthPx={canvasWidthPx || 1}
@@ -4086,24 +4152,27 @@ export default function EditScreen() {
                   liveBounds={liveRulerBounds}
                 />
               </View>
+              ) : null}
               <View style={styles.rulerBodyRow}>
-                <View style={{ opacity: rulerOpacity }} pointerEvents="none">
-                <VerticalRuler
-                  trackHeightPx={canvasHeightPx || 1}
-                  originPx={0}
-                  contentHeightPx={canvasHeightPx || 1}
-                  lengthMm={doc.heightMm}
-                  selectedRangeMm={
-                    selectedElement
-                      ? {
-                          start: selectedElement.top,
-                          end: selectedElement.top + selectedElementHeightMm,
-                        }
-                      : null
-                  }
-                  liveBounds={liveRulerBounds}
-                />
+                {showRulers ? (
+                <View pointerEvents="none">
+                  <VerticalRuler
+                    trackHeightPx={canvasHeightPx || 1}
+                    originPx={0}
+                    contentHeightPx={canvasHeightPx || 1}
+                    lengthMm={doc.heightMm}
+                    selectedRangeMm={
+                      selectedElement
+                        ? {
+                            start: selectedElement.top,
+                            end: selectedElement.top + selectedElementHeightMm,
+                          }
+                        : null
+                    }
+                    liveBounds={liveRulerBounds}
+                  />
                 </View>
+                ) : null}
                 <View
                   style={[
                     styles.artboardSlot,
@@ -4471,7 +4540,10 @@ export default function EditScreen() {
           </Text>
         </View>
 
-        <View style={styles.headerActions}>
+        <View
+          ref={(node) => registerWalkthroughTarget('edit.savePrint', node)}
+          collapsable={false}
+          style={styles.headerActions}>
           <HeaderAction icon="folder" label={t('common.open')} onPress={() => setShowOpenModal(true)} />
           <HeaderAction icon="square.and.arrow.down.on.square" label={t('common.saveAs')} onPress={handleSaveAs} />
           <HeaderAction icon="tray.and.arrow.down.fill" label={t('common.save')} onPress={() => saveDocument()} />
@@ -4483,6 +4555,8 @@ export default function EditScreen() {
         <View style={styles.subToolbarSlot}>
           <View style={styles.subToolbarRow}>
             <Pressable
+              ref={(node) => registerWalkthroughTarget('edit.size', node)}
+              collapsable={false}
               onPress={() => {
                 if (isRatTail143Document(doc)) return;
                 setSizeModalVisible(true);
@@ -4725,7 +4799,12 @@ export default function EditScreen() {
             if (next <= 0) return;
             setSplitViewportH((prev) => (Math.abs(prev - next) <= 1 ? prev : next));
           }}>
-          {renderCanvas()}
+          <View
+            ref={(node) => registerWalkthroughTarget('edit.canvas', node)}
+            collapsable={false}
+            style={styles.canvasTourTarget}>
+            {renderCanvas()}
+          </View>
 
           {showBulkNav ? (
             <BulkLabelNav
@@ -4740,21 +4819,6 @@ export default function EditScreen() {
             />
           ) : null}
 
-          <CanvasPanelDivider
-            canvasHeightPx={canvasSplitH}
-            canvasHeightSv={canvasHeightSv}
-            isDraggingSv={isDividerDraggingSv}
-            viewportPx={
-              splitViewportForCanvas > 0
-                ? splitViewportForCanvas
-                : canvasSplitH + panelMinForSplit
-            }
-            panelMinPx={panelMinForSplit}
-            onDragStart={handleSplitDragStart}
-            onDragEnd={handleSplitDragEnd}
-            onDragCancel={handleSplitDragCancel}
-            onTap={selectedIds.length > 0 ? handleDeselectAll : undefined}
-          />
 
           {editorSettings.showNudgePad && !canvasFullscreen ? (
             <EditingPad
@@ -4806,12 +4870,16 @@ export default function EditScreen() {
                 { marginTop: -Math.max(0, bottomInsetPx - 8) },
               ]}>
               <Animated.View style={[styles.staticPaletteContainer, staticPaletteAnimatedStyle]}>
-                <StaticToolPalette
-                  onToolPress={handleToolPress}
-                  onBeginDrag={beginPaletteDrag}
-                  onMoveDrag={movePaletteDrag}
-                  onEndDrag={endPaletteDrag}
-                />
+                <View
+                  ref={(node) => registerWalkthroughTarget('edit.tools', node)}
+                  collapsable={false}>
+                  <StaticToolPalette
+                    onToolPress={handleToolPress}
+                    onBeginDrag={beginPaletteDrag}
+                    onMoveDrag={movePaletteDrag}
+                    onEndDrag={endPaletteDrag}
+                  />
+                </View>
               </Animated.View>
 
               <Animated.View style={[StyleSheet.absoluteFillObject, propertyPanelAnimatedStyle]}>
@@ -5029,6 +5097,14 @@ export default function EditScreen() {
       {imageSourceSheet}
       {documentSourceSheet}
       {excelImportModal}
+      <WalkthroughOverlay
+        tour="canvas"
+        steps={CANVAS_WALKTHROUGH}
+        onFinish={() => {
+          setCanvasTutorialSeen(true);
+          stopWalkthrough();
+        }}
+      />
     </View>
   );
 }
@@ -5067,6 +5143,12 @@ const styles = themedStyles((c, scheme) => ({
     flex: 1,
     minHeight: 0,
     width: '100%',
+  },
+  // Measure-only wrapper for the canvas walkthrough step; sizes to the stage.
+  canvasTourTarget: {
+    width: '100%',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   overlapBanner: {
     position: 'absolute',

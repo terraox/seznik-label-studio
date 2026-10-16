@@ -15,7 +15,7 @@ import {
   type WindowRect,
 } from '@/lib/walkthrough/registry';
 import type { WalkthroughStep } from '@/lib/walkthrough/home-steps';
-import { useWalkthroughStore } from '@/stores/walkthrough-store';
+import { useWalkthroughStore, type WalkthroughTour } from '@/stores/walkthrough-store';
 
 const DIM = 'rgba(10, 20, 32, 0.78)'; // theme-fixed: dims whatever is under it, in both themes
 const HOLE_PAD = 6;
@@ -24,15 +24,19 @@ const CARD_MAX_W = 360;
 const CARD_EST_H = 190;
 
 export function WalkthroughOverlay({
+  tour,
   steps,
   onFinish,
 }: {
+  /** Only renders while this tour is the one running. */
+  tour: WalkthroughTour;
   steps: readonly WalkthroughStep[];
   /** Called on Done or Skip. */
   onFinish: () => void;
 }) {
   const styles = useStyles();
-  const active = useWalkthroughStore((s) => s.active);
+  const activeTour = useWalkthroughStore((s) => s.tour);
+  const active = useWalkthroughStore((s) => s.active) && activeTour === tour;
   const stepIndex = useWalkthroughStore((s) => s.stepIndex);
   const goTo = useWalkthroughStore((s) => s.goTo);
   const win = useWindowDimensions();
@@ -105,14 +109,19 @@ export function WalkthroughOverlay({
   const isLast = stepIndex >= visibleSteps.length - 1;
   // Keep the ring fully inside the overlay (RING_INSET) so targets flush with a screen edge,
   // like the tab bar, still show all four borders.
-  const hx = rect ? Math.max(RING_INSET, rect.x - HOLE_PAD) : 0;
-  const hy = rect ? Math.max(RING_INSET, rect.y - HOLE_PAD) : 0;
+  const pad = step.holePad;
+  const padTop = pad?.top ?? HOLE_PAD;
+  const padRight = pad?.right ?? HOLE_PAD;
+  const padBottom = pad?.bottom ?? HOLE_PAD;
+  const padLeft = pad?.left ?? HOLE_PAD;
+  const hx = rect ? Math.max(RING_INSET, rect.x - padLeft) : 0;
+  const hy = rect ? Math.max(RING_INSET, rect.y - padTop) : 0;
   const hole = rect
     ? {
         x: hx,
         y: hy,
-        w: Math.min(W - RING_INSET, rect.x + rect.w + HOLE_PAD) - hx,
-        h: Math.min(H - RING_INSET, rect.y + rect.h + HOLE_PAD) - hy,
+        w: Math.min(W - RING_INSET, rect.x + rect.w + padRight) - hx,
+        h: Math.min(H - RING_INSET, rect.y + rect.h + padBottom) - hy,
       }
     : null;
 

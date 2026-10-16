@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   PANEL_DEFAULT_HEIGHT_PX,
   PANEL_MIN_HEIGHT_PX,
-  DIVIDER_HIT_SIZE_PX,
+  SPLIT_GAP_PX,
   usableSplitViewportPx,
   clampCanvasSplitHeight,
   defaultCanvasSplitHeight,
@@ -19,7 +19,7 @@ test('PANEL_DEFAULT_HEIGHT_PX is 318 and PANEL_MIN_HEIGHT_PX is 48', () => {
 
 test('defaultCanvasSplitHeight reserves PANEL_DEFAULT_HEIGHT_PX (318px) for the palette', () => {
   const viewportPx = 700;
-  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX); // 700 - 44 = 656
+  const usable = usableSplitViewportPx(viewportPx, SPLIT_GAP_PX); // no reserved gap: 700
   const defaultH = defaultCanvasSplitHeight(viewportPx);
   assert.equal(defaultH, usable - 318);
   assert.equal(usable - defaultH, 318);
@@ -27,7 +27,7 @@ test('defaultCanvasSplitHeight reserves PANEL_DEFAULT_HEIGHT_PX (318px) for the 
 
 test('restoreCanvasSplitHeight with null ratio uses PANEL_DEFAULT_HEIGHT_PX', () => {
   const viewportPx = 700;
-  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
+  const usable = usableSplitViewportPx(viewportPx, SPLIT_GAP_PX);
   const restoredH = restoreCanvasSplitHeight({
     ratio: null,
     fullscreen: false,
@@ -40,7 +40,7 @@ test('restoreCanvasSplitHeight with null ratio uses PANEL_DEFAULT_HEIGHT_PX', ()
 
 test('restoreCanvasSplitHeight never opens with a sheet shorter than the full tool menu', () => {
   const viewportPx = 700;
-  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
+  const usable = usableSplitViewportPx(viewportPx, SPLIT_GAP_PX);
   const restoredH = restoreCanvasSplitHeight({
     ratio: 0.85,
     fullscreen: false,
@@ -53,7 +53,7 @@ test('restoreCanvasSplitHeight never opens with a sheet shorter than the full to
 
 test('restoreCanvasSplitHeight keeps a taller sheet when the saved ratio already shows the full menu', () => {
   const viewportPx = 700;
-  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
+  const usable = usableSplitViewportPx(viewportPx, SPLIT_GAP_PX);
   const restoredH = restoreCanvasSplitHeight({
     ratio: 0.2,
     fullscreen: false,
@@ -67,7 +67,7 @@ test('restoreCanvasSplitHeight keeps a taller sheet when the saved ratio already
 
 test('canvasHeightAfterDrag allows dragging down to PANEL_MIN_HEIGHT_PX (48px sheet / toolbar row)', () => {
   const viewportPx = 700;
-  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
+  const usable = usableSplitViewportPx(viewportPx, SPLIT_GAP_PX);
   const startCanvasPx = usable - PANEL_DEFAULT_HEIGHT_PX;
   // User drags divider down by 500px (expanding canvas, shrinking sheet)
   const maxDragCanvasH = canvasHeightAfterDrag({
@@ -76,7 +76,7 @@ test('canvasHeightAfterDrag allows dragging down to PANEL_MIN_HEIGHT_PX (48px sh
     viewportPx,
     panelMinPx: PANEL_MIN_HEIGHT_PX,
   });
-  // Canvas should be allowed to grow up to usable - PANEL_MIN_HEIGHT_PX (656 - 48 = 608)
+  // Canvas should be allowed to grow up to usable - PANEL_MIN_HEIGHT_PX (700 - 48 = 652)
   assert.equal(maxDragCanvasH, usable - 48);
   // Sheet is now collapsed to just the toolbar row: 48px!
   assert.equal(usable - maxDragCanvasH, 48);
@@ -84,7 +84,7 @@ test('canvasHeightAfterDrag allows dragging down to PANEL_MIN_HEIGHT_PX (48px sh
 
 test('canvasHeightAfterDrag allows dragging up to fully cover canvas (0px canvas / full sheet)', () => {
   const viewportPx = 700;
-  const usable = usableSplitViewportPx(viewportPx, DIVIDER_HIT_SIZE_PX);
+  const usable = usableSplitViewportPx(viewportPx, SPLIT_GAP_PX);
   const startCanvasPx = usable - PANEL_DEFAULT_HEIGHT_PX;
   // User drags divider all the way UP by 500px (expanding sheet to cover canvas completely)
   const minDragCanvasH = canvasHeightAfterDrag({

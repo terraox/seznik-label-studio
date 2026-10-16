@@ -18,6 +18,12 @@ export const DIVIDER_BAR_THICKNESS_PX = 3;
 export const DIVIDER_HIT_SIZE_PX = 44;
 
 /**
+ * Vertical layout space the split handle takes between canvas and sheet. The handle now lives in the
+ * toolbar row (the "Drag" button), so no strip is reserved and the canvas gets that height.
+ */
+export const SPLIT_GAP_PX = 0;
+
+/**
  * Height required to fit the entire tool palette (toolbar row + all 4 tool rows:
  * Text through Signature) without scrolling or clipping (exact measured requirement).
  * Used as the DEFAULT resting height on fresh label open.
@@ -62,7 +68,7 @@ export type ClampCanvasSplitInput = {
 
 export function usableSplitViewportPx(
   viewportPx: number,
-  dividerPx = DIVIDER_HIT_SIZE_PX,
+  dividerPx = SPLIT_GAP_PX,
 ): number {
   'worklet';
   const viewport = Number.isFinite(viewportPx) ? Math.max(0, viewportPx) : 0;
@@ -82,7 +88,7 @@ function finitePx(value: number, fallback: number): number {
 export function clampCanvasSplitHeight(input: ClampCanvasSplitInput): number {
   'worklet';
   const viewport = Math.max(0, finitePx(input.viewportPx, 0));
-  const divider = Math.max(0, finitePx(input.dividerPx ?? DIVIDER_HIT_SIZE_PX, DIVIDER_HIT_SIZE_PX));
+  const divider = Math.max(0, finitePx(input.dividerPx ?? SPLIT_GAP_PX, SPLIT_GAP_PX));
   const ratio = finitePx(input.canvasMinRatio ?? CANVAS_SPLIT_MIN_RATIO, CANVAS_SPLIT_MIN_RATIO);
   const panelMin = Math.max(0, finitePx(input.panelMinPx ?? PANEL_MIN_HEIGHT_PX, PANEL_MIN_HEIGHT_PX));
   const usable = Math.max(0, viewport - divider);
@@ -144,7 +150,7 @@ export function clampStoredSplitRatio(ratio: number): number {
 export function canvasSplitRatioFromHeight(
   canvasPx: number,
   viewportPx: number,
-  dividerPx = DIVIDER_HIT_SIZE_PX,
+  dividerPx = SPLIT_GAP_PX,
 ): number {
   const usable = usableSplitViewportPx(viewportPx, dividerPx);
   if (usable <= 0) return DEFAULT_CANVAS_SPLIT_RATIO;

@@ -6,7 +6,8 @@ import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reani
 import { rulerTicksFor, type RulerTick } from '@/lib/editor/ruler-ticks';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-export const RULER_SIZE = 28;
+/** Thin strip: the canvas only gives up this much to the ruler. */
+export const RULER_SIZE = 14;
 
 export type LiveRulerBounds = {
   leftMm: SharedValue<number>;
@@ -73,7 +74,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
   const content = Math.max(1, contentWidthPx);
   const origin = Math.max(0, originPx);
   const ticks = useMemo(() => rulerTicksFor(lengthMm, content), [lengthMm, content]);
-  const labels = useMemo(() => spacedMajor(ticks, 22, lengthMm), [ticks, lengthMm]);
+  const labels = useMemo(() => spacedMajor(ticks, 20, lengthMm), [ticks, lengthMm]);
 
   // Selected element projection on horizontal ruler (fallback for static prop)
   const selectionProjection = useMemo(() => {
@@ -142,7 +143,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
 
         {/* Ticks: touching the bottom divider line at y = RULER_SIZE - 1 */}
         {ticks.map((tick) => {
-          const h = tickLen(tick.kind, 10, 7, 4);
+          const h = tickLen(tick.kind, 4, 3, 2);
           const isStart = tick.mm < 0.001;
           const isEnd = Math.abs(tick.mm - lengthMm) < 0.01;
           const isMajor = tick.kind === 'major';
@@ -300,7 +301,7 @@ export const VerticalRuler = memo(function VerticalRuler({
 
         {/* Ticks: touching the right divider line at x = RULER_SIZE - 1 */}
         {ticks.map((tick) => {
-          const w = tickLen(tick.kind, 10, 7, 4);
+          const w = tickLen(tick.kind, 4, 3, 2);
           const isStart = tick.mm < 0.001;
           const isEnd = Math.abs(tick.mm - lengthMm) < 0.01;
           const isMajor = tick.kind === 'major';
@@ -410,16 +411,16 @@ const styles = themedStyles((c, scheme) => ({
   },
   hLabel: {
     position: 'absolute',
-    top: 3,
-    fontSize: 8,
+    top: 1,
+    fontSize: 6.5,
     fontWeight: '600',
     letterSpacing: 0.1,
     color: c.textMuted,
   },
   vLabel: {
     position: 'absolute',
-    left: 2,
-    fontSize: 7.5,
+    left: 1,
+    fontSize: 6,
     fontWeight: '600',
     letterSpacing: 0.1,
     color: c.textMuted,
@@ -440,9 +441,9 @@ const styles = themedStyles((c, scheme) => ({
   },
   cornerText: {
     color: c.brandInk,
-    fontSize: 8.5,
+    fontSize: 6,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    letterSpacing: 0,
     textTransform: 'lowercase',
   },
 }));

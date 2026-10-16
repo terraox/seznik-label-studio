@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -27,7 +27,8 @@ import {
   resolveSplitRelease,
   type SplitReleaseResult,
 } from '@/lib/editor/canvas-split';
-import { themedStyles, useThemeRefresh } from '@/theme';
+import { TopToolbarIcon } from '@/components/editor/editor-menu-icons';
+import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type CanvasPanelDividerProps = {
   canvasHeightPx: number;
@@ -42,6 +43,8 @@ type CanvasPanelDividerProps = {
   onDragCancel?: () => void;
   /** Stationary tap in the gap — used to clear canvas selection. */
   onTap?: () => void;
+  /** `toolbar`: a compact "Drag" button for the end of the toolbar row (no layout strip). */
+  variant?: 'bar' | 'toolbar';
 };
 
 export function CanvasPanelDivider({
@@ -55,6 +58,7 @@ export function CanvasPanelDivider({
   onDragEnd,
   onDragCancel,
   onTap,
+  variant = 'bar',
 }: CanvasPanelDividerProps) {
   useThemeRefresh();
   const fallbackHeightSv = useSharedValue(canvasHeightPx);
@@ -173,6 +177,23 @@ export function CanvasPanelDivider({
     viewportPxSv,
   ]);
 
+  if (variant === 'toolbar') {
+    return (
+      <GestureDetector gesture={gesture}>
+        <Animated.View
+          collapsable={false}
+          accessibilityRole="adjustable"
+          accessibilityLabel="Drag to resize canvas and editing panel"
+          style={[styles.toolbarHandle, Platform.OS === 'web' ? (webHandleStyle as object) : null]}>
+          <TopToolbarIcon name="Drag" size={22} color={C.textSecondary} />
+          <Text numberOfLines={1} style={styles.toolbarHandleLabel}>
+            Drag
+          </Text>
+        </Animated.View>
+      </GestureDetector>
+    );
+  }
+
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
@@ -193,6 +214,23 @@ const webHandleStyle = {
 } as const;
 
 const styles = themedStyles((c) => ({
+  toolbarHandle: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    minWidth: 0,
+    paddingVertical: 2,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: c.hairline,
+  },
+  toolbarHandleLabel: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: c.textSecondary,
+    textAlign: 'center',
+  },
   hit: {
     height: DIVIDER_HIT_SIZE_PX,
     width: '100%',

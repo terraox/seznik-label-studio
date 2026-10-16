@@ -252,6 +252,9 @@ export function fitEditorLabel(
 /** Balanced edge margin around the editor stage so canvas and rulers have breathing room. */
 export const STAGE_PADDING_PX = 14;
 export const CANVAS_BOTTOM_CHIP_CLEARANCE_PX = STAGE_PADDING_PX;
+
+/** Editor canvas margin on each side of the workspace (the board is fitted inside this). */
+export const EDITOR_STAGE_MARGIN_PX = 8;
 export const EDITOR_PAD_ZOOM_CHROME_PX = CANVAS_BOTTOM_CHIP_CLEARANCE_PX;
 
 /**
@@ -265,6 +268,7 @@ export function fitEditorPadBoard(
   padWidthPx: number,
   padHeightPx: number,
   rulerSizePx: number,
+  marginPx: number = STAGE_PADDING_PX,
 ): {
   widthPx: number;
   heightPx: number;
@@ -276,8 +280,8 @@ export function fitEditorPadBoard(
   offsetXPx: number;
   offsetYPx: number;
 } {
-  const maxBoardW = Math.max(64, padWidthPx - STAGE_PADDING_PX * 2);
-  const maxBoardH = Math.max(64, padHeightPx - STAGE_PADDING_PX * 2);
+  const maxBoardW = Math.max(64, padWidthPx - marginPx * 2);
+  const maxBoardH = Math.max(64, padHeightPx - marginPx * 2);
   const innerWidthPx = Math.max(48, maxBoardW - rulerSizePx);
   const innerHeightPx = Math.max(48, maxBoardH - rulerSizePx);
   const fitted = containFitLabel(

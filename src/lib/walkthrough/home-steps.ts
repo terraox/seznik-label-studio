@@ -4,6 +4,8 @@ export type WalkthroughStep = {
   target?: string;
   /** Target lives inside the screen's ScrollView. */
   scrolls?: boolean;
+  /** Per-side override of the cutout padding around the target, in px. */
+  holePad?: { top?: number; right?: number; bottom?: number; left?: number };
   title: string;
   body: string;
 };

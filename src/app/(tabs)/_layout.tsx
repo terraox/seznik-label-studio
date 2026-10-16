@@ -18,6 +18,7 @@ export default function TabsLayout() {
     <View style={{ flex: 1 }}>
       <AppTabs />
       <WalkthroughOverlay
+        tour="home"
         steps={steps}
         onFinish={() => {
           setTutorialSeen(true);
