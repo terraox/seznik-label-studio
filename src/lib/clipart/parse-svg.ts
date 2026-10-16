@@ -129,7 +129,8 @@ export function separateSvgArcFlags(d: string): string {
 }
 
 function attr(tag: string, name: string): string | undefined {
-  const match = tag.match(new RegExp(`${name}="([^"]*)"`));
+  // Whole attribute names only: `width` must not match inside `stroke-width`, nor `x` inside `rx`/`cx`.
+  const match = tag.match(new RegExp(`(?<![\\w:-])${name}="([^"]*)"`));
   return match?.[1];
 }
 
@@ -139,25 +140,37 @@ function num(tag: string, name: string, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function isFilled(tag: string): boolean {
-  const fill = attr(tag, 'fill');
+/** `rootFill` is the `<svg fill>` default; with none given SVG paints shapes black (filled). */
+function isFilled(tag: string, rootFill?: string): boolean {
+  const fill = attr(tag, 'fill') ?? rootFill;
   if (fill === 'none') return false;
-  if (fill && fill !== 'none') return true;
-  return /fill="currentColor"/.test(tag) && !/stroke="currentColor"/.test(tag);
+  return true;
 }
 
-function strokeWidth(tag: string): number {
-  return num(tag, 'stroke-width', 1.6);
+export type SvgViewBox = { x: number; y: number; w: number; h: number };
+
+/** The sticker's own coordinate box. Built-ins are 0 0 24 24; user uploads can be anything. */
+export function parseSvgViewBox(svg: string): SvgViewBox {
+  const root = svg.match(/<svg\b[^>]*>/i)?.[0] ?? '';
+  const vb = attr(root, 'viewBox')?.trim().split(/[\s,]+/).map(Number);
+  if (vb && vb.length === 4 && vb.every(Number.isFinite) && vb[2]! > 0 && vb[3]! > 0) {
+    return { x: vb[0]!, y: vb[1]!, w: vb[2]!, h: vb[3]! };
+  }
+  const w = num(root, 'width', 24);
+  const h = num(root, 'height', 24);
+  return { x: 0, y: 0, w: w > 0 ? w : 24, h: h > 0 ? h : 24 };
 }
 
 /** Enough of SVG for built-in stickers and simple user uploads. */
 export function parseSvgDrawOps(svg: string): ClipartDrawOp[] {
   const ops: ClipartDrawOp[] = [];
-  const tags = svg.match(/<(path|circle|rect|ellipse|line|polygon)\b[^>]*\/?>/gi) ?? [];
+  const rootFill = attr(svg.match(/<svg\b[^>]*>/i)?.[0] ?? '', 'fill');
+  const rootSw = num(svg.match(/<svg\b[^>]*>/i)?.[0] ?? '', 'stroke-width', 1.6);
+  const tags = svg.match(/<(path|circle|rect|ellipse|line|polygon|polyline)\b[^>]*\/?>/gi) ?? [];
   for (const tag of tags) {
     const type = tag.match(/^<(\w+)/)?.[1]?.toLowerCase();
-    const fill = isFilled(tag);
-    const sw = strokeWidth(tag);
+    const fill = isFilled(tag, rootFill);
+    const sw = num(tag, 'stroke-width', rootSw);
     if (type === 'path') {
       const d = attr(tag, 'd');
       if (d) ops.push({ t: 'path', d, fill, sw });
@@ -193,6 +206,9 @@ export function parseSvgDrawOps(svg: string): ClipartDrawOp[] {
         d: num(tag, 'y2'),
         sw,
       });
+    } else if (type === 'polyline') {
+      const pts = attr(tag, 'points');
+      if (pts) ops.push({ t: 'path', d: `M${pts.trim().replace(/\s+/g, ' L')}`, fill, sw });
     } else if (type === 'polygon') {
       const pts = attr(tag, 'points');
       if (pts) ops.push({ t: 'polygon', pts, fill, sw });

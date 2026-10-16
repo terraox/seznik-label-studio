@@ -69,7 +69,15 @@ export type RasterSurface = {
    * Draws a 24x24-grid vector sticker into the square at (x, y) with side `size` dots.
    * Skia only; the dot-buffer host fallback has no path rasterizer.
    */
-  drawVectorGlyph?: (ops: ClipartDrawOp[], x: number, y: number, size: number, gray: number) => void;
+  drawVectorGlyph?: (
+    ops: ClipartDrawOp[],
+    x: number,
+    y: number,
+    size: number,
+    gray: number,
+    /** The sticker's own box (user SVGs aren't always 24x24); fitted and centred in the square. */
+    viewBox?: { x: number; y: number; w: number; h: number },
+  ) => void;
   /**
    * Line-art emoji only. Same square as the canvas SvgXml (viewBox 0 0 24 24,
    * round caps, viewport clip). Circles and ellipses are the SVG primitives,
@@ -468,7 +476,7 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
         canvas.restore?.();
       }
     },
-    drawVectorGlyph(ops, x, y, size, gray) {
+    drawVectorGlyph(ops, x, y, size, gray, viewBox) {
       if (
         typeof canvas.save !== 'function' ||
         typeof canvas.translate !== 'function' ||
@@ -477,14 +485,18 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
       ) {
         return;
       }
-      const k = size / 24;
-      if (!(k > 0)) return;
+      const vb = viewBox ?? { x: 0, y: 0, w: 24, h: 24 };
+      const k = size / Math.max(vb.w, vb.h);
+      if (!(k > 0) || !Number.isFinite(k)) return;
       const color = grayToColor(skiaMod, gray);
       const paint = Skia.Paint();
       paint.setAntiAlias(true);
       paint.setColor(color);
+      // Round ends and joins like the canvas SVG, so stroke tips aren't cut flat.
+      if (skiaMod.StrokeCap && paint.setStrokeCap) paint.setStrokeCap(skiaMod.StrokeCap.Round);
+      if (skiaMod.StrokeJoin && paint.setStrokeJoin) paint.setStrokeJoin(skiaMod.StrokeJoin.Round);
       canvas.save();
-      canvas.translate(x, y);
+      canvas.translate(x + (size - vb.w * k) / 2 - vb.x * k, y + (size - vb.h * k) / 2 - vb.y * k);
       canvas.scale(k, k);
       try {
         for (const op of ops) {

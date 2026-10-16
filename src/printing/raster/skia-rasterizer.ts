@@ -24,7 +24,7 @@ import { dotsPerMm, mmToDots, rectMmToDots, td404BorderGapMm, td404BorderOuterDo
 import { sortLayers } from '@/lib/template-schema';
 import { printGridKnockoutsMm, printGridRectsDots, printGridSpacingMm } from '@/lib/print-grid';
 import { PRINT_RULER_LINE_MM, drawPrintRuler, printRulerEnabled } from '@/lib/print-ruler';
-import { parseSvgDrawOps, type ClipartDrawOp } from '@/lib/clipart/parse-svg';
+import { parseSvgDrawOps, parseSvgViewBox, type ClipartDrawOp, type SvgViewBox } from '@/lib/clipart/parse-svg';
 import { clampStrokeScale } from '@/lib/clipart/stroke-scale';
 import { clipartSvgSource } from '@/lib/clipart/types';
 import { needsComplexTextShaping, resolvePrintFontFamily } from '@/lib/fonts/text-font-family';
@@ -99,7 +99,7 @@ const UNSUPPORTED: ReadonlySet<LabelElement['type']> = new Set([
 ]);
 
 /** SVG stickers draw natively; tiled stickers and imported bitmaps still need the capture path. */
-function vectorClipartOps(el: LabelElement): ClipartDrawOp[] | null {
+function vectorClipart(el: LabelElement): { ops: ClipartDrawOp[]; viewBox: SvgViewBox } | null {
   if (el.type !== 'clipart' || el.tile) return null;
   // Lazy: the clipart library pulls in app stores that host-side raster tests don't need.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -107,11 +107,11 @@ function vectorClipartOps(el: LabelElement): ClipartDrawOp[] | null {
   const svg = clipartSvgSource(getClipartById(el.clipartId));
   if (!svg) return null;
   const ops = parseSvgDrawOps(svg);
-  return ops.length > 0 ? ops : null;
+  return ops.length > 0 ? { ops, viewBox: parseSvgViewBox(svg) } : null;
 }
 
 function isUnsupportedPrintType(el: LabelElement): boolean {
-  if (el.type === 'clipart') return vectorClipartOps(el) == null;
+  if (el.type === 'clipart') return vectorClipart(el) == null;
   return el.type === 'image' || UNSUPPORTED.has(el.type);
 }
 
@@ -304,20 +304,20 @@ function drawDocumentToSurface(
           drawShape(surface, el, dpm, box);
           break;
         case 'clipart': {
-          const ops = vectorClipartOps(el);
-          if (!ops || !surface.drawVectorGlyph) {
+          const art = vectorClipart(el);
+          if (!art || !surface.drawVectorGlyph) {
             throw new Error(`Unsupported print element type: clipart (${el.id})`);
           }
           // Same placement as the canvas: a square of min(w, h), centred in the box.
           const side = Math.min(box.w, box.h);
           const thickness = clampStrokeScale(el.strokeScale);
-          const scaled = thickness === 1 ? ops : ops.map((op) => ({ ...op, sw: op.sw * thickness }));
+          const scaled = thickness === 1 ? art.ops : art.ops.map((op) => ({ ...op, sw: op.sw * thickness }));
           const gx = box.x0 + (box.w - side) / 2;
           const gy = box.y0 + (box.h - side) / 2;
           if (el.clipartId.startsWith('le-') && surface.drawLineEmojiGlyph) {
             surface.drawLineEmojiGlyph(scaled, gx, gy, side, 0);
           } else {
-            surface.drawVectorGlyph(scaled, gx, gy, side, 0);
+            surface.drawVectorGlyph(scaled, gx, gy, side, 0, art.viewBox);
           }
           break;
         }
