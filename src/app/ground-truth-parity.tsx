@@ -45,6 +45,7 @@ import {
 } from '@/printing/raster/skia-rasterizer';
 import { getTextDrawLog } from '@/printing/raster/skia-surface';
 import { useLabelStore } from '@/stores/label-store';
+import { LightScope } from '@/theme';
 
 const DPI = 304;
 const THRESHOLD = 160;
@@ -132,7 +133,7 @@ function formatRegions(rows: DiffRegion[]): string {
   return rows.map((r) => `${r.kind}:${r.id} ${r.percent.toFixed(3)}% (${r.differing}/${r.pixels})`).join('\n');
 }
 
-export default function GroundTruthParityScreen() {
+function GroundTruthParityScreenContent() {
   const insets = useSafeAreaInsets();
   const shotRef = useRef<ViewShot>(null);
   const [running, setRunning] = useState(false);
@@ -313,3 +314,12 @@ const styles = StyleSheet.create({
   err: { color: '#B91C1C', marginBottom: 12 },
   report: { fontFamily: 'Courier', fontSize: 11, color: '#0F172A', lineHeight: 15 },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function GroundTruthParityScreen() {
+  return (
+    <LightScope>
+      <GroundTruthParityScreenContent />
+    </LightScope>
+  );
+}

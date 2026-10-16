@@ -24,8 +24,9 @@ import {
   runStageADeviceBenchmark,
   type StageADeviceReport,
 } from '@/printing/raster/stage-a-device-benchmark';
+import { LightScope } from '@/theme';
 
-export default function StageAGatesScreen() {
+function StageAGatesScreenContent() {
   const insets = useSafeAreaInsets();
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState<StageADeviceReport | null>(null);
@@ -196,3 +197,12 @@ const styles = StyleSheet.create({
   runBtnPressed: { opacity: 0.85 },
   runBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function StageAGatesScreen() {
+  return (
+    <LightScope>
+      <StageAGatesScreenContent />
+    </LightScope>
+  );
+}

@@ -293,7 +293,8 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
   },
-  postIcon: { fontSize: 14 },
+  // Explicit Fabric default (black) so the theme can never recolour printed frame text.
+  postIcon: { fontSize: 14, color: '#000000' },
   postActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -331,6 +332,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '600',
     letterSpacing: 1.5,
+    color: '#000000',
   },
   filmHud: {
     position: 'absolute',

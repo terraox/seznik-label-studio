@@ -42,6 +42,7 @@ import {
   type DetectedLabelShape,
 } from '@/printing/contour-detection';
 import { exportCanvasBoundaryJob } from '@/printing/canvas-export';
+import { LightScope } from '@/theme';
 
 interface SamplePreset {
   id: string;
@@ -66,7 +67,7 @@ const SAMPLE_PRESETS: SamplePreset[] = [
   { id: 'diecut-tag', name: 'Barbell Die-Cut', shape: 'diecut', widthMm: 54, heightMm: 25 },
 ];
 
-export default function Phase8ShapeDetectScreen() {
+function Phase8ShapeDetectScreenContent() {
   const insets = useSafeAreaInsets();
   const connected = usePrinterStore((s) => s.status === 'connected');
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -940,3 +941,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function Phase8ShapeDetectScreen() {
+  return (
+    <LightScope>
+      <Phase8ShapeDetectScreenContent />
+    </LightScope>
+  );
+}

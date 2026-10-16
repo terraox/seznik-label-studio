@@ -18,8 +18,9 @@ import {
   passwordRuleResults,
 } from '@/lib/auth/validation';
 import { useAuthStore } from '@/stores/auth-store';
+import { LightScope } from '@/theme';
 
-export default function RegisterScreen() {
+function RegisterScreenContent() {
   const router = useRouter();
   const register = useAuthStore((s) => s.register);
   const [name, setName] = useState('');
@@ -184,3 +185,12 @@ const styles = StyleSheet.create({
   footerText: { color: AUTH_COLORS.muted, fontSize: 14 },
   footerLink: { color: AUTH_COLORS.blue, fontSize: 14, fontWeight: '700' },
 });
+
+/** Switched off for now (D8, backlog): stays light in dark mode until converted. */
+export default function RegisterScreen() {
+  return (
+    <LightScope>
+      <RegisterScreenContent />
+    </LightScope>
+  );
+}

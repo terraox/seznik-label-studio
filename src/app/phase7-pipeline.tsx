@@ -50,6 +50,7 @@ import {
   type CanvasDocument,
   type CanvasBitmapRaster,
 } from '@/printing/canvas-export';
+import { LightScope } from '@/theme';
 
 const PRESET_SIZES = [
   { label: '50×30 mm', w: 50, h: 30, gap: 2 },
@@ -59,7 +60,7 @@ const PRESET_SIZES = [
 
 type RasterPattern = 'none' | 'checker' | 'border' | 'solid';
 
-export default function Phase7PipelineScreen() {
+function Phase7PipelineScreenContent() {
   const insets = useSafeAreaInsets();
   const connected = usePrinterStore((s) => s.status === 'connected');
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -1041,3 +1042,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function Phase7PipelineScreen() {
+  return (
+    <LightScope>
+      <Phase7PipelineScreenContent />
+    </LightScope>
+  );
+}

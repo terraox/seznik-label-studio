@@ -53,6 +53,7 @@ import {
   type CanvasQrElement,
   type CanvasBoxElement,
 } from '@/printing/canvas-export';
+import { LightScope } from '@/theme';
 
 const PRESETS = [
   { label: '50×30 mm', w: 50, h: 30 },
@@ -68,7 +69,7 @@ const OPACITY_LEVELS = [0.25, 0.5, 0.75, 1.0];
 const SAMPLE_IMAGE_URI =
   'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=60';
 
-export default function Phase3ImageImportScreen() {
+function Phase3ImageImportScreenContent() {
   const insets = useSafeAreaInsets();
   const connected = usePrinterStore((s) => s.status === 'connected');
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -1582,3 +1583,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function Phase3ImageImportScreen() {
+  return (
+    <LightScope>
+      <Phase3ImageImportScreenContent />
+    </LightScope>
+  );
+}

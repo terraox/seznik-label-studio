@@ -47,6 +47,7 @@ import {
   type CanvasElement,
   type CanvasDocument,
 } from '@/printing/canvas-export';
+import { LightScope } from '@/theme';
 
 const PRESET_SIZES = [
   { label: '50×30 mm', w: 50, h: 30 },
@@ -59,7 +60,7 @@ const QR_SIZE_PRESETS = [10, 12, 14, 16, 20];
 const BARCODE_HEIGHT_PRESETS = [6, 8, 10, 12, 15];
 const ZOOM_LEVELS = [0.75, 1.0, 1.25, 1.5, 2.0];
 
-export default function Phase5BarcodeQrScreen() {
+function Phase5BarcodeQrScreenContent() {
   const insets = useSafeAreaInsets();
   const connected = usePrinterStore((s) => s.status === 'connected');
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -1257,3 +1258,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function Phase5BarcodeQrScreen() {
+  return (
+    <LightScope>
+      <Phase5BarcodeQrScreenContent />
+    </LightScope>
+  );
+}

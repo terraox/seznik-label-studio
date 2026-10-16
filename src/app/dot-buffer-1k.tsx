@@ -19,8 +19,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '@/components/app-icon';
 import { Palette } from '@/constants/ui';
 import { runDotBuffer1kConfirmation } from '@/printing/raster/dot-buffer-1k-confirmation';
+import { LightScope } from '@/theme';
 
-export default function DotBuffer1kScreen() {
+function DotBuffer1kScreenContent() {
   const insets = useSafeAreaInsets();
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState('Idle');
@@ -116,3 +117,12 @@ const styles = StyleSheet.create({
   error: { color: '#DC2626', fontSize: 14 },
   mono: { fontFamily: 'monospace', fontSize: 11, color: '#1E293B', lineHeight: 16 },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function DotBuffer1kScreen() {
+  return (
+    <LightScope>
+      <DotBuffer1kScreenContent />
+    </LightScope>
+  );
+}

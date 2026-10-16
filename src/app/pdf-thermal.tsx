@@ -25,6 +25,7 @@ import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore, type PdfFile } from '@/stores/data-store';
 import { usePrinterStore } from '@/stores/printer-store';
+import { LightScope } from '@/theme';
 
 /** 3D Box & Paper Plane Empty State Illustration matching Screenshot 1 */
 function EmptyPdfIllustration() {
@@ -68,7 +69,7 @@ function EmptyPdfIllustration() {
   );
 }
 
-export default function PdfScreen() {
+function PdfScreenContent() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const pdfFiles = useDataStore((s) => s.pdfFiles);
@@ -1270,3 +1271,12 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function PdfScreen() {
+  return (
+    <LightScope>
+      <PdfScreenContent />
+    </LightScope>
+  );
+}

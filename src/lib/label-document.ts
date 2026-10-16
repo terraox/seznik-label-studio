@@ -11,7 +11,7 @@ import {
   type TableElementState,
   type TimeElementState,
 } from '@/components/editor/types';
-import type { SignatureStroke } from '@/components/editor/signature-drawing-board';
+import type { SignatureStroke } from '@/components/editor/signature-preview';
 import type { BorderStyleId } from '@/constants/border-library';
 import type { MediaGeometry } from '@/lib/media-geometry';
 import type { BulkLabelSet } from '@/lib/bulk-labels';

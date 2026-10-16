@@ -59,6 +59,7 @@ import {
   type CanvasDocument,
   type ResizeHandle,
 } from '@/printing/canvas-export';
+import { LightScope } from '@/theme';
 
 const PRESET_SIZES = [
   { label: '50×30 mm', w: 50, h: 30 },
@@ -74,7 +75,7 @@ const SNAP_OPTIONS = [
 
 const ZOOM_LEVELS = [0.75, 1.0, 1.25, 1.5, 2.0];
 
-export default function Phase6EditorScreen() {
+function Phase6EditorScreenContent() {
   const insets = useSafeAreaInsets();
   const connected = usePrinterStore((s) => s.status === 'connected');
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -1355,3 +1356,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function Phase6EditorScreen() {
+  return (
+    <LightScope>
+      <Phase6EditorScreenContent />
+    </LightScope>
+  );
+}

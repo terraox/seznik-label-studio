@@ -42,6 +42,7 @@ import {
 import { rasterizeDocumentToBitmapTimed } from '@/printing/raster/skia-rasterizer';
 import { TD404_HEADLESS_SKIA_PRINT } from '@/printing/raster/td404-headless-flag';
 import { decodeBase64ToBytes, unpackWireMono1bppToGray } from '@/printing/raster/tspl-wire';
+import { LightScope } from '@/theme';
 
 const location = createLocationLabel();
 const borders = borderCases().map((c) => ({ spec: c, doc: createBorderDocument(c) }));
@@ -49,7 +50,7 @@ const positions = positionPages();
 
 type CaptureItem = { id: string; doc: LabelDocument; kind: 'location' | 'border' | 'position' };
 
-export default function LocationDotsScreen() {
+function LocationDotsScreenContent() {
   const insets = useSafeAreaInsets();
   const shotRefs = useRef<Record<string, ViewShot | null>>({});
   const [running, setRunning] = useState(false);
@@ -300,3 +301,12 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontWeight: '700' },
   report: { fontFamily: 'monospace', fontSize: 11, color: '#0F172A' },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function LocationDotsScreen() {
+  return (
+    <LightScope>
+      <LocationDotsScreenContent />
+    </LightScope>
+  );
+}

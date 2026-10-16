@@ -11,8 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
 import type { FilePickerDiagnostics } from 'local-file-picker';
+import { LightScope } from '@/theme';
 
-export default function FilePickerDiagnosticsScreen() {
+function FilePickerDiagnosticsScreenContent() {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -175,3 +176,12 @@ const styles = StyleSheet.create({
   lineLabel: { fontSize: 12, color: '#667085' },
   lineValue: { fontSize: 14, color: '#111' },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function FilePickerDiagnosticsScreen() {
+  return (
+    <LightScope>
+      <FilePickerDiagnosticsScreenContent />
+    </LightScope>
+  );
+}

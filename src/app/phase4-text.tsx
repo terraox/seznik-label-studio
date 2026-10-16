@@ -38,6 +38,7 @@ import {
   type CanvasTextElement,
   type CanvasDocument,
 } from '@/printing/canvas-export';
+import { LightScope } from '@/theme';
 
 const PRESET_SIZES = [
   { label: '50×30 mm', w: 50, h: 30 },
@@ -59,7 +60,7 @@ const FONT_PRESETS = [
 
 const ZOOM_LEVELS = [0.75, 1.0, 1.25, 1.5, 2.0];
 
-export default function Phase4TextScreen() {
+function Phase4TextScreenContent() {
   const insets = useSafeAreaInsets();
   const connected = usePrinterStore((s) => s.status === 'connected');
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -840,3 +841,12 @@ const styles = StyleSheet.create({
   },
   printBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function Phase4TextScreen() {
+  return (
+    <LightScope>
+      <Phase4TextScreenContent />
+    </LightScope>
+  );
+}

@@ -37,6 +37,7 @@ import { solveBorderAxis } from '@/lib/printer/border-calibration';
 import { rasterizeDocumentToBitmap } from '@/printing/raster/skia-rasterizer';
 import { usePrinterStore } from '@/stores/printer-store';
 import { generateCalibrationTspl, PRINTER_DPI, DOTS_PER_MM } from '@/printing/calibration';
+import { LightScope } from '@/theme';
 
 const GRID_STEP_MM = 5;
 
@@ -191,7 +192,7 @@ const CALIBRATION_SIZES = [
   { label: '57×30 mm', widthMm: 57, heightMm: 30 },
 ];
 
-export default function CalibrationPrintScreen() {
+function CalibrationPrintScreenContent() {
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -872,3 +873,12 @@ const styles = StyleSheet.create({
   printBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   printSecondaryBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function CalibrationPrintScreen() {
+  return (
+    <LightScope>
+      <CalibrationPrintScreenContent />
+    </LightScope>
+  );
+}

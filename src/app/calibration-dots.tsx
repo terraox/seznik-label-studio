@@ -27,10 +27,11 @@ import {
 import { rasterizeDocumentToBitmapTimed } from '@/printing/raster/skia-rasterizer';
 import { TD404_HEADLESS_SKIA_PRINT } from '@/printing/raster/td404-headless-flag';
 import { unpackWireMono1bppToGray, decodeBase64ToBytes } from '@/printing/raster/tspl-wire';
+import { LightScope } from '@/theme';
 
 const { doc, regions } = createCalibrationLabel();
 
-export default function CalibrationDotsScreen() {
+function CalibrationDotsScreenContent() {
   const insets = useSafeAreaInsets();
   const shotRef = useRef<ViewShot>(null);
   const [running, setRunning] = useState(false);
@@ -152,3 +153,12 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontWeight: '700' },
   report: { fontFamily: 'monospace', fontSize: 11, color: '#0F172A' },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function CalibrationDotsScreen() {
+  return (
+    <LightScope>
+      <CalibrationDotsScreenContent />
+    </LightScope>
+  );
+}

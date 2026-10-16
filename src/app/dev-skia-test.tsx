@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SkiaCanvas, type SkiaTransformCommitPayload } from '@/components/editor/skia-canvas';
 import type { LabelDocument, LabelElement } from '@/lib/label-document';
 import { mmToPx } from '@/lib/label-coordinate-system';
+import { LightScope } from '@/theme';
 
 const INITIAL_DOC: LabelDocument = {
   id: 'dev-skia-test-doc',
@@ -123,7 +124,7 @@ const INITIAL_DOC: LabelDocument = {
   ],
 };
 
-export default function DevSkiaTestScreen() {
+function DevSkiaTestScreenContent() {
   const router = useRouter();
   const [doc, setDoc] = useState<LabelDocument>(INITIAL_DOC);
   const [selectedIds, setSelectedIds] = useState<string[]>(['el-barcode-1']);
@@ -389,3 +390,12 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function DevSkiaTestScreen() {
+  return (
+    <LightScope>
+      <DevSkiaTestScreenContent />
+    </LightScope>
+  );
+}

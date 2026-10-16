@@ -5,8 +5,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AUTH_COLORS, AuthField, AuthScreen, PrimaryButton } from '@/components/auth/auth-ui';
 import { digitsOnly, isValidPhone } from '@/lib/auth/validation';
 import { useAuthStore } from '@/stores/auth-store';
+import { LightScope } from '@/theme';
 
-export default function LoginScreen() {
+function LoginScreenContent() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
   const [phone, setPhone] = useState('');
@@ -74,3 +75,12 @@ const styles = StyleSheet.create({
   footerText: { color: AUTH_COLORS.muted, fontSize: 14 },
   footerLink: { color: AUTH_COLORS.blue, fontSize: 14, fontWeight: '700' },
 });
+
+/** Switched off for now (D8, backlog): stays light in dark mode until converted. */
+export default function LoginScreen() {
+  return (
+    <LightScope>
+      <LoginScreenContent />
+    </LightScope>
+  );
+}

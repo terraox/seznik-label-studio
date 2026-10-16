@@ -42,6 +42,7 @@ import {
   type CanvasQrElement,
   type CanvasBoxElement,
 } from '@/printing/index';
+import { LightScope } from '@/theme';
 
 const DPI_OPTIONS: Array<{ dpi: SupportedDpi; label: string; desc: string }> = [
   { dpi: 203, label: '203 DPI', desc: '8 dots/mm (Standard Shipping)' },
@@ -50,7 +51,7 @@ const DPI_OPTIONS: Array<{ dpi: SupportedDpi; label: string; desc: string }> = [
   { dpi: 600, label: '600 DPI', desc: '23.62 dots/mm (Micro Electronics)' },
 ];
 
-export default function Phase9RobustnessScreen() {
+function Phase9RobustnessScreenContent() {
   const insets = useSafeAreaInsets();
   const connected = usePrinterStore((s) => s.status === 'connected');
   const deviceName = usePrinterStore((s) => s.deviceName);
@@ -1128,3 +1129,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function Phase9RobustnessScreen() {
+  return (
+    <LightScope>
+      <Phase9RobustnessScreenContent />
+    </LightScope>
+  );
+}

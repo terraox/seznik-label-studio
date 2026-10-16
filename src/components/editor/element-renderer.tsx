@@ -14,7 +14,7 @@ import Svg, {
 import { BorderPreview } from "@/components/border-preview";
 import { ClipartIcon } from "@/components/clipart-icon";
 import { MonoImagePreview } from "@/components/editor/mono-image-preview";
-import { SignaturePreview } from "@/components/editor/signature-drawing-board";
+import { SignaturePreview } from "@/components/editor/signature-preview";
 import {
   DRAWING_COLORS,
   applyTimeOffsets,

@@ -17,6 +17,7 @@ import { Palette } from '@/constants/ui';
 import { Spacing } from '@/constants/theme';
 import { compareRendererFps, PRODUCTION_RENDERER } from '@/lib/editor/skia-prototype';
 import type { MmBox } from '@/lib/editor/resize-policy';
+import { LightScope } from '@/theme';
 
 const PHOTO = require('../../assets/images/home/import.jpg');
 
@@ -28,7 +29,7 @@ const STOCK = [
 
 const START: MmBox = { left: 4, top: 6, width: 20, height: 10 };
 
-export default function CanvasSkiaPrototypeScreen() {
+function CanvasSkiaPrototypeScreenContent() {
   const insets = useSafeAreaInsets();
   const [stockIndex, setStockIndex] = useState(0);
   const [image, setImage] = useState<MmBox>(START);
@@ -121,3 +122,12 @@ const styles = StyleSheet.create({
   mm: { color: Palette.muted, fontSize: 12 },
   note: { color: Palette.actionText, fontSize: 13, lineHeight: 18 },
 });
+
+/** Dev / debug screen: stays light in dark mode (D4). */
+export default function CanvasSkiaPrototypeScreen() {
+  return (
+    <LightScope>
+      <CanvasSkiaPrototypeScreenContent />
+    </LightScope>
+  );
+}
