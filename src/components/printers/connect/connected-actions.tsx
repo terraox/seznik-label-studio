@@ -3,10 +3,10 @@ import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import type { ConsumerPrinterId } from '@/constants/printer-models';
 import { Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow } from '@/constants/ui';
+import { androidRipple } from '@/constants/ui';
 
 import { PRINTER_PHOTOS } from './printer-family-cards';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type ConnectedActionsProps = {
   modelId: ConsumerPrinterId;
@@ -92,7 +92,7 @@ export function ConnectedActions({
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   card: {
     backgroundColor: c.surface,
     borderRadius: 20,
@@ -101,7 +101,7 @@ const styles = themedStyles((c) => ({
     padding: Spacing.three,
     gap: 8,
     alignItems: 'center',
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   stage: {
     width: '100%',

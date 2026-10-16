@@ -4,9 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow } from '@/constants/ui';
+import { androidRipple } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type HelpPane = 'tutorials' | 'guides';
 
@@ -197,7 +197,7 @@ export default function HelpScreen() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   root: {
     flex: 1,
     backgroundColor: c.bg,
@@ -252,7 +252,7 @@ const styles = themedStyles((c) => ({
   },
   switchItemActive: {
     backgroundColor: c.surface,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   switchLabel: {
     fontSize: 14,
@@ -276,7 +276,7 @@ const styles = themedStyles((c) => ({
     borderRadius: 18,
     padding: 14,
     gap: 12,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   lessonOpen: {
     borderWidth: 1,
@@ -356,7 +356,7 @@ const styles = themedStyles((c) => ({
     borderRadius: 16,
     padding: 14,
     gap: 8,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   guideTop: {
     flexDirection: 'row',

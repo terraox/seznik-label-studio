@@ -2,8 +2,7 @@ import { router } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { Alert, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { cardShadow } from '@/constants/ui';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type IconName = AppIconName;
 
@@ -121,7 +120,7 @@ export function LabelSettingsMenu({
 /** @deprecated Use LabelSettingsMenu */
 export const MoreMenu = LabelSettingsMenu;
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 30,
@@ -137,7 +136,7 @@ const styles = themedStyles((c) => ({
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
     overflow: 'hidden',
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   menuRow: {
     flexDirection: 'row',

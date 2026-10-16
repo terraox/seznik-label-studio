@@ -2,9 +2,9 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow } from '@/constants/ui';
+import { androidRipple } from '@/constants/ui';
 import { normalizePrinterMac } from '@/stores/printer-store';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type LastConnectedPrinterProps = {
   modelName: string;
@@ -120,7 +120,7 @@ function statusCopy({
   };
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   wrap: { gap: 8 },
   section: {
     fontSize: 12,
@@ -140,7 +140,7 @@ const styles = themedStyles((c) => ({
     borderColor: c.hairline,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   iconBadge: {
     width: 44,

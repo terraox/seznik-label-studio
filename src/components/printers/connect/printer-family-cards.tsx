@@ -7,8 +7,7 @@ import {
   type ConsumerPrinterId,
 } from '@/constants/printer-models';
 import { Spacing } from '@/constants/theme';
-import { cardShadow } from '@/constants/ui';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 export const PRINTER_PHOTOS: Record<ConsumerPrinterId, number> = {
   tejas: require('../../../../assets/images/printer_tejas.png'),
@@ -72,13 +71,13 @@ function FamilyCard({
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   wrap: {
     backgroundColor: c.surface,
     borderRadius: 20,
     padding: Spacing.three,
     gap: 12,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   heading: { fontSize: 18, fontWeight: '700', color: c.text },
   row: { flexDirection: 'row', gap: 10 },

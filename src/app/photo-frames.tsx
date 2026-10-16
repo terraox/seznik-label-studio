@@ -14,8 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PhotoFramePreview } from '@/components/photo-frame-preview';
 import { PHOTO_FRAMES } from '@/constants/photo-frames';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow } from '@/constants/ui';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 export default function PhotoFramesScreen() {
   useThemeRefresh();
@@ -104,7 +103,7 @@ export default function PhotoFramesScreen() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   root: { flex: 1, backgroundColor: c.bg },
   header: {
     backgroundColor: c.header,
@@ -136,7 +135,7 @@ const styles = themedStyles((c) => ({
     backgroundColor: c.surface,
     borderRadius: 12,
     overflow: 'hidden',
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   cardHeader: {
     backgroundColor: c.accentFill,

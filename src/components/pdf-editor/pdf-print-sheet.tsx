@@ -4,14 +4,14 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { QualityControl, type QualityStepperProps } from '@/components/quality-control';
-import { cardShadow, Type } from '@/constants/ui';
+import { Type } from '@/constants/ui';
 import { defaultLabelSettings } from '@/lib/label-settings';
 import type { PdfPrintOptions } from '@/lib/pdf-editor/print';
 import { parseCustomPageList, parsePageRange, type PdfPrintSelection } from '@/lib/pdf-editor/session';
 import { clampToCap, qualityCapsFor, resolveQualityBridge } from '@/lib/printer/bridge-quality-caps';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore } from '@/stores/printer-store';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type Mode = PdfPrintSelection['mode'];
 
@@ -371,7 +371,7 @@ export const PdfPrintPanel = forwardRef<
   );
 });
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   wrap: { gap: 10 },
   pressed: { opacity: 0.65 },
   banner: {
@@ -394,7 +394,7 @@ const styles = themedStyles((c) => ({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 4,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   section: {
     paddingVertical: 12,

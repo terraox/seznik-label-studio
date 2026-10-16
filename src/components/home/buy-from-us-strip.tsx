@@ -10,8 +10,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AppIcon } from '@/components/app-icon';
-import { androidRipple, cardShadow, HomeLayout } from '@/constants/ui';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { androidRipple, HomeLayout } from '@/constants/ui';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const ITEMS = [
   'Label rolls',
@@ -93,7 +93,7 @@ export function BuyFromUsStrip() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   card: {
     minHeight: HomeLayout.buyStripHeight,
     backgroundColor: c.surface,
@@ -102,7 +102,7 @@ const styles = themedStyles((c) => ({
     paddingTop: 14,
     paddingBottom: 12,
     gap: 12,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   header: {
     flexDirection: 'row',

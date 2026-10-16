@@ -16,7 +16,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
-import { cardShadow } from '@/constants/ui';
 import {
   LabelDpi,
   LabelSizePreset,
@@ -215,7 +214,7 @@ export function LabelSizePicker({
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   triggerBar: {
     flexDirection: 'row',
     alignItems: 'center',

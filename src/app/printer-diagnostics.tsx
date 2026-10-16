@@ -20,7 +20,6 @@ import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow } from '@/constants/ui';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
 import { GRID_SPACING_PRESETS_MM } from '@/lib/editor/canvas-grid';
@@ -33,7 +32,7 @@ import {
   suggestedDiagnosticGridSpacingMm,
 } from '@/lib/printer/diagnostic-grid-print';
 import { usePrinterStore } from '@/stores/printer-store';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 function statusLook(state: string): { label: string; color: string; bg: string } {
   if (state === 'connected') return { label: 'Connected', color: C.success, bg: C.successSoft };
@@ -566,7 +565,7 @@ function ActionButton({
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   root: { flex: 1, backgroundColor: c.bg, alignItems: 'center' },
   scroll: { flex: 1, width: '100%' },
   content: {
@@ -581,7 +580,7 @@ const styles = themedStyles((c) => ({
     padding: Spacing.four,
     alignItems: 'center',
     gap: 6,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   pill: {
     flexDirection: 'row',
@@ -612,7 +611,7 @@ const styles = themedStyles((c) => ({
     borderRadius: 16,
     padding: Spacing.three,
     gap: 8,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   sectionTitle: {
     fontSize: 12,

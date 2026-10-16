@@ -2,8 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Spacing } from '@/constants/theme';
-import { cardShadow } from '@/constants/ui';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type BluetoothBlockersProps = {
   canScan: boolean;
@@ -91,7 +90,7 @@ export function BluetoothOffDialog({
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   card: {
     backgroundColor: c.surface,
     borderRadius: 16,
@@ -101,7 +100,7 @@ const styles = themedStyles((c) => ({
     paddingVertical: Spacing.four,
     alignItems: 'center',
     gap: 8,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   overlay: {
     flex: 1,
@@ -123,7 +122,7 @@ const styles = themedStyles((c) => ({
     paddingBottom: Spacing.three,
     alignItems: 'center',
     gap: 8,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   iconWrap: {
     width: 56,

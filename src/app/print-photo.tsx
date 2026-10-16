@@ -22,7 +22,6 @@ import { PhotoFramePreview } from '@/components/photo-frame-preview';
 import { PrintSizeSelector } from '@/components/print-size-selector';
 import { getPhotoFrame } from '@/constants/photo-frames';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow } from '@/constants/ui';
 import { type LabelSizeMm } from '@/lib/label-geometry';
 import { decodeGalleryImage } from '@/lib/printer/gallery-decode';
 import { pngBase64ToGray, rotateGray } from '@/lib/printer/escpos';
@@ -44,7 +43,7 @@ import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-mana
 import { logPrintTrace } from '@/printing';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
 const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'] as const;
@@ -844,7 +843,7 @@ const styles = themedStyles((c, scheme) => ({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   placeholderHint: { color: c.textMuted, fontSize: 13, fontWeight: '400' },
   photoActionRow: {
@@ -877,7 +876,7 @@ const styles = themedStyles((c, scheme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   thumbWrap: { width: 44, height: 44 },
   thumb: { width: 44, height: 44, borderRadius: 6 },
@@ -915,7 +914,7 @@ const styles = themedStyles((c, scheme) => ({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   groupLabel: {
     fontSize: 14,

@@ -19,14 +19,13 @@ import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { ShareNodeIcon } from '@/components/home-icons';
 import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow } from '@/constants/ui';
 import { JEWELRY_DIECUT } from '@/constants/jewelry-diecut';
 import { CABLE_FLAG_DIECUT, CABLE_FLAG_PREVIEW_SINGLE } from '@/constants/cable-flag-diecut';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { useLabelStore } from '@/stores/label-store';
 import { useTranslation } from '@/lib/i18n';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 interface CategoryGroup {
   header: string;
@@ -2385,7 +2384,7 @@ const styles = themedStyles((c, scheme) => ({
     backgroundColor: c.surface,
     borderRadius: 12,
     overflow: 'hidden',
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   cardPressed: {
     opacity: 0.85,
@@ -5511,7 +5510,7 @@ const styles = themedStyles((c, scheme) => ({
     width: '100%',
     maxWidth: 520,
     alignSelf: 'center',
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   cloudSignedInScroll: {
     flex: 1,
@@ -5528,7 +5527,7 @@ const styles = themedStyles((c, scheme) => ({
     borderRadius: 12,
     padding: 14,
     marginBottom: 18,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   cloudAvatar: {
     width: 44,
@@ -5581,7 +5580,7 @@ const styles = themedStyles((c, scheme) => ({
     padding: 24,
     alignItems: 'center',
     gap: 10,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   cloudEmptyText: {
     color: c.textMuted,

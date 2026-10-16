@@ -3,8 +3,8 @@ import { Pressable, Text, View } from 'react-native';
 
 import { ToolIcon } from '@/components/home/tool-icon';
 import { HOME_TOOLS, type HomeToolId } from '@/components/home/home-tools';
-import { androidRipple, cardShadow, HomeLayout } from '@/constants/ui';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { androidRipple, HomeLayout } from '@/constants/ui';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 export function ToolTile({
   id,
@@ -37,7 +37,7 @@ export function ToolTile({
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   outer: {
     flex: 1,
     minWidth: 0,
@@ -50,7 +50,7 @@ const styles = themedStyles((c) => ({
     gap: 6,
     paddingHorizontal: 4,
     paddingVertical: 8,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   label: {
     fontSize: 12,

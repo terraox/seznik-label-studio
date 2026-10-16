@@ -14,13 +14,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { editorBridge } from '@/constants/editor-bridge';
-import { cardShadow, Type } from '@/constants/ui';
+import { Type } from '@/constants/ui';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { useExcelImportFlow, type ExcelImportSuccess } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
 import { useDataStore, type ImportedExcelFile } from '@/stores/data-store';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const TABS = ['All', 'Excel', 'PDF', 'CSV', 'Remote Data'] as const;
 
@@ -569,7 +569,7 @@ export default function DataFileScreen() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   root: {
     flex: 1,
     backgroundColor: c.fill,
@@ -778,7 +778,7 @@ const styles = themedStyles((c) => ({
     paddingHorizontal: 8,
     paddingTop: 8,
     paddingBottom: 10,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   gridTileEditing: {
     borderWidth: 1,

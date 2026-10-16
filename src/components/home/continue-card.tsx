@@ -12,9 +12,9 @@ import {
 import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { ShareNodeIcon } from '@/components/home-icons';
 import { CATALOG_STOCK_LINER, LabelPreview } from '@/components/label-preview';
-import { androidRipple, cardShadow, HomeLayout, scaleFont } from '@/constants/ui';
+import { androidRipple, HomeLayout, scaleFont } from '@/constants/ui';
 import type { LabelDocument } from '@/lib/label-document';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type ContinueCardProps = {
   document: LabelDocument;
@@ -142,12 +142,12 @@ export function ContinueCard({ document, onDelete, onUpload }: ContinueCardProps
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   card: {
     backgroundColor: c.surface,
     borderRadius: 16,
     overflow: 'hidden',
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   headingBar: {
     flexDirection: 'row',

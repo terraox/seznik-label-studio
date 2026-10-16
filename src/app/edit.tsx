@@ -207,7 +207,7 @@ import {
 import { editorBridge, barcodeEncodeModeForScanType, isBorderRemoval, isQrScanType } from '@/constants/editor-bridge';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow, Type } from '@/constants/ui';
+import { androidRipple, Type } from '@/constants/ui';
 import {
   applyGeometryToAllLabels,
   applyGeometryToThisLabel,
@@ -276,7 +276,7 @@ import {
   snapBoxToGuides,
   type SnapGuide,
 } from '@/lib/editor/engine';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type IconName = AppIconName;
 
@@ -5020,7 +5020,7 @@ export default function EditScreen() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   root: {
     flex: 1,
     backgroundColor: c.bg,
@@ -5416,7 +5416,7 @@ const styles = themedStyles((c) => ({
     borderTopLeftRadius: Spacing.four,
     borderTopRightRadius: Spacing.four,
     overflow: 'hidden',
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   pinnedToolbar: {
     width: '100%',

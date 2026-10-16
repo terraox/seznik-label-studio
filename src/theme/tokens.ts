@@ -35,6 +35,8 @@ export type ThemeColors = {
   border: string;
   /** Dividers between rows (decorative). */
   hairline: string;
+  /** Outline that separates cards and sheets from the page in dark mode (shadows vanish on black). */
+  cardBorder: string;
   /** Accent for text, icons, selected states. */
   accent: string;
   /** Primary button fill. */
@@ -92,6 +94,7 @@ export const LightColors: ThemeColors = {
   textDisabled: '#A4B0BC',
   border: '#CBD5E1',
   hairline: '#EAECEF',
+  cardBorder: '#EAECEF',
   accent: '#17A6B8',
   accentFill: '#17A6B8',
   accentStrong: '#0E7C8A',
@@ -133,6 +136,7 @@ export const DarkColors: ThemeColors = {
   textDisabled: '#6B6B6B',
   border: '#6B6B6B',
   hairline: '#2E2E2E',
+  cardBorder: '#333333',
   accent: '#3FC6D6',
   accentFill: '#0E7C8A',
   accentStrong: '#0E7C8A',

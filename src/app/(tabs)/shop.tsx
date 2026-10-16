@@ -4,9 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow } from '@/constants/ui';
+import { androidRipple } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type ShopCategory = 'all' | 'rolls' | 'specialty';
 
@@ -148,7 +148,7 @@ export default function ShopScreen() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   root: {
     flex: 1,
     backgroundColor: c.bg,
@@ -269,7 +269,7 @@ const styles = themedStyles((c) => ({
     paddingHorizontal: 12,
     paddingVertical: 10,
     minHeight: 68,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   iconWrap: {
     width: 40,

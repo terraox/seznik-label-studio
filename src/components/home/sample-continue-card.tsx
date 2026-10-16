@@ -1,8 +1,7 @@
 import { Text, View } from 'react-native';
 
 import { AppIcon, type AppIconName } from '@/components/app-icon';
-import { cardShadow } from '@/constants/ui';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const ACTIONS: { icon: AppIconName; label: string }[] = [
   { icon: 'square.and.pencil', label: 'Edit' },
@@ -44,7 +43,7 @@ export function SampleContinueCard() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   card: {
     backgroundColor: c.surface,
     borderRadius: 16,
@@ -52,7 +51,7 @@ const styles = themedStyles((c) => ({
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: c.accent,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   headingBar: {
     flexDirection: 'row',

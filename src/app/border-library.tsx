@@ -13,11 +13,10 @@ import {
 } from '@/constants/border-library';
 import { editorBridge } from '@/constants/editor-bridge';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow } from '@/constants/ui';
 import { joshBorderGapMm } from '@/lib/printer/josh-print';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { td404BorderGapMm } from '@/lib/printer/print-spec';
-import { themedStyles, useThemeRefresh } from '@/theme';
+import { cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -124,7 +123,7 @@ export default function BorderLibraryScreen() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   root: {
     flex: 1,
     backgroundColor: c.bg,
@@ -165,7 +164,7 @@ const styles = themedStyles((c) => ({
     backgroundColor: c.surface,
     borderRadius: 10,
     padding: Spacing.two,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   cardActive: {
     borderWidth: 1.5,

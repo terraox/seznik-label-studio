@@ -2,8 +2,8 @@ import { useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
 import { HOME_TOOLS } from '@/components/home/home-tools';
-import { androidRipple, cardShadow, HomeLayout } from '@/constants/ui';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { androidRipple, HomeLayout } from '@/constants/ui';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 /**
  * WePrint-style New Label glyph: outline back sheet (navy) + filled front sheet
@@ -109,7 +109,7 @@ export function HeroCard({
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -119,7 +119,7 @@ const styles = themedStyles((c) => ({
     paddingHorizontal: 18,
     borderRadius: 12,
     backgroundColor: c.surface,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   art: {
     width: 52,

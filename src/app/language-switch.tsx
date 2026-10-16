@@ -11,9 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { INDIAN_LANGUAGES } from '@/constants/indian-languages';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow } from '@/constants/ui';
 import { useSettingsStore } from '@/stores/settings-store';
-import { themedStyles, useThemeRefresh } from '@/theme';
+import { cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 export default function LanguageSwitchScreen() {
   useThemeRefresh();
@@ -72,7 +71,7 @@ export default function LanguageSwitchScreen() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   root: {
     flex: 1,
     backgroundColor: c.bg,
@@ -85,7 +84,7 @@ const styles = themedStyles((c) => ({
     paddingVertical: Spacing.three,
     marginTop: Spacing.three,
     marginBottom: Spacing.two,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   bannerTitle: {
     fontSize: 15,
@@ -105,7 +104,7 @@ const styles = themedStyles((c) => ({
     marginBottom: Spacing.two,
     flexDirection: 'row',
     alignItems: 'center',
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   rowActive: {
     borderWidth: 1.5,

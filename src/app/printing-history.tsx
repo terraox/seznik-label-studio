@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { androidRipple, cardShadow } from '@/constants/ui';
+import { androidRipple } from '@/constants/ui';
 import { migratePrintHistoryOnce } from '@/lib/print-history/migrate';
 import { resolveHistoryLabelDocumentAsync } from '@/lib/print-history/resolve-preview';
 import { cloneDocument, generateId, type LabelDocument } from '@/lib/label-document';
@@ -25,7 +25,7 @@ import {
   usePrintHistoryStore,
   type PrintHistoryEntry,
 } from '@/stores/print-history-store';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const TILE_GAP = Spacing.two;
 const CARD_PREVIEW_HEIGHT = 148;
@@ -331,7 +331,7 @@ export default function PrintingHistoryScreen() {
   );
 }
 
-const styles = themedStyles((c) => ({
+const styles = themedStyles((c, scheme) => ({
   root: {
     flex: 1,
     backgroundColor: c.bg,
@@ -408,7 +408,7 @@ const styles = themedStyles((c) => ({
     backgroundColor: c.surface,
     borderRadius: 10,
     padding: Spacing.two,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   tileCardHeader: {
     flexDirection: 'row',

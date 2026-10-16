@@ -26,7 +26,7 @@ import {
 import { LabelPreview } from '@/components/label-preview';
 import { PrintSizeSelector } from '@/components/print-size-selector';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { cardShadow, Type } from '@/constants/ui';
+import { Type } from '@/constants/ui';
 import {
   JEWELRY_DIECUT,
   JEWELRY_DIECUT_PRINT_PRESET_2UP,
@@ -138,7 +138,7 @@ import {
   type PrintSizePreset,
 } from '@/lib/print-sizes';
 import { logCaptureSha1 } from '@/lib/debug/capture-hash';
-import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
 const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'] as const;
@@ -2469,7 +2469,7 @@ const styles = themedStyles((c, scheme) => ({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 4,
-    ...cardShadow,
+    ...cardElevation(c, scheme),
   },
   cardSection: {
     paddingVertical: 10,

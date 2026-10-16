@@ -1,16 +1,19 @@
-import { Platform, StyleSheet, type ViewStyle } from 'react-native';
+import { Platform, type ViewStyle } from 'react-native';
 
 import type { ColorScheme, ThemeColors } from './tokens';
 
 /**
  * Card and sheet elevation.
  *
- * A drop shadow is invisible on a black page, so dark mode separates layers with a hairline
- * border instead. Light mode keeps today's `cardShadow` values exactly.
+ * A drop shadow is invisible on a black page, so dark mode separates layers with a 1px
+ * `cardBorder` outline instead.
+ *
+ * Android uses `boxShadow` rather than `elevation`: low elevation on a rounded card leaves dark
+ * smudges at the corners. iOS keeps its native shadow.
  */
 export function cardElevation(c: ThemeColors, scheme: ColorScheme): ViewStyle {
   if (scheme === 'dark') {
-    return { borderWidth: StyleSheet.hairlineWidth, borderColor: c.hairline };
+    return { borderWidth: 1, borderColor: c.cardBorder };
   }
   return (
     Platform.select<ViewStyle>({
@@ -20,7 +23,7 @@ export function cardElevation(c: ThemeColors, scheme: ColorScheme): ViewStyle {
         shadowOpacity: 0.05,
         shadowRadius: 6,
       },
-      android: { elevation: 2 },
+      android: { boxShadow: '0px 2px 6px rgba(11, 31, 51, 0.08)' }, // theme-fixed: light-mode card shadow
       default: {},
     }) ?? {}
   );
@@ -29,7 +32,7 @@ export function cardElevation(c: ThemeColors, scheme: ColorScheme): ViewStyle {
 /** Stronger elevation for popups, menus and bottom sheets. */
 export function sheetElevation(c: ThemeColors, scheme: ColorScheme): ViewStyle {
   if (scheme === 'dark') {
-    return { borderWidth: StyleSheet.hairlineWidth, borderColor: c.hairline };
+    return { borderWidth: 1, borderColor: c.cardBorder };
   }
   return (
     Platform.select<ViewStyle>({
@@ -39,7 +42,7 @@ export function sheetElevation(c: ThemeColors, scheme: ColorScheme): ViewStyle {
         shadowOpacity: 0.14,
         shadowRadius: 18,
       },
-      android: { elevation: 10 },
+      android: { boxShadow: '0px 8px 18px rgba(11, 31, 51, 0.16)' }, // theme-fixed: light-mode sheet shadow
       default: {},
     }) ?? {}
   );
