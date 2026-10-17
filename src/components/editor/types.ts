@@ -18,7 +18,8 @@ export type Rotation = number;
 
 export function normalizeRotation(deg: number): number {
   if (!Number.isFinite(deg)) return 0;
-  return ((Math.round(deg) % 360) + 360) % 360;
+  // Elements only turn in quarter turns.
+  return ((Math.round(deg / 90) * 90) % 360 + 360) % 360;
 }
 
 export type EditorElementState = {

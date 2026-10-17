@@ -4611,7 +4611,7 @@ export default function EditScreen() {
               }}
               style={({ pressed }) => [styles.subToolbar, pressed && styles.pressed]}>
               <Text numberOfLines={1} style={styles.dimText}>
-                {doc.widthMm.toFixed(1)} × {doc.heightMm.toFixed(1)} mm · {doc.paperType}
+                {doc.widthMm.toFixed(1)} × {doc.heightMm.toFixed(1)} mm{doc.bulk ? '' : ` · ${doc.paperType}`}
                 {doc.orientation ? ` · ${doc.orientation}°` : ''}
                 {doc.ups ? ` · ${doc.ups.columns}ups` : ''}
                 {doc.bulk ? ` · ${doc.bulk.rowCount} labels` : ''}
@@ -4620,7 +4620,7 @@ export default function EditScreen() {
                 {isRatTail143Document(doc)
                   ? 'Prints 14.3 × 101.6 mm wrap stock · content locked on the paddle'
                   : doc.bulk
-                    ? 'Tap to change size for every label in this series'
+                    ? 'Tap to resize all labels'
                     : 'Tap to customize size'}
               </Text>
             </Pressable>

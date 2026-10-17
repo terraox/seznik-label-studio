@@ -189,3 +189,19 @@ export function joshDrawRectMm(options: {
 function roundMm(value: number): number {
   return Math.round(value * 100) / 100;
 }
+
+/**
+ * Same wait as JoshPrinterManager.labelPitchMs. A collated job pauses between
+ * separate copies=1 sends. The native wait runs only when one call has copies > 1.
+ * Feed length is height + max(gap, or 3 when gap is not positive, and 2), at
+ * speed inches/sec when speed > 0 else 3, plus 250 ms, clamped to 400–3000.
+ * Truncates the way Kotlin converts the sum to Long.
+ */
+export function joshLabelPitchMs(heightMm: number, gapMm: number, speed: number): number {
+  const gapPart = gapMm > 0 ? gapMm : 3;
+  const pitchMm = heightMm + Math.max(gapPart, 2);
+  const ips = speed > 0 ? speed : 3;
+  const mmPerSec = Math.max(ips * 25.4, 20);
+  const raw = (pitchMm / mmPerSec) * 1000 + 250;
+  return Math.min(3000, Math.max(400, Math.trunc(raw)));
+}

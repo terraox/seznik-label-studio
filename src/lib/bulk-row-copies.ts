@@ -124,6 +124,70 @@ export function copiesChangeSummary(sheet: ExcelSheet, columnIndex: number | nul
   return `${line} (rows ${rows.join(', ')})`;
 }
 
+export type BulkSend = {
+  rowIndex: number;
+  /** Labels in this send. Uncollated is the row count. Collated is always 1. */
+  copies: number;
+  /** 1-based copy of this row. */
+  copyNumber: number;
+  /** 1-based round. Uncollated sends are round 1. */
+  round: number;
+};
+
+/** True when grouped and collated paper orders differ. */
+export function collateChangesOrder(rows: readonly { copies: number }[]): boolean {
+  const printable = rows.filter((row) => row.copies > 0);
+  if (printable.length < 2) return false;
+  return printable.slice(0, -1).some((row) => row.copies > 1);
+}
+
+/**
+ * Grouped: one send per row, native copies = the row count.
+ * Collated: one send per physical label, copies = 1, rows with fewer copies drop out.
+ * A count of 0 is omitted. Sheet parsing never produces 0; callers can still pass one.
+ */
+export function bulkSendList(rows: readonly BulkPrintRow[], collate: boolean): BulkSend[] {
+  const printable = rows.filter((row) => row.copies > 0);
+  if (!collate) {
+    return printable.map((row) => ({
+      rowIndex: row.rowIndex,
+      copies: row.copies,
+      copyNumber: 1,
+      round: 1,
+    }));
+  }
+  const remaining = printable.map((row) => row.copies);
+  const sends: BulkSend[] = [];
+  let round = 1;
+  for (;;) {
+    let placed = false;
+    for (let index = 0; index < printable.length; index++) {
+      if (remaining[index] <= 0) continue;
+      const row = printable[index];
+      const copyNumber = row.copies - remaining[index] + 1;
+      remaining[index] -= 1;
+      sends.push({
+        rowIndex: row.rowIndex,
+        copies: 1,
+        copyNumber,
+        round,
+      });
+      placed = true;
+    }
+    if (!placed) return sends;
+    round += 1;
+  }
+}
+
+/** First call stores the factory result. Later calls return that same value. */
+export function rememberRowRaster<T>(cache: Map<number, T>, rowIndex: number, create: () => T): T {
+  const existing = cache.get(rowIndex);
+  if (existing !== undefined) return existing;
+  const created = create();
+  cache.set(rowIndex, created);
+  return created;
+}
+
 export function planBulkPrint(
   sheet: ExcelSheet,
   copiesColumnIndex: number | null | undefined,

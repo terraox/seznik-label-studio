@@ -4,13 +4,17 @@ import assert from 'node:assert/strict';
 import {
   MAX_COPIES_PER_ROW,
   MAX_JOB_LABELS,
+  bulkSendList,
+  collateChangesOrder,
   columnEligibleForCopies,
   copiesChangeSummary,
   countChangedCopiesCells,
   guessCopiesColumnIndex,
   parseCopiesCell,
   planBulkPrint,
+  rememberRowRaster,
   resolveRowCopies,
+  type BulkPrintRow,
 } from '@/lib/bulk-row-copies';
 import type { ExcelSheet } from '@/stores/data-store';
 
@@ -174,4 +178,109 @@ test('more than ten adjusted rows stay a single summary', () => {
     rows: Array.from({ length: 11 }, () => ['0']),
   };
   assert.equal(copiesChangeSummary(many, 0), '11 values were changed to 1–99');
+});
+
+function rowsOf(...copies: number[]): BulkPrintRow[] {
+  return copies.map((count, rowIndex) => ({ rowIndex, copies: count }));
+}
+
+function paperOrder(rows: BulkPrintRow[], collate: boolean): number[] {
+  const order: number[] = [];
+  for (const send of bulkSendList(rows, collate)) {
+    for (let copy = 0; copy < send.copies; copy++) order.push(send.rowIndex);
+  }
+  return order;
+}
+
+test('counts 3, 1, 2 group together and collate in rounds', () => {
+  const rows = rowsOf(3, 1, 2);
+  assert.equal(collateChangesOrder(rows), true);
+  assert.deepEqual(bulkSendList(rows, false), [
+    { rowIndex: 0, copies: 3, copyNumber: 1, round: 1 },
+    { rowIndex: 1, copies: 1, copyNumber: 1, round: 1 },
+    { rowIndex: 2, copies: 2, copyNumber: 1, round: 1 },
+  ]);
+  assert.deepEqual(paperOrder(rows, false), [0, 0, 0, 1, 2, 2]);
+
+  const collated = bulkSendList(rows, true);
+  assert.deepEqual(
+    collated.map((send) => send.rowIndex),
+    [0, 1, 2, 0, 2, 0],
+  );
+  assert.deepEqual(
+    collated.map((send) => send.copies),
+    [1, 1, 1, 1, 1, 1],
+  );
+  assert.deepEqual(
+    collated.map((send) => send.round),
+    [1, 1, 1, 2, 2, 3],
+  );
+  assert.deepEqual(
+    collated.map((send) => send.copyNumber),
+    [1, 1, 1, 2, 2, 3],
+  );
+  assert.deepEqual(paperOrder(rows, true), [0, 1, 2, 0, 2, 0]);
+});
+
+test('counts 1, 1, 3 and 1, 1, 1 print the same either way', () => {
+  const tail = rowsOf(1, 1, 3);
+  assert.equal(collateChangesOrder(tail), false);
+  assert.deepEqual(paperOrder(tail, false), [0, 1, 2, 2, 2]);
+  assert.deepEqual(paperOrder(tail, true), [0, 1, 2, 2, 2]);
+
+  const ones = rowsOf(1, 1, 1);
+  assert.equal(collateChangesOrder(ones), false);
+  assert.deepEqual(paperOrder(ones, false), [0, 1, 2]);
+  assert.deepEqual(paperOrder(ones, true), [0, 1, 2]);
+});
+
+test('stepper 2 on three single rows shows a different collated order', () => {
+  const ones: ExcelSheet = {
+    name: 'Ones',
+    columns: ['Qty'],
+    rows: [['1'], ['1'], ['1']],
+  };
+  const plan = planBulkPrint(ones, 0, 2);
+  assert.deepEqual(
+    plan.rows.map((row) => row.copies),
+    [2, 2, 2],
+  );
+  assert.equal(collateChangesOrder(plan.rows), true);
+  assert.deepEqual(paperOrder(plan.rows, false), [0, 0, 1, 1, 2, 2]);
+  assert.deepEqual(paperOrder(plan.rows, true), [0, 1, 2, 0, 1, 2]);
+});
+
+test('a zero-copy row is left out of both orders', () => {
+  const rows = rowsOf(0, 3, 1);
+  assert.deepEqual(paperOrder(rows, false), [1, 1, 1, 2]);
+  assert.deepEqual(paperOrder(rows, true), [1, 2, 1, 1]);
+  assert.equal(collateChangesOrder(rows), true);
+});
+
+test('building a send list does not change cached row rasters', () => {
+  const rows = rowsOf(3, 1, 2);
+  const rasters = new Map<number, Uint8Array>([
+    [0, Uint8Array.from([1, 2, 3])],
+    [1, Uint8Array.from([4, 5])],
+    [2, Uint8Array.from([6])],
+  ]);
+  const before = [...rasters.entries()].map(([key, bytes]) => [key, Array.from(bytes)] as const);
+  bulkSendList(rows, false);
+  bulkSendList(rows, true);
+  for (const [key, bytes] of before) {
+    assert.deepEqual(Array.from(rasters.get(key)!), bytes);
+  }
+
+  const cache = new Map<number, Uint8Array>();
+  let calls = 0;
+  for (const send of bulkSendList(rows, true)) {
+    const bitmap = rememberRowRaster(cache, send.rowIndex, () => {
+      calls += 1;
+      return rasters.get(send.rowIndex)!;
+    });
+    assert.equal(bitmap, rasters.get(send.rowIndex));
+    assert.deepEqual(Array.from(bitmap), before.find(([key]) => key === send.rowIndex)?.[1]);
+  }
+  assert.equal(calls, 3);
+  assert.equal(cache.size, 3);
 });

@@ -10,6 +10,7 @@ import {
   PixelRatio,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   useWindowDimensions,
   View,
@@ -61,7 +62,13 @@ import {
 } from '@/constants/rat-tail-143';
 import { dataPageCount, resolveDocumentData } from '@/lib/data-binding';
 import { projectBulkDocument, resolveBulkSheet } from '@/lib/bulk-labels';
-import { MAX_JOB_LABELS, planBulkPrint } from '@/lib/bulk-row-copies';
+import {
+  MAX_JOB_LABELS,
+  bulkSendList,
+  collateChangesOrder,
+  planBulkPrint,
+  rememberRowRaster,
+} from '@/lib/bulk-row-copies';
 import {
   createLabelDocument,
   generateId,
@@ -104,7 +111,12 @@ import {
   td404ContentShiftMm,
   td404EdgeBorderOptions,
 } from '@/lib/printer/print-spec';
-import { joshEffectiveDpi, joshHeadlessRasterOptions, joshInkOffsetMm } from '@/lib/printer/josh-print';
+import {
+  joshEffectiveDpi,
+  joshHeadlessRasterOptions,
+  joshInkOffsetMm,
+  joshLabelPitchMs,
+} from '@/lib/printer/josh-print';
 import * as FileSystem from 'expo-file-system/legacy';
 import { logPrintTrace } from '@/printing';
 import { resolveBuildTime, resolveGitSha } from '@/lib/build-identity';
@@ -398,6 +410,24 @@ function ChipGroup<T extends string>({
   );
 }
 
+type CachedRowPrint = {
+  pageDoc: LabelDocument | null;
+  fitLabelExtract: boolean;
+  td404HeadlessMono: boolean;
+  joshHeadlessCandidate: boolean;
+  captureResolvedAt: number;
+  base64: string;
+  rotatedBase64: string;
+  connectionMs: number;
+  captureMs: number;
+  fitLabelDecodeMs: number;
+  fitLabelRasterMs: number;
+  fitLabelMono: FitLabelPrintPayload | null;
+  joshFacesReady: boolean;
+  joshMonoBitmap: RasterBitmap | null;
+  td404Bitmap: RasterBitmap | null;
+};
+
 export default function PrintScreen() {
   const uiScheme = useThemeRefresh();
   const insets = useSafeAreaInsets();
@@ -542,6 +572,7 @@ export default function PrintScreen() {
   }, [baseDocument, defaultPreset, defaults.labelWidth, defaults.labelHeight, cableFlagJob, ratTail143Job]);
 
   const [copies, setCopies] = useState(1);
+  const [collate, setCollate] = useState(false);
   const [printProgress, setPrintProgress] = useState<string | null>(null);
   const [darkness, setDarkness] = useState<number | null>(null);
   const [speed, setSpeed] = useState<number | null>(null);
@@ -717,6 +748,10 @@ export default function PrintScreen() {
       baseDocument.bulk.rowCopiesOverrides,
     );
   }, [baseDocument, excelFiles, copies]);
+
+  const showCollate = Boolean(
+    baseDocument?.bulk && bulkPrintPlan && collateChangesOrder(bulkPrintPlan.rows),
+  );
 
   const buildPageDocument = useCallback(
     (page: number): LabelDocument | null => {
@@ -897,6 +932,21 @@ export default function PrintScreen() {
   );
   const previewAreaMinHeight = maxPreviewHeight + 56; // 28 px padding each side
 
+  // The print job rotates the bitmap by the chosen orientation, so show the label turned the same
+  // way (clockwise, matching rotateGray). Quarter turns swap the box the label is fitted into.
+  const previewTurn = ratTail143Job ? 0 : parseInt(orientation.replace('°', ''), 10);
+  const previewQuarter = previewTurn === 90 || previewTurn === 270;
+  const turned = fitLabelSize(
+    previewQuarter ? (activeDoc?.heightMm ?? 44) : (activeDoc?.widthMm ?? 80),
+    previewQuarter ? (activeDoc?.widthMm ?? 80) : (activeDoc?.heightMm ?? 44),
+    Math.round(baseCardWidth * zoom),
+    Math.round(maxPreviewHeight * zoom),
+  );
+  const previewBoxW = turned.widthPx;
+  const previewBoxH = turned.heightPx;
+  const previewDrawW = previewQuarter ? previewBoxH : previewBoxW;
+  const previewDrawH = previewQuarter ? previewBoxW : previewBoxH;
+
   const historySource: PrintHistoryEntry['source'] = params.labelId
     ? 'label'
     : params.scanData
@@ -1025,6 +1075,9 @@ export default function PrintScreen() {
       return;
     }
 
+    const collateJob = Boolean(bulkPlan && collate && collateChangesOrder(bulkPlan.rows));
+    let labelsCompleted = 0;
+
     useSettingsStore.getState().patchDefaults({ paperType });
     setPrinting(true);
     const timer = new PrintTimingLogger();
@@ -1110,50 +1163,32 @@ export default function PrintScreen() {
       }
 
       const printJobs = bulkPlan
-        ? bulkPlan.rows.map((row) => ({ page: row.rowIndex, sendCopies: row.copies }))
-        : Array.from({ length: pageCount }, (_, page) => ({ page, sendCopies: copies }));
-      let labelsSent = 0;
+        ? bulkSendList(bulkPlan.rows, collateJob).map((item) => ({
+            page: item.rowIndex,
+            sendCopies: item.copies,
+            copyNumber: item.copyNumber,
+            round: item.round,
+          }))
+        : Array.from({ length: pageCount }, (_, page) => ({
+            page,
+            sendCopies: copies,
+            copyNumber: 1,
+            round: 1,
+          }));
+      const rowRasters = new Map<number, CachedRowPrint>();
       for (let jobIndex = 0; jobIndex < printJobs.length; jobIndex++) {
-        const { page, sendCopies } = printJobs[jobIndex];
+        const { page, sendCopies, copyNumber, round } = printJobs[jobIndex];
         if (bulkPlan) {
-          labelsSent += sendCopies;
           console.info(
-            `[print] label ${page} copies ${sendCopies} total ${labelsSent}`,
-          );
-          setPrintProgress(
-            `Row ${jobIndex + 1} / ${printJobs.length} · ${labelsSent} / ${bulkPlan.totalPhysical} labels`,
+            `[print] label ${page} copy ${copyNumber} round ${round} total ${labelsCompleted}/${bulkPlan.totalPhysical} copies ${sendCopies}`,
           );
         }
         const pageStart = Date.now();
-        const pageDoc =
-          applyDisplayTransforms(buildPageDocument(page)) ?? displayDocument ?? previewDocument;
-        const fitLabelExtract = pageDoc != null && isFitLabelImageOnlyDocument(pageDoc);
-        if (pageCount > 1) {
-          setPageIndex(page);
-          if (!fitLabelExtract && !manager.isJosh) {
-            timer.start('pageWaitForPaint');
-            await waitForNextPaint();
-            timer.end('pageWaitForPaint');
-          }
-        }
-
-        const td404HeadlessMono =
-          manager.usesTd404CommandSet &&
-          orientationDeg === 0 &&
-          pageDoc != null &&
-          canHeadlessRasterPrint(pageDoc) &&
-          Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
-          Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
-        const joshHeadlessCandidate =
-          manager.isJosh &&
-          orientationDeg === 0 &&
-          pageDoc != null &&
-          canHeadlessRasterPrint(pageDoc) &&
-          Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
-          Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
-
-        timer.start('capture+verify');
-        const captureTarget = printCaptureLayout(widthMm, heightMm, jobDpi).content;
+        const cachedRow = bulkPlan ? rowRasters.get(page) : undefined;
+        let pageDoc: LabelDocument | null = null;
+        let fitLabelExtract = false;
+        let td404HeadlessMono = false;
+        let joshHeadlessCandidate = false;
         let captureResolvedAt = 0;
         let base64 = '';
         let rotatedBase64 = '';
@@ -1164,6 +1199,51 @@ export default function PrintScreen() {
         let fitLabelMono: FitLabelPrintPayload | null = null;
         let joshFacesReady = false;
         let joshMonoBitmap: RasterBitmap | null = null;
+        if (cachedRow) {
+          pageDoc = cachedRow.pageDoc;
+          fitLabelExtract = cachedRow.fitLabelExtract;
+          td404HeadlessMono = cachedRow.td404HeadlessMono;
+          joshHeadlessCandidate = cachedRow.joshHeadlessCandidate;
+          captureResolvedAt = cachedRow.captureResolvedAt;
+          base64 = cachedRow.base64;
+          rotatedBase64 = cachedRow.rotatedBase64;
+          connectionMs = cachedRow.connectionMs;
+          captureMs = cachedRow.captureMs;
+          fitLabelDecodeMs = cachedRow.fitLabelDecodeMs;
+          fitLabelRasterMs = cachedRow.fitLabelRasterMs;
+          fitLabelMono = cachedRow.fitLabelMono;
+          joshFacesReady = cachedRow.joshFacesReady;
+          joshMonoBitmap = cachedRow.joshMonoBitmap;
+        } else {
+        pageDoc =
+          applyDisplayTransforms(buildPageDocument(page)) ?? displayDocument ?? previewDocument;
+        fitLabelExtract = pageDoc != null && isFitLabelImageOnlyDocument(pageDoc);
+        if (pageCount > 1) {
+          setPageIndex(page);
+          if (!fitLabelExtract && !manager.isJosh) {
+            timer.start('pageWaitForPaint');
+            await waitForNextPaint();
+            timer.end('pageWaitForPaint');
+          }
+        }
+
+        td404HeadlessMono =
+          manager.usesTd404CommandSet &&
+          orientationDeg === 0 &&
+          pageDoc != null &&
+          canHeadlessRasterPrint(pageDoc) &&
+          Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
+          Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
+        joshHeadlessCandidate =
+          manager.isJosh &&
+          orientationDeg === 0 &&
+          pageDoc != null &&
+          canHeadlessRasterPrint(pageDoc) &&
+          Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
+          Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
+
+        timer.start('capture+verify');
+        const captureTarget = printCaptureLayout(widthMm, heightMm, jobDpi).content;
         if (td404HeadlessMono || joshHeadlessCandidate) {
           const tConn0 = Date.now();
           const [connectionResult, bitmap] = await Promise.all([
@@ -1360,6 +1440,27 @@ export default function PrintScreen() {
             capture_ms: captureMs,
             note: 'Packed BITMAP PNG is encoded to TSPL. ViewShot is ink only; millimetres come from PrintGeometry.',
           });
+        }
+
+          if (bulkPlan) {
+            rememberRowRaster(rowRasters, page, () => ({
+              pageDoc,
+              fitLabelExtract,
+              td404HeadlessMono,
+              joshHeadlessCandidate,
+              captureResolvedAt,
+              base64,
+              rotatedBase64,
+              connectionMs,
+              captureMs,
+              fitLabelDecodeMs,
+              fitLabelRasterMs,
+              fitLabelMono,
+              joshFacesReady,
+              joshMonoBitmap,
+              td404Bitmap: null,
+            }));
+          }
         }
 
         const paperCommand = paperTypeCommand({
@@ -1580,18 +1681,29 @@ export default function PrintScreen() {
           timer.start('sdkFastPrint');
           try {
             if (td404HeadlessMono && pageDoc) {
-              const tPrep0 = Date.now();
-              assertHeadlessRasterDocument(pageDoc);
-              await ensurePrintTypefacesForDocument(pageDoc);
-              const docPrepMs = Date.now() - tPrep0;
-              const timed = rasterizeDocumentToBitmapTimed(pageDoc, jobDpi, {
-                threshold,
-                darknessSteps: inkSteps,
-                bakeTd404Feed: true,
-                edgeBorders: td404EdgeBorderOptions(jobDpi),
-                shiftDots: bakeOffset ? td404ContentShiftDots(jobDpi, printOffsetMm) : undefined,
-              });
-              const bitmap = timed.result;
+              const cachedBitmap = rowRasters.get(page)?.td404Bitmap ?? null;
+              let bitmap = cachedBitmap;
+              let docPrepMs = 0;
+              let rasterizeMs = 0;
+              let bitpackMs = 0;
+              if (!bitmap) {
+                const tPrep0 = Date.now();
+                assertHeadlessRasterDocument(pageDoc);
+                await ensurePrintTypefacesForDocument(pageDoc);
+                docPrepMs = Date.now() - tPrep0;
+                const timed = rasterizeDocumentToBitmapTimed(pageDoc, jobDpi, {
+                  threshold,
+                  darknessSteps: inkSteps,
+                  bakeTd404Feed: true,
+                  edgeBorders: td404EdgeBorderOptions(jobDpi),
+                  shiftDots: bakeOffset ? td404ContentShiftDots(jobDpi, printOffsetMm) : undefined,
+                });
+                bitmap = timed.result;
+                rasterizeMs = timed.rasterizeMs;
+                bitpackMs = timed.bitpackMs;
+                const entry = rowRasters.get(page);
+                if (entry) entry.td404Bitmap = bitmap;
+              }
               const tNative0 = Date.now();
               usedNative = await manager.printMonoLabelFast({
                 monoBytes: bitmap.mono1bppBuffer,
@@ -1616,8 +1728,6 @@ export default function PrintScreen() {
                 );
               }
               const monoTiming = manager.getLastTd404MonoLabelTiming();
-              const rasterizeMs = timed.rasterizeMs;
-              const bitpackMs = timed.bitpackMs;
               const totalMs = Date.now() - pageStart;
               const accounted =
                 connectionMs + docPrepMs + rasterizeMs + bitpackMs + nativeCallMs;
@@ -1842,6 +1952,18 @@ export default function PrintScreen() {
             'data:', bytes.length, 'bytes (JS path)',
           );
         }
+        if (bulkPlan) {
+          labelsCompleted += sendCopies;
+          setPrintProgress(`Printing ${labelsCompleted} of ${bulkPlan.totalPhysical}`);
+          if (collateJob && manager.isJosh && jobIndex < printJobs.length - 1) {
+            const pitchMs = joshLabelPitchMs(
+              paper.heightMm,
+              joshJob?.gapMm ?? gapLength,
+              joshJob?.speed ?? printSpeed,
+            );
+            await new Promise<void>((resolve) => setTimeout(resolve, pitchMs));
+          }
+        }
       }
 
       // Store timing for diagnostics screen.
@@ -1863,7 +1985,13 @@ export default function PrintScreen() {
       if (printingSettings.returnPrevious) router.back();
     } catch (error) {
       const message = formatPrintFailure(error);
-      if (message) Alert.alert('Print Failed', message);
+      if (message) {
+        const sent =
+          bulkPlan != null
+            ? `\n\nSent ${labelsCompleted} of ${bulkPlan.totalPhysical} before the printer stopped.`
+            : '';
+        Alert.alert('Print Failed', `${message}${sent}`);
+      }
     } finally {
       printingLockRef.current = false;
       setPrinting(false);
@@ -1888,6 +2016,7 @@ export default function PrintScreen() {
     printOffsetMm,
     gapLength,
     copies,
+    collate,
     baseDocument,
     excelFiles,
     paperType,
@@ -1951,13 +2080,23 @@ export default function PrintScreen() {
         <View style={[styles.previewArea, { minHeight: previewAreaMinHeight }]}>
           <View style={styles.previewShadow}>
             {(displayDocument ?? previewDocument) ? (
-              <LabelPreview
-                document={(displayDocument ?? previewDocument)!}
-                width={cardWidth}
-                maxHeight={cardHeight}
-                showArtboardBorder={false}
-                hideNonPrinting
-              />
+              <View
+                style={{
+                  width: previewBoxW,
+                  height: previewBoxH,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <View style={{ transform: [{ rotate: `${previewTurn}deg` }] }}>
+                  <LabelPreview
+                    document={(displayDocument ?? previewDocument)!}
+                    width={previewDrawW}
+                    maxHeight={previewDrawH}
+                    showArtboardBorder={false}
+                    hideNonPrinting
+                  />
+                </View>
+              </View>
             ) : params.imageUri ? (
               <View style={[styles.previewCard, { width: cardWidth, height: cardHeight }]}>
                 <Image
@@ -2113,6 +2252,25 @@ export default function PrintScreen() {
               onCommitValue={setCopies}
               bordered
             />
+            {showCollate ? (
+              <View style={styles.collateRow}>
+                <View style={styles.collateCopy}>
+                  <Text style={styles.collateLabel}>Collate</Text>
+                  <Text style={styles.collateHelp}>
+                    {collate
+                      ? 'One of each label, then the next set. A label with fewer copies drops out.'
+                      : 'All copies of each label, then the next.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={collate}
+                  onValueChange={setCollate}
+                  disabled={printing}
+                  trackColor={{ false: C.border, true: C.accent }}
+                  thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+                />
+              </View>
+            ) : null}
             {bulkPrintPlan && baseDocument?.bulk ? (
               <Text style={styles.bulkTotal}>
                 {bulkPrintPlan.totalPhysical} {bulkPrintPlan.totalPhysical === 1 ? 'label' : 'labels'} from{' '}
@@ -2567,6 +2725,27 @@ const styles = themedStyles((c, scheme) => ({
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
+  },
+  collateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  collateCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  collateLabel: {
+    color: c.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  collateHelp: {
+    color: c.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
   },
   bulkTotal: {
     color: c.textSecondary,

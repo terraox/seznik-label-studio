@@ -149,6 +149,8 @@ export function resizeMemberByScale(opts: {
   minMm: number;
   canvas: CanvasBounds;
   naturalHeightMm?: number;
+  /** Element rotation in degrees (quarter turns). Turns the canvas limit onto the rotated axes. */
+  rotation?: number;
 }): MmBox {
   'worklet';
   const minMm = Math.max(0.1, finiteMm(opts.minMm, MIN_ELEMENT_MM));
@@ -161,8 +163,23 @@ export function resizeMemberByScale(opts: {
   const aspect = finiteAspect(opts.aspect);
   const scaleX = Number.isFinite(opts.scaleX) ? opts.scaleX : 1;
   const scaleY = Number.isFinite(opts.scaleY) ? opts.scaleY : 1;
-  const maxAllowedW = Math.max(minMm, Math.min(MAX_ELEMENT_MM, maxW - startLeft));
-  const maxAllowedH = Math.max(minMm, Math.min(MAX_ELEMENT_MM, maxH - startTop));
+  // The box turns about its centre and the resize keeps its top-left corner fixed on screen,
+  // so each local axis grows toward a different canvas edge. Room along that edge is the limit.
+  const turn = ((Math.round((opts.rotation ?? 0) / 90) * 90) % 360 + 360) % 360;
+  let roomW = maxW - startLeft;
+  let roomH = maxH - startTop;
+  if (turn === 90) {
+    roomW = maxH - (startTop + (startH - startW) / 2);
+    roomH = startLeft + (startW + startH) / 2;
+  } else if (turn === 180) {
+    roomW = startLeft + startW;
+    roomH = startTop + startH;
+  } else if (turn === 270) {
+    roomW = startTop + (startH + startW) / 2;
+    roomH = maxW - (startLeft + (startW - startH) / 2);
+  }
+  const maxAllowedW = Math.max(minMm, Math.min(MAX_ELEMENT_MM, roomW));
+  const maxAllowedH = Math.max(minMm, Math.min(MAX_ELEMENT_MM, roomH));
 
   let width = startW;
   let height = startH;

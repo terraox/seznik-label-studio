@@ -644,7 +644,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         topMm: roundedTop,
         widthMm: roundMm(widthMm),
         heightMm: roundMm(heightMm),
-        rotation: ((Math.round(baseRotation) % 360) + 360) % 360,
+        rotation: ((Math.round(baseRotation / 90) * 90) % 360 + 360) % 360,
       });
       isInteracting.value = false;
     },
@@ -821,6 +821,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         minMm: resizePolicy.minMm,
         canvas: { widthMm: canvasWidthMm, heightMm: canvasHeightMm },
         naturalHeightMm,
+        rotation: rot,
       });
       if (isTextElement && handle === 'e') {
         const wrapH = visibleTextHeightMm({
@@ -838,7 +839,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         next.height = roundMm(Math.min(maxH, wrapH));
       }
 
-      const rotation = ((Math.round(rot) % 360) + 360) % 360;
+      const rotation = ((Math.round(rot / 90) * 90) % 360 + 360) % 360;
       if (rotation !== 0) {
         const rad = (rotation * Math.PI) / 180;
         const cos = Math.cos(rad);
@@ -1564,6 +1565,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             aspect: aspectSv.value > 0 ? aspectSv.value : 1,
             minMm: minResizeMmSv.value,
             canvas: { widthMm: canvasWMmSv.value, heightMm: canvasHMmSv.value },
+            rotation: startRot.value,
           });
 
           let liveHeightMm = box.height;

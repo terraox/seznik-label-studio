@@ -156,8 +156,8 @@ export function EditingPad({
 
         <View style={styles.actions}>
           <View style={styles.actionRow}>
-            <PadBtn icon="arrow.counterclockwise" disabled={!enabled || locked} onPress={() => onRotate(-15)} />
-            <PadBtn icon="arrow.clockwise" disabled={!enabled || locked} onPress={() => onRotate(15)} />
+            <PadBtn icon="arrow.counterclockwise" disabled={!enabled || locked} onPress={() => onRotate(-90)} />
+            <PadBtn icon="arrow.clockwise" disabled={!enabled || locked} onPress={() => onRotate(90)} />
             <PadBtn icon="square.on.square" disabled={!enabled} onPress={onDuplicate} />
             <PadBtn icon="trash" disabled={!enabled} onPress={onDelete} />
           </View>
