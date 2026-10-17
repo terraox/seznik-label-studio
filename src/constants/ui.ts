@@ -54,7 +54,7 @@ export const HomeLayout = {
   /** Last-edited card preview stage height (HiFi catalog paint). */
   continuePreviewMaxHeight: 200,
   /** Buy from us marquee strip. */
-  buyStripHeight: 108,
+  buyStripHeight: 250,
   labelMaxFontScale: 1.4,
 } as const;
 
