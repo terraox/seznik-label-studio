@@ -1,7 +1,7 @@
 {
-  "name": "td404-printer",
+  "name": "td404-tejas-printer",
   "version": "1.0.0",
-  "description": "TD-404 / Ninestar classic Bluetooth (SPP) printer module",
+  "description": "TD-404 Tejas / Ninestar classic Bluetooth (SPP) printer module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {

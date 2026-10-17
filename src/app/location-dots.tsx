@@ -18,7 +18,7 @@ import type { LabelDocument } from '@/lib/label-document';
 import { printCaptureLayout, printCaptureOptionsForSize, waitForNextPaint } from '@/lib/printer/print-job';
 import { createPrintSpec } from '@/lib/printer/print-spec';
 import { usePrinterStore } from '@/stores/printer-store';
-import { printTd404MonoLabel, printTd404PngLabel } from 'td404-printer';
+import { printTd404MonoLabel, printTd404PngLabel } from '@/lib/printer/td404-bridge';
 import {
   LOCATION_DPI,
   borderCases,

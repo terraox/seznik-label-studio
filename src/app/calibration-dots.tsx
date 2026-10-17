@@ -15,7 +15,7 @@ import { AppIcon } from '@/components/app-icon';
 import { LabelPreview } from '@/components/label-preview';
 import { resolveBuildTime, resolveGitSha } from '@/lib/build-identity';
 import { printCaptureLayout, printCaptureOptionsForSize, waitForNextPaint } from '@/lib/printer/print-job';
-import { printTd404PngLabel } from 'td404-printer';
+import { printTd404PngLabel } from '@/lib/printer/td404-bridge';
 import {
   CALIBRATION_DPI,
   assertCalibrationPage,

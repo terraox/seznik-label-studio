@@ -4032,7 +4032,10 @@ export default function EditScreen() {
           handleSelect(border.id);
           break;
         }
-        router.push({ pathname: '/border-library', params: { from: 'edit' } });
+        router.push({
+          pathname: '/border-library',
+          params: { from: 'edit', ...(doc.mediaShape ? { mediaShape: doc.mediaShape } : {}) },
+        });
         break;
       }
       case 'Excel':
@@ -4615,6 +4618,7 @@ export default function EditScreen() {
                 pathname: '/border-library',
                 params: {
                   from: 'edit',
+                  ...(doc.mediaShape ? { mediaShape: doc.mediaShape } : {}),
                   style: targetEl.borderStyle,
                   ...(targetEl.edgeGapMm != null ? { edgeGap: String(targetEl.edgeGapMm) } : {}),
                   hasBorder: '1',

@@ -28,8 +28,8 @@ import {
   getTd404ConnectionInfo,
   isTd404Connected,
   printTd404PngLabel,
-} from 'td404-printer';
-import type { Td404PngLabelOptions } from 'td404-printer';
+} from '@/lib/printer/td404-bridge';
+import type { Td404PngLabelOptions } from '@/lib/printer/td404-bridge';
 
 import {
   ConnectedDevice,

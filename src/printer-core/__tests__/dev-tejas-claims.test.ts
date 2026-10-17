@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 // Deliberately NOT importing the driver classes from `@/printer-dev` /
-// `@/printer-tejas`: those pull in the `dev-printer` / `td404-printer` native
+// `@/printer-tejas`: those pull in the `dev-printer` / `td404-tejas-printer` native
 // wrappers, which import `react-native` at module scope. `react-native`'s Flow
 // syntax cannot be transformed by tsx/esbuild outside a Metro bundle, so — same
 // as the existing `test:labelx` suite — this test exercises the RN-free

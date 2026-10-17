@@ -1,4 +1,4 @@
-package expo.modules.td404printer
+package expo.modules.td404tejasprinter
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -41,7 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * Lists bonded (paired) devices + nearby discovery, then connects via SPP
  * (same profile as SppBluetoothPort in labelprinter.aar).
  */
-class Td404PrinterModule : Module() {
+class Td404TejasPrinterModule : Module() {
   /** Bump when the TSPL packer changes so a stale installed binary is visible in logcat. */
   private val nativeRev = "td404-border-fix-2"
   private val sppUuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
@@ -78,7 +78,7 @@ class Td404PrinterModule : Module() {
   }
 
   override fun definition() = ModuleDefinition {
-    Name("Td404Printer")
+    Name("Td404TejasPrinter")
 
     Events("onDeviceFound", "onScanFinished", "onConnectionChanged")
 
@@ -414,7 +414,7 @@ class Td404PrinterModule : Module() {
           }
           promise.resolve(android.util.Base64.encodeToString(reply.toByteArray(), android.util.Base64.NO_WRAP))
         } catch (e: IOException) {
-          android.util.Log.e("Td404Printer", "SPP query failed: ${e.message}")
+          android.util.Log.e("Td404TejasPrinter", "SPP query failed: ${e.message}")
           promise.reject("QUERY_FAILED", e.message, e)
         } catch (e: InterruptedException) {
           Thread.currentThread().interrupt()
@@ -444,7 +444,7 @@ class Td404PrinterModule : Module() {
           val result = printPngLabelNative(options)
           promise.resolve(result)
         } catch (e: Exception) {
-          android.util.Log.e("Td404Printer", "printPngLabel failed: ${e.message}", e)
+          android.util.Log.e("Td404TejasPrinter", "printPngLabel failed: ${e.message}", e)
           if (e is IOException) {
             closeSocket()
             sendEvent(
@@ -475,10 +475,10 @@ class Td404PrinterModule : Module() {
           val result = printMonoLabelNative(monoBytes, options)
           promise.resolve(result)
         } catch (e: IllegalArgumentException) {
-          android.util.Log.e("Td404Printer", "printMonoLabel rejected: ${e.message}", e)
+          android.util.Log.e("Td404TejasPrinter", "printMonoLabel rejected: ${e.message}", e)
           promise.reject("MONO_INVALID", e.message, e)
         } catch (e: Exception) {
-          android.util.Log.e("Td404Printer", "printMonoLabel failed: ${e.message}", e)
+          android.util.Log.e("Td404TejasPrinter", "printMonoLabel failed: ${e.message}", e)
           if (e is IOException) {
             closeSocket()
             sendEvent(
@@ -564,7 +564,7 @@ class Td404PrinterModule : Module() {
             )
           )
         } catch (e: Exception) {
-          android.util.Log.e("Td404Printer", "renderPdfPages failed: ${e.message}", e)
+          android.util.Log.e("Td404TejasPrinter", "renderPdfPages failed: ${e.message}", e)
           promise.reject("PDF_RENDER_FAILED", e.message, e)
         } finally {
           try { renderer?.close() } catch (_: Exception) {}
@@ -586,7 +586,7 @@ class Td404PrinterModule : Module() {
         val written = writeBytesToSocketSync(bytes)
         promise.resolve(mapOf("bytesSent" to written))
       } catch (e: IOException) {
-        android.util.Log.e("Td404Printer", "SPP write failed, closing dead socket: ${e.message}")
+        android.util.Log.e("Td404TejasPrinter", "SPP write failed, closing dead socket: ${e.message}")
         closeSocket()
         sendEvent(
           "onConnectionChanged",
@@ -612,7 +612,7 @@ class Td404PrinterModule : Module() {
       rawOut.write(bytes)
       rawOut.flush()
       val totalMs = System.currentTimeMillis() - startMs
-      android.util.Log.i("Td404Printer", "SPP fast write ${bytes.size} bytes in ${totalMs}ms")
+      android.util.Log.i("Td404TejasPrinter", "SPP fast write ${bytes.size} bytes in ${totalMs}ms")
       return bytes.size
     }
 
@@ -635,7 +635,7 @@ class Td404PrinterModule : Module() {
       }
     }
     val totalMs = System.currentTimeMillis() - startMs
-    android.util.Log.i("Td404Printer", "SPP paced write ${bytes.size} bytes in ${totalMs}ms chunk=${1024}")
+    android.util.Log.i("Td404TejasPrinter", "SPP paced write ${bytes.size} bytes in ${totalMs}ms chunk=${1024}")
     return bytes.size
   }
 
@@ -803,9 +803,9 @@ class Td404PrinterModule : Module() {
     logJobIdentity(options, dryRun)
     val headerLine = header.replace("\r\n", " | ").trim()
     val ink = wireInkMargins(rawBmp, bytesPerRow, packedW, contentH)
-    android.util.Log.i("Td404Printer", "PRINT-HEADER native_rev=$nativeRev $headerLine")
+    android.util.Log.i("Td404TejasPrinter", "PRINT-HEADER native_rev=$nativeRev $headerLine")
     android.util.Log.i(
-      "Td404Printer",
+      "Td404TejasPrinter",
       "PRINT-INK native_rev=$nativeRev png=${pngW}x${pngH} fit=$fitMode packed=${packedW}x${contentH} $ink",
     )
 
@@ -813,7 +813,7 @@ class Td404PrinterModule : Module() {
     var writeMs = 0L
     if (dryRun) {
       android.util.Log.i(
-        "Td404Printer",
+        "Td404TejasPrinter",
         "PRINT-TRACE DRY-RUN SDK png=${pngW}x${pngH} packed=${packedW}x${packedH} " +
           "BITMAP=${bytesPerRow}x${contentH} job=${job.size}B (no socket write)",
       )
@@ -822,7 +822,7 @@ class Td404PrinterModule : Module() {
       totalSent = writeBytesToSocketSync(job)
       writeMs = System.currentTimeMillis() - tWrite0
       android.util.Log.i(
-        "Td404Printer",
+        "Td404TejasPrinter",
         "PRINT-TRACE SDK png=${pngW}x${pngH} packed=${packedW}x${packedH} sizeDots=${sizeDotsW}x${sizeDotsH} " +
           "dpm=$dpm dpi=$dpi SIZE=${formatMm(widthMm)}x${formatMm(heightMm)}mm " +
           "BITMAP=${bytesPerRow}x${contentH} DIRECTION=$direction job=${job.size}B copies=$copies " +
@@ -923,7 +923,7 @@ class Td404PrinterModule : Module() {
     }
     val ink = wireInkMargins(wireBmp, bytesPerRow, packedW, heightDots)
     android.util.Log.i(
-      "Td404Printer",
+      "Td404TejasPrinter",
       "PRINT-INK MONO native_rev=$nativeRev packed=${packedW}x${heightDots} REFERENCE=${xDots},${yDots} BITMAP=0,0 $ink",
     )
 
@@ -958,7 +958,7 @@ class Td404PrinterModule : Module() {
     var writeMs = 0L
     if (dryRun) {
       android.util.Log.i(
-        "Td404Printer",
+        "Td404TejasPrinter",
         "PRINT-TRACE DRY-RUN MONO packed=${packedW}x${packedH} BITMAP=${bytesPerRow}x${heightDots} job=${job.size}B (no socket write)",
       )
     } else {
@@ -966,7 +966,7 @@ class Td404PrinterModule : Module() {
       totalSent = writeBytesToSocketSync(job)
       writeMs = System.currentTimeMillis() - tWrite0
       android.util.Log.i(
-        "Td404Printer",
+        "Td404TejasPrinter",
         "PRINT-TRACE MONO packed=${packedW}x${packedH} sizeDots=${sizeDotsW}x${sizeDotsH} " +
           "dpm=$dpm dpi=$dpi SIZE=${formatMm(widthMm)}x${formatMm(heightMm)}mm " +
           "BITMAP=${bytesPerRow}x${heightDots} DIRECTION=$direction job=${job.size}B copies=$copies " +
@@ -1070,7 +1070,7 @@ class Td404PrinterModule : Module() {
         bitmap.recycle()
       }
       android.util.Log.i(
-        "Td404Printer",
+        "Td404TejasPrinter",
         "PRINT-TRACE BITMAP_CROP src=${srcW}x${srcH} packed=${packedW}x${packedH} cropRight=$cropW",
       )
       return cropped
@@ -1113,7 +1113,7 @@ class Td404PrinterModule : Module() {
     out.setPixels(dst, 0, packedW, 0, 0, packedW, packedH)
     if (out !== bitmap) bitmap.recycle()
     android.util.Log.i(
-      "Td404Printer",
+      "Td404TejasPrinter",
       "PRINT-TRACE BITMAP_AVERAGE src=${srcW}x${srcH} packed=${packedW}x${packedH} scale=$scale",
     )
     return out
@@ -1130,7 +1130,7 @@ class Td404PrinterModule : Module() {
 
   private fun logJobIdentity(options: Map<String, Any?>, dryRun: Boolean) {
     android.util.Log.i(
-      "Td404Printer",
+      "Td404TejasPrinter",
       "JOB-IDENTITY native_rev=$nativeRev gitSha=${optionsGitSha(options)} buildTime=${optionsBuildTime(options)} dryRun=$dryRun",
     )
   }
@@ -1191,7 +1191,7 @@ class Td404PrinterModule : Module() {
     for ((name, makeSocket) in attempts) {
       var sock: BluetoothSocket? = null
       try {
-        android.util.Log.i("Td404Printer", "Opening SPP socket via $name...")
+        android.util.Log.i("Td404TejasPrinter", "Opening SPP socket via $name...")
         sock = makeSocket()
         if (generation != connectGeneration.get()) {
           try { sock?.close() } catch (_: Exception) {}
@@ -1205,7 +1205,7 @@ class Td404PrinterModule : Module() {
           throw IOException("Connection replaced by a newer printer.")
         }
         if (pendingSocket === sock) pendingSocket = null
-        android.util.Log.i("Td404Printer", "SPP socket connected successfully via $name")
+        android.util.Log.i("Td404TejasPrinter", "SPP socket connected successfully via $name")
         return sock!!
       } catch (e: Exception) {
         if (generation != connectGeneration.get()) {
@@ -1213,7 +1213,7 @@ class Td404PrinterModule : Module() {
           if (pendingSocket === sock) pendingSocket = null
           throw IOException("Connection replaced by a newer printer.")
         }
-        android.util.Log.w("Td404Printer", "SPP attempt via $name failed: ${e.message}")
+        android.util.Log.w("Td404TejasPrinter", "SPP attempt via $name failed: ${e.message}")
         lastError = e
         try {
           sock?.close()

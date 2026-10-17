@@ -104,7 +104,7 @@ function getNative(): NativeTd404 | null {
   if (Platform.OS !== 'android') return null;
   if (cached !== undefined) return cached;
   try {
-    cached = requireNativeModule<NativeTd404>('Td404Printer');
+    cached = requireNativeModule<NativeTd404>('Td404RudraPrinter');
   } catch {
     cached = null;
   }

@@ -21,7 +21,7 @@ Defined in `src/constants/printer-models.ts`.
 | Piece | Folder |
 |-------|--------|
 | JOSH phone module | `modules/josh-printer/` |
-| TD-404 phone module | `modules/td404-printer/` |
+| TD-404 phone module | `modules/td404-tejas-printer/` |
 | TEZ phone module | `modules/tez-printer/` |
 | DEV phone module | `modules/dev-printer/` |
 | Label X phone module | `modules/labelx-printer/` |

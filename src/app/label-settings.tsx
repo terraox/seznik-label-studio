@@ -273,6 +273,7 @@ export default function LabelSettingsScreen() {
               pathname: '/border-library',
               params: {
                 from: 'label-settings',
+                ...(doc.mediaShape ? { mediaShape: doc.mediaShape } : {}),
                 ...(border?.type === 'border'
                   ? {
                       style: border.borderStyle,

@@ -141,7 +141,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import { logPrintTrace } from '@/printing';
 import { resolveBuildTime, resolveGitSha } from '@/lib/build-identity';
-import { printTd404MonoLabel, printTd404PngLabel } from 'td404-printer';
+import { printTd404MonoLabel, printTd404PngLabel } from '@/lib/printer/td404-bridge';
 import {
   assertHeadlessRasterDocument,
   canHeadlessRasterPrint,

@@ -5,7 +5,7 @@
  * dispatches them directly to the connected thermal printer (Tejas, Rudra, or Josh).
  */
 
-import { renderPdfPages, type RenderedPdfPage, type RenderPdfResult } from 'td404-printer';
+import { renderPdfPages, type RenderedPdfPage, type RenderPdfResult } from '@/lib/printer/td404-bridge';
 import { renderPdfPage } from 'pdf-raster';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getPrinterManager } from '@/lib/printer/printer-manager';

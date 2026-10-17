@@ -92,7 +92,8 @@
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",
     "share-target": "file:modules/share-target",
-    "td404-printer": "file:./modules/td404-printer",
+    "td404-rudra-printer": "file:./modules/td404-rudra-printer",
+    "td404-tejas-printer": "file:./modules/td404-tejas-printer",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.15"
   },
@@ -151,7 +152,8 @@
       "reactNativeDirectoryCheck": {
         "exclude": [
           "@react-native-ml-kit/text-recognition",
-          "td404-printer",
+          "td404-rudra-printer",
+          "td404-tejas-printer",
           "josh-printer",
           "dev-printer",
           "pdf-raster"

@@ -202,7 +202,7 @@ assert.ok(calibrationQualityWarning({ density: 0, speed: 1 }, { density: 10, spe
 const td404QualityHeader = (density: number, speed: number) =>
   `SPEED ${Math.trunc(speed)}\r\nDENSITY ${Math.trunc(density)}\r\n`;
 const kt = readFileSync(
-  join(process.cwd(), 'modules/td404-printer/android/src/main/java/expo/modules/td404printer/Td404PrinterModule.kt'),
+  join(process.cwd(), 'modules/td404-tejas-printer/android/src/main/java/expo/modules/td404tejasprinter/Td404TejasPrinterModule.kt'),
   'utf8',
 );
 const count = (needle: string) => kt.split(needle).length - 1;

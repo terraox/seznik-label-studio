@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 apply plugin: 'expo-module-gradle-plugin'
 
-group = 'expo.modules.td404printer'
+group = 'expo.modules.td404tejasprinter'
 version = '1.0.0'
 
 def getExtOrDefault(name, defaultValue) {
@@ -10,7 +10,7 @@ def getExtOrDefault(name, defaultValue) {
 
 android {
   compileSdk getExtOrDefault('compileSdkVersion', 35)
-  namespace "expo.modules.td404printer"
+  namespace "expo.modules.td404tejasprinter"
   defaultConfig {
     minSdk getExtOrDefault('minSdkVersion', 24)
     targetSdk getExtOrDefault('targetSdkVersion', 35)

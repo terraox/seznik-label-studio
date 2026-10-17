@@ -12,8 +12,11 @@
       "josh-printer": [
         "./modules/josh-printer/src/index.ts"
       ],
-      "td404-printer": [
-        "./modules/td404-printer/src/index.ts"
+      "td404-tejas-printer": [
+        "./modules/td404-tejas-printer/src/index.ts"
+      ],
+      "td404-rudra-printer": [
+        "./modules/td404-rudra-printer/src/index.ts"
       ],
       "dev-printer": [
         "./modules/dev-printer/src/index.ts"

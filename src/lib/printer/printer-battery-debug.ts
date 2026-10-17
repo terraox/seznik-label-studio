@@ -13,7 +13,7 @@ export async function debugLogPrinterBatteries(
       return;
     case 'td404': {
       if (!deviceId) return;
-      const { debugLogTd404RemoteBattery } = await import('td404-printer');
+      const { debugLogTd404RemoteBattery } = await import('@/lib/printer/td404-bridge');
       await debugLogTd404RemoteBattery(deviceId);
       break;
     }

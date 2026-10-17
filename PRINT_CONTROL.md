@@ -226,7 +226,7 @@ The note in `TEZ_PRINTER_CALIBRATION_FIX.md` that quotes `Printer_Y50.nextPrint(
 
 ### 4. TD-404 / Tejas / Rudra — Ninestar `labelprinter`
 
-**Files:** `modules/td404-printer/android/libs/labelprinter.jar`. Our module does not call these builders at runtime; it writes its own TSPL on its own RFCOMM socket. The SDK is still the thing that was asked about.
+**Files:** `modules/td404-tejas-printer/android/libs/labelprinter.jar`. Our module does not call these builders at runtime; it writes its own TSPL on its own RFCOMM socket. The SDK is still the thing that was asked about.
 
 **`LabelCommand` public methods** (60). Control-related:
 

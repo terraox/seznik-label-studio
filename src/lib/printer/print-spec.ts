@@ -170,8 +170,29 @@ export function td404BorderGapMm(edgeGapMm: number | undefined | null): number {
  * Second 50x50 print with x -1.25: left ~1 (on the die-cut), right 3, top 2, bottom 2. Y is
  * right. The 46 mm wide border sat 1 mm too far left, so x moved +1 mm to -0.25.
  * Third print at x -0.25 (width extra 0): left 1.5, right 2.5, so x moved +0.5 mm to 0.25.
+ * This is the Tejas value. Rudra has its own, below.
  */
 export const TD404_DIECUT_CENTER_OFFSET_MM = { x: 0.25, y: 1 };
+
+/**
+ * Rudra's media registration. Print at gap 3 with the Tejas offset (0.25, 1), read off the
+ * label (left/right/top/bottom, mm): 2.5 / 1.5 / 4.5 / 0.5. The border sat 0.5 mm too far
+ * right and 2 mm too low, so the centre moved to (-0.25, -1).
+ */
+export const RUDRA_DIECUT_CENTER_OFFSET_MM = { x: -0.25, y: -1 };
+
+/** Die-cut centre offset for the selected printer. Tejas unless Rudra is selected. */
+export function td404DiecutCenterOffsetMm(): { x: number; y: number } {
+  try {
+    // Lazy: the store pulls in AsyncStorage, which pure raster code and tests must not load.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { usePrinterStore } = require('@/stores/printer-store');
+    if (usePrinterStore.getState().selectedPrinterModel === 'rudra') return RUDRA_DIECUT_CENTER_OFFSET_MM;
+  } catch {
+    // No store (tests, headless): Tejas.
+  }
+  return TD404_DIECUT_CENTER_OFFSET_MM;
+}
 
 /**
  * Extra border width on the right, in mm. 0: a fit of every ruler reading (x -0.25, y +1)
@@ -205,8 +226,9 @@ export function td404BorderOuterDots(
   gapMm: number = TD404_BORDER_GAP_MM,
 ): { x0: number; y0: number; x1: number; y1: number } {
   const extra = mmToDots(TD404_BORDER_WIDTH_EXTRA_MM, dpi);
-  const cx = widthDots / 2 + mmToDots(TD404_DIECUT_CENTER_OFFSET_MM.x, dpi) + extra / 2;
-  const cy = heightDots / 2 + mmToDots(TD404_DIECUT_CENTER_OFFSET_MM.y, dpi);
+  const offset = td404DiecutCenterOffsetMm();
+  const cx = widthDots / 2 + mmToDots(offset.x, dpi) + extra / 2;
+  const cy = heightDots / 2 + mmToDots(offset.y, dpi);
   const gap = mmToDots(gapMm, dpi);
   const halfW = Math.max(0.5, widthDots / 2 - gap + extra / 2);
   const halfH = Math.max(0.5, heightDots / 2 - gap);

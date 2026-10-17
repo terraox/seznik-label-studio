@@ -147,7 +147,7 @@ These are **theoretical floors**. Real jobs add systematic errors below. Percent
 | | |
 |---|---|
 | **Bluetooth names** | TEJAS, RUDRA, TD404, TD-404, SEZNIK, 4BARCODE, POSTEK, TSC, GAINSCHA |
-| **Driver** | `modules/td404-printer` → **TSPL** (`SIZE`, `GAP`, `BITMAP`, `PRINT`) |
+| **Driver** | `modules/td404-tejas-printer` → **TSPL** (`SIZE`, `GAP`, `BITMAP`, `PRINT`) |
 | **Default DPI** | **304** (12 dots/mm); 203 supported |
 | **Label width** | ✅ `widthMm` → `SIZE` + bitmap scale |
 | **Label height** | ✅ `heightMm` → `SIZE` + bitmap scale |
@@ -504,7 +504,7 @@ fit_factor    = 1.0  when capture aspect = label aspect
 | Capture geometry | `src/lib/label-geometry.ts`, `src/lib/printer/print-spec.ts` |
 | Printer routing | `src/lib/printer/printer-manager.ts` |
 | Model registry | `src/constants/printer-models.ts` |
-| TD-404 types | `modules/td404-printer/src/index.ts` |
+| TD-404 types | `modules/td404-tejas-printer/src/index.ts` |
 | DEV types | `modules/dev-printer/src/types.ts` |
 | TEZ types | `modules/tez-printer/src/types.ts` |
 | JOSH types | `modules/josh-printer/src/index.ts` |

@@ -14,7 +14,7 @@
 | Caysn AutoReplyPrint (`autoreplyprint.jar` + `libautoreplyprint.so`) | SEZNIK DEV (Veer uses the same driver) | `DevPrinter` | `modules/dev-printer/src/index.ts` | `DevPrinterModule.kt` |
 | LuckPrinter SDK v1.3.8 Abroad | SEZNIK LABEL X (MiniX / GD985) | `LabelXPrinter` | `modules/labelx-printer/src/index.ts` | `LabelXPrinterModule.kt` |
 | PrintSDK-68 (obfuscated) | SEZNIK TEZ / SHAKTI | `TezPrinter` | `modules/tez-printer/src/index.ts` | `TezPrinterModule.kt` → `TezPrinterManager` / `PrintPipeline` |
-| Ninestar `labelprinter.jar` (linked, **unused at print time**) | SEZNIK TEJAS / RUDRA (TD-404) | `Td404Printer` | `modules/td404-printer/src/index.ts` | `Td404PrinterModule.kt` |
+| Ninestar `labelprinter.jar` (linked, **unused at print time**) | SEZNIK TEJAS / RUDRA (TD-404) | `Td404Printer` | `modules/td404-tejas-printer/src/index.ts` | `Td404PrinterModule.kt` |
 | DothanTech LPAPI | SEZNIK JOSH | `JoshPrinter` | `modules/josh-printer/src/index.ts` | `JoshPrinterModule.kt` → `JoshPrinterManager.kt` |
 
 Marketing names and `supportedNames` live in `src/constants/printer-models.ts`.
@@ -375,7 +375,7 @@ OEM_DPM = 8
 
 **Default DPI:** 304. **Transport:** `td404-spp` (our own RFCOMM, not the SDK port class). **Native name:** `Td404Printer`.
 
-### JS/TS bridge — `modules/td404-printer/src/index.ts`
+### JS/TS bridge — `modules/td404-tejas-printer/src/index.ts`
 
 ```ts
 export type Td404PngLabelOptions = {
@@ -620,10 +620,10 @@ modules/tez-printer/
   android/src/main/java/expo/modules/tezprinter/SerialTaskQueue.kt
   android/src/main/java/expo/modules/tezprinter/RetryPolicy.kt
 
-modules/td404-printer/
+modules/td404-tejas-printer/
   src/index.ts
   expo-module.config.json
-  android/src/main/java/expo/modules/td404printer/Td404PrinterModule.kt
+  android/src/main/java/expo/modules/td404tejasprinter/Td404TejasPrinterModule.kt
 
 modules/josh-printer/
   src/index.ts
@@ -4825,7 +4825,7 @@ class RetryPolicy(
 
 ### 4. TD-404 — Ninestar labelprinter | SEZNIK TEJAS / RUDRA
 
-#### `modules/td404-printer/expo-module.config.json` (6 lines)
+#### `modules/td404-tejas-printer/expo-module.config.json` (6 lines)
 
 ```json
 {
@@ -4836,7 +4836,7 @@ class RetryPolicy(
 }
 ```
 
-#### `modules/td404-printer/src/index.ts` (288 lines)
+#### `modules/td404-tejas-printer/src/index.ts` (288 lines)
 
 ```ts
 import { requireNativeModule } from 'expo-modules-core';
@@ -5128,7 +5128,7 @@ export async function renderPdfPages(
 }
 ```
 
-#### `modules/td404-printer/android/src/main/java/expo/modules/td404printer/Td404PrinterModule.kt` (922 lines)
+#### `modules/td404-tejas-printer/android/src/main/java/expo/modules/td404tejasprinter/Td404TejasPrinterModule.kt` (922 lines)
 
 ```kotlin
 package expo.modules.td404printer

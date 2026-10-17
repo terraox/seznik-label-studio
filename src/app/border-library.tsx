@@ -4,6 +4,7 @@ import { FlatList, Pressable, Text, useWindowDimensions, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BorderPreview } from '@/components/border-preview';
+import { borderShapeForMedia } from '@/printing/raster/border-shapes';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import {
   BORDER_CATEGORIES,
@@ -30,10 +31,14 @@ export default function BorderLibraryScreen() {
     from?: string;
     style?: string;
     edgeGap?: string;
+    mediaShape?: string;
   }>();
   const from = firstParam(params.from);
   const applying = from === 'edit' || from === 'label-settings';
   const requested = firstParam(params.style);
+  // Circle labels preview each style as a ring, matching what the canvas and print draw.
+  const previewShape = borderShapeForMedia(firstParam(params.mediaShape));
+  const round = previewShape !== 'rect';
   const [selectedId, setSelectedId] = useState<BorderStyleId>(
     requested && BORDER_LIBRARY.some((item) => item.id === requested)
       ? (requested as BorderStyleId)
@@ -110,8 +115,10 @@ export default function BorderLibraryScreen() {
                 active && styles.cardActive,
                 pressed && styles.pressed,
               ]}>
-              <View style={styles.previewBox}>
-                <BorderPreview styleId={item.id} />
+              <View style={[styles.previewBox, round && styles.previewBoxRound]}>
+                <View style={round ? styles.previewRound : styles.previewFill}>
+                  <BorderPreview styleId={item.id} shape={previewShape} />
+                </View>
               </View>
               <Text style={styles.borderName}>{item.name}</Text>
               <Text style={styles.borderCategory}>{item.category}</Text>
@@ -177,6 +184,9 @@ const styles = themedStyles((c, scheme) => ({
     padding: 10,
     marginBottom: 8,
   },
+  previewBoxRound: { alignItems: 'center', justifyContent: 'center' },
+  previewFill: { flex: 1 },
+  previewRound: { height: 68, width: 68 },
   borderName: {
     fontSize: 13,
     fontWeight: '700',

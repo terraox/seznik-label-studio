@@ -12,7 +12,7 @@ Audit date: 2026-09-17. Line numbers are accurate as of that date; re-verify bef
 | | TD-404 | JOSH | DEV | TEZ |
 |---|---|---|---|---|
 | Vendor / protocol | Ninestar, TSPL | DothanTech LPAPI | Caysn AutoReplyPrint (TSPL **and** ESC/POS) | Flashlabel OEM PrintSDK |
-| Native module | `modules/td404-printer/` | `modules/josh-printer/` | `modules/dev-printer/` | `modules/tez-printer/` |
+| Native module | `modules/td404-tejas-printer/` | `modules/josh-printer/` | `modules/dev-printer/` | `modules/tez-printer/` |
 | Real head DPI | 304 (also 203) | 203 | 203 | 203 |
 | Takes a raw PNG? | yes | yes | yes | yes |
 | Byte alignment needed | yes (TSPL `BITMAP` width is in bytes) | **no** (Bitmap API) | yes for TSPL + ESC/POS raster | **no** (Bitmap API) |

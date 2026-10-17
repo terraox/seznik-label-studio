@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["expo.modules.td404rudraprinter.Td404RudraPrinterModule"]
+  }
+}

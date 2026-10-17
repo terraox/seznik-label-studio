@@ -6,13 +6,17 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 
+import { usePrinterStore } from '@/stores/printer-store';
+
 export type PrintTraceRecord = Record<string, string | number | boolean | null | undefined>;
 
 function emitPipelineLogcat(body: string): void {
   if (Platform.OS !== 'android') return;
   try {
     const mod = requireOptionalNativeModule<{ logPipelineTrace?: (message: string) => void }>(
-      'Td404Printer',
+      usePrinterStore.getState().selectedPrinterModel === 'rudra'
+        ? 'Td404RudraPrinter'
+        : 'Td404TejasPrinter',
     );
     mod?.logPipelineTrace?.(body);
   } catch {

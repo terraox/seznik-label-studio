@@ -30,7 +30,7 @@ export async function fetchPrinterBatteryPercent(ctx: BatteryFetchContext): Prom
 
   if (!ctx.deviceId) return null;
   try {
-    const { readSystemBluetoothBatteryPercent } = await import('td404-printer');
+    const { readSystemBluetoothBatteryPercent } = await import('@/lib/printer/td404-bridge');
     return normalizeBatteryPercent(await readSystemBluetoothBatteryPercent(ctx.deviceId));
   } catch {
     return null;

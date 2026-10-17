@@ -48,9 +48,9 @@ flowchart TD
 
 Confirmed from source, not from the architecture narrative. This verdict only authorizes **which** bridge Stage B will use. It does **not** authorize starting Stage B before GATE-A.
 
-- Live path is [`printPngLabel`](modules/td404-printer/android/src/main/java/expo/modules/td404printer/Td404PrinterModule.kt) → `printPngLabelNative`: Base64 PNG decode, optional rotate, scale to `floor(mm × dotsPerMm / 8) × 8`, luminance threshold (default 160) or Floyd–Steinberg, MSB-first pack, TSPL `BITMAP` mode 0, then `writeBytesToSocketSync` on our RFCOMM socket.
+- Live path is [`printPngLabel`](modules/td404-tejas-printer/android/src/main/java/expo/modules/td404tejasprinter/Td404TejasPrinterModule.kt) → `printPngLabelNative`: Base64 PNG decode, optional rotate, scale to `floor(mm × dotsPerMm / 8) × 8`, luminance threshold (default 160) or Floyd–Steinberg, MSB-first pack, TSPL `BITMAP` mode 0, then `writeBytesToSocketSync` on our RFCOMM socket.
 - Wire polarity already in that function: buffer prefilled `0xFF` (white = 1), black clears the bit (black = 0). MSB first (`bitIndex = 7 - (x & 7)`).
-- [`printRaw`](modules/td404-printer/android/src/main/java/expo/modules/td404printer/Td404PrinterModule.kt) already writes a `ByteArray` through the same paced socket writer. A full TSPL job can be sent without a new entry point.
+- [`printRaw`](modules/td404-tejas-printer/android/src/main/java/expo/modules/td404tejasprinter/Td404TejasPrinterModule.kt) already writes a `ByteArray` through the same paced socket writer. A full TSPL job can be sent without a new entry point.
 - [`encodeTscBitmapJob`](src/lib/printer/tsc.ts) already wraps a 1-bit raster in TSPL and XORs `0xFF`, so a black=1 logical buffer becomes the same black=0 wire format. It does **not** match the live header: JS emits `DIRECTION 0,0` and omits `SET TEAR ON` / `OFFSET 0 mm`; native emits `DIRECTION 1` plus those commands. Reusing the JS encoder unchanged would change print geometry versus today's TD-404 path.
 
 Closest alternative is Dev (also contract B, hand-built TSPL). It is worse for this proof: writes go through AutoReplyPrint `CP_Port_Write`, `commandSet` can fall into ESC/POS, and width is capped near 378 dots. Josh, Label X, and Tez decode a PNG inside a vendor SDK and have no raw TSPL socket we own. Pull-forward stays TD-404.
@@ -235,7 +235,7 @@ Prefer a **new** native entry point `printMonoLabel` beside `printPngLabel`, not
 - No `BitmapFactory`, no scale, no threshold, no dither on this path.
 - `printPngLabel` stays as it is.
 
-`printRaw` plus a corrected JS header is a fallback if we want zero Kotlin for the first hardware try. It is not the planned contract: the header must match native `DIRECTION 1`, and the bridge fallback in [`printTd404Raw`](modules/td404-printer/src/index.ts) base64-encodes on failure, which hides timing. A dedicated entry returns `writeMs` without a PNG.
+`printRaw` plus a corrected JS header is a fallback if we want zero Kotlin for the first hardware try. It is not the planned contract: the header must match native `DIRECTION 1`, and the bridge fallback in [`printTd404Raw`](modules/td404-tejas-printer/src/index.ts) base64-encodes on failure, which hides timing. A dedicated entry returns `writeMs` without a PNG.
 
 Isolation: a dev-only flag, default **off**, read only in the `usesTd404CommandSet` branch of [`src/app/print.tsx`](src/app/print.tsx). Off → today's `tryNativeSdkPngPrint`. On → rasterize then `printMonoLabel`. Other SDKs stay on ViewShot. Flag off is the rollback.
 

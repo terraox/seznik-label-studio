@@ -605,7 +605,7 @@ class PrinterManager {
   private getTd404() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('td404-printer') as typeof import('td404-printer');
+      return require('@/lib/printer/td404-bridge') as typeof import('@/lib/printer/td404-bridge');
     } catch {
       return null;
     }
