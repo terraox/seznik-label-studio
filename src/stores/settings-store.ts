@@ -135,6 +135,10 @@ type SettingsStoreState = {
   printerNoticeSeen: boolean;
   /** The label-canvas tour has been seen (or skipped) at least once. */
   canvasTutorialSeen: boolean;
+  /** The Print Excel tour has been seen (or skipped) at least once. */
+  excelTutorialSeen: boolean;
+  /** The Data Column copies tour has been seen (or skipped) at least once. */
+  excelColumnsTutorialSeen: boolean;
   /** PDF crop: the one-time "tap again for the bigger block" hint has been shown. */
   smartCropHintSeen: boolean;
   /** Settings → Appearance. Follow system by default. */
@@ -150,6 +154,8 @@ type SettingsStoreState = {
   setTutorialSeen: (seen: boolean) => void;
   setPrinterNoticeSeen: (seen: boolean) => void;
   setCanvasTutorialSeen: (seen: boolean) => void;
+  setExcelTutorialSeen: (seen: boolean) => void;
+  setExcelColumnsTutorialSeen: (seen: boolean) => void;
   setSmartCropHintSeen: (seen: boolean) => void;
   setAppearance: (appearance: AppearancePreference) => void;
   setProfilePhotoUri: (uri: string | null) => void;
@@ -165,6 +171,8 @@ export const useSettingsStore = create<SettingsStoreState>()(
       tutorialSeen: false,
       printerNoticeSeen: false,
       canvasTutorialSeen: false,
+      excelTutorialSeen: false,
+      excelColumnsTutorialSeen: false,
       smartCropHintSeen: false,
       appearance: 'light',
       profilePhotoUri: null,
@@ -180,6 +188,8 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setTutorialSeen: (seen) => set({ tutorialSeen: seen }),
       setPrinterNoticeSeen: (seen) => set({ printerNoticeSeen: seen }),
       setCanvasTutorialSeen: (seen) => set({ canvasTutorialSeen: seen }),
+      setExcelTutorialSeen: (seen) => set({ excelTutorialSeen: seen }),
+      setExcelColumnsTutorialSeen: (seen) => set({ excelColumnsTutorialSeen: seen }),
       setSmartCropHintSeen: (seen) => set({ smartCropHintSeen: seen }),
       setAppearance: (appearance) => set({ appearance }),
       setProfilePhotoUri: (profilePhotoUri) => set({ profilePhotoUri }),

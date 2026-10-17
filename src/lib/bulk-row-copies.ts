@@ -7,7 +7,7 @@ const COPIES_HEADER = /^(copies|qty|quantity|pcs|count)$/i;
 
 export type ParsedCopiesCell = {
   copies: number;
-  /** Text, NaN, negative, or above the per-row cap. Blank is not a change. */
+  /** Anything that is not a whole number from 1 to 99. Blank is not a change. */
   changed: boolean;
 };
 
@@ -28,10 +28,45 @@ export function parseCopiesCell(raw: string | undefined | null): ParsedCopiesCel
   if (!text) return { copies: 1, changed: false };
   const value = Number(text);
   if (!Number.isFinite(value)) return { copies: 1, changed: true };
-  if (value < 0) return { copies: 0, changed: true };
   const floored = Math.floor(value);
-  if (floored > MAX_COPIES_PER_ROW) return { copies: MAX_COPIES_PER_ROW, changed: true };
-  return { copies: floored, changed: false };
+  const copies = Math.min(MAX_COPIES_PER_ROW, Math.max(1, floored));
+  const clean = /^\d+$/.test(text) && floored >= 1 && floored <= MAX_COPIES_PER_ROW;
+  return { copies, changed: !clean };
+}
+
+function columnOrNull(
+  sheet: ExcelSheet,
+  copiesColumnIndex: number | null | undefined,
+): number | null {
+  if (
+    copiesColumnIndex == null ||
+    copiesColumnIndex < 0 ||
+    copiesColumnIndex >= sheet.columns.length
+  ) {
+    return null;
+  }
+  return copiesColumnIndex;
+}
+
+/** A stored editor edit wins when it is a whole number from 1 to 99. */
+export function resolveRowCopies(
+  sheet: ExcelSheet,
+  rowIndex: number,
+  copiesColumnIndex: number | null | undefined,
+  overrides?: Record<string, number> | null,
+): number {
+  const override = overrides?.[String(rowIndex)];
+  if (
+    typeof override === 'number' &&
+    Number.isInteger(override) &&
+    override >= 1 &&
+    override <= MAX_COPIES_PER_ROW
+  ) {
+    return override;
+  }
+  const column = columnOrNull(sheet, copiesColumnIndex);
+  if (column == null) return 1;
+  return parseCopiesCell(sheet.rows[rowIndex]?.[column]).copies;
 }
 
 /** Blank cells are allowed. A column qualifies when it has at least one number and no other text. */
@@ -60,32 +95,45 @@ export function guessCopiesColumnIndex(sheet: ExcelSheet): number | null {
   return null;
 }
 
-export function countChangedCopiesCells(sheet: ExcelSheet, columnIndex: number | null): number {
-  if (columnIndex == null || columnIndex < 0 || columnIndex >= sheet.columns.length) return 0;
-  let changed = 0;
-  for (const row of sheet.rows) {
-    if (parseCopiesCell(row[columnIndex]).changed) changed += 1;
+/** 1-based data-row numbers whose cells were adjusted into 1–99. */
+export function changedCopiesRowNumbers(
+  sheet: ExcelSheet,
+  columnIndex: number | null,
+): number[] {
+  if (columnIndex == null || columnIndex < 0 || columnIndex >= sheet.columns.length) return [];
+  const rows: number[] = [];
+  for (let rowIndex = 0; rowIndex < sheet.rows.length; rowIndex++) {
+    if (parseCopiesCell(sheet.rows[rowIndex]?.[columnIndex]).changed) rows.push(rowIndex + 1);
   }
-  return changed;
+  return rows;
+}
+
+export function countChangedCopiesCells(sheet: ExcelSheet, columnIndex: number | null): number {
+  return changedCopiesRowNumbers(sheet, columnIndex).length;
+}
+
+/** One summary line. Ten or fewer adjusted rows also list those row numbers. */
+export function copiesChangeSummary(sheet: ExcelSheet, columnIndex: number | null): string | null {
+  const rows = changedCopiesRowNumbers(sheet, columnIndex);
+  if (rows.length === 0) return null;
+  const line =
+    rows.length === 1
+      ? '1 value was changed to 1–99'
+      : `${rows.length} values were changed to 1–99`;
+  if (rows.length > 10) return line;
+  return `${line} (rows ${rows.join(', ')})`;
 }
 
 export function planBulkPrint(
   sheet: ExcelSheet,
   copiesColumnIndex: number | null | undefined,
   multiply: number,
+  overrides?: Record<string, number> | null,
 ): BulkPrintPlan {
   const factor = Math.max(1, Math.floor(Number.isFinite(multiply) ? multiply : 1));
-  const column =
-    copiesColumnIndex == null ||
-    copiesColumnIndex < 0 ||
-    copiesColumnIndex >= sheet.columns.length
-      ? null
-      : copiesColumnIndex;
   const rows: BulkPrintRow[] = [];
   for (let rowIndex = 0; rowIndex < sheet.rows.length; rowIndex++) {
-    const parsed =
-      column == null ? { copies: 1, changed: false } : parseCopiesCell(sheet.rows[rowIndex]?.[column]);
-    const copies = parsed.copies * factor;
+    const copies = resolveRowCopies(sheet, rowIndex, copiesColumnIndex, overrides) * factor;
     if (copies > 0) rows.push({ rowIndex, copies });
   }
   const totalPhysical = rows.reduce((sum, row) => sum + row.copies, 0);

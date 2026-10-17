@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -13,6 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '@/components/app-icon';
 import { KindBarcodeGlyph, KindQrGlyph, KindTextGlyph } from '@/components/excel-kind-icons';
 import { ExcelLabelPreview } from '@/components/excel-label-preview';
+import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
+import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 import {
@@ -25,14 +27,18 @@ import {
 } from '@/lib/bulk-labels';
 import {
   copiesColumnChoices,
-  countChangedCopiesCells,
+  copiesChangeSummary,
   guessCopiesColumnIndex,
 } from '@/lib/bulk-row-copies';
 import type { ExcelSheet } from '@/stores/data-store';
 import { clampLabelMm } from '@/lib/label-geometry';
+import { createUpsConfig, type LabelDocument } from '@/lib/label-document';
+import { EXCEL_COLUMNS_WALKTHROUGH } from '@/lib/walkthrough/excel-steps';
+import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
 import { useDataStore } from '@/stores/data-store';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useWalkthroughStore } from '@/stores/walkthrough-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const KINDS: { id: BulkSlotKind; Glyph: typeof KindTextGlyph }[] = [
@@ -51,6 +57,34 @@ function mappingsForSheet(sheet: ExcelSheet, copiesColumnIndex: number | null): 
   );
 }
 
+function applyExcelLabelSetup(
+  doc: LabelDocument,
+  setup: {
+    name?: string;
+    circle: boolean;
+    columns: number;
+    gapMm: number;
+    batchEdit: boolean;
+  },
+): LabelDocument {
+  const next: LabelDocument = {
+    ...doc,
+    ...(setup.name ? { name: setup.name } : {}),
+    ...(setup.circle ? { mediaShape: 'circle' as const } : {}),
+  };
+  if (setup.columns < 2) return next;
+  const ups = createUpsConfig({
+    columns: setup.columns,
+    columnSpacingMm: setup.gapMm,
+    batchEdit: setup.batchEdit,
+    seedElements: next.elements,
+  });
+  ups.panels[0] = next.elements;
+  next.ups = ups;
+  next.templateCategory = 'Multi-UP';
+  return next;
+}
+
 function paramMm(value: string | string[] | undefined, fallback: number): number {
   const raw = firstParam(value);
   if (!raw) return fallback;
@@ -65,6 +99,11 @@ export default function ExcelBulkSetupScreen() {
     excelFileId?: string | string[];
     widthMm?: string | string[];
     heightMm?: string | string[];
+    labelName?: string | string[];
+    mediaShape?: string | string[];
+    columns?: string | string[];
+    gapMm?: string | string[];
+    batchEdit?: string | string[];
     sheetIndex?: string | string[];
     targetLabelId?: string | string[];
   }>();
@@ -75,6 +114,11 @@ export default function ExcelBulkSetupScreen() {
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const getDocument = useLabelStore((s) => s.getDocument);
   const defaults = useSettingsStore((s) => s.defaults);
+  const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const stopWalkthrough = useWalkthroughStore((s) => s.stop);
+  const setExcelColumnsTutorialSeen = useSettingsStore((s) => s.setExcelColumnsTutorialSeen);
+  const scrollRef = useRef<import('react-native').ScrollView>(null);
+  const scrollY = useRef(0);
 
   const file = excelFiles.find((f) => f.id === excelFileId) ?? null;
   const initialSheet = Number.parseInt(firstParam(params.sheetIndex) ?? '', 10);
@@ -95,6 +139,40 @@ export default function ExcelBulkSetupScreen() {
     sheet ? mappingsForSheet(sheet, guessCopiesColumnIndex(sheet)) : [],
   );
   const [displayHead, setDisplayHead] = useState(false);
+  const labelName = firstParam(params.labelName);
+  const circle = firstParam(params.mediaShape) === 'circle';
+  const across = Number.parseInt(firstParam(params.columns) ?? '1', 10);
+  const gapMm = Number.parseFloat(firstParam(params.gapMm) ?? '0');
+  const batchEdit = firstParam(params.batchEdit) === '1';
+
+  useEffect(() => {
+    setWalkthroughScroller((dy) =>
+      scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + dy), animated: false }),
+    );
+    return () => setWalkthroughScroller(null);
+  }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const maybeStart = () => {
+      if (useSettingsStore.getState().excelColumnsTutorialSeen) return;
+      timer = setTimeout(() => startWalkthrough('excel'), 500);
+    };
+    if (useSettingsStore.persist.hasHydrated()) maybeStart();
+    const unsub = useSettingsStore.persist.onFinishHydration(maybeStart);
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
+  }, [startWalkthrough]);
+
+  useEffect(
+    () => () => {
+      const { active, tour } = useWalkthroughStore.getState();
+      if (active && tour === 'excel') useWalkthroughStore.getState().stop();
+    },
+    [],
+  );
 
   const columnCount = sheet?.columns.length ?? 0;
   const syncedMappings = useMemo(() => {
@@ -110,7 +188,7 @@ export default function ExcelBulkSetupScreen() {
   const canConfirm = Boolean(file && sheet && includedCount > 0 && sheet.rows.length > 0);
   const copiesChoices = sheet ? copiesColumnChoices(sheet) : [];
   const activeCopiesIndex = copiesChoices.includes(copiesColumnIndex ?? -1) ? copiesColumnIndex : null;
-  const changedCopies = sheet ? countChangedCopiesCells(sheet, activeCopiesIndex) : 0;
+  const copiesWarning = sheet ? copiesChangeSummary(sheet, activeCopiesIndex) : null;
   const copiesColumnName =
     sheet && activeCopiesIndex != null ? sheet.columns[activeCopiesIndex] ?? 'Copies' : null;
 
@@ -180,7 +258,7 @@ export default function ExcelBulkSetupScreen() {
     }
 
     const doc = createBulkLabelDocument({
-      name: `${file.name} · ${sheet.rows.length} labels`,
+      name: labelName || `${file.name} · ${sheet.rows.length} labels`,
       widthMm: labelSize.widthMm,
       heightMm: labelSize.heightMm,
       orientation: defaults.orientation,
@@ -198,7 +276,14 @@ export default function ExcelBulkSetupScreen() {
       Alert.alert('Unable to create labels', 'Include at least one column.');
       return;
     }
-    upsertDocument(doc);
+    upsertDocument(
+      applyExcelLabelSetup(doc, {
+        circle,
+        columns: Number.isFinite(across) ? across : 1,
+        gapMm: Number.isFinite(gapMm) ? gapMm : 0,
+        batchEdit,
+      }),
+    );
     router.replace({ pathname: '/edit', params: { labelId: doc.id } });
   };
 
@@ -230,16 +315,31 @@ export default function ExcelBulkSetupScreen() {
           <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
         </Pressable>
         <Text style={styles.headerTitle}>Data Column</Text>
-        <Pressable
-          disabled={!canConfirm}
-          onPress={handleConfirm}
-          hitSlop={8}
-          style={({ pressed }) => [styles.headerAction, pressed && canConfirm && styles.pressed]}>
-          <Text style={[styles.confirmHeader, !canConfirm && styles.confirmHeaderOff]}>Confirm</Text>
-        </Pressable>
+        <View style={styles.headerRight}>
+          <Pressable
+            onPress={() => startWalkthrough('excel')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Copies walkthrough"
+            style={({ pressed }) => [styles.helpBtn, pressed && styles.pressed]}>
+            <AppIcon name="questionmark.circle.fill" tintColor={C.onAccent} size={22} />
+          </Pressable>
+          <Pressable
+            disabled={!canConfirm}
+            onPress={handleConfirm}
+            hitSlop={8}
+            style={({ pressed }) => [styles.headerAction, pressed && canConfirm && styles.pressed]}>
+            <Text style={[styles.confirmHeader, !canConfirm && styles.confirmHeaderOff]}>Confirm</Text>
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
+        ref={scrollRef}
+        onScroll={(e) => {
+          scrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         style={styles.body}
         contentContainerStyle={styles.bodyContent}
         keyboardShouldPersistTaps="handled">
@@ -266,11 +366,15 @@ export default function ExcelBulkSetupScreen() {
           </View>
         ) : null}
 
+        <WalkthroughTarget id="excel.copies">
         <View style={styles.copiesCard}>
           <Text style={styles.copiesTitle}>
             {copiesColumnName
               ? `Copies column: ${copiesColumnName}`
               : 'Copies column: None — each row prints once'}
+          </Text>
+          <Text style={styles.copiesNote}>
+            Each row starts from this column. You can change one label’s count in the editor. A blank cell starts at 1. 0, text, and numbers outside 1–99 are adjusted. None starts every row at 1.
           </Text>
           <View style={styles.sheetChips}>
             <Pressable
@@ -295,13 +399,12 @@ export default function ExcelBulkSetupScreen() {
           {copiesChoices.length === 0 ? (
             <Text style={styles.copiesNote}>No number columns in this sheet.</Text>
           ) : null}
-          {changedCopies > 0 ? (
-            <Text style={styles.copiesNote}>
-              {changedCopies === 1 ? '1 value was changed' : `${changedCopies} values were changed`}
-            </Text>
-          ) : null}
+          {copiesWarning ? <Text style={styles.copiesNote}>{copiesWarning}</Text> : null}
         </View>
+        </WalkthroughTarget>
 
+        <WalkthroughTarget id="excel.columns">
+        <View>
         {sheet.columns.map((name, columnIndex) => {
           const mapping = syncedMappings[columnIndex] ?? {
             columnIndex,
@@ -343,6 +446,8 @@ export default function ExcelBulkSetupScreen() {
             </View>
           );
         })}
+        </View>
+        </WalkthroughTarget>
       </ScrollView>
 
       <View style={[styles.dock, { paddingBottom: insets.bottom + 12 }]}>
@@ -357,6 +462,14 @@ export default function ExcelBulkSetupScreen() {
         </View>
         <ExcelLabelPreview sheet={sheet} mappings={syncedMappings} displayHead={displayHead} />
       </View>
+      <WalkthroughOverlay
+        tour="excel"
+        steps={EXCEL_COLUMNS_WALKTHROUGH}
+        onFinish={() => {
+          setExcelColumnsTutorialSeen(true);
+          stopWalkthrough();
+        }}
+      />
     </View>
   );
 }
@@ -382,6 +495,8 @@ const styles = themedStyles((c) => ({
     fontSize: 17,
     fontWeight: '600',
   },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  helpBtn: { width: 32, height: 36, alignItems: 'center', justifyContent: 'center' },
   headerAction: { minWidth: 72, alignItems: 'flex-end', paddingRight: 4 },
   confirmHeader: { color: c.onAccent, fontSize: 16, fontWeight: '400' },
   confirmHeaderOff: { color: 'rgba(255,255,255,0.4)' }, // theme-fixed: white on header

@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import Svg, { Path } from 'react-native-svg';
 
-import { barcodeModulesForMode } from '@/lib/barcode-code128';
+import { barcodeBarsForMode } from '@/lib/barcode-code128';
+import { formatBarcodeHri } from '@/lib/barcode/hri';
 import type { BulkColumnMapping } from '@/lib/bulk-labels';
 import { Palette } from '@/constants/ui';
 import type { ExcelSheet } from '@/stores/data-store';
@@ -13,24 +15,37 @@ type ExcelLabelPreviewProps = {
   displayHead: boolean;
 };
 
+const BARCODE_INK = '#111111';
+
+/** Same bar geometry the canvas uses: one filled run per bar, scaled to the box. */
 function PreviewBarcode({ value }: { value: string }) {
-  const units = useMemo(() => {
-    const modules = barcodeModulesForMode('CODE-128', value.trim() || '12345678');
-    if (!modules || modules.length === 0) return [1, 1, 1, 1, 1, 1];
-    const next: boolean[] = [];
-    let bar = true;
-    for (const width of modules) {
-      for (let i = 0; i < width; i++) next.push(bar);
-      bar = !bar;
-    }
-    return next;
-  }, [value]);
+  const content = value.trim();
+  const barsPath = useMemo(() => {
+    if (!content) return null;
+    const bars = barcodeBarsForMode('CODE-128', content);
+    if (!bars || bars.length === 0) return '';
+    return bars
+      .map((bar) => {
+        const x = bar.x * 1000;
+        const w = Math.max(bar.width * 1000, 0.55);
+        return `M${x},0h${w}v100h-${w}Z`;
+      })
+      .join(' ');
+  }, [content]);
+
+  if (!content) return null;
+  if (!barsPath) {
+    return <Text style={styles.invalid}>Invalid barcode content</Text>;
+  }
 
   return (
     <View style={styles.barcode}>
-      {units.map((on, i) => (
-        <View key={i} style={[styles.barcodeUnit, on ? styles.barcodeOn : styles.barcodeOff]} />
-      ))}
+      <Svg width="100%" height={52} viewBox="0 0 1000 100" preserveAspectRatio="none">
+        <Path d={barsPath} fill={BARCODE_INK} />
+      </Svg>
+      <Text style={styles.barcodeText} numberOfLines={1}>
+        {formatBarcodeHri('CODE-128', content)}
+      </Text>
     </View>
   );
 }
@@ -90,12 +105,14 @@ const styles = StyleSheet.create({
   },
   barcode: {
     width: '100%',
-    height: 78,
-    flexDirection: 'row',
-    alignItems: 'stretch',
+    gap: 2,
   },
-  barcodeUnit: { flex: 1, minWidth: 1 },
-  barcodeOn: { backgroundColor: '#111111' },
-  barcodeOff: { backgroundColor: 'transparent' },
+  barcodeText: {
+    color: BARCODE_INK,
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
+  },
+  invalid: { color: Palette.muted, fontSize: 13 },
   qrWrap: { marginTop: 4 },
 });

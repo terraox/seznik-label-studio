@@ -710,7 +710,12 @@ export default function PrintScreen() {
     if (!baseDocument?.bulk) return null;
     const sheet = resolveBulkSheet(excelFiles, baseDocument.bulk);
     if (!sheet) return null;
-    return planBulkPrint(sheet, baseDocument.bulk.copiesColumnIndex ?? null, copies);
+    return planBulkPrint(
+      sheet,
+      baseDocument.bulk.copiesColumnIndex ?? null,
+      copies,
+      baseDocument.bulk.rowCopiesOverrides,
+    );
   }, [baseDocument, excelFiles, copies]);
 
   const buildPageDocument = useCallback(
@@ -999,7 +1004,12 @@ export default function PrintScreen() {
     const bulkSheet = baseDocument?.bulk ? resolveBulkSheet(excelFiles, baseDocument.bulk) : null;
     const bulkPlan =
       baseDocument?.bulk && bulkSheet
-        ? planBulkPrint(bulkSheet, baseDocument.bulk.copiesColumnIndex ?? null, copies)
+        ? planBulkPrint(
+            bulkSheet,
+            baseDocument.bulk.copiesColumnIndex ?? null,
+            copies,
+            baseDocument.bulk.rowCopiesOverrides,
+          )
         : null;
     if (bulkPlan?.allZero) {
       printingLockRef.current = false;
@@ -1107,6 +1117,9 @@ export default function PrintScreen() {
         const { page, sendCopies } = printJobs[jobIndex];
         if (bulkPlan) {
           labelsSent += sendCopies;
+          console.info(
+            `[print] label ${page} copies ${sendCopies} total ${labelsSent}`,
+          );
           setPrintProgress(
             `Row ${jobIndex + 1} / ${printJobs.length} · ${labelsSent} / ${bulkPlan.totalPhysical} labels`,
           );
@@ -2100,9 +2113,10 @@ export default function PrintScreen() {
               onCommitValue={setCopies}
               bordered
             />
-            {bulkPrintPlan ? (
+            {bulkPrintPlan && baseDocument?.bulk ? (
               <Text style={styles.bulkTotal}>
-                {bulkPrintPlan.totalPhysical} {bulkPrintPlan.totalPhysical === 1 ? 'label' : 'labels'}
+                {bulkPrintPlan.totalPhysical} {bulkPrintPlan.totalPhysical === 1 ? 'label' : 'labels'} from{' '}
+                {baseDocument.bulk.rowCount} {baseDocument.bulk.rowCount === 1 ? 'design' : 'designs'}
               </Text>
             ) : null}
 

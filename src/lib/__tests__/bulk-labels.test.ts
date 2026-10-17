@@ -424,6 +424,14 @@ test('copies column index is stored and does not change projected elements', () 
   );
   const unmarked = projectBulkDocument(plain, sheet, 0);
   assert.deepEqual(marked.elements, unmarked.elements);
+
+  const edited = projectBulkDocument(
+    { ...plain, bulk: { ...plain.bulk!, rowCopiesOverrides: { '0': 4, '1': 9 } } },
+    sheet,
+    0,
+  );
+  assert.deepEqual(edited.elements, unmarked.elements);
+  assert.deepEqual(edited.bulk?.rowCopiesOverrides, { '0': 4, '1': 9 });
 });
 
 test('display head prefixes text slot values', () => {

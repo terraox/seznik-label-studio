@@ -78,8 +78,10 @@ export type BulkLabelSet = {
   qrErrorLevel: QrErrorLevel;
   /** When true, text slots render as `Column: value`. */
   displayHead?: boolean;
-  /** Sheet column used as per-row copies. Null or absent means every row prints once. */
+  /** Sheet column used as the starting copies count. Null or absent means every row starts at 1. */
   copiesColumnIndex?: number | null;
+  /** Sparse editor edits, keyed by sheet row index. A positive integer here wins over the column. */
+  rowCopiesOverrides?: Record<string, number>;
 };
 
 export function bulkSlotId(columnIndex: number): string {
@@ -483,6 +485,7 @@ export function createBulkLabelDocument(params: {
     qrErrorLevel,
     displayHead: Boolean(params.displayHead),
     copiesColumnIndex: params.copiesColumnIndex ?? null,
+    rowCopiesOverrides: {},
   };
   const doc = createLabelDocument({
     name: params.name,

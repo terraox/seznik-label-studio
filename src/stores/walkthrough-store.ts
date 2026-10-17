@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 /** Which tour is running. Each screen's overlay renders only for its own tour. */
-export type WalkthroughTour = 'home' | 'canvas';
+export type WalkthroughTour = 'home' | 'canvas' | 'excel';
 
 type WalkthroughState = {
   active: boolean;
@@ -14,7 +14,8 @@ type WalkthroughState = {
 
 /**
  * Runtime tour state (not persisted). First-run flags live in settings-store
- * (`tutorialSeen` for Home, `canvasTutorialSeen` for the label canvas).
+ * (`tutorialSeen` for Home, `canvasTutorialSeen` for the label canvas,
+ * `excelTutorialSeen` for Print Excel, `excelColumnsTutorialSeen` for Data Column).
  */
 export const useWalkthroughStore = create<WalkthroughState>((set) => ({
   active: false,

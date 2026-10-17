@@ -22,6 +22,11 @@ export default function ExcelDataPreviewScreen() {
     excelFileId?: string | string[];
     widthMm?: string | string[];
     heightMm?: string | string[];
+    labelName?: string | string[];
+    mediaShape?: string | string[];
+    columns?: string | string[];
+    gapMm?: string | string[];
+    batchEdit?: string | string[];
     targetLabelId?: string | string[];
   }>();
   const excelFileId = firstParam(params.excelFileId);
@@ -49,6 +54,11 @@ export default function ExcelDataPreviewScreen() {
         sheetIndex: String(sheetIndex),
         ...(firstParam(params.widthMm) ? { widthMm: firstParam(params.widthMm) } : {}),
         ...(firstParam(params.heightMm) ? { heightMm: firstParam(params.heightMm) } : {}),
+        ...(firstParam(params.labelName) ? { labelName: firstParam(params.labelName) } : {}),
+        ...(firstParam(params.mediaShape) ? { mediaShape: firstParam(params.mediaShape) } : {}),
+        ...(firstParam(params.columns) ? { columns: firstParam(params.columns) } : {}),
+        ...(firstParam(params.gapMm) ? { gapMm: firstParam(params.gapMm) } : {}),
+        ...(firstParam(params.batchEdit) ? { batchEdit: firstParam(params.batchEdit) } : {}),
         ...(firstParam(params.targetLabelId)
           ? { targetLabelId: firstParam(params.targetLabelId) }
           : {}),

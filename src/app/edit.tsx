@@ -219,6 +219,7 @@ import { editorBridge, barcodeEncodeModeForScanType, isBorderRemoval, isQrScanTy
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple, Type } from '@/constants/ui';
+import { resolveRowCopies } from '@/lib/bulk-row-copies';
 import {
   applyGeometryToAllLabels,
   applyGeometryToThisLabel,
@@ -246,6 +247,7 @@ import {
 } from '@/lib/label-document';
 import { isFontNameReady } from '@/lib/fonts/font-ready';
 import { resolveLabelSettings } from '@/lib/label-settings';
+import { BulkCopiesBar, BULK_COPIES_BAR_HEIGHT_PX } from '@/components/bulk-copies-bar';
 import { BulkLabelNav } from '@/components/bulk-label-nav';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
@@ -840,7 +842,9 @@ export default function EditScreen() {
   const basePxPerMMSv = useSharedValue(1);
   const liveScaleSv = useSharedValue(1);
   const showBulkNav = Boolean(doc.bulk && doc.bulk.rowCount > 1);
-  const bulkNavReservePx = showBulkNav ? BULK_LABEL_NAV_HEIGHT_PX : 0;
+  const showBulkCopies = Boolean(doc.bulk);
+  const bulkNavReservePx =
+    (showBulkNav ? BULK_LABEL_NAV_HEIGHT_PX : 0) + (showBulkCopies ? BULK_COPIES_BAR_HEIGHT_PX : 0);
   const splitViewportForCanvas = Math.max(0, splitViewportH - bulkNavReservePx);
   const panelDefaultBase = showBulkNav ? BULK_PANEL_DEFAULT_HEIGHT_PX : PANEL_DEFAULT_HEIGHT_PX;
   const panelDefaultForSplit =
@@ -3167,6 +3171,39 @@ export default function EditScreen() {
     router.push({ pathname: '/print', params: { labelId: docRef.current.id } });
   }, [saveDocument]);
 
+  const savedBulkCopies = doc.bulk?.rowCopiesOverrides?.[String(doc.bulk.activeRowIndex)];
+  const bulkCopiesValue =
+    typeof savedBulkCopies === 'number' &&
+    Number.isInteger(savedBulkCopies) &&
+    savedBulkCopies >= 1 &&
+    savedBulkCopies <= 99
+      ? savedBulkCopies
+      : doc.bulk && bulkSheet
+        ? resolveRowCopies(
+            bulkSheet,
+            doc.bulk.activeRowIndex,
+            doc.bulk.copiesColumnIndex,
+            doc.bulk.rowCopiesOverrides,
+          )
+        : 1;
+
+  const commitBulkCopies = useCallback((nextCount: number) => {
+    const current = docRef.current;
+    if (!current.bulk) return;
+    const key = String(current.bulk.activeRowIndex);
+    if (current.bulk.rowCopiesOverrides?.[key] === nextCount) return;
+    const next = {
+      ...current,
+      bulk: {
+        ...current.bulk,
+        rowCopiesOverrides: { ...(current.bulk.rowCopiesOverrides ?? {}), [key]: nextCount },
+      },
+    };
+    docRef.current = next;
+    setDoc(next);
+    setDirty(true);
+  }, []);
+
   const applyLabelSize = useCallback(
     (widthMm: number, heightMm: number, mode: StockSizeHandling) => {
       if (isRatTail143Document(docRef.current)) return;
@@ -4811,6 +4848,14 @@ export default function EditScreen() {
             style={styles.canvasTourTarget}>
             {renderCanvas()}
           </View>
+
+          {doc.bulk ? (
+            <BulkCopiesBar
+              value={bulkCopiesValue}
+              rowKey={doc.bulk.activeRowIndex}
+              onCommit={commitBulkCopies}
+            />
+          ) : null}
 
           {showBulkNav ? (
             <BulkLabelNav
