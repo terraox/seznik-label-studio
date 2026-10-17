@@ -19,13 +19,12 @@ import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import {
   filterShopProducts,
   formatSizeKey,
-  groupShopProducts,
+  groupPrintersByCategory,
   uniqueSizes,
   uniqueTypes,
-  type ShopProductGroup,
 } from '@/lib/shop/filter-catalog';
 import { loadShopCatalog } from '@/lib/shop/load-catalog';
-import type { ShopCatalog, ShopCategory } from '@/lib/shop/types';
+import type { ShopCatalog, ShopCategory, ShopProduct } from '@/lib/shop/types';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const GRID_COLUMNS = 2;
@@ -33,9 +32,15 @@ const GRID_GAP = 12;
 const GRID_PAD = Spacing.three;
 
 const CATEGORIES: { id: ShopCategory; label: string }[] = [
-  { id: 'printers', label: 'Printers' },
-  { id: 'labels', label: 'Labels' },
+  { id: 'printers', label: 'Seznik Printers' },
+  { id: 'labels', label: 'Label Rolls' },
 ];
+
+type ShopListSection = {
+  key: string;
+  title: string | null;
+  products: ShopProduct[];
+};
 
 export default function ShopScreen() {
   useThemeRefresh();
@@ -88,17 +93,32 @@ export default function ShopScreen() {
         : [],
     [catalog, category, query, type, size],
   );
-  const groups = useMemo(() => groupShopProducts(products), [products]);
+  const sections = useMemo<ShopListSection[]>(() => {
+    if (category === 'printers') {
+      return groupPrintersByCategory(products).map((group) => ({
+        ...group,
+        title: group.title,
+      }));
+    }
+    if (products.length === 0) return [];
+    return [{ key: 'labels-grid', title: null, products }];
+  }, [category, products]);
 
   function renderEmpty() {
     if (category === 'printers') {
+      if (!catalog || catalog.printers.length === 0) {
+        return (
+          <View style={styles.empty}>
+            <AppIcon name="bag" tintColor={C.brandInk} size={22} />
+            <Text style={styles.emptyTitle}>No printers</Text>
+            <Text style={styles.emptyBody}>The printer catalogue is empty.</Text>
+          </View>
+        );
+      }
       return (
         <View style={styles.empty}>
-          <AppIcon name="bag" tintColor={C.brandInk} size={22} />
-          <Text style={styles.emptyTitle}>Printer catalogue coming soon</Text>
-          <Text style={styles.emptyBody}>
-            This tab is ready for printer listings. Label rolls are in Labels.
-          </Text>
+          <Text style={styles.emptyTitle}>No matching printers</Text>
+          <Text style={styles.emptyBody}>Clear search or filters to see the full catalogue.</Text>
         </View>
       );
     }
@@ -118,16 +138,28 @@ export default function ShopScreen() {
     );
   }
 
+  const hero =
+    category === 'printers'
+      ? {
+          eyebrow: 'Machines',
+          title: 'Seznik printers on Amazon.',
+          body: 'Browse Seznik machines and open the product page. Store links are used when Amazon is unavailable.',
+        }
+      : {
+          eyebrow: 'Supplies',
+          title: 'Label rolls on Amazon.',
+          body: 'Browse Seznik stock and open the product page.',
+        };
+
+  const noun = category === 'printers' ? 'printers' : 'labels';
+
   const header = (
     <View style={styles.headerBlock}>
       <View style={styles.hero}>
         <View style={styles.heroCopy}>
-          <Text style={styles.heroEyebrow}>Supplies</Text>
-          <Text style={styles.heroTitle}>Label rolls on Amazon.</Text>
-          <Text style={styles.heroBody}>
-            Browse Seznik stock and open the product page. Printers will land in this shop when
-            that catalogue is added.
-          </Text>
+          <Text style={styles.heroEyebrow}>{hero.eyebrow}</Text>
+          <Text style={styles.heroTitle}>{hero.title}</Text>
+          <Text style={styles.heroBody}>{hero.body}</Text>
         </View>
         <View style={styles.heroMark}>
           <AppIcon name="bag.fill" tintColor={C.onAccent} size={22} />
@@ -154,36 +186,38 @@ export default function ShopScreen() {
         })}
       </View>
 
+      <View style={styles.searchWrap}>
+        <AppIcon name="magnifyingglass" tintColor={C.textMuted} size={16} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder={
+            category === 'printers' ? 'Search printer name or category' : 'Search name, type, or size'
+          }
+          placeholderTextColor={C.textMuted}
+          value={query}
+          onChangeText={setQuery}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
+      </View>
+      <Text style={styles.filterHeading}>Type</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRow}>
+        <FilterChip label="All" active={type == null} onPress={() => setType(null)} />
+        {types.map((item) => (
+          <FilterChip
+            key={item}
+            label={item}
+            active={type === item}
+            onPress={() => setType(item === type ? null : item)}
+          />
+        ))}
+      </ScrollView>
       {category === 'labels' ? (
         <>
-          <View style={styles.searchWrap}>
-            <AppIcon name="magnifyingglass" tintColor={C.textMuted} size={16} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search name, type, or size"
-              placeholderTextColor={C.textMuted}
-              value={query}
-              onChangeText={setQuery}
-              autoCorrect={false}
-              autoCapitalize="none"
-              returnKeyType="search"
-            />
-          </View>
-          <Text style={styles.filterHeading}>Type</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipRow}>
-            <FilterChip label="All" active={type == null} onPress={() => setType(null)} />
-            {types.map((item) => (
-              <FilterChip
-                key={item}
-                label={item}
-                active={type === item}
-                onPress={() => setType(item === type ? null : item)}
-              />
-            ))}
-          </ScrollView>
           <Text style={styles.filterHeading}>Size</Text>
           <ScrollView
             horizontal
@@ -199,11 +233,11 @@ export default function ShopScreen() {
               />
             ))}
           </ScrollView>
-          <Text style={styles.count}>
-            {products.length} of {sourceProducts.length} labels
-          </Text>
         </>
       ) : null}
+      <Text style={styles.count}>
+        {products.length} of {sourceProducts.length} {noun}
+      </Text>
     </View>
   );
 
@@ -226,11 +260,11 @@ export default function ShopScreen() {
       ) : (
         <FlatList
           style={styles.scroll}
-          data={groups}
-          keyExtractor={(item: ShopProductGroup) => item.key}
+          data={sections}
+          keyExtractor={(item: ShopListSection) => item.key}
           renderItem={({ item }) => (
             <View style={styles.group}>
-              <Text style={styles.groupTitle}>{item.title}</Text>
+              {item.title ? <Text style={styles.groupTitle}>{item.title}</Text> : null}
               <View style={styles.grid}>
                 {item.products.map((product) => (
                   <ProductCard key={product.id} product={product} width={cardWidth} />

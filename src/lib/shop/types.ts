@@ -15,6 +15,7 @@ export type ShopProduct = {
   name: string;
   imageUrl: string;
   amazonUrl: string;
+  storeUrl?: string;
   type: string;
   imageSource: string;
   category: ShopCategory;

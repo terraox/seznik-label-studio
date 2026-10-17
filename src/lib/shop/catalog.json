@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-16T09:50:21.924Z",
-  "source": "scripts/shop/pro-list.xlsx#Roll Products",
+  "generatedAt": "2026-10-17T05:35:46.584Z",
+  "source": "scripts/shop/pro-list.xlsx#Roll Products + scripts/shop/seznik-printers.xlsx#Printer Catalogue",
   "labels": [
     {
       "id": "100x150mm-1200",
@@ -1076,7 +1076,426 @@
       }
     }
   ],
-  "printers": [],
+  "printers": [
+    {
+      "id": "josh",
+      "name": "Josh",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/josh.png?v=1784116088",
+      "amazonUrl": "https://www.amazon.in/dp/B0CVF9YPPD",
+      "storeUrl": "https://www.seznik.in/products/seznik-josh-label-printer",
+      "type": "Label Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Josh",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0CVF9YPPD",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "tej",
+      "name": "Tej",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/tej.png?v=1784116088",
+      "amazonUrl": "https://www.amazon.in/dp/B0F1HDRSF1",
+      "storeUrl": "https://www.seznik.in/products/tej-bluetooth-mini-thermal-label-printer-for-business-office-home-students-inkless-thermal-mobile-desktop-compatible-58-mm-2-inches-1-year-warranty-tej-label-printer",
+      "type": "Label Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Tej",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0F1HDRSF1",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "shakti",
+      "name": "Shakti",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/shakti.png?v=1784116088",
+      "amazonUrl": "https://www.amazon.in/dp/B0DYNS66BT",
+      "storeUrl": "https://www.seznik.in/products/shakti-shipping-label-printer-4-6-label-adjustable-label-size-print-bluetooth-usb-connect-inkless-thermal-print-from-mobile-laptop-does-not-support-seller-flex-1year-warranty",
+      "type": "Label Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Shakti",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0DYNS66BT",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "label-x",
+      "name": "Label X",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/labels_x_web.png?v=1785581619",
+      "amazonUrl": "https://www.amazon.in/SEZNIK-Shipping-Printer-Bluetooth-Printing/dp/B0GZG4R46S",
+      "storeUrl": "https://www.seznik.in/products/seznik-labelx-shipping-label-printer-bundle-with-roll-holder-4x6-thermal-labels-bluetooth-usb-inkless-printer-400-labels-for-amazon-meesho-courier-barcode-printing",
+      "type": "Label Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Label X",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0GZG4R46S",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "rudra",
+      "name": "Rudra",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/rudra.png?v=1784116088",
+      "amazonUrl": "https://www.amazon.in/dp/B0GZ8GJ472",
+      "storeUrl": "https://www.seznik.in/products/seznik-rudra-thermal-label-printer-direct-thermal-transfer-e-commerce-304-dpi-hd-print-usb-bluetooth-wifi-shipping-jewellery-excel-print-mrp-barcode-1-year-warranty-no-sellerflex",
+      "type": "Label Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Rudra",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0GZ8GJ472",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "tejas",
+      "name": "Tejas",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/tejas.png?v=1784116088",
+      "amazonUrl": "https://www.amazon.in/SEZNIK-Bluetooth-Commerce-Jewellery-SellerFlex/dp/B0GZ9XFWZX/ref=sr_1_4?nsdOptOutParam=true&s=kitchen&sr=1-4",
+      "storeUrl": "https://www.seznik.in/products/seznik-tejas-shipping-label-printer-304-dpi-hd-print-usb-bluetooth-direct-thermal-label-printer-for-e-commerce-mrp-sticker-jewellery-excel-barcode-1-year-warranty-no-sellerflex",
+      "type": "Label Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Tejas",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0GZ9XFWZX",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "ved",
+      "name": "VED",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/ved_printyer.png?v=1791277778",
+      "amazonUrl": "https://www.amazon.in/SEZNIK-Bluetooth-Shipping-Ecommerce-Wireless/dp/B0HK45HM11/ref=asc_df_B0HK45HM11?mcid=b988ac0af755351eabe2a8b15dc0ce40&hvadid=709963085918&hvpos=&hvnetw=g&hvrand=16617021994902136219&hvpone=&hvptwo=&hvqmt=&hvdev=c&hvdvcmdl=&hvlocint=&hvlocphy=9062101&hvtargid=pla-2504673786676&hvocijid=16617021994902136219-B0HK45HM11-&hvexpln=0",
+      "storeUrl": "https://www.seznik.in/products/seznik-ved-4x6-bluetooth-shipping-label-printer-for-ecommerce-direct-thermal-1-4-inch-203-dpi-wireless-usb-free-app-software-barcode-android-ios-mac-win-1yr-warranty-no-seller-flex",
+      "type": "Label Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "VED",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0HK45HM11",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "mini-x",
+      "name": "Mini X",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/miniixx.png?v=1784117851",
+      "amazonUrl": "https://www.amazon.in/SEZNIK-Bluetooth-Portable-Compatible-MiniX-Green/dp/B0DG98Q4HD/ref=sr_1_2_sspa?nsdOptOutParam=true&sr=8-2-spons&aref=JUntPXXJDe&sp_csd=d2lkZ2V0TmFtZT1zcF9hdGY",
+      "storeUrl": "https://www.seznik.in/products/seznik-mini-printer-inkless-thermal-bluetooth-portable-printer-compatible-android-ios-mobile-1-year-warranty-minix-white",
+      "type": "Photo & Mini Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Mini X",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0DG98Q4HD",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "nano-x",
+      "name": "Nano X",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/NanoXFront.png?v=1785566358",
+      "amazonUrl": "https://www.amazon.in/SEZNIK-Portable-Bluetooth-Compatible-NanoX-UltraHD/dp/B0CW835TVC",
+      "storeUrl": "https://www.seznik.in/products/seznik-mini-printer-ultra-hd-wireless-print-304-dpi-inkless-portable-monochrome-home-inkjet-printers-bluetooth-printer-compatible-with-android-ios-1-year-warranty-mini-ultrahd-green",
+      "type": "Photo & Mini Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Nano X",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0CW835TVC",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "nexa",
+      "name": "Nexa",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/nexa_102579e4-99cb-44db-9743-a4802895a61c.png?v=1784116088",
+      "amazonUrl": "https://www.amazon.in/SEZNIK-Printer-Bluetooth-Portable-Printing/dp/B0GZBDBS6L",
+      "storeUrl": "https://www.seznik.in/products/seznik-nexa-mini-printer-for-mobile-bluetooth-portable-mini-thermal-printer-304-dpi-inkless-sticker-image-labels-doodle-notes-printer-mobile-printing-for-android-ios-windows",
+      "type": "Photo & Mini Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Nexa",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0GZBDBS6L",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "eon",
+      "name": "Eon",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/Eon.png?v=1785565635",
+      "amazonUrl": "https://www.amazon.in/SEZNIK-Bluetooth-Portable-Compatible-EON-PhantomBlue/dp/B0DVT7284B",
+      "storeUrl": "https://www.seznik.in/products/seznik-mini-printer-inkless-thermal-bluetooth-portable-printer-compatible-android-ios-mobile-1-year-warranty-eon-phantomblue",
+      "type": "Photo & Mini Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Eon",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0DVT7284B",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "veer",
+      "name": "Veer",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/veer.png?v=1784117231",
+      "amazonUrl": "https://www.amazon.in/dp/B0F3FFM7N9",
+      "storeUrl": "https://www.seznik.in/products/veer-bluetooth-usb-thermal-receipt-printer-58-mm-rechargeable-inkless-mobile-desktop-compatible-veer-receipt-printer",
+      "type": "Photo & Mini Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Veer",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0F3FFM7N9",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "dev",
+      "name": "Dev",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/dev.png?v=1784116088",
+      "amazonUrl": "https://www.amazon.in/SEZNIK-Bluetooth-Business-Compatible-Warranty/dp/B0FJ7QX6NQ",
+      "storeUrl": "https://www.seznik.in/products/seznik-dev-bluetooth-thermal-label-receipt-printer-for-business-inkless-mini-203-dpi-mobile-desktop-compatible-upto-2-inch-print-lifetime-free-label-print-app-1-year-warranty",
+      "type": "Photo & Mini Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Dev",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0FJ7QX6NQ",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "neo",
+      "name": "Neo",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/Neo.png?v=1785565684",
+      "amazonUrl": "https://www.amazon.in/dp/B0DYKN8XX3",
+      "storeUrl": "https://www.seznik.in/products/seznik-mini-camera-printer-click-photo-print-inkless-bluetooth-hd-print-android-ios-instant-print-neo-blue",
+      "type": "Photo & Mini Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Neo",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0DYKN8XX3",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "nova",
+      "name": "Nova",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/nova_blue.png?v=1785585168",
+      "amazonUrl": "https://www.amazon.in/dp/B0DYKN8XX3",
+      "storeUrl": "https://www.seznik.in/products/seznik-mini-camera-printer-click-photo-print-inkless-bluetooth-hd-print-android-ios-instant-print-neo-blue",
+      "type": "Photo & Mini Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Nova",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0DYKN8XX3",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "lite",
+      "name": "Lite",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/A4_lite.png?v=1784116088",
+      "amazonUrl": "https://www.amazon.in/SEZNIK-Portable-Bluetooth-Compatible-Lite-203DPI-Black/dp/B0DZ1JYX3G",
+      "storeUrl": "https://www.seznik.in/products/portable-a4-printer-bluetooth-inkless-thermal-printer-usb-bluetooth-compatible-with-android-ios-laptop-1-year-warranty-lite-203dpi-black",
+      "type": "A4 Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Lite",
+      "linkAudit": {
+        "kind": "product",
+        "host": "www.amazon.in",
+        "asin": "B0DZ1JYX3G",
+        "flags": [],
+        "openable": true
+      }
+    },
+    {
+      "id": "standard",
+      "name": "Standard",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/A4.png?v=1784116088",
+      "amazonUrl": "https://amzn.in/d/07U633Na",
+      "type": "A4 Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Standard",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    },
+    {
+      "id": "pro-hd",
+      "name": "Pro+HD",
+      "imageUrl": "https://cdn.shopify.com/s/files/1/0644/3309/4820/files/pro_HD_b3b85729-8ec1-44dc-a0a3-8d5762469613.png?v=1784375378",
+      "amazonUrl": "https://amzn.in/d/0c3BqZ0H",
+      "type": "A4 Printers",
+      "imageSource": "",
+      "category": "printers",
+      "sizeLabel": null,
+      "quantityLabel": null,
+      "widthMm": null,
+      "heightMm": null,
+      "quantity": null,
+      "detailLabel": "Pro+HD",
+      "linkAudit": {
+        "kind": "short_link",
+        "host": "amzn.in",
+        "asin": null,
+        "flags": [
+          "short_link",
+          "no_asin_dp"
+        ],
+        "openable": true
+      }
+    }
+  ],
   "flags": [
     {
       "id": "25x15-2500",
@@ -1319,6 +1738,18 @@
       "detail": "amzn.in"
     },
     {
+      "id": "standard",
+      "name": "Standard",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "pro-hd",
+      "name": "Pro+HD",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
       "id": "magic-sticky-3rolls",
       "name": "Magic Sticky - (3 Rolls) - Normal",
       "kind": "duplicate_amazon_url",
@@ -1329,6 +1760,18 @@
       "name": "Magic-Sticky - 3 Rolls",
       "kind": "duplicate_amazon_url",
       "detail": "https://amzn.in/d/09ilynRs"
+    },
+    {
+      "id": "neo",
+      "name": "Neo",
+      "kind": "duplicate_amazon_url",
+      "detail": "https://www.amazon.in/dp/B0DYKN8XX3"
+    },
+    {
+      "id": "nova",
+      "name": "Nova",
+      "kind": "duplicate_amazon_url",
+      "detail": "https://www.amazon.in/dp/B0DYKN8XX3"
     }
   ]
 }

@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { ProductImage } from '@/components/shop/product-image';
 import { androidRipple } from '@/constants/ui';
-import { openAmazonUrl } from '@/lib/shop/amazon-url';
+import { openProductUrl } from '@/lib/shop/amazon-url';
 import { productDisplayTitle } from '@/lib/shop/filter-catalog';
 import { typeTokens } from '@/lib/shop/parse-product';
 import type { ShopProduct } from '@/lib/shop/types';
@@ -14,21 +14,41 @@ type Props = {
   width: number;
 };
 
+function hasStoreUrl(product: ShopProduct): boolean {
+  const store = product.storeUrl?.trim() ?? '';
+  if (!store) return false;
+  try {
+    const parsed = new URL(store);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export function ProductCard({ product, width }: Props) {
   useThemeRefresh();
   const [opening, setOpening] = useState(false);
   const types = typeTokens(product.type);
   const title = productDisplayTitle(product);
+  const amazonOpenable = product.linkAudit.openable;
+  const storeOpenable = hasStoreUrl(product);
+  const canBuy = amazonOpenable || storeOpenable;
+  const buyLabel = amazonOpenable ? 'Buy on Amazon' : storeOpenable ? 'Buy on Seznik' : 'Unavailable';
+  const buyA11y = amazonOpenable
+    ? `Buy ${product.name} on Amazon`
+    : storeOpenable
+      ? `Buy ${product.name} on Seznik`
+      : `Unavailable: ${product.name}`;
 
   async function onBuy() {
     if (opening) return;
     setOpening(true);
     try {
-      const result = await openAmazonUrl(product.amazonUrl);
+      const result = await openProductUrl(product);
       if (!result.ok) {
         Alert.alert(
           'Link unavailable',
-          'This Amazon link could not be opened. The product URL was not changed.',
+          'This product link could not be opened. The product URL was not changed.',
         );
       }
     } finally {
@@ -45,35 +65,45 @@ export function ProductCard({ product, width }: Props) {
             {title}
           </Text>
           <View style={styles.meta}>
-            {types.map((token) => (
-              <View key={token} style={styles.typePill}>
-                <Text style={styles.typeText} numberOfLines={1}>
-                  {token}
-                </Text>
-              </View>
-            ))}
+            {product.category === 'printers' ? (
+              product.type ? (
+                <View style={styles.typePill}>
+                  <Text style={styles.typeText} numberOfLines={1}>
+                    {product.type}
+                  </Text>
+                </View>
+              ) : null
+            ) : (
+              types.map((token) => (
+                <View key={token} style={styles.typePill}>
+                  <Text style={styles.typeText} numberOfLines={1}>
+                    {token}
+                  </Text>
+                </View>
+              ))
+            )}
           </View>
-          <Text style={styles.qty} numberOfLines={1}>
-            {product.quantityLabel ?? ' '}
-          </Text>
+          {product.category === 'labels' ? (
+            <Text style={styles.qty} numberOfLines={1}>
+              {product.quantityLabel ?? ' '}
+            </Text>
+          ) : null}
         </View>
         <Pressable
           onPress={() => void onBuy()}
-          disabled={opening || !product.linkAudit.openable}
+          disabled={opening || !canBuy}
           android_ripple={androidRipple}
           accessibilityRole="button"
-          accessibilityLabel={`Buy ${product.name} on Amazon`}
+          accessibilityLabel={buyA11y}
           style={({ pressed }) => [
             styles.buy,
             pressed && styles.buyPressed,
-            (!product.linkAudit.openable || opening) && styles.buyDisabled,
+            (!canBuy || opening) && styles.buyDisabled,
           ]}>
           {opening ? (
             <ActivityIndicator color={C.onAccent} size="small" />
           ) : (
-            <Text style={styles.buyLabel}>
-              {product.linkAudit.openable ? 'Buy on Amazon' : 'Unavailable'}
-            </Text>
+            <Text style={styles.buyLabel}>{buyLabel}</Text>
           )}
         </Pressable>
       </View>

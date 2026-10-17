@@ -1,8 +1,9 @@
 /**
- * Read scripts/shop/pro-list.xlsx (Roll Products) and write
+ * Read scripts/shop/pro-list.xlsx (Roll Products) and
+ * scripts/shop/seznik-printers.xlsx (Printer Catalogue) and write
  * src/lib/shop/catalog.json + catalog-flags.json.
  *
- * Does not rewrite Amazon or image URLs. Derived size/qty is display-only.
+ * Does not rewrite Amazon, store, or image URLs. Derived size/qty is display-only.
  *
  * Usage: node scripts/shop/generate-catalog.mjs
  */
@@ -16,7 +17,8 @@ const XLSX = require('xlsx');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
-const SOURCE = path.join(__dirname, 'pro-list.xlsx');
+const LABELS_SOURCE = path.join(__dirname, 'pro-list.xlsx');
+const PRINTERS_SOURCE = path.join(__dirname, 'seznik-printers.xlsx');
 const OUT_DIR = path.join(ROOT, 'src/lib/shop');
 
 const RECT_SIZE = /(\d+(?:\.\d+)?)\s*[xX×]\s*(\d+(?:\.\d+)?)\s*mm/i;
@@ -135,17 +137,53 @@ function cell(row, key) {
   return String(value).trim();
 }
 
-const wb = XLSX.readFile(SOURCE, { raw: false, defval: null });
-if (!wb.SheetNames.includes('Roll Products')) {
-  throw new Error(`Missing "Roll Products" sheet. Found: ${wb.SheetNames.join(', ')}`);
+function slugId(name) {
+  return String(name ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\+/g, '-')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
-const rows = XLSX.utils.sheet_to_json(wb.Sheets['Roll Products'], { defval: null, raw: false });
+
+function pushLinkFlags(flags, product) {
+  const { id, name, amazonUrl, linkAudit } = product;
+  if (linkAudit.kind === 'unusual_domain') {
+    flags.push({ id, name, kind: 'unusual_domain', detail: linkAudit.host ?? undefined });
+  }
+  if (linkAudit.kind === 'short_link') {
+    flags.push({ id, name, kind: 'short_link', detail: linkAudit.host ?? undefined });
+  }
+  if (linkAudit.kind === 'invalid') {
+    flags.push({ id, name, kind: 'invalid_amazon_url', detail: amazonUrl || 'missing' });
+  }
+}
+
+const labelsWb = XLSX.readFile(LABELS_SOURCE, { raw: false, defval: null });
+if (!labelsWb.SheetNames.includes('Roll Products')) {
+  throw new Error(`Missing "Roll Products" sheet. Found: ${labelsWb.SheetNames.join(', ')}`);
+}
+const labelRows = XLSX.utils.sheet_to_json(labelsWb.Sheets['Roll Products'], {
+  defval: null,
+  raw: false,
+});
+
+const printersWb = XLSX.readFile(PRINTERS_SOURCE, { raw: false, defval: null });
+if (!printersWb.SheetNames.includes('Printer Catalogue')) {
+  throw new Error(`Missing "Printer Catalogue" sheet. Found: ${printersWb.SheetNames.join(', ')}`);
+}
+const printerRows = XLSX.utils.sheet_to_json(printersWb.Sheets['Printer Catalogue'], {
+  defval: null,
+  raw: false,
+});
 
 const labels = [];
+const printers = [];
 const flags = [];
 const amazonCounts = new Map();
+const printerIds = new Set();
 
-for (const row of rows) {
+for (const row of labelRows) {
   const id = cell(row, 'Product ID');
   const name = cell(row, 'Product Name');
   const imageUrl = cell(row, 'Product Image Link');
@@ -156,7 +194,7 @@ for (const row of rows) {
   const linkAudit = classifyAmazonUrl(amazonUrl);
   amazonCounts.set(amazonUrl, (amazonCounts.get(amazonUrl) ?? 0) + 1);
 
-  labels.push({
+  const product = {
     id,
     name,
     imageUrl,
@@ -177,27 +215,65 @@ for (const row of rows) {
       flags: linkAudit.flags,
       openable: linkAudit.openable,
     },
-  });
+  };
+  labels.push(product);
 
   if (id === 'new-waterproof-amazon-product') {
     flags.push({ id, name, kind: 'placeholder_id', detail: id });
   }
-  if (linkAudit.kind === 'unusual_domain') {
-    flags.push({ id, name, kind: 'unusual_domain', detail: linkAudit.host ?? undefined });
-  }
-  if (linkAudit.kind === 'short_link') {
-    flags.push({ id, name, kind: 'short_link', detail: linkAudit.host ?? undefined });
-  }
-  if (linkAudit.kind === 'invalid') {
-    flags.push({ id, name, kind: 'invalid_amazon_url', detail: amazonUrl || 'missing' });
-  }
+  pushLinkFlags(flags, product);
   if (typeNameMismatch(type, name)) {
     flags.push({ id, name, kind: 'type_name_mismatch', detail: `Type=${type}` });
   }
 }
 
-for (const product of labels) {
-  if ((amazonCounts.get(product.amazonUrl) ?? 0) > 1) {
+for (const row of printerRows) {
+  const name = cell(row, 'Printer Name');
+  const id = slugId(name);
+  if (!id) {
+    throw new Error(`Printer row is missing a name: ${JSON.stringify(row)}`);
+  }
+  if (printerIds.has(id)) {
+    throw new Error(`Duplicate printer slug "${id}" from name "${name}"`);
+  }
+  printerIds.add(id);
+
+  const imageUrl = cell(row, 'Image URL');
+  const amazonUrl = cell(row, 'Amazon Link');
+  const storeUrl = cell(row, 'Store Product URL');
+  const type = cell(row, 'Category');
+  const linkAudit = classifyAmazonUrl(amazonUrl);
+  amazonCounts.set(amazonUrl, (amazonCounts.get(amazonUrl) ?? 0) + 1);
+
+  const product = {
+    id,
+    name,
+    imageUrl,
+    amazonUrl,
+    ...(storeUrl ? { storeUrl } : {}),
+    type,
+    imageSource: '',
+    category: 'printers',
+    sizeLabel: null,
+    quantityLabel: null,
+    widthMm: null,
+    heightMm: null,
+    quantity: null,
+    detailLabel: name,
+    linkAudit: {
+      kind: linkAudit.kind,
+      host: linkAudit.host,
+      asin: linkAudit.asin,
+      flags: linkAudit.flags,
+      openable: linkAudit.openable,
+    },
+  };
+  printers.push(product);
+  pushLinkFlags(flags, product);
+}
+
+for (const product of [...labels, ...printers]) {
+  if (product.amazonUrl && (amazonCounts.get(product.amazonUrl) ?? 0) > 1) {
     flags.push({
       id: product.id,
       name: product.name,
@@ -209,9 +285,10 @@ for (const product of labels) {
 
 const catalog = {
   generatedAt: new Date().toISOString(),
-  source: 'scripts/shop/pro-list.xlsx#Roll Products',
+  source:
+    'scripts/shop/pro-list.xlsx#Roll Products + scripts/shop/seznik-printers.xlsx#Printer Catalogue',
   labels,
-  printers: [],
+  printers,
   flags,
 };
 
@@ -226,5 +303,5 @@ const unusual = flags.filter((f) => f.kind === 'unusual_domain').length;
 const short = flags.filter((f) => f.kind === 'short_link').length;
 const dup = flags.filter((f) => f.kind === 'duplicate_amazon_url').length;
 console.log(
-  `Wrote ${labels.length} labels, 0 printers, ${flags.length} flags (unusual=${unusual} short=${short} duplicate_url=${dup})`,
+  `Wrote ${labels.length} labels, ${printers.length} printers, ${flags.length} flags (unusual=${unusual} short=${short} duplicate_url=${dup})`,
 );

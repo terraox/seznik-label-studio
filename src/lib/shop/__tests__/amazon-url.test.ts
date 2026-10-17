@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { classifyAmazonUrl, openAmazonUrl } from '@/lib/shop/amazon-url';
+import { classifyAmazonUrl, openAmazonUrl, openProductUrl } from '@/lib/shop/amazon-url';
 
 test('product dp URLs stay amazon.in and are openable', () => {
   const url = 'https://www.amazon.in/dp/B0GT9ZZFCC';
@@ -52,4 +52,37 @@ test('invalid URLs are not opened and not replaced with a search URL', async () 
   assert.equal(result.ok, false);
   assert.equal(result.openedUrl, null);
   assert.deepEqual(opened, []);
+});
+
+test('openProductUrl keeps exact Amazon dp URLs including ref=sr tracking', async () => {
+  const source =
+    'https://www.amazon.in/SEZNIK-Bluetooth-Commerce-Jewellery-SellerFlex/dp/B0GZ9XFWZX/ref=sr_1_4?nsdOptOutParam=true&s=kitchen&sr=1-4';
+  const opened: string[] = [];
+  const result = await openProductUrl(
+    { amazonUrl: source, storeUrl: 'https://www.seznik.in/products/seznik-tejas-shipping-label-printer-304-dpi-hd-print-usb-bluetooth-direct-thermal-label-printer-for-e-commerce-mrp-sticker-jewellery-excel-barcode-1-year-warranty-no-sellerflex' },
+    async (url) => {
+      opened.push(url);
+      return true;
+    },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.openedUrl, source);
+  assert.deepEqual(opened, [source]);
+  assert.equal(opened[0]?.includes('/s?'), false);
+  assert.equal(opened[0]?.includes('s?k='), false);
+});
+
+test('openProductUrl falls back to store URL when Amazon is not openable', async () => {
+  const store = 'https://www.seznik.in/products/seznik-josh-label-printer';
+  const opened: string[] = [];
+  const result = await openProductUrl(
+    { amazonUrl: 'not-a-url', storeUrl: store },
+    async (url) => {
+      opened.push(url);
+      return true;
+    },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.openedUrl, store);
+  assert.deepEqual(opened, [store]);
 });

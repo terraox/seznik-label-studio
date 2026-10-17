@@ -1,5 +1,5 @@
 {
-  "source": "scripts/shop/pro-list.xlsx#Roll Products",
+  "source": "scripts/shop/pro-list.xlsx#Roll Products + scripts/shop/seznik-printers.xlsx#Printer Catalogue",
   "flags": [
     {
       "id": "25x15-2500",
@@ -242,6 +242,18 @@
       "detail": "amzn.in"
     },
     {
+      "id": "standard",
+      "name": "Standard",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
+      "id": "pro-hd",
+      "name": "Pro+HD",
+      "kind": "short_link",
+      "detail": "amzn.in"
+    },
+    {
       "id": "magic-sticky-3rolls",
       "name": "Magic Sticky - (3 Rolls) - Normal",
       "kind": "duplicate_amazon_url",
@@ -252,6 +264,18 @@
       "name": "Magic-Sticky - 3 Rolls",
       "kind": "duplicate_amazon_url",
       "detail": "https://amzn.in/d/09ilynRs"
+    },
+    {
+      "id": "neo",
+      "name": "Neo",
+      "kind": "duplicate_amazon_url",
+      "detail": "https://www.amazon.in/dp/B0DYKN8XX3"
+    },
+    {
+      "id": "nova",
+      "name": "Nova",
+      "kind": "duplicate_amazon_url",
+      "detail": "https://www.amazon.in/dp/B0DYKN8XX3"
     }
   ]
 }

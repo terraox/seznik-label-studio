@@ -77,18 +77,24 @@ export function classifyAmazonUrl(raw: string | null | undefined): ClassifiedAma
 
 export type OpenUrlFn = (url: string) => Promise<boolean>;
 
-/**
- * Open the exact source URL. Never substitutes a generic Amazon search page.
- */
-export async function openAmazonUrl(
-  raw: string,
-  openUrl?: OpenUrlFn,
-): Promise<{ ok: boolean; openedUrl: string | null; reason?: string }> {
-  const classified = classifyAmazonUrl(raw);
-  if (!classified.openable) {
-    return { ok: false, openedUrl: null, reason: classified.flags[0] ?? 'invalid' };
+export type ShopBuyTarget = {
+  amazonUrl: string;
+  storeUrl?: string;
+};
+
+function isHttpUrl(raw: string): boolean {
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
   }
-  const openedUrl = classified.url;
+}
+
+async function openExactUrl(
+  openedUrl: string,
+  openUrl?: OpenUrlFn,
+): Promise<{ ok: boolean; openedUrl: string; reason?: string }> {
   try {
     if (openUrl) {
       const ok = await openUrl(openedUrl);
@@ -103,4 +109,35 @@ export async function openAmazonUrl(
   } catch {
     return { ok: false, openedUrl, reason: 'open_failed' };
   }
+}
+
+/**
+ * Open the exact source URL. Never substitutes a generic Amazon search page.
+ */
+export async function openAmazonUrl(
+  raw: string,
+  openUrl?: OpenUrlFn,
+): Promise<{ ok: boolean; openedUrl: string | null; reason?: string }> {
+  const classified = classifyAmazonUrl(raw);
+  if (!classified.openable) {
+    return { ok: false, openedUrl: null, reason: classified.flags[0] ?? 'invalid' };
+  }
+  return openExactUrl(classified.url, openUrl);
+}
+
+/**
+ * Open the exact Amazon URL when it is openable. Otherwise open the store URL.
+ * Never rewrites Amazon `/dp/` links (including `ref=sr` tracking) into search pages.
+ */
+export async function openProductUrl(
+  product: ShopBuyTarget,
+  openUrl?: OpenUrlFn,
+): Promise<{ ok: boolean; openedUrl: string | null; reason?: string }> {
+  const amazon = await openAmazonUrl(product.amazonUrl, openUrl);
+  if (amazon.ok) return amazon;
+  const store = typeof product.storeUrl === 'string' ? product.storeUrl.trim() : '';
+  if (store && isHttpUrl(store)) {
+    return openExactUrl(store, openUrl);
+  }
+  return amazon;
 }

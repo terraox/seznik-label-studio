@@ -28,6 +28,7 @@ export function formatSizeKey(key: string): string {
 }
 
 export function productDisplayTitle(product: ShopProduct): string {
+  if (product.category === 'printers') return product.name;
   if (product.widthMm != null && product.heightMm != null) {
     return `${product.widthMm} × ${product.heightMm} mm`;
   }
@@ -85,6 +86,35 @@ export function groupShopProducts(products: ShopProduct[]): ShopProductGroup[] {
   return groups;
 }
 
+export const PRINTER_CATEGORY_ORDER = [
+  'Label Printers',
+  'Photo & Mini Printers',
+  'A4 Printers',
+] as const;
+
+export function groupPrintersByCategory(products: ShopProduct[]): ShopProductGroup[] {
+  const groups: ShopProductGroup[] = [];
+  const index = new Map<string, ShopProductGroup>();
+  for (const product of products) {
+    const key = product.type.trim() || 'Other';
+    let group = index.get(key);
+    if (!group) {
+      group = { key, title: key, products: [] };
+      index.set(key, group);
+      groups.push(group);
+    }
+    group.products.push(product);
+  }
+  const order = new Map(PRINTER_CATEGORY_ORDER.map((name, i) => [name, i]));
+  groups.sort((a, b) => {
+    const ia = order.get(a.key) ?? Number.POSITIVE_INFINITY;
+    const ib = order.get(b.key) ?? Number.POSITIVE_INFINITY;
+    if (ia !== ib) return ia - ib;
+    return a.title.localeCompare(b.title);
+  });
+  return groups;
+}
+
 export function uniqueTypes(products: ShopProduct[]): string[] {
   const set = new Set<string>();
   for (const product of products) {
@@ -116,6 +146,7 @@ function matchesQuery(product: ShopProduct, query: string): boolean {
     product.sizeLabel ?? '',
     product.quantityLabel ?? '',
     product.detailLabel,
+    product.storeUrl ?? '',
   ]
     .join(' ')
     .toLowerCase();
@@ -136,13 +167,13 @@ export function filterShopProducts(
   products: ShopProduct[],
   filters: ShopFilterState,
 ): ShopProduct[] {
-  return products
-    .filter(
-      (product) =>
-        product.category === filters.category &&
-        matchesQuery(product, filters.query) &&
-        matchesType(product, filters.type) &&
-        matchesSize(product, filters.size),
-    )
-    .sort(compareShopProducts);
+  const filtered = products.filter(
+    (product) =>
+      product.category === filters.category &&
+      matchesQuery(product, filters.query) &&
+      matchesType(product, filters.type) &&
+      matchesSize(product, filters.size),
+  );
+  if (filters.category === 'printers') return filtered;
+  return filtered.sort(compareShopProducts);
 }
