@@ -5,6 +5,7 @@ import {
   createLabelDocument,
   createUpsConfig,
   upsPanelDocument,
+  upsTileCellDocument,
   type LabelElement,
 } from '@/lib/label-document';
 
@@ -87,5 +88,29 @@ assert.equal(untouched.elements[0]?.id, 'b1');
 
 const plain = createLabelDocument({ name: 'one', widthMm: 40, heightMm: 20 });
 assert.equal(upsPanelDocument(plain, 0), plain);
+
+const round = createLabelDocument({
+  name: '2-up circle',
+  widthMm: 30,
+  heightMm: 30,
+  mediaShape: 'circle',
+  elements: [border('c0', 30, 30)],
+});
+round.ups = createUpsConfig({ columns: 2, columnSpacingMm: 2, seedElements: round.elements });
+assert.equal(round.mediaShape, 'circle', 'each edited cell stays a circle');
+const roundSheet = composeUpsDocument(round);
+assert.equal(roundSheet.mediaShape, undefined, 'the row is not one circle');
+assert.equal(roundSheet.upsTile?.shape, 'circle');
+assert.equal(roundSheet.upsTile?.columns, 2);
+assert.equal(roundSheet.upsTile?.cellWidthMm, 30);
+assert.equal(roundSheet.upsTile?.gapMm, 2);
+assert.equal(roundSheet.widthMm, 62);
+const roundCell = upsTileCellDocument(roundSheet, 0);
+const roundStored = defaultBorderPlacement(30, 30);
+assert.equal(roundCell?.mediaShape, 'circle');
+assert.equal(roundCell?.widthMm, 30);
+assert.equal(roundCell?.heightMm, 30);
+assert.equal(roundCell?.elements[0]?.left, roundStored.left);
+assert.equal(upsTileCellDocument(roundSheet, 1)?.elements.length, 0);
 
 console.log('ok ups-panel-document');

@@ -9,7 +9,7 @@ import { PrintRulerLayer } from '@/components/print-ruler-layer';
 import { StockSilhouetteOverlay } from '@/components/stock-silhouette';
 import { ElementContentView } from '@/components/editor/element-renderer';
 import { useVisibleTextRevision } from '@/lib/visible-text-layout';
-import { elementSizeMm, type LabelDocument } from '@/lib/label-document';
+import { elementSizeMm, upsTileCellDocument, type LabelDocument } from '@/lib/label-document';
 import { fitLabelSize, mediaShapeClipStyle } from '@/lib/label-geometry';
 import { printGridKnockoutsMm, printGridSpacingMm } from '@/lib/print-grid';
 import { printRulerEnabled } from '@/lib/print-ruler';
@@ -332,10 +332,52 @@ function LabelCanvas({
   bakeTd404Feed?: boolean;
   shiftMm?: ShiftMm;
 }) {
-  const gridSpacingMm = printGridSpacingMm(document);
-  const rulerOn = printRulerEnabled(document);
   const elements = document.elements;
   const gridKnockouts = useMemo(() => printGridKnockoutsMm({ elements }), [elements]);
+  const tile = document.upsTile;
+  if (tile && fitted.scale > 0) {
+    return (
+      <View
+        collapsable={false}
+        style={[{ width: fitted.widthPx || 1, height: fitted.heightPx || 1, backgroundColor: 'transparent' }, style]}>
+        {Array.from({ length: tile.columns }, (_, index) => {
+          const cell = upsTileCellDocument(document, index);
+          if (!cell) return null;
+          const left = (tile.originXMm + index * (tile.cellWidthMm + tile.gapMm)) * fitted.scale;
+          const top = tile.originYMm * fitted.scale;
+          return (
+            <View
+              key={index}
+              collapsable={false}
+              style={{
+                position: 'absolute',
+                left,
+                top,
+                width: Math.max(1, tile.cellWidthMm * fitted.scale),
+                height: Math.max(1, tile.cellHeightMm * fitted.scale),
+              }}>
+              <LabelCanvas
+                document={cell}
+                fitted={{
+                  widthPx: Math.max(1, tile.cellWidthMm * fitted.scale),
+                  heightPx: Math.max(1, tile.cellHeightMm * fitted.scale),
+                  scale: fitted.scale,
+                }}
+                showBorder={showBorder}
+                hideNonPrinting={hideNonPrinting}
+                printDpi={printDpi}
+                bakeTd404Feed={bakeTd404Feed}
+                shiftMm={shiftMm}
+              />
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
+
+  const gridSpacingMm = printGridSpacingMm(document);
+  const rulerOn = printRulerEnabled(document);
   return (
     <ArtboardFrame
       document={document}

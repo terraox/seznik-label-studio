@@ -666,7 +666,18 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
                 contentFit="contain"
                 style={styles.emptyLogo}
               />
-              <Text style={styles.emptyHint}>Tap or drag a tool onto the label</Text>
+              <Text
+                style={[
+                  styles.emptyHint,
+                  doc.mediaShape === 'circle' || doc.mediaShape === 'ellipse'
+                    ? {
+                        width: Math.round((doc.mediaShape === 'circle' ? Math.min(w, h) : w) * 0.58),
+                        textAlign: 'center',
+                      }
+                    : null,
+                ]}>
+                Tap or drag a tool onto the label
+              </Text>
             </View>
           ) : null}
 

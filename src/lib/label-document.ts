@@ -159,6 +159,20 @@ export type LabelElement = (
 
 export type LabelElementOfType<T extends ElementType> = Extract<LabelElement, { type: T }>;
 
+/**
+ * A flattened multi-up sheet whose cells are circles or ellipses.
+ * The sheet stays a rectangle so the row is not clipped into one shape.
+ */
+export type UpsTile = {
+  shape: 'circle' | 'ellipse';
+  columns: number;
+  gapMm: number;
+  cellWidthMm: number;
+  cellHeightMm: number;
+  originXMm: number;
+  originYMm: number;
+};
+
 /** Multi-up (2ups / 3ups / 4ups): edit one panel at a time; print tiles them in a row. */
 export type LabelUpsConfig = {
   columns: number;
@@ -200,6 +214,8 @@ export type LabelDocument = {
   templateCategory?: string;
   /** Present when this label is an N-up series edited panel-by-panel. */
   ups?: LabelUpsConfig;
+  /** Present on a flattened N-up sheet whose cells keep a circle or ellipse outline. */
+  upsTile?: UpsTile;
   /** Excel bulk set: one saved label, many rows projected onto the canvas. */
   bulk?: BulkLabelSet;
   /** Per-label print/layout options (mirror mode, offsets, gap, etc.). */
@@ -401,6 +417,9 @@ export function composeUpsDocument(doc: LabelDocument): LabelDocument {
     }
   }
 
+  const cellShape =
+    synced.mediaShape === 'circle' || synced.mediaShape === 'ellipse' ? synced.mediaShape : null;
+
   return {
     ...synced,
     id: synced.id,
@@ -408,6 +427,19 @@ export function composeUpsDocument(doc: LabelDocument): LabelDocument {
     widthMm: Math.round(totalW * 100) / 100,
     heightMm: cellH,
     elements,
+    // Each cell keeps the circle. The sheet itself is the row, not one circle.
+    mediaShape: cellShape ? undefined : synced.mediaShape,
+    upsTile: cellShape
+      ? {
+          shape: cellShape,
+          columns,
+          gapMm: gap,
+          cellWidthMm: cellW,
+          cellHeightMm: cellH,
+          originXMm: 0,
+          originYMm: 0,
+        }
+      : undefined,
     background:
       synced.background?.type === 'color'
         ? synced.background
@@ -416,6 +448,31 @@ export function composeUpsDocument(doc: LabelDocument): LabelDocument {
           : { type: 'color', color: '#FFFFFF' },
     ups: undefined,
     updatedAt: Date.now(),
+  };
+}
+
+/** One cell of a flattened circle/ellipse multi-up sheet, at that cell's own size. */
+export function upsTileCellDocument(doc: LabelDocument, index: number): LabelDocument | null {
+  const tile = doc.upsTile;
+  if (!tile) return null;
+  const i = Math.max(0, Math.min(tile.columns - 1, Math.round(index)));
+  const pitch = tile.cellWidthMm + tile.gapMm;
+  const ox = tile.originXMm + i * pitch;
+  const oy = tile.originYMm;
+  const elements = doc.elements
+    .filter((el) => {
+      const center = el.left + el.width / 2;
+      const col = Math.floor((center - tile.originXMm) / Math.max(pitch, 0.01));
+      return Math.max(0, Math.min(tile.columns - 1, col)) === i;
+    })
+    .map((el) => ({ ...el, left: el.left - ox, top: el.top - oy }));
+  return {
+    ...doc,
+    mediaShape: tile.shape,
+    upsTile: undefined,
+    widthMm: tile.cellWidthMm,
+    heightMm: tile.cellHeightMm,
+    elements,
   };
 }
 

@@ -176,6 +176,48 @@ export function fillEllipse(dest: GrayBitmap, x: number, y: number, w: number, h
   }
 }
 
+/** Turn ink outside each circle/ellipse cell white. Gaps and page corners stay blank. */
+export function whitenOutsideUpsTiles(
+  gray: Uint8Array,
+  width: number,
+  height: number,
+  tile: {
+    shape: 'circle' | 'ellipse';
+    columns: number;
+    originX: number;
+    originY: number;
+    cellWidth: number;
+    cellHeight: number;
+    pitch: number;
+  },
+): void {
+  const columns = Math.max(0, Math.round(tile.columns));
+  const rx = tile.shape === 'circle' ? Math.min(tile.cellWidth, tile.cellHeight) / 2 : tile.cellWidth / 2;
+  const ry = tile.shape === 'circle' ? rx : tile.cellHeight / 2;
+  const safeRx = Math.max(rx, 0.5);
+  const safeRy = Math.max(ry, 0.5);
+  const cx = tile.cellWidth / 2;
+  const cy = tile.cellHeight / 2;
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    const localY = y + 0.5 - tile.originY;
+    for (let x = 0; x < width; x++) {
+      let inside = false;
+      const localBase = x + 0.5 - tile.originX;
+      for (let col = 0; col < columns; col++) {
+        const localX = localBase - col * tile.pitch;
+        const nxx = (localX - cx) / safeRx;
+        const nyy = (localY - cy) / safeRy;
+        if (nxx * nxx + nyy * nyy <= 1) {
+          inside = true;
+          break;
+        }
+      }
+      if (!inside) gray[row + x] = 255;
+    }
+  }
+}
+
 export function applyShapeMask(
   dest: GrayBitmap,
   shape: MediaShapeKind,

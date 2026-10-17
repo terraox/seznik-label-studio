@@ -36,6 +36,7 @@ import {
 import { visibleWrappedLines } from '@/lib/visible-text-layout';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { stretchThenRoundBars } from './barcode-stretch';
+import { whitenOutsideUpsTiles } from './bitmap';
 import { packGrayToMono1bpp } from './bit-packer';
 import { drawJoshEdgeBorder, drawPrintBorder, drawTd404EdgeBorder } from './print-border';
 import { borderShapeForMedia } from './border-shapes';
@@ -202,6 +203,11 @@ let activeDotScale = 1;
 let activeBakeFeed = false;
 let activeEdgeBorders = false;
 
+/** Circle and ellipse cells keep that outline after a multi-up sheet is flattened. */
+function printOutlineShape(doc: LabelDocument): string | undefined {
+  return doc.upsTile?.shape ?? doc.mediaShape;
+}
+
 /** Borders drawn in the post-shift pass (JOSH): visible, unrotated, rectangular die-cut. */
 function isEdgeBorder(el: LabelElement, doc: LabelDocument): el is Extract<LabelElement, { type: 'border' }> {
   return (
@@ -209,7 +215,7 @@ function isEdgeBorder(el: LabelElement, doc: LabelDocument): el is Extract<Label
     el.needPrinting !== false &&
     el.visible !== false &&
     (el.rotation ?? 0) % 360 === 0 &&
-    borderShapeForMedia(doc.mediaShape) === 'rect'
+    borderShapeForMedia(printOutlineShape(doc)) === 'rect'
   );
 }
 
@@ -294,7 +300,7 @@ function drawDocumentToSurface(
             bitmapWidthDots,
             bitmapHeightDots,
             bakeFeed: activeBakeFeed,
-            mediaShape: doc.mediaShape,
+            mediaShape: printOutlineShape(doc),
           });
           break;
         case 'line':
@@ -400,6 +406,19 @@ export function rasterizeDocumentToBitmapTimed(
     Math.round(options.shiftDots?.x ?? 0) * activeDotScale,
     Math.round(options.shiftDots?.y ?? 0) * activeDotScale,
   );
+  const tile = doc.upsTile;
+  if (tile && (tile.shape === 'circle' || tile.shape === 'ellipse')) {
+    const scale = activeDotScale;
+    whitenOutsideUpsTiles(gray, surfW, surfH, {
+      shape: tile.shape,
+      columns: tile.columns,
+      originX: mmToDots(tile.originXMm, dpi) * scale,
+      originY: mmToDots(tile.originYMm, dpi) * scale,
+      cellWidth: mmToDots(tile.cellWidthMm, dpi) * scale,
+      cellHeight: mmToDots(tile.cellHeightMm, dpi) * scale,
+      pitch: mmToDots(tile.cellWidthMm + tile.gapMm, dpi) * scale,
+    });
+  }
   if (activeEdgeBorders) {
     // Same crop the native side applied before (sizeDotsW), then the border layer.
     whitenColumns(gray, surfW, surfH, page.sizeDotsW);

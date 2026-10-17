@@ -990,7 +990,17 @@ export function fitDocumentCenteredOnPage(
     scaled.top = oy + scaled.top;
     return clampElementToLabel(scaled, nextDoc);
   });
-  return { ...nextDoc, elements };
+  const upsTile = doc.upsTile
+    ? {
+        ...doc.upsTile,
+        cellWidthMm: doc.upsTile.cellWidthMm * scale,
+        cellHeightMm: doc.upsTile.cellHeightMm * scale,
+        gapMm: doc.upsTile.gapMm * scale,
+        originXMm: ox + doc.upsTile.originXMm * scale,
+        originYMm: oy + doc.upsTile.originYMm * scale,
+      }
+    : undefined;
+  return { ...nextDoc, elements, upsTile };
 }
 
 /**

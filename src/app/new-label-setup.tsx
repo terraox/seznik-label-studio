@@ -289,6 +289,7 @@ export default function NewLabelSetupScreen() {
         heightMm: size.heightMm,
         orientation: defaults.orientation,
         paperType: defaults.paperType,
+        ...(circle ? { mediaShape: 'circle' as const } : {}),
         elements: ups.panels[0] ?? [],
         background: { type: 'color', color: '#FFFFFF' }, // theme-fixed: label paper colour (document data)
       });
