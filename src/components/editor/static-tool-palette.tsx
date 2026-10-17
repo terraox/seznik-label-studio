@@ -33,7 +33,7 @@ export const TOOL_ROWS: { icon: AppIconName; label: string }[][] = [
     { icon: 'character', label: 'ArcText' },
   ],
   [
-    { icon: 'list.number', label: 'Counter' },
+    { icon: 'list.number', label: 'Serial' },
     { icon: 'tablecells.badge.ellipsis', label: 'Excel' },
     { icon: 'viewfinder', label: 'Scan' },
     { icon: 'eye', label: 'OCR' },

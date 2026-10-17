@@ -31,7 +31,7 @@ import {
 } from '@/lib/label-document';
 import { DRAWING_COLORS } from '@/components/editor/types';
 import { encodeModeToSymbology } from '@/lib/barcode-code128';
-import { applySerialOffset } from '@/lib/serial-content';
+import { applySerialOffset, logLegacySerial } from '@/lib/serial-content';
 import { logPrintTrace } from '@/printing/trace';
 import { dotsPerMm as dotsPerMmForDpi } from '@/lib/printer/print-spec';
 import { binarizeGray8, tileGray } from '@/printing/raster/bitmap';
@@ -224,6 +224,7 @@ function convertDegrees(
     el.contentType === 'Degrees'
       ? applySerialOffset(content, el.degreesOffset, 1)
       : content;
+  if (el.contentType === 'Degrees') logLegacySerial('print convert', content, el.degreesOffset, 1, resolved);
   const textAfterVars = replacePlaceholders(resolved, ctx.templateVariables);
   const text = el.verticalDisplay ? textAfterVars.split('').join('\n') : textAfterVars;
 

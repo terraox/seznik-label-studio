@@ -5,6 +5,8 @@
  * LabelDocument left/top/width/height/rotation in mm.
  */
 
+import { newSerialFieldId } from '@/lib/serial/legacy';
+import { withFreshSerialIds } from '@/lib/serial/resolve-document';
 import { elementSizeMm, generateId, type LabelElement } from '@/lib/label-document';
 
 export const NUDGE_FINE_MM = 0.2;
@@ -341,7 +343,7 @@ export function duplicateElements(
     clone.left = next.left;
     clone.top = next.top;
     clone.lockMovement = false;
-    return clone;
+    return withFreshSerialIds(clone, newSerialFieldId);
   });
   return { elements: [...elements, ...clones], newIds: clones.map((c) => c.id) };
 }
@@ -367,7 +369,7 @@ export function pasteElementsFromClipboard(elements: LabelElement[], canvas: Can
     clone.left = next.left;
     clone.top = next.top;
     clone.lockMovement = false;
-    return clone;
+    return withFreshSerialIds(clone, newSerialFieldId);
   });
   return { elements: [...elements, ...clones], newIds: clones.map((c) => c.id) };
 }

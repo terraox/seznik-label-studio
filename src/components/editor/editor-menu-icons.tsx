@@ -139,6 +139,7 @@ export function ToolMenuIcon({
       );
 
     case 'Counter':
+    case 'Serial':
     case 'Degrees':
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32">

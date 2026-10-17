@@ -5,6 +5,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { TextInput } from '@/components/ui/text-input';
 
+import { ContentTypeRow, SerialBlock } from '@/components/editor/serial-section';
 import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
 import { formatDataSourceColumn } from '@/lib/editor/data-source-display';
@@ -391,29 +392,24 @@ export function TextPropertyPanel({
       <FormScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
         {activeTab === 'Regular' && (
           <>
-            <SegmentRow
-              label="Content Type"
-              options={['Manual', 'Degrees', 'Data Source'] as const}
-              selected={state.contentType}
-              onSelect={(contentType: ContentType) =>
-                patch(
-                  contentType === 'Degrees'
-                    ? { contentType, degreesOffset: degreesOffset || 1 }
-                    : { contentType },
-                )
+            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.text} />
+            <SerialBlock
+              state={state}
+              patch={patch}
+              legacyContent={state.text}
+              legacyOffset={degreesOffset}
+              legacyStepper={
+                <>
+                  <Divider />
+                  <StepperRow
+                    label="Degrees Offset"
+                    value={formatInt(degreesOffset)}
+                    onMinus={() => patch({ degreesOffset: Math.max(0, degreesOffset - 1) })}
+                    onPlus={() => patch({ degreesOffset: degreesOffset + 1 })}
+                  />
+                </>
               }
             />
-            {state.contentType === 'Degrees' && (
-              <>
-                <Divider />
-                <StepperRow
-                  label="Degrees Offset"
-                  value={formatInt(degreesOffset)}
-                  onMinus={() => patch({ degreesOffset: Math.max(0, degreesOffset - 1) })}
-                  onPlus={() => patch({ degreesOffset: degreesOffset + 1 })}
-                />
-              </>
-            )}
             <Divider />
             {state.contentType === 'Data Source' ? (
               <NavRow
@@ -421,7 +417,7 @@ export function TextPropertyPanel({
                 value={state.columnNameContent || 'Select column'}
                 onPress={onColumnNamePress}
               />
-            ) : (
+            ) : state.contentType === 'Degrees' && state.serial ? null : (
               <View style={styles.contentRow}>
                 <Text style={styles.rowLabel}>Content</Text>
                 <Pressable
@@ -566,29 +562,24 @@ export function TextPropertyPanel({
 
         {activeTab === 'Content' && (
           <>
-            <SegmentRow
-              label="Content Type"
-              options={['Manual', 'Degrees', 'Data Source'] as const}
-              selected={state.contentType}
-              onSelect={(contentType: ContentType) =>
-                patch(
-                  contentType === 'Degrees'
-                    ? { contentType, degreesOffset: degreesOffset || 1 }
-                    : { contentType },
-                )
+            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.text} />
+            <SerialBlock
+              state={state}
+              patch={patch}
+              legacyContent={state.text}
+              legacyOffset={degreesOffset}
+              legacyStepper={
+                <>
+                  <Divider />
+                  <StepperRow
+                    label="Degrees Offset"
+                    value={formatInt(degreesOffset)}
+                    onMinus={() => patch({ degreesOffset: Math.max(0, degreesOffset - 1) })}
+                    onPlus={() => patch({ degreesOffset: degreesOffset + 1 })}
+                  />
+                </>
               }
             />
-            {state.contentType === 'Degrees' && (
-              <>
-                <Divider />
-                <StepperRow
-                  label="Degrees Offset"
-                  value={formatInt(degreesOffset)}
-                  onMinus={() => patch({ degreesOffset: Math.max(0, degreesOffset - 1) })}
-                  onPlus={() => patch({ degreesOffset: degreesOffset + 1 })}
-                />
-              </>
-            )}
             <Divider />
             {state.contentType === 'Data Source' ? (
               <NavRow
@@ -596,7 +587,7 @@ export function TextPropertyPanel({
                 value={state.columnNameContent || 'Select column'}
                 onPress={onColumnNamePress}
               />
-            ) : (
+            ) : state.contentType === 'Degrees' && state.serial ? null : (
               <>
                 <View style={styles.contentRow}>
                   <Text style={styles.rowLabel}>Content</Text>

@@ -15,6 +15,7 @@ import type { SignatureStroke } from '@/components/editor/signature-preview';
 import type { BorderStyleId } from '@/constants/border-library';
 import type { MediaGeometry } from '@/lib/media-geometry';
 import type { BulkLabelSet } from '@/lib/bulk-labels';
+import type { SerialBatch } from '@/lib/serial/types';
 import type { LabelSettings } from '@/lib/label-settings';
 import { huggedTextFrameMm } from '@/lib/visible-text-layout';
 
@@ -218,6 +219,8 @@ export type LabelDocument = {
   upsTile?: UpsTile;
   /** Excel bulk set: one saved label, many rows projected onto the canvas. */
   bulk?: BulkLabelSet;
+  /** Serial batch size. The continue-from-last offset is deliberately NOT here (see serial-continue-store). */
+  serialBatch?: SerialBatch;
   /** Per-label print/layout options (mirror mode, offsets, gap, etc.). */
   settings?: LabelSettings;
   /** Visual guide behind the editor canvas. Absent on older labels. */

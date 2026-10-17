@@ -6,6 +6,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { TextInput } from '@/components/ui/text-input';
 
+import { ContentTypeRow, SerialBlock } from '@/components/editor/serial-section';
 import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
 import {
@@ -284,27 +285,28 @@ function ContentSection({
   useThemeRefresh();
   return (
     <>
-      <SegmentRow
-        label="Content Type"
-        options={['Manual', 'Degrees', 'Data Source'] as const}
-        selected={state.contentType}
-        onSelect={(contentType: ContentType) => patch({ contentType })}
+      <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} />
+      <SerialBlock
+        state={state}
+        patch={patch}
+        legacyContent={state.content}
+        legacyOffset={state.degreesOffset}
+        legacyStepper={
+          <>
+            <Divider />
+            <StepperRow
+              label="Degrees Offset"
+              value={formatInt(state.degreesOffset)}
+              onMinus={() => patch({ degreesOffset: Math.max(0, state.degreesOffset - 1) })}
+              onPlus={() => patch({ degreesOffset: state.degreesOffset + 1 })}
+            />
+          </>
+        }
       />
-      {state.contentType === 'Degrees' && (
-        <>
-          <Divider />
-          <StepperRow
-            label="Degrees Offset"
-            value={formatInt(state.degreesOffset)}
-            onMinus={() => patch({ degreesOffset: Math.max(0, state.degreesOffset - 1) })}
-            onPlus={() => patch({ degreesOffset: state.degreesOffset + 1 })}
-          />
-        </>
-      )}
       <Divider />
       {state.contentType === 'Data Source' ? (
         <NavRow label="Content" value={state.columnNameContent} onPress={onColumnNamePress} />
-      ) : (
+      ) : state.contentType === 'Degrees' && state.serial ? null : (
         <>
           <View style={styles.contentRow}>
             <Text style={styles.rowLabel}>Content</Text>

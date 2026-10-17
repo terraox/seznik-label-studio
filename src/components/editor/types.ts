@@ -4,6 +4,8 @@ export type PropertyTab = 'Regular' | 'Position' | 'Content' | 'Paragraph' | 'Fo
 export type BarcodePropertyTab = 'Regular' | 'Position' | 'Content' | 'Encoding' | 'Font';
 export type QrcodePropertyTab = 'Regular' | 'Position' | 'Content' | 'Encoding';
 
+import type { SerialConfig } from '@/lib/serial/types';
+
 export type ContentType = 'Manual' | 'Degrees' | 'Data Source';
 export type TextFlag = 'Hide' | 'Top' | 'Bottom';
 export type QrEncodeMode = 'QRCode' | 'PDF417' | 'DataMatrix';
@@ -41,6 +43,8 @@ export type EditorElementState = {
   antiColor: boolean;
   drawingColorIndex: number;
   contentType: ContentType;
+  /** New Serial settings. Active when contentType is 'Degrees' and this is present; legacy Counters have none. */
+  serial?: SerialConfig;
   columnNameContent: string;
   charSpacing: number;
   lineSpacing: LineSpacing;
@@ -94,6 +98,8 @@ export function formatInt(value: number) {
 
 export type BarcodeElementState = {
   contentType: ContentType;
+  /** New Serial settings. Active when contentType is 'Degrees' and this is present; legacy Counters have none. */
+  serial?: SerialConfig;
   content: string;
   columnNameContent: string;
   encodeMode: string;
@@ -142,6 +148,8 @@ export const DEFAULT_BARCODE_STATE: BarcodeElementState = {
 
 export type QrcodeElementState = {
   contentType: ContentType;
+  /** New Serial settings. Active when contentType is 'Degrees' and this is present; legacy Counters have none. */
+  serial?: SerialConfig;
   content: string;
   encodeMode: QrEncodeMode;
   errorLevel: QrErrorLevel;
@@ -397,6 +405,8 @@ export type ArcTextPropertyTab = 'Regular' | 'Position' | 'Content' | 'Style' | 
 
 export type ArcTextElementState = {
   contentType: ContentType;
+  /** New Serial settings. Active when contentType is 'Degrees' and this is present; legacy Counters have none. */
+  serial?: SerialConfig;
   degreesOffset: number;
   columnNameContent: string;
   text: string;
@@ -443,6 +453,8 @@ export const DEFAULT_ARCTEXT_STATE: ArcTextElementState = {
 
 export type DegreesElementState = {
   contentType: ContentType;
+  /** New Serial settings. Active when contentType is 'Degrees' and this is present; legacy Counters have none. */
+  serial?: SerialConfig;
   degreesOffset: number;
   content: string;
   columnNameContent: string;

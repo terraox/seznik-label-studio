@@ -1,5 +1,5 @@
 import { cloneDocument, type LabelDocument } from '@/lib/label-document';
-import { applySerialOffset } from '@/lib/serial-content';
+import { applySerialOffset, logLegacySerial } from '@/lib/serial-content';
 import type { ExcelSheet } from '@/stores/data-store';
 import { looksLikeImageUri } from '@/lib/editor/image-mono';
 
@@ -51,9 +51,13 @@ function applyDegreesSerial(
   const step = 'degreesOffset' in element ? element.degreesOffset : 0;
   if (step === 0) return;
   if (element.type === 'text') {
-    element.text = applySerialOffset(element.text, step, pageIndex);
+    const before = element.text;
+    element.text = applySerialOffset(before, step, pageIndex);
+    logLegacySerial('resolveDocumentForPage', before, step, pageIndex, element.text);
   } else if ('content' in element && typeof element.content === 'string') {
-    element.content = applySerialOffset(element.content, step, pageIndex);
+    const before = element.content;
+    element.content = applySerialOffset(before, step, pageIndex);
+    logLegacySerial('resolveDocumentForPage', before, step, pageIndex, element.content);
   }
 }
 

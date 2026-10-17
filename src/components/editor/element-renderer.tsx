@@ -55,7 +55,7 @@ import {
 import { ensureTableCells } from "@/lib/editor/table-cells";
 import { ptToMm, type LabelElement } from "@/lib/label-document";
 import { dotsPerMm } from "@/lib/printer/print-spec";
-import { applySerialOffset } from "@/lib/serial-content";
+import { applySerialOffset, logLegacySerial } from "@/lib/serial-content";
 import {
   measureTextWidthMm,
   computeWrappedLines,
@@ -228,7 +228,9 @@ function resolveTextRaw(
     return formatDataSourceColumn(element.columnNameContent, showColumnName);
   }
   if (element.contentType === "Degrees") {
-    return applySerialOffset(textValue, element.degreesOffset ?? 1, 1);
+    const shown = applySerialOffset(textValue, element.degreesOffset ?? 1, 1);
+    logLegacySerial("renderer displays", textValue, element.degreesOffset ?? 1, 1, shown);
+    return shown;
   }
   return textValue;
 }

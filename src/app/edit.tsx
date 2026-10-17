@@ -249,6 +249,18 @@ import { isFontNameReady } from '@/lib/fonts/font-ready';
 import { resolveLabelSettings } from '@/lib/label-settings';
 import { BulkCopiesBar, BULK_COPIES_BAR_HEIGHT_PX } from '@/components/bulk-copies-bar';
 import { BulkLabelNav } from '@/components/bulk-label-nav';
+import { SerialEditorContext, type SerialEditorValue } from '@/components/editor/serial-context';
+import { SerialBar, SERIAL_BAR_HEIGHT_PX } from '@/components/editor/serial-bar';
+import {
+  collectSerialFields,
+  isSerialActive,
+  linkCandidates,
+  resolveDocumentForIndex,
+  serialBatchCount,
+} from '@/lib/serial/resolve-document';
+import { defaultSerialConfig } from '@/lib/serial/legacy';
+import { MAX_SERIAL_BATCH } from '@/lib/serial/types';
+import { useSerialContinueStore } from '@/stores/serial-continue-store';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
@@ -309,7 +321,7 @@ const TOOL_ROWS: { icon: IconName; label: string }[][] = [
     { icon: 'character', label: 'ArcText' },
   ],
   [
-    { icon: 'list.number', label: 'Counter' },
+    { icon: 'list.number', label: 'Serial' },
     { icon: 'tablecells.badge.ellipsis', label: 'Excel' },
     { icon: 'viewfinder', label: 'Scan' },
     { icon: 'eye', label: 'OCR' },
@@ -843,8 +855,49 @@ export default function EditScreen() {
   const liveScaleSv = useSharedValue(1);
   const showBulkNav = Boolean(doc.bulk && doc.bulk.rowCount > 1);
   const showBulkCopies = Boolean(doc.bulk);
+  // Serial labels: the canvas shows the label at `serialPreviewIndex`; the saved design is never changed.
+  const serialFields = useMemo(() => collectSerialFields(doc), [doc.elements]);
+  const showSerialBar = serialFields.length > 0 && !doc.bulk && !doc.ups;
+  const serialCount = serialBatchCount(doc);
+  const [serialPreviewIndex, setSerialPreviewIndex] = useState(0);
+  const serialIdx = Math.min(Math.max(0, serialPreviewIndex), serialCount - 1);
+  const continueEntry = useSerialContinueStore((st) => st.byLabel[doc.id]);
+  const continueOffset = continueEntry?.enabled ? continueEntry.offset : 0;
+  const canvasDoc = useMemo(
+    () =>
+      serialFields.length === 0
+        ? doc
+        : resolveDocumentForIndex(doc, (doc.bulk ? doc.bulk.activeRowIndex : serialIdx) + (doc.bulk ? 0 : continueOffset)),
+    [doc, serialFields.length, serialIdx, continueOffset],
+  );
+  const serialEditorValue = useMemo<SerialEditorValue>(
+    () => ({
+      count: serialCount,
+      setCount: (n) =>
+        setDoc((prev) => ({
+          ...prev,
+          serialBatch: { v: 1, count: Math.max(1, Math.min(MAX_SERIAL_BATCH, Math.floor(n) || 1)) },
+          updatedAt: Date.now(),
+        })),
+      isBulk: Boolean(doc.bulk),
+      blockedReason: doc.ups ? 'Serial labels are not available on multi-up labels yet.' : null,
+      linkOptions: (excludeFieldId) => {
+        const names: Record<string, string> = { text: 'Text', barcode: 'Barcode', qrcode: 'QR code', degrees: 'Serial', arctext: 'ArcText', table: 'Table cell' };
+        const seen: Record<string, number> = {};
+        return linkCandidates(doc, excludeFieldId).map((f) => {
+          const base = names[f.type] ?? 'Field';
+          seen[base] = (seen[base] ?? 0) + 1;
+          return { id: f.config.id, label: `${base} ${seen[base]}` };
+        });
+      },
+      printerDpi: null,
+    }),
+    [doc, serialCount],
+  );
   const bulkNavReservePx =
-    (showBulkNav ? BULK_LABEL_NAV_HEIGHT_PX : 0) + (showBulkCopies ? BULK_COPIES_BAR_HEIGHT_PX : 0);
+    (showBulkNav ? BULK_LABEL_NAV_HEIGHT_PX : 0) +
+    (showBulkCopies ? BULK_COPIES_BAR_HEIGHT_PX : 0) +
+    (showSerialBar ? SERIAL_BAR_HEIGHT_PX : 0);
   const splitViewportForCanvas = Math.max(0, splitViewportH - bulkNavReservePx);
   const panelDefaultBase = showBulkNav ? BULK_PANEL_DEFAULT_HEIGHT_PX : PANEL_DEFAULT_HEIGHT_PX;
   const panelDefaultForSplit =
@@ -2408,6 +2461,12 @@ export default function EditScreen() {
     setPrimaryId(id);
     setPanelOpen(true);
 
+    // A serial element has no typed text; its settings live in the panel.
+    if (isSerialActive(element)) {
+      resetTabToRegularForElement(element.type);
+      return;
+    }
+
     if (element.type === 'text') {
       setTextTab('Content');
       setTextEditField('text');
@@ -2427,7 +2486,7 @@ export default function EditScreen() {
     requestAnimationFrame(() => {
       textEditInputRef.current?.focus();
     });
-  }, []);
+  }, [resetTabToRegularForElement]);
 
   const handleQuickEdit = useCallback((id: string, anchorRect?: ElementAnchorRect) => {
     const element = docRef.current.elements.find((el) => el.id === id);
@@ -2441,8 +2500,9 @@ export default function EditScreen() {
           id,
           type: element.type,
           // A fresh text box starts blank (placeholder cleared); once the user has typed, edit it.
-          value:
-            element.type === 'text' && element.text && element.text !== NEW_TEXT_PLACEHOLDER
+          value: isSerialActive(element)
+            ? ((element as unknown as { serial?: { start: string } }).serial?.start ?? '')
+            : element.type === 'text' && element.text && element.text !== NEW_TEXT_PLACEHOLDER
               ? element.text
               : '',
           anchorRect,
@@ -2472,7 +2532,11 @@ export default function EditScreen() {
         return;
       }
       const element = docRef.current.elements.find((el) => el.id === quickEditTarget.id);
-      if (element) {
+      if (element && isSerialActive(element)) {
+        // Quick edit on a serial element changes its Start value.
+        const serial = (element as unknown as { serial: Record<string, unknown> }).serial;
+        patchElement(element.id, { serial: { ...serial, start: newValue.trim() } });
+      } else if (element) {
         const patch = getQuickEditPatch(element, newValue);
         patchElement(element.id, patch);
       }
@@ -3828,8 +3892,16 @@ export default function EditScreen() {
         router.push({ pathname: '/clipart', params: { from: 'edit' } });
         return;
       }
+      if (ghost.label === 'Serial' || ghost.label === 'Counter') {
+        if (docRef.current.ups) {
+          Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
+          return;
+        }
+        overrides.serial = defaultSerialConfig();
+        overrides.content = '1';
+      }
       addElement(ghost.type, overrides);
-      openAddedElementPanel(ghost.label);
+      openAddedElementPanel(ghost.label === 'Serial' || ghost.label === 'Counter' ? 'Degrees' : ghost.label);
     },
     [addElement, openAddedElementPanel, publishSnapGuides, windowPointToArtboardMm],
   );
@@ -3910,7 +3982,15 @@ export default function EditScreen() {
         addElement('arctext');
         openAddedElementPanel(label);
         break;
+      case 'Serial':
       case 'Counter':
+        if (docRef.current.ups) {
+          Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
+          break;
+        }
+        addElement('degrees', { serial: defaultSerialConfig(), content: '1' });
+        openAddedElementPanel('Degrees');
+        break;
       case 'Degrees':
         addElement('degrees');
         openAddedElementPanel('Degrees');
@@ -4252,7 +4332,7 @@ export default function EditScreen() {
                   ]}>
                   <KonvaCanvas
                     ref={canvasShotRef}
-                    document={doc}
+                    document={canvasDoc}
                     canvasWidthPx={canvasWidthPx}
                     canvasHeightPx={canvasHeightPx}
                     pxPerMM={pxPerMM}
@@ -4573,6 +4653,7 @@ export default function EditScreen() {
   );
 
   return (
+    <SerialEditorContext.Provider value={serialEditorValue}>
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <View style={styles.headerLeft}>
@@ -4854,6 +4935,18 @@ export default function EditScreen() {
               value={bulkCopiesValue}
               rowKey={doc.bulk.activeRowIndex}
               onCommit={commitBulkCopies}
+            />
+          ) : null}
+
+          {showSerialBar ? (
+            <SerialBar
+              index={serialIdx}
+              total={serialCount}
+              onGo={(i) => setSerialPreviewIndex(Math.min(serialCount - 1, Math.max(0, i)))}
+              continueEnabled={Boolean(continueEntry?.enabled)}
+              continueOffset={continueEntry?.offset ?? 0}
+              onContinueChange={(on) => useSerialContinueStore.getState().setEnabled(doc.id, on)}
+              onResetContinue={() => useSerialContinueStore.getState().reset(doc.id)}
             />
           ) : null}
 
@@ -5157,6 +5250,7 @@ export default function EditScreen() {
         }}
       />
     </View>
+    </SerialEditorContext.Provider>
   );
 }
 
