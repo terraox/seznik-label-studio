@@ -256,11 +256,14 @@ import {
   isSerialActive,
   linkCandidates,
   resolveDocumentForIndex,
+  serialMaps,
   serialBatchCount,
 } from '@/lib/serial/resolve-document';
-import { defaultSerialConfig } from '@/lib/serial/legacy';
+import { defaultSerialConfig, newSerialFieldId } from '@/lib/serial/legacy';
 import { MAX_SERIAL_BATCH } from '@/lib/serial/types';
 import { useSerialContinueStore } from '@/stores/serial-continue-store';
+import { getPrinterManager } from '@/lib/printer/printer-manager';
+import { usePrinterStore } from '@/stores/printer-store';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { useExcelImportFlow } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
@@ -861,6 +864,7 @@ export default function EditScreen() {
   const serialCount = serialBatchCount(doc);
   const [serialPreviewIndex, setSerialPreviewIndex] = useState(0);
   const serialIdx = Math.min(Math.max(0, serialPreviewIndex), serialCount - 1);
+  const printerLinked = usePrinterStore((st) => st.status === 'connected' || st.status === 'printing');
   const continueEntry = useSerialContinueStore((st) => st.byLabel[doc.id]);
   const continueOffset = continueEntry?.enabled ? continueEntry.offset : 0;
   const canvasDoc = useMemo(
@@ -870,6 +874,7 @@ export default function EditScreen() {
         : resolveDocumentForIndex(doc, (doc.bulk ? doc.bulk.activeRowIndex : serialIdx) + (doc.bulk ? 0 : continueOffset)),
     [doc, serialFields.length, serialIdx, continueOffset],
   );
+  const addLinkedBarcodeRef = useRef<((fieldId: string) => void) | null>(null);
   const serialEditorValue = useMemo<SerialEditorValue>(
     () => ({
       count: serialCount,
@@ -890,9 +895,13 @@ export default function EditScreen() {
           return { id: f.config.id, label: `${base} ${seen[base]}` };
         });
       },
-      printerDpi: null,
+      printerDpi: printerLinked ? getPrinterManager().getPrintDpi() : null,
+      configs: serialMaps(serialFields).configs,
+      contexts: serialMaps(serialFields).contexts,
+      offset: doc.bulk ? 0 : continueOffset,
+      addLinkedBarcode: (fieldId) => addLinkedBarcodeRef.current?.(fieldId),
     }),
-    [doc, serialCount],
+    [doc, serialCount, serialFields, continueOffset, printerLinked],
   );
   const bulkNavReservePx =
     (showBulkNav ? BULK_LABEL_NAV_HEIGHT_PX : 0) +
@@ -1663,6 +1672,18 @@ export default function EditScreen() {
     },
     [primaryId, selectedIds, patchElement],
   );
+
+  // "Add barcode with the same serial": the barcode becomes the root field and the source follows it,
+  // so the text always shows what the barcode encodes (check digit included).
+  addLinkedBarcodeRef.current = (fieldId: string) => {
+    const cur = docRef.current;
+    if (cur.ups) return;
+    const src = collectSerialFields(cur).find((f) => f.config.id === fieldId);
+    if (!src || src.config.linkTo || src.type === 'barcode') return;
+    const barcodeConfig = { ...src.config, id: newSerialFieldId(), linkTo: undefined };
+    addElement('barcode', { contentType: 'Degrees', content: '1', serial: barcodeConfig });
+    patchElement(src.elementId, { serial: { ...src.config, linkTo: barcodeConfig.id } });
+  };
 
   // Writes to an explicit cell target. Kept free of selection state so callers reached from
   // a focus effect (scan / font / column-name results) can't run against a stale closure.

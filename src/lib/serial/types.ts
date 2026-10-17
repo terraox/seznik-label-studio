@@ -69,6 +69,8 @@ export interface SerialIssue {
   severity: 'error' | 'warning';
   /** 1-based label number the problem was found at, when it is about one value. */
   label?: number;
+  /** A one-tap fix: replaces the field's serial config with `serial`. */
+  fix?: { label: string; serial: SerialConfig };
 }
 
 export const MAX_SERIAL_BATCH = 5000;

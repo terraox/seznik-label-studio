@@ -1,3 +1,4 @@
+import { ContentTypeRow, SerialBlock } from '@/components/editor/serial-section';
 import { router } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
@@ -187,6 +188,8 @@ function BarcodeContentFields({
   if (state.contentType === 'Data Source') {
     return <NavRow label="Content" value={state.columnNameContent} onPress={onColumnNamePress} />;
   }
+  // A serial barcode has no typed content; its value comes from the Serial settings above.
+  if (state.contentType === 'Degrees' && state.serial) return null;
   return (
     <>
       <View style={styles.contentRow}>
@@ -543,11 +546,14 @@ export function BarcodePropertyPanel({
       <FormScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
         {activeTab === 'Regular' && (
           <>
-            <SegmentRow
-              label="Content Type"
-              options={['Manual', 'Degrees', 'Data Source'] as const}
-              selected={state.contentType}
-              onSelect={(contentType: ContentType) => patch({ contentType })}
+            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} />
+            <SerialBlock
+              state={state}
+              patch={patch}
+              legacyContent={state.content}
+              legacyOffset={1}
+              legacyStepper={null}
+              target={{ type: 'barcode', mode: state.encodeMode, widthMm: state.width }}
             />
             <Divider />
             <BarcodeContentFields state={state} patch={patch} onColumnNamePress={onColumnNamePress} />
@@ -639,11 +645,14 @@ export function BarcodePropertyPanel({
 
         {activeTab === 'Content' && (
           <>
-            <SegmentRow
-              label="Content Type"
-              options={['Manual', 'Degrees', 'Data Source'] as const}
-              selected={state.contentType}
-              onSelect={(contentType: ContentType) => patch({ contentType })}
+            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} />
+            <SerialBlock
+              state={state}
+              patch={patch}
+              legacyContent={state.content}
+              legacyOffset={1}
+              legacyStepper={null}
+              target={{ type: 'barcode', mode: state.encodeMode, widthMm: state.width }}
             />
             <Divider />
             <BarcodeContentFields state={state} patch={patch} onColumnNamePress={onColumnNamePress} />

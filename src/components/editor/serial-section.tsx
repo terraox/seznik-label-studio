@@ -4,6 +4,7 @@ import { Alert, Pressable, Text, View } from 'react-native';
 import { useSerialEditor } from '@/components/editor/serial-context';
 import { TextInput } from '@/components/ui/text-input';
 import { firstAndLast, validateConfig } from '@/lib/serial/engine';
+import { barcodeSerialIssues, qrSerialIssues } from '@/lib/serial/symbology-validate';
 import { defaultSerialConfig, legacyToSerial } from '@/lib/serial/legacy';
 import {
   MAX_SERIAL_BATCH,
@@ -140,17 +141,19 @@ function CountInput({ value, onCommit }: { value: number; onCommit: (n: number) 
  * Serial settings for one element. Simple view: Type, Start, Step, Count. Everything else is under
  * More options. Every change patches the whole `serial` object in ONE call (one undo step).
  */
+/** What kind of code the field feeds, so barcode / QR checks can run in the editor. */
+export type SerialTarget =
+  | { type: 'barcode'; mode: string; widthMm: number }
+  | { type: 'qrcode'; mode: string; level: string; zoneSize?: string; widthMm: number };
+
 export function SerialSection({
   config,
   patch,
-  context,
-  elementIssues = [],
+  target,
 }: {
   config: SerialConfig;
   patch: (updates: { serial: SerialConfig }) => void;
-  context?: SerialContext;
-  /** Extra problems for this element (barcode / QR checks). */
-  elementIssues?: SerialIssue[];
+  target?: SerialTarget;
 }) {
   useThemeRefresh();
   const editor = useSerialEditor();
@@ -160,13 +163,24 @@ export function SerialSection({
   const kind = config.kind;
   const numeric = kind === 'number' || kind === 'decimal';
 
-  const issues = useMemo(
-    () => [...validateConfig(config, editor.count, 0, context), ...elementIssues],
-    [config, editor.count, context, elementIssues],
-  );
+  const context: SerialContext | undefined = target?.type === 'barcode' ? { encodeMode: target.mode } : undefined;
+  const issues = useMemo(() => {
+    const base = validateConfig(config, editor.count, editor.offset, context);
+    if (!target || base.some((i) => i.severity === 'error')) return base;
+    // Barcode / QR checks use the whole label's fields so a link resolves to its root.
+    const configs = { ...editor.configs, [config.id]: config };
+    const contexts = { ...editor.contexts, ...(context ? { [config.id]: context } : {}) };
+    const extra =
+      target.type === 'barcode'
+        ? barcodeSerialIssues({ mode: target.mode, config, configs, contexts, count: editor.count, offset: editor.offset, widthMm: target.widthMm, dpi: editor.printerDpi ?? undefined })
+        : qrSerialIssues({ mode: target.mode, level: target.level, zoneSize: target.zoneSize, config, configs, contexts, count: editor.count, offset: editor.offset, widthMm: target.widthMm, dpi: editor.printerDpi ?? undefined });
+    return [...base, ...extra];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, editor.count, editor.offset, editor.configs, editor.contexts, editor.printerDpi, target?.type, (target as { mode?: string } | undefined)?.mode, (target as { level?: string } | undefined)?.level, target?.widthMm]);
   const preview = useMemo(
-    () => (issues.some((i) => i.severity === 'error') ? null : firstAndLast(config, editor.count, 0, context)),
-    [config, editor.count, context, issues],
+    () => (issues.some((i) => i.severity === 'error') ? null : firstAndLast(config, editor.count, editor.offset, context)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [config, editor.count, editor.offset, issues, target?.type],
   );
   const links = editor.linkOptions(config.id);
 
@@ -236,15 +250,26 @@ export function SerialSection({
       )}
 
       {issues.map((i, n) => (
-        <Text key={`${i.field}-${n}`} style={i.severity === 'error' ? styles.error : styles.warn}>
-          {i.message}
-        </Text>
+        <View key={`${i.field}-${n}`}>
+          <Text style={i.severity === 'error' ? styles.error : styles.warn}>{i.message}</Text>
+          {i.fix ? (
+            <Pressable onPress={() => patch({ serial: i.fix!.serial })} style={styles.moreBtn}>
+              <Text style={styles.moreText}>Fix: {i.fix.label}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ))}
       {preview ? (
         <Text style={styles.previewLine}>
           {preview.first}
           {editor.count > 1 ? `  ...  ${preview.last}` : ''}
         </Text>
+      ) : null}
+
+      {!linked && !target && editor.addLinkedBarcode ? (
+        <Pressable onPress={() => editor.addLinkedBarcode?.(config.id)} style={styles.moreBtn}>
+          <Text style={styles.moreText}>Add barcode with the same serial</Text>
+        </Pressable>
       ) : null}
 
       {!linked ? (
@@ -448,20 +473,18 @@ export function SerialBlock({
   legacyStepper,
   legacyContent,
   legacyOffset,
-  context,
-  elementIssues,
+  target,
 }: {
   state: SerialCarrier;
   patch: (updates: any) => void;
   legacyStepper: React.ReactNode;
   legacyContent: string;
   legacyOffset: number;
-  context?: SerialContext;
-  elementIssues?: SerialIssue[];
+  target?: SerialTarget;
 }) {
   if (state.contentType !== 'Degrees') return null;
   if (state.serial) {
-    return <SerialSection config={state.serial} patch={patch} context={context} elementIssues={elementIssues} />;
+    return <SerialSection config={state.serial} patch={patch} target={target} />;
   }
   return (
     <>
