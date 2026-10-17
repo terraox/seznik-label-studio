@@ -1,3 +1,4 @@
+import { composeUpsDocument } from '@/lib/label-document';
 import { useRouter } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
 import { useCallback, useMemo, useRef, useState, memo, type ReactNode } from 'react';
@@ -1961,7 +1962,7 @@ export default function TemplateScreen() {
                       {catalogDimensions(tpl.widthMm, tpl.heightMm)}
                     </Text>
                   </View>
-                  <LabelPreview document={tpl} catalogStock />
+                  <LabelPreview document={composeUpsDocument(tpl)} catalogStock />
                   <View style={styles.cardFooter}>
                     <Pressable hitSlop={10} onPress={() => handleEditCloudTemplate(tpl)}>
                       <AppIcon name="square.and.pencil" tintColor={C.accent} size={19} />
@@ -2139,7 +2140,7 @@ export default function TemplateScreen() {
                         {catalogDimensions(docItem.widthMm, docItem.heightMm)}
                       </Text>
                     </View>
-                    <LabelPreview document={docItem} catalogStock />
+                    <LabelPreview document={composeUpsDocument(docItem)} catalogStock />
                     <View style={styles.cardFooter}>
                       <Pressable
                         hitSlop={8}

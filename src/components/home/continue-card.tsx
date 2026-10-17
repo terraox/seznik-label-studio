@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
   Alert,
   Pressable,
@@ -13,7 +13,7 @@ import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { ShareNodeIcon } from '@/components/home-icons';
 import { CATALOG_STOCK_LINER, LabelPreview } from '@/components/label-preview';
 import { androidRipple, HomeLayout, scaleFont } from '@/constants/ui';
-import type { LabelDocument } from '@/lib/label-document';
+import { composeUpsDocument, type LabelDocument } from '@/lib/label-document';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type ContinueCardProps = {
@@ -71,6 +71,12 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
   const router = useRouter();
   const { width } = useWindowDimensions();
 
+  // Multi-up labels edit one panel at a time; show the whole row as it prints, not panel 1.
+  const previewDocument = useMemo(
+    () => ((document.ups?.columns ?? 0) >= 2 ? composeUpsDocument(document) : document),
+    [document],
+  );
+
   const sizeLabel = `${document.widthMm.toFixed(0)} x ${document.heightMm.toFixed(0)} (${document.paperType})`;
 
   const handleDelete = () => {
@@ -107,7 +113,7 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
       {/* catalogStock uses HiFi paint-then-scale so QR/text stay visible at card size */}
       <View style={styles.previewStage}>
         <LabelPreview
-          document={document}
+          document={previewDocument}
           catalogStock
           maxHeight={HomeLayout.continuePreviewMaxHeight}
         />
