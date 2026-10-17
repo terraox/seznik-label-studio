@@ -31,44 +31,44 @@ const sheet: ExcelSheet = {
 };
 
 test('parseCopiesCell applies the count rules', () => {
-  assert.deepEqual(parseCopiesCell(''), { copies: 1, changed: false });
-  assert.deepEqual(parseCopiesCell('   '), { copies: 1, changed: false });
-  assert.deepEqual(parseCopiesCell(undefined), { copies: 1, changed: false });
+  assert.deepEqual(parseCopiesCell(''), { copies: 0, changed: false });
+  assert.deepEqual(parseCopiesCell('   '), { copies: 0, changed: false });
+  assert.deepEqual(parseCopiesCell(undefined), { copies: 0, changed: false });
   assert.deepEqual(parseCopiesCell('1'), { copies: 1, changed: false });
-  assert.deepEqual(parseCopiesCell('0'), { copies: 1, changed: true });
+  assert.deepEqual(parseCopiesCell('0'), { copies: 0, changed: false });
   assert.deepEqual(parseCopiesCell('-3'), { copies: 1, changed: true });
   assert.deepEqual(parseCopiesCell('abc'), { copies: 1, changed: true });
   assert.deepEqual(parseCopiesCell('2.9'), { copies: 2, changed: true });
-  assert.deepEqual(parseCopiesCell('0.4'), { copies: 1, changed: true });
+  assert.deepEqual(parseCopiesCell('0.4'), { copies: 0, changed: true });
   assert.deepEqual(parseCopiesCell('99'), { copies: 99, changed: false });
   assert.deepEqual(parseCopiesCell('100'), { copies: MAX_COPIES_PER_ROW, changed: true });
 });
 
-test('planBulkPrint keeps every row and multiplies in place', () => {
+test('planBulkPrint skips 0 and blank rows and multiplies in place', () => {
   const once = planBulkPrint(sheet, 1, 1);
   assert.deepEqual(once.rows, [
     { rowIndex: 0, copies: 1 },
     { rowIndex: 1, copies: 3 },
-    { rowIndex: 2, copies: 1 },
-    { rowIndex: 3, copies: 1 },
     { rowIndex: 4, copies: 2 },
   ]);
-  assert.equal(once.totalPhysical, 8);
+  assert.equal(once.totalPhysical, 6);
   assert.equal(once.allZero, false);
   assert.equal(once.overCap, false);
 
   const twice = planBulkPrint(sheet, 1, 2);
   assert.deepEqual(
     twice.rows.map((row) => row.copies),
-    [2, 6, 2, 2, 4],
+    [2, 6, 4],
   );
-  assert.equal(twice.totalPhysical, 16);
+  assert.equal(twice.totalPhysical, 12);
 });
 
 test('an override wins, otherwise the cell, otherwise 1', () => {
   assert.equal(resolveRowCopies(sheet, 1, 1, { '1': 7 }), 7);
   assert.equal(resolveRowCopies(sheet, 1, 1, {}), 3);
   assert.equal(resolveRowCopies(sheet, 2, 1, { '2': 4 }), 4);
+  assert.equal(resolveRowCopies(sheet, 2, 1, {}), 0);
+  assert.equal(resolveRowCopies(sheet, 3, 1, {}), 0);
   assert.equal(resolveRowCopies(sheet, 0, null, null), 1);
   assert.equal(resolveRowCopies(sheet, 1, null, { nope: 5 }), 1);
   const multiplied = planBulkPrint(sheet, 1, 2, { '1': 4 });
@@ -115,18 +115,15 @@ test('no copies column prints every row once', () => {
   assert.equal(countChangedCopiesCells(sheet, null), 0);
 });
 
-test('zeros print once each and a huge total hits the cap', () => {
+test('zeros and blanks are skipped, all-zero flags allZero, a huge total hits the cap', () => {
   const zeros: ExcelSheet = {
     name: 'Z',
     columns: ['Qty'],
-    rows: [['0'], ['0']],
+    rows: [['0'], ['']],
   };
-  const printed = planBulkPrint(zeros, 0, 1);
-  assert.deepEqual(printed.rows, [
-    { rowIndex: 0, copies: 1 },
-    { rowIndex: 1, copies: 1 },
-  ]);
-  assert.equal(printed.allZero, false);
+  const skipped = planBulkPrint(zeros, 0, 1);
+  assert.deepEqual(skipped.rows, []);
+  assert.equal(skipped.allZero, true);
 
   const huge: ExcelSheet = {
     name: 'H',
@@ -155,19 +152,19 @@ test('only numeric columns are copies choices, and headers auto-guess among them
   assert.equal(columnEligibleForCopies(mixed, 0), true);
   assert.equal(columnEligibleForCopies(mixed, 1), false);
   assert.equal(guessCopiesColumnIndex(mixed), 0);
-  assert.equal(countChangedCopiesCells(sheet, 1), 1);
+  assert.equal(countChangedCopiesCells(sheet, 1), 0);
 });
 
-test('changed cells are text, negative, decimal, zero, and over the cap', () => {
+test('changed cells are text, negative, decimal, and over the cap; blank and 0 are skips', () => {
   const dirty: ExcelSheet = {
     name: 'D',
     columns: ['Copies'],
     rows: [['1'], [''], ['abc'], ['-1'], ['100'], ['0'], ['2.9'], ['0.4']],
   };
-  assert.equal(countChangedCopiesCells(dirty, 0), 6);
+  assert.equal(countChangedCopiesCells(dirty, 0), 5);
   assert.equal(
     copiesChangeSummary(dirty, 0),
-    '6 values were changed to 1–99 (rows 3, 4, 5, 6, 7, 8)',
+    '5 values were changed to 0–99 (rows 3, 4, 5, 7, 8)',
   );
 });
 
@@ -175,9 +172,9 @@ test('more than ten adjusted rows stay a single summary', () => {
   const many: ExcelSheet = {
     name: 'Many',
     columns: ['Copies'],
-    rows: Array.from({ length: 11 }, () => ['0']),
+    rows: Array.from({ length: 11 }, () => ['abc']),
   };
-  assert.equal(copiesChangeSummary(many, 0), '11 values were changed to 1–99');
+  assert.equal(copiesChangeSummary(many, 0), '11 values were changed to 0–99');
 });
 
 function rowsOf(...copies: number[]): BulkPrintRow[] {

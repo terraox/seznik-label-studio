@@ -134,6 +134,7 @@ import { ensurePrintTypefacesForDocument, missingPrintTypefaces } from '@/printi
 import { useDataStore, type ExcelSheet } from '@/stores/data-store';
 import { useLabelStore } from '@/stores/label-store';
 import { usePrinterStore, type PrintHistoryEntry } from '@/stores/printer-store';
+import { usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { applyPaperType, defaultLabelSettings, resolveLabelSettings } from '@/lib/label-settings';
 import { loadAndRenderPdf, printPdfToThermal, type RenderedPdfPage } from '@/lib/pdf-printer';
@@ -1952,8 +1953,9 @@ export default function PrintScreen() {
             'data:', bytes.length, 'bytes (JS path)',
           );
         }
+        labelsCompleted += sendCopies;
+        usePrintStatsStore.getState().record(sendCopies);
         if (bulkPlan) {
-          labelsCompleted += sendCopies;
           setPrintProgress(`Printing ${labelsCompleted} of ${bulkPlan.totalPhysical}`);
           if (collateJob && manager.isJosh && jobIndex < printJobs.length - 1) {
             const pitchMs = joshLabelPitchMs(

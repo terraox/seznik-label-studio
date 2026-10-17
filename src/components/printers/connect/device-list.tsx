@@ -45,8 +45,12 @@ export function DeviceList({
         <View style={styles.headerActions}>
           {scanning ? <ActivityIndicator size="small" color={accent} /> : null}
           {!scanning && canScan && bluetoothOn ? (
-            <Pressable onPress={onRescan} hitSlop={8} style={({ pressed }) => pressed && styles.pressed}>
-              <Text style={styles.rescan}>Scan again</Text>
+            <Pressable
+              onPress={onRescan}
+              hitSlop={8}
+              style={({ pressed }) => [styles.rescanBtn, { borderColor: accent }, pressed && styles.pressed]}>
+              <AppIcon name="arrow.clockwise" tintColor={accent} size={14} />
+              <Text style={[styles.rescan, { color: accent }]}>Scan again</Text>
             </Pressable>
           ) : null}
         </View>
@@ -96,7 +100,9 @@ function Section({
                   index < devices.length - 1 && styles.rowBorder,
                   pressed && styles.pressed,
                 ]}>
-                <AppIcon name="printer" tintColor={C.textMuted} size={20} />
+                <View style={[styles.rowIcon, { backgroundColor: C.accentSoft }]}>
+                  <AppIcon name="printer.fill" tintColor={accent} size={18} />
+                </View>
                 <View style={styles.info}>
                   <View style={styles.nameRow}>
                     <Text style={styles.name} numberOfLines={1}>
@@ -116,7 +122,9 @@ function Section({
                 {connectingId === device.id ? (
                   <ActivityIndicator size="small" color={accent} />
                 ) : (
-                  <Text style={[styles.connect, { color: accent }]}>Connect</Text>
+                  <View style={[styles.connectPill, { backgroundColor: accent }]}>
+                    <Text style={styles.connect}>Connect</Text>
+                  </View>
                 )}
               </Pressable>
             );
@@ -158,7 +166,17 @@ const styles = themedStyles((c) => ({
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
-  rescan: { color: c.accent, fontSize: 14, fontWeight: '700' },
+  rescanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    backgroundColor: c.accentSoft,
+  },
+  rescan: { fontSize: 13, fontWeight: '700' },
   card: {
     backgroundColor: c.surface,
     borderRadius: 16,
@@ -181,6 +199,8 @@ const styles = themedStyles((c) => ({
   },
   badgeText: { fontSize: 11, fontWeight: '700' },
   meta: { fontSize: 12, color: c.textMuted },
-  connect: { fontSize: 14, fontWeight: '700' },
+  rowIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  connectPill: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999 },
+  connect: { fontSize: 13, fontWeight: '700', color: c.onAccent },
   pressed: { opacity: 0.7 },
 }));

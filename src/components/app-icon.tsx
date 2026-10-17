@@ -8,6 +8,8 @@ export type AppIconName = string;
 type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
 const ION: Record<string, IoniconsName> = {
+  bluetooth: 'bluetooth',
+  'exclamationmark.triangle.fill': 'warning',
   'align.horizontal.center': 'swap-horizontal-outline',
   'align.vertical.bottom': 'arrow-down-outline',
   'align.vertical.center': 'swap-vertical-outline',
@@ -133,7 +135,8 @@ export function AppIcon({
   pointerEvents?: 'none' | 'auto' | 'box-none' | 'box-only';
   style?: StyleProp<ViewStyle>;
 }) {
-  if (Platform.OS === 'ios') {
+  // No SF Symbol for Bluetooth, so every platform uses the Ionicons glyph.
+  if (Platform.OS === 'ios' && name !== 'bluetooth') {
     return (
       <SymbolView
         name={name as SymbolViewProps['name']}

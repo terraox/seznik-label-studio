@@ -23,6 +23,7 @@ import {
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { printArtworkJob } from '@/lib/printer/universal-bridge';
 import { usePrinterStore } from '@/stores/printer-store';
+import { usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
 
 function asBridgeId(value: string | null | undefined): BridgeId | null {
@@ -188,6 +189,7 @@ export async function printEditedPdf(
       await sendIsolatedPrintCopies(bytes, copies);
     }
     pagesPrinted++;
+    usePrintStatsStore.getState().record(copies);
   }
 
   if (settings.printing.recordHistory) {

@@ -374,7 +374,7 @@ export default function ExcelBulkSetupScreen() {
               : 'Copies column: None — each row prints once'}
           </Text>
           <Text style={styles.copiesNote}>
-            Each row starts from this column. You can change one label’s count in the editor. A blank cell starts at 1. 0, text, and numbers outside 1–99 are adjusted. None starts every row at 1.
+            Each row starts from this column. You can change one label’s count in the editor. A blank cell or 0 skips that row, so it is not printed. Text and numbers outside 0–99 are adjusted. None prints every row once.
           </Text>
           <View style={styles.sheetChips}>
             <Pressable

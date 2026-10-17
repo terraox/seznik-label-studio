@@ -50,6 +50,7 @@ import {
 } from '@/lib/printer/paper-type';
 import { logPrintTrace } from '@/printing';
 import { usePrinterStore } from '@/stores/printer-store';
+import { usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
@@ -447,6 +448,7 @@ export default function PrintPhotoScreen() {
       });
       timer.end('encode+send');
 
+      usePrintStatsStore.getState().record(copies);
       timer.dump('PHOTO PRINT');
       manager.setLastPrintTiming(timer.getEntries());
 

@@ -7,7 +7,7 @@ const COPIES_HEADER = /^(copies|qty|quantity|pcs|count)$/i;
 
 export type ParsedCopiesCell = {
   copies: number;
-  /** Anything that is not a whole number from 1 to 99. Blank is not a change. */
+  /** Anything that is not a whole number from 0 to 99. Blank and 0 mean skip, not a change. */
   changed: boolean;
 };
 
@@ -25,12 +25,15 @@ export type BulkPrintPlan = {
 
 export function parseCopiesCell(raw: string | undefined | null): ParsedCopiesCell {
   const text = (raw ?? '').trim();
-  if (!text) return { copies: 1, changed: false };
+  // Blank or 0 means skip this row: it is not printed.
+  if (!text) return { copies: 0, changed: false };
   const value = Number(text);
   if (!Number.isFinite(value)) return { copies: 1, changed: true };
+  if (value < 0) return { copies: 1, changed: true };
   const floored = Math.floor(value);
-  const copies = Math.min(MAX_COPIES_PER_ROW, Math.max(1, floored));
-  const clean = /^\d+$/.test(text) && floored >= 1 && floored <= MAX_COPIES_PER_ROW;
+  if (floored === 0) return { copies: 0, changed: value !== 0 };
+  const copies = Math.min(MAX_COPIES_PER_ROW, floored);
+  const clean = /^\d+$/.test(text) && floored <= MAX_COPIES_PER_ROW;
   return { copies, changed: !clean };
 }
 
@@ -95,7 +98,7 @@ export function guessCopiesColumnIndex(sheet: ExcelSheet): number | null {
   return null;
 }
 
-/** 1-based data-row numbers whose cells were adjusted into 1–99. */
+/** 1-based data-row numbers whose cells were adjusted into 0–99. */
 export function changedCopiesRowNumbers(
   sheet: ExcelSheet,
   columnIndex: number | null,
@@ -118,8 +121,8 @@ export function copiesChangeSummary(sheet: ExcelSheet, columnIndex: number | nul
   if (rows.length === 0) return null;
   const line =
     rows.length === 1
-      ? '1 value was changed to 1–99'
-      : `${rows.length} values were changed to 1–99`;
+      ? '1 value was changed to 0–99'
+      : `${rows.length} values were changed to 0–99`;
   if (rows.length > 10) return line;
   return `${line} (rows ${rows.join(', ')})`;
 }

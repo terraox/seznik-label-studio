@@ -34,7 +34,7 @@ export const EXCEL_COLUMNS_WALKTHROUGH: readonly WalkthroughStep[] = [
     target: 'excel.copies',
     scrolls: true,
     title: 'Number of copies',
-    body: 'Pick a column of numbers, such as Copies or Qty. Each row starts at that count, and you can change it on the label in the editor. A blank cell starts at 1. 0, text, and numbers outside 1–99 are adjusted. None starts every row at 1. The chosen column is greyed out and is not printed on the label.',
+    body: 'Pick a column of numbers, such as Copies or Qty. Each row starts at that count, and you can change it on the label in the editor. A blank cell or 0 skips that row, so it is not printed. Text and numbers outside 0–99 are adjusted. None prints every row once. The chosen column is greyed out and is not printed on the label.',
   },
   {
     id: 'columns',

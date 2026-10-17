@@ -42,41 +42,57 @@ export function LastConnectedPrinter({
     <View style={styles.wrap}>
       <Text style={styles.section}>Quick reconnect</Text>
       <View style={styles.card}>
-        <View style={styles.iconBadge}>
-          <AppIcon name="printer" tintColor={C.onAccent} size={20} />
-        </View>
-
-        <View style={styles.copy}>
-          <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {modelName} · {mac}
-          </Text>
-          <View style={styles.statusRow}>
-            <View style={[styles.statusPill, { backgroundColor: `${status.tone}18` }]}>
-              <View style={[styles.statusDot, { backgroundColor: status.dot }]} />
-              <Text style={[styles.statusText, { color: status.tone }]}>{status.label}</Text>
+        <View style={styles.stripe} />
+        <View style={styles.body}>
+          <View style={styles.topRow}>
+            <View style={styles.iconTile}>
+              <AppIcon name="printer.fill" tintColor={C.accentInk} size={26} />
             </View>
-            <Text style={styles.bridge} numberOfLines={1}>{bridgeLabel}</Text>
+            <View style={styles.copy}>
+              <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+              <View style={styles.statusRow}>
+                <View style={[styles.statusDot, { backgroundColor: status.dot }]} />
+                <Text style={[styles.statusText, { color: status.tone }]}>{status.label}</Text>
+              </View>
+            </View>
           </View>
-        </View>
 
-        <Pressable
-          onPress={onConnect}
-          disabled={connecting}
-          android_ripple={androidRipple}
-          style={({ pressed }) => [
-            styles.connectBtn,
-            connecting && styles.connectBtnBusy,
-            pressed && !connecting && styles.pressed,
-          ]}>
-          {connecting ? (
-            <ActivityIndicator color={C.onAccent} size="small" />
-          ) : (
-            <Text style={styles.connectText}>Connect</Text>
-          )}
-        </Pressable>
+          <View style={styles.chips}>
+            <View style={styles.chip}>
+              <Text style={styles.chipText} numberOfLines={1}>{modelName}</Text>
+            </View>
+            <View style={styles.chip}>
+              <AppIcon name="bluetooth" tintColor={C.accentInk} size={12} />
+              <Text style={styles.chipText} numberOfLines={1}>{bridgeLabel}</Text>
+            </View>
+            <View style={styles.chip}>
+              <Text style={[styles.chipText, styles.mono]} numberOfLines={1}>{mac}</Text>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={onConnect}
+            disabled={connecting}
+            android_ripple={androidRipple}
+            style={({ pressed }) => [
+              styles.connectBtn,
+              connecting && styles.connectBtnBusy,
+              pressed && !connecting && styles.pressed,
+            ]}>
+            {connecting ? (
+              <ActivityIndicator color={C.onAccent} size="small" />
+            ) : (
+              <>
+                <AppIcon name="bluetooth" tintColor={C.onAccent} size={18} />
+                <Text style={styles.connectText}>Connect now</Text>
+                <AppIcon name="chevron.right" tintColor={C.onAccent} size={16} />
+              </>
+            )}
+          </Pressable>
+
+          <Text style={styles.hint}>{status.hint}</Text>
+        </View>
       </View>
-      <Text style={styles.hint}>{status.hint}</Text>
     </View>
   );
 }
@@ -132,56 +148,53 @@ const styles = themedStyles((c, scheme) => ({
   },
   card: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
     backgroundColor: c.surface,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: c.hairline,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
+    borderColor: c.cardBorder,
+    overflow: 'hidden',
     ...cardElevation(c, scheme),
   },
-  iconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: c.header,
+  stripe: { width: 6, backgroundColor: c.accentFill },
+  body: { flex: 1, padding: Spacing.three, gap: 14 },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  iconTile: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: c.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  copy: { flex: 1, gap: 2, minWidth: 0 },
-  name: { fontSize: 16, fontWeight: '700', color: c.text },
-  meta: { fontSize: 12, color: c.textSecondary, fontVariant: ['tabular-nums'] },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
-    flexWrap: 'wrap',
-  },
-  statusPill: {
+  copy: { flex: 1, gap: 4, minWidth: 0 },
+  name: { fontSize: 19, fontWeight: '800', color: c.text },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontSize: 13, fontWeight: '700' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 999,
+    backgroundColor: c.accentSoft,
+    maxWidth: '100%',
   },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  bridge: { fontSize: 11, color: c.textMuted, flexShrink: 1 },
+  chipText: { fontSize: 12, fontWeight: '600', color: c.textSecondary, flexShrink: 1 },
+  mono: { fontVariant: ['tabular-nums'] },
   connectBtn: {
-    minWidth: 88,
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: c.accentStrong,
+    minHeight: 50,
+    borderRadius: 14,
+    backgroundColor: c.accentFill,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
   },
   connectBtnBusy: { opacity: 0.9 },
-  connectText: { color: c.onAccent, fontSize: 14, fontWeight: '700' },
-  hint: { fontSize: 12, lineHeight: 17, color: c.textMuted, paddingHorizontal: 4 },
-  pressed: { opacity: 0.92 },
+  connectText: { color: c.onAccent, fontSize: 16, fontWeight: '800' },
+  hint: { fontSize: 12, lineHeight: 17, color: c.textMuted, textAlign: 'center' },
+  pressed: { opacity: 0.9 },
 }));

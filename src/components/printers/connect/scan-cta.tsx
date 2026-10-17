@@ -48,7 +48,7 @@ export function ScanCta({
         {scanning ? (
           <ActivityIndicator color={C.onAccent} />
         ) : (
-          <AppIcon name="antenna.radiowaves.left.and.right" tintColor={C.onAccent} size={18} />
+          <AppIcon name="bluetooth" tintColor={C.onAccent} size={18} />
         )}
         <Text style={styles.buttonText}>{scanning ? `Scanning for ${modelName}…` : 'Scan for printers'}</Text>
       </Pressable>

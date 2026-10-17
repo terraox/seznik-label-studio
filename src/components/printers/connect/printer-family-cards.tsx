@@ -22,7 +22,6 @@ type PrinterFamilyCardsProps = {
 
 export function PrinterFamilyCards({ selectedId, onSelect }: PrinterFamilyCardsProps) {
   useThemeRefresh();
-  const selected = CONSUMER_PRINTER_LIST.find((printer) => printer.id === selectedId) ?? CONSUMER_PRINTER_LIST[0];
 
   return (
     <View style={styles.wrap}>
@@ -37,7 +36,20 @@ export function PrinterFamilyCards({ selectedId, onSelect }: PrinterFamilyCardsP
           />
         ))}
       </View>
-      <Text style={styles.note}>{selected.tagline}</Text>
+      <PrinterMatchNotice />
+    </View>
+  );
+}
+
+function PrinterMatchNotice() {
+  useThemeRefresh();
+  return (
+    <View style={styles.notice}>
+      <AppIcon name="exclamationmark.triangle.fill" tintColor={C.warning} size={16} />
+      <Text style={styles.noticeText}>
+        <Text style={styles.noticeStrong}>Connect to the right printer </Text>
+        for the best print quality and accurate label sizing.
+      </Text>
     </View>
   );
 }
@@ -80,6 +92,17 @@ const styles = themedStyles((c, scheme) => ({
     ...cardElevation(c, scheme),
   },
   heading: { fontSize: 18, fontWeight: '700', color: c.text },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: c.warningSoft,
+  },
+  noticeText: { flex: 1, fontSize: 12.5, lineHeight: 17, color: c.onWarningSoft },
+  noticeStrong: { fontWeight: '700' },
   row: { flexDirection: 'row', gap: 10 },
   card: {
     flex: 1,
@@ -109,6 +132,5 @@ const styles = themedStyles((c, scheme) => ({
     justifyContent: 'center',
   },
   name: { textAlign: 'center', fontSize: 14, fontWeight: '700', color: c.text },
-  note: { fontSize: 13, lineHeight: 18, color: c.textMuted },
   pressed: { opacity: 0.8 },
 }));

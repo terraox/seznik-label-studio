@@ -8,7 +8,6 @@ import {
   migrateInlineSnapshotsToFiles,
   persistHistorySnapshot,
 } from '@/lib/print-history/snapshot-file';
-import { usePrintStatsStore } from '@/stores/print-stats-store';
 import type { PrintHistoryEntry } from '@/lib/print-history/types';
 import { cloneDocument, generateId } from '@/lib/label-document';
 
@@ -68,7 +67,6 @@ export const usePrintHistoryStore = create<PrintHistoryState>()(
             if (old.snapshotFileId) void deleteHistorySnapshot(old.snapshotFileId);
           }
           syncCache(entries);
-          usePrintStatsStore.getState().record(entry.copies, stored.printedAt);
           return { entries };
         }),
 

@@ -15,6 +15,7 @@ import {
   sendIsolatedPrintCopies,
 } from '@/lib/printer/print-job';
 import { usePrinterStore } from '@/stores/printer-store';
+import { usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { logPrintTrace } from '@/printing';
 
@@ -264,8 +265,10 @@ export async function printPdfToThermal(
 
       await sendIsolatedPrintCopies(bytes, copies);
       pagesPrinted++;
+      usePrintStatsStore.getState().record(copies);
     } else {
       pagesPrinted++;
+      usePrintStatsStore.getState().record(copies);
     }
   }
 
