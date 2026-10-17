@@ -5,43 +5,23 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import { makeStyles } from '@/theme';
 
-const LOGO_FADE_MS = 500;
-const BRAND_DELAY_MS = 500;
-const TAGLINE_DELAY_MS = 1000;
-const HOLD_MS = 2300;
+const FADE_MS = 250;
+const BRAND_DELAY_MS = 250;
+const TAGLINE_DELAY_MS = 500;
+// Total time on screen before the app loads.
+const HOLD_MS = 1500;
 
-function IndianFlag() {
-  return (
-    <View style={flag.root}>
-      <View style={[flag.band, { backgroundColor: '#FF9933' }]} />
-      <View style={[flag.band, flag.middle]}>
-        <View style={flag.chakra} />
-      </View>
-      <View style={[flag.band, { backgroundColor: '#138808' }]} />
-    </View>
-  );
-}
-
-const flag = StyleSheet.create({
-  root: { width: 27, height: 18, borderRadius: 2, overflow: 'hidden', marginLeft: 8 },
-  band: { flex: 1 },
-  middle: { backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  chakra: { width: 5, height: 5, borderRadius: 2.5, borderWidth: 1, borderColor: '#000080' },
-});
-
-/** Logo, "Seznik India" with the flag, then a tagline; then the app loads directly. */
+/** Logo, "SEZNIK INDIA", then a tagline; then the app loads directly. */
 export function IntroScreen({ onFinish, onDone }: { onFinish: () => void; onDone: () => void }) {
   const styles = useStyles();
-  const logo = useRef(new Animated.Value(0)).current;
   const brand = useRef(new Animated.Value(0)).current;
   const tagline = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
     const fade = (v: Animated.Value, delay: number) =>
-      Animated.timing(v, { toValue: 1, duration: LOGO_FADE_MS, delay, useNativeDriver: true });
+      Animated.timing(v, { toValue: 1, duration: FADE_MS, delay, useNativeDriver: true });
     const sequence = Animated.parallel([
-      fade(logo, 0),
       fade(brand, BRAND_DELAY_MS),
       fade(tagline, TAGLINE_DELAY_MS),
     ]);
@@ -54,24 +34,23 @@ export function IntroScreen({ onFinish, onDone }: { onFinish: () => void; onDone
       sequence.stop();
       clearTimeout(doneTimer);
     };
-  }, [logo, brand, tagline, onFinish, onDone]);
+  }, [brand, tagline, onFinish, onDone]);
 
   return (
     <View style={[StyleSheet.absoluteFill, styles.root]}>
       <View style={styles.center}>
-        <Animated.View style={{ opacity: logo }}>
-          <Image
-            source={require('../../assets/images/logo.png')}
-            style={styles.logo}
-            contentFit="contain"
-          />
-        </Animated.View>
+        <Image
+          source={require('../../assets/images/logo.png')}
+          style={styles.logo}
+          contentFit="contain"
+          priority="high"
+          cachePolicy="memory"
+        />
         <Animated.View style={[styles.brandRow, { opacity: brand }]}>
           <Text style={styles.brand}>SEZNIK INDIA</Text>
         </Animated.View>
         <Animated.View style={[styles.brandRow, styles.taglineRow, { opacity: tagline }]}>
-          <Text style={styles.tagline}>Made in India with love 💔</Text>
-          <IndianFlag />
+          <Text style={styles.tagline}>Made in India 🇮🇳 with love ♥️</Text>
         </Animated.View>
       </View>
     </View>
