@@ -3,6 +3,8 @@
  * Uses code set B (printable ASCII) with automatic switch to set C for digit runs.
  */
 
+import { gs1CheckDigit } from '@/lib/serial/check-digit';
+
 const PATTERNS = [
   '212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212',
   '221213', '221312', '231212', '112232', '122132', '122231', '113222', '123122', '123221',
@@ -269,13 +271,7 @@ const EAN13_PARITY: Record<number, ('L' | 'G')[]> = {
   9: ['L', 'G', 'G', 'L', 'G', 'L'],
 };
 
-function eanChecksum(digits: string): number {
-  let sum = 0;
-  for (let i = digits.length - 1, weight = 3; i >= 0; i -= 1, weight = weight === 3 ? 1 : 3) {
-    sum += Number(digits[i]) * weight;
-  }
-  return (10 - (sum % 10)) % 10;
-}
+const eanChecksum = gs1CheckDigit;
 
 function encodeEan13(input: string): number[] | null {
   const digits = input.replace(/\D/g, '');

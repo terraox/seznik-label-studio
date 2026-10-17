@@ -5,6 +5,8 @@
  * sample label + a numeric range, with no Excel/PDF import required.
  */
 
+import { gs1CheckDigit } from '@/lib/serial/check-digit';
+
 // ---------- Types ----------
 
 export interface ParsedSequence {
@@ -84,23 +86,8 @@ export function parseSequenceFromText(sample: string): ParsedSequence | null {
 
 // ---------- Barcode checksum handling ----------
 
-function ean13CheckDigit(digits12: string): number {
-  const nums = digits12.split('').map(Number);
-  const sum = nums.reduce(
-    (acc, d, i) => acc + d * (i % 2 === 0 ? 1 : 3),
-    0
-  );
-  return (10 - (sum % 10)) % 10;
-}
-
-function upcACheckDigit(digits11: string): number {
-  const nums = digits11.split('').map(Number);
-  const sum = nums.reduce(
-    (acc, d, i) => acc + d * (i % 2 === 0 ? 3 : 1),
-    0
-  );
-  return (10 - (sum % 10)) % 10;
-}
+const ean13CheckDigit = gs1CheckDigit;
+const upcACheckDigit = gs1CheckDigit;
 
 function buildBarcodeValue(
   numericPayload: string,
