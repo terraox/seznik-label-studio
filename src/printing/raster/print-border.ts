@@ -194,6 +194,29 @@ export function drawTd404EdgeBorder(
   label: EdgeBorderPage,
   shift: { x: number; y: number },
 ): void {
+  // A 2-up cell border only frames its own half, so it keeps its rectangle. Snapping it to the
+  // page edge would merge both cells into one frame.
+  if (!borderCoversBitmap(el, dpi, label.widthDots, label.heightDots)) {
+    const ins = borderFrameInsetsForElement(el, dpi);
+    const x0 = mmToDots(el.left, dpi) + ins.left;
+    const y0 = Math.max(0, mmToDots(el.top, dpi)) + ins.top;
+    const x1 = mmToDots(el.left + el.width, dpi) - ins.right;
+    const y1 = mmToDots(el.top + el.height, dpi) - ins.bottom;
+    drawInwardFrameInBox(
+      target,
+      Math.max(1, x1 - x0),
+      Math.max(1, y1 - y0),
+      dpi,
+      el.lineWidth,
+      resolveBorderStyle(el.borderStyle),
+      x0 + shift.x,
+      y0 + shift.y,
+      { left: 0, right: 0, top: 0, bottom: 0 },
+      'rect',
+      1,
+    );
+    return;
+  }
   const outer = td404BorderOuterDots(label.widthDots, label.heightDots, dpi, td404BorderGapMm(el.edgeGapMm));
   drawInwardFrameInBox(
     target,
