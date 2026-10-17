@@ -150,7 +150,10 @@ export function startDevScan(
     onDevice(payload as DevDiscoveredDevice);
   });
 
+  // Ignore the stale "finished" broadcast Android sends when it cancels the previous scan.
+  const startedAt = Date.now();
   const subFinished = mod.addListener('onScanFinished', () => {
+    if (Date.now() - startedAt < 2000) return;
     if (typeof onFinishedOrFailed === 'function' && !onFailed) {
       onFinishedOrFailed();
     }

@@ -144,6 +144,8 @@ export default function PrinterConnectScreen() {
     getPrinterManager().isAutoReconnectSuppressed(),
   );
   const mountedRef = useRef(true);
+  /** Bumped per scan so a superseded scan cannot touch the list or spinner. */
+  const scanTokenRef = useRef(0);
   const autoConnectKeyRef = useRef<string | null>(null);
   const connectRequestRef = useRef(0);
   /** Silent background reconnect in flight. Never shown as a spinner (printer may simply be off). */
@@ -206,13 +208,14 @@ export default function PrinterConnectScreen() {
       setNativeHint(null);
       return;
     }
+    const token = ++scanTokenRef.current;
     setDevices([]);
     setScanning(true);
     setNativeHint(null);
     setScanErrors([]);
     try {
       const result = await getPrinterManager().startModelScan(toDriverModel(target), (device) => {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || token !== scanTokenRef.current) return;
         setDevices((prev) => {
           const key = device.id.toUpperCase();
           const idx = prev.findIndex((item) => item.id.toUpperCase() === key);
@@ -223,7 +226,7 @@ export default function PrinterConnectScreen() {
         });
         void attemptAutoConnectLast(device);
       });
-      if (mountedRef.current) {
+      if (mountedRef.current && token === scanTokenRef.current) {
         setScanErrors(result.errors);
         if (result.errors.some((entry) => isBluetoothOffError(entry))) setBluetoothOn(false);
         if (result.paired + result.nearby === 0) {
@@ -235,14 +238,14 @@ export default function PrinterConnectScreen() {
         }
       }
     } catch (error) {
-      if (mountedRef.current) {
+      if (mountedRef.current && token === scanTokenRef.current) {
         const message = error instanceof Error ? error.message : `Could not scan for ${meta.shortName}.`;
         setNativeHint(message);
         refreshCaps();
         if (!isBluetoothOffError(error)) Alert.alert('Bluetooth scan failed', message);
       }
     } finally {
-      if (mountedRef.current) setScanning(false);
+      if (mountedRef.current && token === scanTokenRef.current) setScanning(false);
     }
   }, [attemptAutoConnectLast, refreshCaps, selectedModel]);
 

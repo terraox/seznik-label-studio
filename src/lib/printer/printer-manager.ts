@@ -1216,7 +1216,8 @@ class PrinterManager {
       return { paired: 0, nearby: 0, errors: [] };
     }
     store.setStatus('scanning');
-    this.stopScan();
+    // Wait for the previous native discovery to stop, or its late stop cancels this new scan.
+    await this.stopScanAsync();
 
     const seen = new Set<string>();
     const emit = (d: DiscoveredPrinter) => {

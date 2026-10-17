@@ -177,8 +177,14 @@ export function startTd404Scan(
   const foundSub = mod.addListener('onDeviceFound', (payload) => {
     onDevice(payload as Td404Device);
   });
+  // Android broadcasts "discovery finished" when it cancels the previous scan. That stale event
+  // lands right after a rescan starts and would end the new scan at once, so ignore it.
+  const startedAt = Date.now();
   const finishSub = onFinished
-    ? mod.addListener('onScanFinished', () => onFinished())
+    ? mod.addListener('onScanFinished', () => {
+        if (Date.now() - startedAt < 2000) return;
+        onFinished();
+      })
     : null;
 
   void mod
