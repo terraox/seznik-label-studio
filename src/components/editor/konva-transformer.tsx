@@ -156,6 +156,8 @@ const SAFE_MODE_SPRING = { damping: 12, stiffness: 180, mass: 0.6 };
 
 /** Below this the two reports are one physical tap double-counted. */
 const DOUBLE_TAP_MIN_GAP_MS = 30;
+/** Width step of the wrapped-height table built when a text width drag starts. */
+const LIVE_HEIGHT_STEP_MM = 0.5;
 /** Both taps must land on roughly the same spot, not opposite ends of a wide element. */
 const DOUBLE_TAP_MAX_DIST_PX = 32;
 /** Dedupes the native, UI-thread, and JS-thread detectors firing for one gesture. */
@@ -373,6 +375,34 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     sx,
     sy,
   };
+  // Wrapped height for every width the drag can reach, measured once when the drag starts.
+  // The drag worklet reads it on the UI thread, so the box height changes in the same frame
+  // as the natively wrapping text instead of waiting for a JS measure per frame.
+  const liveHeightTableSv = useSharedValue<number[]>([]);
+  const liveHeightTableMinSv = useSharedValue(0);
+  const buildLiveHeightTableJS = useCallback(() => {
+    const cur = liveTextRef.current;
+    const minW = Math.max(0.5, cur.minMm);
+    const maxW = Math.max(minW, canvasWidthMm - Math.max(0, finiteMm(element.left)));
+    const table: number[] = [];
+    for (let w = minW; w <= maxW + LIVE_HEIGHT_STEP_MM; w += LIVE_HEIGHT_STEP_MM) {
+      table.push(
+        visibleTextHeightMm({
+          text: cur.text,
+          fontSize: cur.fontSize,
+          widthMm: w,
+          autoWrapping: cur.autoWrapping === 'Close' ? 'Word' : cur.autoWrapping,
+          lineSpacing: cur.lineSpacing,
+          charSpacing: cur.charSpacing,
+          bold: cur.bold,
+          verticalDisplay: cur.verticalDisplay,
+          fontFamily: cur.fontFamily || undefined,
+        }),
+      );
+    }
+    liveHeightTableMinSv.value = minW;
+    liveHeightTableSv.value = table;
+  }, [canvasWidthMm, element.left, liveHeightTableMinSv, liveHeightTableSv]);
   const liveHeightFrame = useRef<number | null>(null);
   const liveHeightWidthPx = useRef(-1);
   const correctLiveHeightJS = useCallback(
@@ -408,13 +438,13 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     [],
   );
   useAnimatedReaction(
-    () => (textLiveSv.value ? animW.value : -1),
+    () => (textLiveSv.value && liveHeightTableSv.value.length === 0 ? animW.value : -1),
     (widthPx, prev) => {
       if (widthPx < 0) return;
       if (prev != null && prev >= 0 && Math.abs(widthPx - prev) < 1) return;
       runOnJS(correctLiveHeightJS)(widthPx);
     },
-    [correctLiveHeightJS],
+    [correctLiveHeightJS, liveHeightTableSv],
   );
 
   const liftSv = useSharedValue(1);
@@ -1477,6 +1507,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           runOnJS(notifyTransformStartJS)(element.id, 'resize');
           if (wrapTextOnWidthSv.value && handle === 'e') {
             textLiveSv.value = true;
+            runOnJS(buildLiveHeightTableJS)();
           }
           if (
             groupEligibleSv &&
@@ -1570,17 +1601,24 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
           let liveHeightMm = box.height;
           if (wrapTextOnWidthSv.value && handle === 'e') {
-            const wrapH = computeTextElementHeightMm({
-              text: textContentSv.value,
-              fontSize: textFontSizeSv.value,
-              widthMm: Math.max(0.5, box.width),
-              autoWrapping: autoWrappingSv.value,
-              lineSpacing: lineSpacingSv.value,
-              charSpacing: charSpacingSv.value,
-              bold: boldSv.value,
-              verticalDisplay: verticalDisplaySv.value,
-              fontFamily: fontFamilySv.value || undefined,
-            });
+            const table = liveHeightTableSv.value;
+            let wrapH: number;
+            if (table.length > 0) {
+              const idx = Math.round((box.width - liveHeightTableMinSv.value) / LIVE_HEIGHT_STEP_MM);
+              wrapH = table[Math.max(0, Math.min(table.length - 1, idx))];
+            } else {
+              wrapH = computeTextElementHeightMm({
+                text: textContentSv.value,
+                fontSize: textFontSizeSv.value,
+                widthMm: Math.max(0.5, box.width),
+                autoWrapping: autoWrappingSv.value,
+                lineSpacing: lineSpacingSv.value,
+                charSpacing: charSpacingSv.value,
+                bold: boldSv.value,
+                verticalDisplay: verticalDisplaySv.value,
+                fontFamily: fontFamilySv.value || undefined,
+              });
+            }
             const maxH = Math.max(minResizeMmSv.value, canvasHMmSv.value - box.top);
             liveHeightMm = Math.min(maxH, wrapH);
           }
@@ -1609,6 +1647,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           'worklet';
           if (wrapTextOnWidthSv.value && handle === 'e') {
             runOnJS(releaseTextLiveJS)();
+            liveHeightTableSv.value = [];
           }
           runOnJS(dispatchResizeCommit)(handle, animW.value, animH.value, animRot.value);
         })
@@ -1616,10 +1655,14 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           'worklet';
           if (wrapTextOnWidthSv.value && handle === 'e') {
             runOnJS(releaseTextLiveJS)();
+            liveHeightTableSv.value = [];
           }
         });
     },
     [
+      buildLiveHeightTableJS,
+      liveHeightTableSv,
+      liveHeightTableMinSv,
       deselectGesture,
       originLeftSv,
       originTopSv,

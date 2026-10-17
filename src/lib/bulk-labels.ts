@@ -343,7 +343,7 @@ function layoutSlotTemplates(
         width: geo.width,
         height: geo.height,
         fontSize: fontSize ?? draft.fontSize ?? DEFAULT_ELEMENT_STATE.fontSize,
-        autoWrapping: 'Close',
+        autoWrapping: 'Word',
       };
       templates[slot.id] = el;
       geometry[slot.id] = geometryOfElement(el);
@@ -410,8 +410,10 @@ function fitProjectedText(
 ): LabelElement {
   if (el.type !== 'text') return el;
   const fitted = fitTextBoxToContent(el, canvas);
+  const wraps = el.autoWrapping !== 'Close' && el.autoTextHeight !== false;
+  // Wrapping text keeps every line visible; fixed-height text stays inside its slot.
   const height =
-    typeof el.height === 'number' && el.height > 0
+    !wraps && typeof el.height === 'number' && el.height > 0
       ? Math.min(fitted.height, el.height)
       : fitted.height;
   return { ...el, width: fitted.width, height };
@@ -424,7 +426,10 @@ export function projectBulkElements(
   canvas?: { widthMm: number; heightMm: number },
 ): LabelElement[] {
   return bulk.slots.map((slot) => {
-    const template = bulk.slotTemplates[slot.id];
+    const stored = bulk.slotTemplates[slot.id];
+    // Older Excel sets were saved with single-line 'Close' text that got cut off with "…".
+    const template =
+      stored.type === 'text' && stored.autoWrapping === 'Close' ? { ...stored, autoWrapping: 'Word' as const } : stored;
     const geo = resolvedSlotGeometry(bulk, rowIndex, slot.id);
     const value = resolvedSlotContent(bulk, sheet, rowIndex, slot);
     const withGeo = applyGeometry(template, geo);
