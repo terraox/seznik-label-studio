@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import { makeStyles } from '@/theme';
@@ -8,8 +8,9 @@ import { makeStyles } from '@/theme';
 const FADE_MS = 250;
 const BRAND_DELAY_MS = 250;
 const TAGLINE_DELAY_MS = 500;
-// Total time on screen before the app loads.
+// Time on screen (from when the logo is shown) before the app loads.
 const HOLD_MS = 1500;
+const LOAD_FALLBACK_MS = 1000;
 
 /** Logo, "SEZNIK INDIA", then a tagline; then the app loads directly. */
 export function IntroScreen({ onFinish, onDone }: { onFinish: () => void; onDone: () => void }) {
@@ -17,7 +18,17 @@ export function IntroScreen({ onFinish, onDone }: { onFinish: () => void; onDone
   const brand = useRef(new Animated.Value(0)).current;
   const tagline = useRef(new Animated.Value(0)).current;
 
+  const [loaded, setLoaded] = useState(false);
+
+  // The native splash stays up until the logo has decoded, so the intro never shows without it.
+  // If the image is slow or fails, show the intro anyway after a short wait.
   useEffect(() => {
+    const fallback = setTimeout(() => setLoaded(true), LOAD_FALLBACK_MS);
+    return () => clearTimeout(fallback);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
     SplashScreen.hideAsync().catch(() => {});
     const fade = (v: Animated.Value, delay: number) =>
       Animated.timing(v, { toValue: 1, duration: FADE_MS, delay, useNativeDriver: true });
@@ -34,17 +45,19 @@ export function IntroScreen({ onFinish, onDone }: { onFinish: () => void; onDone
       sequence.stop();
       clearTimeout(doneTimer);
     };
-  }, [brand, tagline, onFinish, onDone]);
+  }, [loaded, brand, tagline, onFinish, onDone]);
 
   return (
     <View style={[StyleSheet.absoluteFill, styles.root]}>
       <View style={styles.center}>
         <Image
-          source={require('../../assets/images/logo.png')}
+          source={require('../../assets/images/logo-intro.png')}
           style={styles.logo}
           contentFit="contain"
           priority="high"
           cachePolicy="memory"
+          onLoad={() => setLoaded(true)}
+          onError={() => setLoaded(true)}
         />
         <Animated.View style={[styles.brandRow, { opacity: brand }]}>
           <Text style={styles.brand}>SEZNIK INDIA</Text>

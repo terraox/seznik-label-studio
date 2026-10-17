@@ -450,3 +450,38 @@ test('display head prefixes text slot values', () => {
   assert.ok(slot);
   assert.equal(resolvedSlotContent(doc.bulk, sheet, 0, slot), 'Name: Widget');
 });
+
+test('display head prefix is not saved as an edit or stacked on re-projection', () => {
+  const doc = createBulkLabelDocument({
+    name: 'headed',
+    widthMm: 50,
+    heightMm: 40,
+    excelFileId: 'xls_test',
+    sheetIndex: 0,
+    sheet,
+    mappings,
+    displayHead: true,
+  });
+  assert.ok(doc?.bulk);
+  const slot = doc.bulk.slots.find((s) => s.kind === 'text');
+  assert.ok(slot);
+  let current = doc;
+  for (let i = 0; i < 3; i += 1) {
+    const bulk = syncBulkFromProjectedElements(current.bulk!, sheet, current.elements);
+    assert.deepEqual(bulk.rowContentOverrides, {});
+    current = projectBulkDocument({ ...current, bulk }, sheet, 0);
+  }
+  assert.equal(resolvedSlotContent(current.bulk!, sheet, 0, slot), 'Name: Widget');
+
+  // A real edit is stored without the prefix, and overrides damaged by older builds are healed.
+  const edited = current.elements.map((el) =>
+    el.id === slot.id && el.type === 'text' ? { ...el, text: 'Name: Gadget' } : el,
+  );
+  const saved = syncBulkFromProjectedElements(current.bulk!, sheet, edited);
+  assert.equal(saved.rowContentOverrides['0'][slot.id], 'Gadget');
+  const damaged = {
+    ...saved,
+    rowContentOverrides: { '0': { [slot.id]: 'Name: Name: Gadget' } },
+  };
+  assert.equal(resolvedSlotContent(damaged, sheet, 0, slot), 'Name: Gadget');
+});

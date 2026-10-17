@@ -135,6 +135,21 @@ export function resolvedSlotGeometry(bulk: BulkLabelSet, rowIndex: number, slotI
   return bulk.sharedGeometry[slotId];
 }
 
+/** Removes every leading `Column: ` that Display head added, so it is never stored or stacked. */
+function stripHeadPrefix(slot: BulkSlot, text: string): string {
+  const prefix = `${slot.columnName}: `;
+  let out = text;
+  while (out.startsWith(prefix)) out = out.slice(prefix.length);
+  return out;
+}
+
+function withHead(bulk: BulkLabelSet, slot: BulkSlot, raw: string): string {
+  if (slot.kind === 'text' && bulk.displayHead && raw.trim()) {
+    return `${slot.columnName}: ${raw}`;
+  }
+  return raw;
+}
+
 export function resolvedSlotContent(
   bulk: BulkLabelSet,
   sheet: ExcelSheet,
@@ -142,11 +157,15 @@ export function resolvedSlotContent(
   slot: BulkSlot,
 ): string {
   const override = bulk.rowContentOverrides[String(rowIndex)]?.[slot.id];
-  const raw = override !== undefined ? override : cellValue(sheet, rowIndex, slot.columnIndex);
-  if (slot.kind === 'text' && bulk.displayHead && raw.trim()) {
-    return `${slot.columnName}: ${raw}`;
-  }
-  return raw;
+  // Overrides saved by older builds may already carry the prefix (even repeated); drop it
+  // before adding it once.
+  const raw =
+    override !== undefined
+      ? slot.kind === 'text' && bulk.displayHead
+        ? stripHeadPrefix(slot, override)
+        : override
+      : cellValue(sheet, rowIndex, slot.columnIndex);
+  return withHead(bulk, slot, raw);
 }
 
 function applyGeometry<T extends LabelElement>(el: T, geo: BulkGeometry): T {
@@ -619,8 +638,12 @@ export function syncBulkFromProjectedElements(
     const el = elements.find((item) => item.id === slot.id);
     if (!el) continue;
     const sheetValue = cellValue(sheet, bulk.activeRowIndex, slot.columnIndex);
-    const live =
+    const shown =
       el.type === 'text' ? el.text : 'content' in el && typeof el.content === 'string' ? el.content : '';
+    // The element shows `Column: value` when Display head is on. Compare and store the raw cell
+    // text, otherwise the prefix is saved as an edit and added again on the next projection.
+    const live =
+      slot.kind === 'text' && bulk.displayHead ? stripHeadPrefix(slot, shown) : shown;
     const existingOverride = bulk.rowContentOverrides[rowKey]?.[slot.id];
     if (live !== sheetValue) {
       if (existingOverride !== live) {

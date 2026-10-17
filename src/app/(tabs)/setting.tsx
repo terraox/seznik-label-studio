@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SupportedPrintersSection } from '@/components/supported-printers-section';
 import { ActionSheet } from '@/components/ui/action-sheet';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple } from '@/constants/ui';
@@ -266,6 +267,8 @@ export default function SettingScreen() {
               onPress={() => router.push('/printer-connect')}
             />
           </SettingGroup>
+
+          <SupportedPrintersSection />
 
           <SettingGroup>
             <SettingRow
