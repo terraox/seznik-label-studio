@@ -83,3 +83,24 @@ test('batch count is clamped and copies get fresh field ids', () => {
   assert.equal((copy as { serial: SerialConfig }).serial.id, 'fresh');
   assert.equal(collectSerialFields({ elements: [el, copy] }).length, 2);
 });
+
+test('table cells are serialized cell by cell', () => {
+  const base = { text: 'x', contentType: 'Manual' } as never;
+  const serialCell = { text: 'x', contentType: 'Degrees', serial: cfg({ id: 'cell1', start: '5', prefix: 'R' }) } as never;
+  const table = {
+    id: 'tb', type: 'table', rowCount: 2, columnCount: 2, left: 0, top: 0, width: 20, height: 10,
+    cells: [[base, serialCell], [serialCell, base]],
+  };
+  const doc = docWith([table]);
+  assert.equal(collectSerialFields(doc).length, 2);
+  const cellsAt = (i: number) =>
+    (resolveDocumentForIndex(doc, i).elements[0] as unknown as { cells: { text: string; contentType: string }[][] }).cells;
+  assert.equal(cellsAt(0)[0][1].text, 'R5');
+  assert.equal(cellsAt(3)[0][1].text, 'R8');
+  assert.equal(cellsAt(3)[0][0].text, 'x'); // plain cells untouched
+  assert.equal(cellsAt(0)[0][1].contentType, 'Manual');
+  // copies of a table get fresh field ids for every serial cell
+  const copy = withFreshSerialIds(doc.elements[0], (() => { let n = 0; return () => `n${n++}`; })());
+  const ids = collectSerialFields({ elements: [copy] }).map((f) => f.config.id);
+  assert.deepEqual(ids, ['n0', 'n1']);
+});

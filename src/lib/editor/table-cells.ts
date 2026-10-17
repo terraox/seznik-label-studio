@@ -1,3 +1,4 @@
+import type { SerialConfig } from '@/lib/serial/types';
 import {
   type AutoWrapping,
   type ContentType,
@@ -38,6 +39,8 @@ export type TableCellContent = {
   antiColor: boolean;
   drawingColorIndex: number;
   degreesOffset?: number;
+  /** New Serial settings for this cell (active when contentType is 'Degrees'). */
+  serial?: SerialConfig;
 };
 
 export function createDefaultTableCell(): TableCellContent {
@@ -215,6 +218,7 @@ export function tableCellToEditorState(
     verticalDisplay: cell.verticalDisplay,
     autoTextHeight: false,
     ...(cell.degreesOffset != null ? { degreesOffset: cell.degreesOffset } : {}),
+    ...(cell.serial ? { serial: cell.serial } : {}),
   };
 }
 
@@ -236,6 +240,7 @@ const CELL_KEYS = new Set([
   'antiColor',
   'drawingColorIndex',
   'degreesOffset',
+  'serial',
 ]);
 
 export function pickTableCellPatch(
