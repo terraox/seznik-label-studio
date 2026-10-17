@@ -660,7 +660,12 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
           ) : null}
 
           {doc.elements.length === 0 && !stockCut ? (
-            <View style={styles.emptyHintWrap}>
+            <View pointerEvents="none" style={styles.emptyHintWrap}>
+              <Image
+                source={require('../../../assets/images/logo.png')}
+                contentFit="contain"
+                style={styles.emptyLogo}
+              />
               <Text style={styles.emptyHint}>Tap or drag a tool onto the label</Text>
             </View>
           ) : null}
@@ -795,6 +800,12 @@ const styles = themedStyles((c) => ({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+  },
+  emptyLogo: {
+    width: '45%',
+    height: '45%',
+    opacity: 0.12,
   },
   emptyHint: {
     fontSize: 13,
