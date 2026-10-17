@@ -44,13 +44,22 @@ export function PrinterFamilyCards({ selectedId, onSelect }: PrinterFamilyCardsP
 function PrinterMatchNotice() {
   useThemeRefresh();
   return (
+    <>
     <View style={styles.notice}>
-      <AppIcon name="exclamationmark.triangle.fill" tintColor={C.warning} size={16} />
+      <AppIcon name="exclamationmark.triangle.fill" tintColor={C.accentInk} size={16} />
       <Text style={styles.noticeText}>
         <Text style={styles.noticeStrong}>Connect to the right printer </Text>
         for the best print quality and accurate label sizing.
       </Text>
     </View>
+    <View style={[styles.notice, styles.pairNotice]}>
+      <AppIcon name="bluetooth" tintColor={C.success} size={16} />
+      <Text style={[styles.noticeText, styles.pairText]}>
+        <Text style={styles.noticeStrong}>Pair first. </Text>
+        Before you scan, pair your printer in your phone's Bluetooth settings.
+      </Text>
+    </View>
+    </>
   );
 }
 
@@ -99,10 +108,12 @@ const styles = themedStyles((c, scheme) => ({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,
-    backgroundColor: c.warningSoft,
+    backgroundColor: c.accentSoft,
   },
-  noticeText: { flex: 1, fontSize: 12.5, lineHeight: 17, color: c.onWarningSoft },
+  noticeText: { flex: 1, fontSize: 12.5, lineHeight: 17, color: c.accentInk },
   noticeStrong: { fontWeight: '700' },
+  pairNotice: { backgroundColor: c.successSoft },
+  pairText: { color: c.success },
   row: { flexDirection: 'row', gap: 10 },
   card: {
     flex: 1,

@@ -137,6 +137,8 @@ export default function PrinterConnectScreen() {
   const [measuring, setMeasuring] = useState(false);
   const [nativeHint, setNativeHint] = useState<string | null>(null);
   const [scanErrors, setScanErrors] = useState<string[]>([]);
+  /** True once a scan finished with no errors, so 'not in the list' reliably means unpaired. */
+  const [scanCleanDone, setScanCleanDone] = useState(false);
   const [caps, setCaps] = useState<BluetoothCapabilities>(() => getPrinterManager().getCapabilities());
   const [bluetoothOn, setBluetoothOn] = useState(() => getPrinterManager().isBluetoothEnabled());
   const [bluetoothOffDialog, setBluetoothOffDialog] = useState(false);
@@ -213,6 +215,7 @@ export default function PrinterConnectScreen() {
     setScanning(true);
     setNativeHint(null);
     setScanErrors([]);
+    setScanCleanDone(false);
     try {
       const result = await getPrinterManager().startModelScan(toDriverModel(target), (device) => {
         if (!mountedRef.current || token !== scanTokenRef.current) return;
@@ -228,6 +231,7 @@ export default function PrinterConnectScreen() {
       });
       if (mountedRef.current && token === scanTokenRef.current) {
         setScanErrors(result.errors);
+        setScanCleanDone(result.errors.length === 0);
         if (result.errors.some((entry) => isBluetoothOffError(entry))) setBluetoothOn(false);
         if (result.paired + result.nearby === 0) {
           setNativeHint(
@@ -333,6 +337,10 @@ export default function PrinterConnectScreen() {
     const key = normalizePrinterMac(lastForBridge.id);
     return listedDevices.some((d) => normalizePrinterMac(d.id) === key);
   }, [lastForBridge?.id, listedDevices]);
+
+  // Paired printers are always listed (in range or not), so a clean scan that lacks the last
+  // printer means it was unpaired from Android Bluetooth settings.
+  const lastUnpaired = Boolean(lastForBridge?.id) && scanCleanDone && !scanning && !lastNearby;
 
   const connectWith = async (target: ConsumerPrinterId, device: DiscoveredPrinter) => {
     if (target !== usePrinterStore.getState().selectedPrinterModel) {
@@ -547,7 +555,7 @@ export default function PrinterConnectScreen() {
             deviceName={lastForBridge?.name ?? ''}
             deviceId={lastForBridge?.id ?? ''}
             connecting={Boolean(lastForBridge && connectingId === lastForBridge.id)}
-            visible={Boolean(lastForBridge && caps.canScan && bluetoothOn)}
+            visible={Boolean(lastForBridge && caps.canScan && bluetoothOn && !lastUnpaired)}
             nearby={lastNearby}
             scanning={scanning}
             autoConnectPaused={autoConnectPaused}

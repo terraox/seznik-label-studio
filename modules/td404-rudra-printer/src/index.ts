@@ -175,6 +175,7 @@ export function startTd404Scan(
   }
 
   const foundSub = mod.addListener('onDeviceFound', (payload) => {
+    console.info('[td404-scan] found', JSON.stringify(payload));
     onDevice(payload as Td404Device);
   });
   // Android broadcasts "discovery finished" when it cancels the previous scan. That stale event
@@ -190,8 +191,16 @@ export function startTd404Scan(
   void mod
     .startScan()
     .then((result) => {
+      console.info('[td404-scan] startScan result', JSON.stringify(result ?? null));
       if (result && result.discoveryStarted === false) {
-        onFinished?.();
+        // Paired printers were still listed, but nearby discovery never ran. Say why instead of
+        // ending silently, otherwise unpaired printers just look missing.
+        onFinished?.(
+          new Error(
+            result.reason ??
+              'Nearby scan could not start. Allow Nearby devices permission and, on Android 11 or older, turn on Location.',
+          ),
+        );
       }
     })
     .catch((error) => {

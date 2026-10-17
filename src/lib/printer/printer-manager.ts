@@ -1222,10 +1222,15 @@ class PrinterManager {
     const seen = new Set<string>();
     const emit = (d: DiscoveredPrinter) => {
       const key = (d.id || '').toUpperCase();
-      if (!key || seen.has(key)) return;
+      if (!key) return;
+      // Re-emit when a later sighting brings a real name; the first one is often just the MAC.
+      const named = Boolean(d.name && d.name.toUpperCase() !== key && !d.name.startsWith('Bluetooth '));
+      if (seen.has(key) && !(named && !namedSeen.has(key))) return;
       seen.add(key);
+      if (named) namedSeen.add(key);
       onDevice(d);
     };
+    const namedSeen = new Set<string>();
 
     let paired = 0;
     let nearby = 0;
@@ -1385,6 +1390,21 @@ class PrinterManager {
         }
       } else {
         errors.push('LABEL X native module not available in this build');
+      }
+    }
+
+    // Android's "Available devices" also lists BLE advertisers that classic inquiry never sees.
+    // Add them after the classic scan (never alongside it: concurrent scans drop devices).
+    const bleExtra = this.getBle();
+    if (bleExtra && this.isBluetoothEnabled()) {
+      try {
+        await this.startBleScan(bleExtra, (d) => {
+          const before = seen.size;
+          emit(d);
+          if (seen.size > before) nearby++;
+        });
+      } catch (e) {
+        console.warn('[printer] BLE supplement scan failed', e);
       }
     }
 
