@@ -51,6 +51,11 @@ import {
 } from '@/lib/printer/SerialLabelEngine';
 import { createSerialLabelDocument, serialDocumentName } from '@/lib/serial-label-document';
 import { useDataStore } from '@/stores/data-store';
+import { DEFAULT_ELEMENT_STATE } from '@/components/editor/types';
+import { fitTextDefaults } from '@/lib/element-sizing';
+import { defaultSerialConfig } from '@/lib/serial/legacy';
+import { storedValuePatch } from '@/lib/serial/stored';
+import { DEFAULT_SERIAL_COUNT } from '@/lib/serial/types';
 import { scaleDocumentToSize } from '@/lib/element-sizing';
 import { resolveProfile } from '@/printer-core/profiles';
 import { useLabelStore } from '@/stores/label-store';
@@ -83,8 +88,11 @@ export default function NewLabelSetupScreen() {
     serialStep?: string;
     serialPad?: string;
     serialSymbology?: string;
+    serialEditor?: string;
   }>();
   const isSerial = Boolean(params.serialSample);
+  // New Home entry: size first, then the normal editor with a Serial text element.
+  const isSerialEditor = params.serialEditor === '1';
   const isImportImage = Boolean(params.importImageUri);
   const isClone = params.isClone === 'true';
   const defaults = useSettingsStore((s) => s.defaults);
@@ -125,7 +133,7 @@ export default function NewLabelSetupScreen() {
   const cell = cellSize(form);
   const gapMm = parseGapMm(form.gap) ?? 0;
   const multi = form.columns > 1;
-  const showLayout = !isImportImage && !isSerial;
+  const showLayout = !isImportImage && !isSerial && !isSerialEditor;
   const total = cell.w != null ? totalWidthMm(cell.w, form.columns, gapMm) : null;
   const warning = multi && total != null ? widthWarning(total, printerMaxMm) : null;
   const presetValue = presetLabelFor(form.shape, cell.w, cell.h);
@@ -147,6 +155,38 @@ export default function NewLabelSetupScreen() {
       console.log(
         `[new-label] create shape=${form.shape} columns=${form.columns} size=${size.widthMm}x${size.heightMm} gap=${gapMm} image=${isImportImage}`,
       );
+    }
+
+    if (isSerialEditor) {
+      const serial = defaultSerialConfig();
+      const fit = fitTextDefaults(size.widthMm, size.heightMm);
+      const element = {
+        ...DEFAULT_ELEMENT_STATE,
+        id: generateId(),
+        type: 'text',
+        text: '1',
+        contentType: 'Degrees',
+        ...storedValuePatch(serial, 'text'),
+        left: fit.left,
+        top: fit.top,
+        width: fit.width,
+        fontSize: fit.fontSize,
+        autoTextHeight: true,
+        autoWrapping: defaults.autoWrap,
+      } as unknown as LabelElement;
+      const doc = createLabelDocument({
+        name,
+        widthMm: size.widthMm,
+        heightMm: size.heightMm,
+        orientation: defaults.orientation,
+        paperType: defaults.paperType,
+        elements: [element],
+        background: { type: 'color', color: '#FFFFFF' }, // theme-fixed: label paper colour (document data)
+      });
+      doc.serialBatch = { v: 1, count: DEFAULT_SERIAL_COUNT };
+      upsertDocument(doc);
+      router.replace({ pathname: '/edit', params: { labelId: doc.id } });
+      return;
     }
 
     if (isSerial) {
@@ -328,7 +368,7 @@ export default function NewLabelSetupScreen() {
           <Text style={styles.backChevron}>‹</Text>
         </Pressable>
         <Text style={styles.headerTitle}>
-          {isSerial
+          {isSerial || isSerialEditor
             ? 'Serial label size'
             : isImportImage
             ? 'Label Sizing Setup'
@@ -404,7 +444,7 @@ export default function NewLabelSetupScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>{sizeTitle}</Text>
-          {isSerial ? (
+          {isSerial || isSerialEditor ? (
             <Text style={styles.note}>
               Width and height of one sticker, in mm. Measure your roll or pick a preset. Every
               numbered label uses this size. Next you can drag the text and barcode into place.
@@ -503,7 +543,7 @@ export default function NewLabelSetupScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>{t('editor.labelName')}</Text>
-          {isSerial ? (
+          {isSerial || isSerialEditor ? (
             <Text style={styles.note}>Only for finding this job later. It is not printed.</Text>
           ) : null}
           <TextInput
@@ -537,6 +577,14 @@ export default function NewLabelSetupScreen() {
           <Text style={styles.templatesLinkText}>Browse our templates</Text>
           <Text style={styles.chevronRight}>›</Text>
         </Pressable>
+        {isSerialEditor ? (
+          <Pressable
+            onPress={() => router.replace('/serial-label')}
+            style={({ pressed }) => [styles.templatesLink, pressed && styles.pressed]}>
+            <Text style={styles.templatesLinkText}>Use the classic serial generator</Text>
+            <Text style={styles.chevronRight}>›</Text>
+          </Pressable>
+        ) : null}
       </FormScrollView>
 
       <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }} style={styles.stickyHost}>
@@ -547,7 +595,7 @@ export default function NewLabelSetupScreen() {
             accessibilityRole="button"
             accessibilityState={{ disabled: !canCreate }}
             style={({ pressed }) => [styles.newButton, !canCreate && styles.newButtonOff, pressed && styles.pressed]}>
-            <Text style={styles.newButtonText}>{isSerial ? 'Open on canvas' : isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
+            <Text style={styles.newButtonText}>{isSerial || isSerialEditor ? 'Open on canvas' : isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
           </Pressable>
         </View>
       </KeyboardStickyView>

@@ -3,7 +3,8 @@ import { Alert, Pressable, Text, View } from 'react-native';
 
 import { useSerialEditor } from '@/components/editor/serial-context';
 import { TextInput } from '@/components/ui/text-input';
-import { firstAndLast, valueAt, validateConfig } from '@/lib/serial/engine';
+import { firstAndLast, validateConfig } from '@/lib/serial/engine';
+import { storedValuePatch, type ContentKey } from '@/lib/serial/stored';
 import { barcodeSerialIssues, qrSerialIssues } from '@/lib/serial/symbology-validate';
 import { defaultSerialConfig, legacyToSerial } from '@/lib/serial/legacy';
 import {
@@ -25,25 +26,7 @@ export function contentChoiceOf(contentType: string): ContentChoice {
 
 type SerialCarrier = { contentType: string; serial?: SerialConfig };
 
-export type ContentKey = 'text' | 'content';
-
-/**
- * Keeps the element's stored text in step with its first serial value, with the legacy step set to 0.
- * Anything that does not know about Serial (thumbnails, history snapshots, templates) then shows the
- * first label instead of a stale placeholder. The real value always comes from resolveDocumentForIndex.
- */
-export function storedValuePatch(
-  serial: SerialConfig,
-  key: ContentKey,
-  ctx?: SerialContext,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = { serial, degreesOffset: 0 };
-  if (!serial.linkTo) {
-    const first = valueAt(serial, 0, ctx);
-    if (first.ok) out[key] = first.value;
-  }
-  return out;
-}
+export { storedValuePatch } from '@/lib/serial/stored';
 
 /**
  * What to patch when the user picks a Content Type. Returns null when nothing should change

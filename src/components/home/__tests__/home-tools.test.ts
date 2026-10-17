@@ -22,7 +22,7 @@ const LEGACY_HOME_HREFS = [
   '/jewellery-label',
   '/customize-template',
   '/img-to-label',
-  '/serial-label',
+  '/new-label-setup?serialEditor=1',
 ];
 
 const GRID_COLUMNS = 3;

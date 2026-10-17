@@ -15,7 +15,7 @@ export type HomeTool = {
 export const HOME_TOOLS = {
   newLabel: { label: 'New Label', href: '/new-label', icon: 'add-circle-outline', group: 'create' },
   imageToLabel: { label: 'Upload label', href: '/image-to-label', icon: 'image-outline', group: 'create' },
-  serialLabels: { label: 'Serial Labels', href: '/serial-label', icon: 'list-outline', group: 'create' },
+  serialLabels: { label: 'Serial Labels', href: '/new-label-setup?serialEditor=1', icon: 'list-outline', group: 'create' },
   customSize: {
     label: 'Custom Size',
     href: '/customize-template',

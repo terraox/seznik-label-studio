@@ -251,6 +251,7 @@ import { BulkCopiesBar, BULK_COPIES_BAR_HEIGHT_PX } from '@/components/bulk-copi
 import { BulkLabelNav } from '@/components/bulk-label-nav';
 import { SerialEditorContext, type SerialEditorValue } from '@/components/editor/serial-context';
 import { SerialBar, SERIAL_BAR_HEIGHT_PX } from '@/components/editor/serial-bar';
+import { storedValuePatch } from '@/components/editor/serial-section';
 import {
   collectSerialFields,
   isSerialActive,
@@ -1681,7 +1682,7 @@ export default function EditScreen() {
     const src = collectSerialFields(cur).find((f) => f.config.id === fieldId);
     if (!src || src.config.linkTo || src.type === 'barcode') return;
     const barcodeConfig = { ...src.config, id: newSerialFieldId(), linkTo: undefined };
-    addElement('barcode', { contentType: 'Degrees', content: '1', serial: barcodeConfig });
+    addElement('barcode', { contentType: 'Degrees', ...storedValuePatch(barcodeConfig, 'content', { encodeMode: 'CODE-128' }) });
     patchElement(src.elementId, { serial: { ...src.config, linkTo: barcodeConfig.id } });
   };
 
@@ -3918,8 +3919,7 @@ export default function EditScreen() {
           Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
           return;
         }
-        overrides.serial = defaultSerialConfig();
-        overrides.content = '1';
+        Object.assign(overrides, storedValuePatch(defaultSerialConfig(), 'content'));
       }
       addElement(ghost.type, overrides);
       openAddedElementPanel(ghost.label === 'Serial' || ghost.label === 'Counter' ? 'Degrees' : ghost.label);
@@ -4009,7 +4009,7 @@ export default function EditScreen() {
           Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
           break;
         }
-        addElement('degrees', { serial: defaultSerialConfig(), content: '1' });
+        addElement('degrees', storedValuePatch(defaultSerialConfig(), 'content'));
         openAddedElementPanel('Degrees');
         break;
       case 'Degrees':
