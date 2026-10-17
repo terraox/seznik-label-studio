@@ -173,6 +173,7 @@ export function pageColorMode(session: PdfEditSession, pageIndex: number): PdfCo
 }
 
 export type PdfPrintSelection =
+  | { mode: 'all' }
   | { mode: 'current' }
   | { mode: 'range'; start: number; end: number }
   | { mode: 'custom'; pages: number[] }
@@ -365,6 +366,7 @@ export function resolvePrintPageIndices(
   currentPageIndex: number,
 ): number[] {
   if (pageCount <= 0) return [];
+  if (selection.mode === 'all') return Array.from({ length: pageCount }, (_, i) => i);
   if (selection.mode === 'current') {
     const i = Math.min(pageCount - 1, Math.max(0, currentPageIndex));
     return [i];

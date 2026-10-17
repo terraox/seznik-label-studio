@@ -2069,7 +2069,7 @@ export default function PrintScreen() {
           <Text numberOfLines={1} style={styles.connectionText}>
             {connected
               ? `${activeModelMeta.shortName}: ${deviceName ?? 'Connected'}`
-              : `${activeModelMeta.shortName} · Unconnected`}
+              : 'Not connected'}
           </Text>
           <AppIcon name="link" tintColor="#FFFFFF" size={14} /* theme-fixed: white icon on status fill */ />
         </Pressable>

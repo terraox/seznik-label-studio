@@ -543,7 +543,7 @@ export default function PrintPhotoScreen() {
             pressed && styles.pressed,
           ]}>
           <Text numberOfLines={1} style={styles.connectionText}>
-            {connected ? deviceName ?? 'Connected' : 'Unconnected'}
+            {connected ? deviceName ?? 'Connected' : 'Not connected'}
           </Text>
           <AppIcon name="link" tintColor="#FFFFFF" size={14} /* theme-fixed: white icon on status fill */ />
         </Pressable>

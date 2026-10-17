@@ -338,12 +338,20 @@ export async function printPreparedGrayJob(
   return job;
 }
 
-export async function printArtworkJob(input: ArtworkPrintInput): Promise<RenderedPrintJob> {
+/**
+ * `wantJob` builds the 1-bpp job up front, a full extra raster pass the caller can inspect.
+ * The native PNG printers (Tejas, Rudra, Josh, Dev, Tez, LabelX) never use it, so callers
+ * that ignore the result pass false and skip that work.
+ */
+async function runArtworkJob(
+  input: ArtworkPrintInput,
+  wantJob: boolean,
+): Promise<RenderedPrintJob | undefined> {
   if (input.preparedGeometry) {
     return printPreparedGrayJob({ ...input, preparedGeometry: input.preparedGeometry });
   }
   const manager = getPrinterManager();
-  const job = renderArtworkToJob(input);
+  const job = wantJob ? renderArtworkToJob(input) : undefined;
 
   if (manager.isLabelX) {
     const pngBase64 = grayToPngBase64({
@@ -459,8 +467,9 @@ export async function printArtworkJob(input: ArtworkPrintInput): Promise<Rendere
     return job;
   }
 
+  const rendered = job ?? renderArtworkToJob(input);
   const adapter = adapterFromManager();
-  const bytes = await adapter.encode(job, {
+  const bytes = await adapter.encode(rendered, {
     gapMm: input.gapMm,
     mediaType: input.mediaType,
     density: input.density,
@@ -490,7 +499,17 @@ export async function printArtworkJob(input: ArtworkPrintInput): Promise<Rendere
     copies: Math.max(1, input.copies ?? 1),
     rawByteLength: bytes.length,
   });
-  return job;
+  return rendered;
+}
+
+
+export async function printArtworkJob(input: ArtworkPrintInput): Promise<RenderedPrintJob> {
+  return (await runArtworkJob(input, true)) as RenderedPrintJob;
+}
+
+/** Same print, without building the inspectable job. Use when the result is not needed. */
+export async function sendArtworkJob(input: ArtworkPrintInput): Promise<void> {
+  await runArtworkJob(input, false);
 }
 
 export type PhysicalProofReport = {

@@ -17,6 +17,7 @@ import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 type Mode = PdfPrintSelection['mode'];
 
 const MODES: { id: Mode; label: string; detail: string }[] = [
+  { id: 'all', label: 'All pages', detail: 'Every page in the document' },
   { id: 'current', label: 'Current page', detail: 'Only the page you were just viewing' },
   { id: 'range', label: 'Range', detail: 'A continuous run, such as 1 to 4' },
   { id: 'custom', label: 'Custom', detail: 'Specific pages, such as 1, 3, 5' },
@@ -165,7 +166,8 @@ export const PdfPrintPanel = forwardRef<
     [darkness, gapMm, hOffset, labelDefaults.hOffsetMm, labelDefaults.vOffsetMm, speed, vOffset],
   );
 
-  const [mode, setMode] = useState<Mode>('current');
+  const [mode, setMode] = useState<Mode>('all');
+  const [showPages, setShowPages] = useState(false);
   const [rangeStart, setRangeStart] = useState('1');
   const [rangeEnd, setRangeEnd] = useState(String(Math.max(1, pageCount)));
   const [custom, setCustom] = useState('');
@@ -174,9 +176,9 @@ export const PdfPrintPanel = forwardRef<
 
   const submit = useCallback(() => {
     if (printing) return;
-    if (mode === 'current') {
+    if (mode === 'all' || mode === 'current') {
       setError(null);
-      onPrint({ mode: 'current' }, buildOptions(copies));
+      onPrint({ mode }, buildOptions(copies));
       return;
     }
     if (mode === 'even' || mode === 'odd') {
@@ -206,6 +208,16 @@ export const PdfPrintPanel = forwardRef<
   useImperativeHandle(ref, () => ({ submit }), [submit]);
 
   const modeLabel = MODES.find((m) => m.id === mode)?.label ?? '';
+  const pagesSummary =
+    mode === 'all'
+      ? `All ${pageCount} ${pageCount === 1 ? 'page' : 'pages'}`
+      : mode === 'current'
+        ? `Page ${currentPage} of ${pageCount}`
+        : mode === 'range'
+          ? `Pages ${rangeStart || '?'}–${rangeEnd || '?'}`
+          : mode === 'custom'
+            ? custom.trim() ? `Pages ${custom.trim()}` : 'Custom pages'
+            : modeLabel;
 
   return (
     <View style={styles.wrap}>
@@ -234,9 +246,18 @@ export const PdfPrintPanel = forwardRef<
         />
 
         <View style={styles.section}>
-          <Text style={styles.groupLabel}>
-            Pages <Text style={styles.groupHint}>· on page {currentPage} of {pageCount}</Text>
-          </Text>
+          <Pressable
+            onPress={() => setShowPages((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showPages }}
+            style={styles.pagesHead}>
+            <Text style={styles.groupLabel}>
+              Pages <Text style={styles.groupHint}>· {pagesSummary}</Text>
+            </Text>
+            <AppIcon name={showPages ? 'chevron.up' : 'chevron.down'} size={16} tintColor={C.textSecondary} />
+          </Pressable>
+          {showPages ? (
+            <>
           <View style={styles.chipRow}>
             {MODES.map((item) => {
               const selected = mode === item.id;
@@ -286,6 +307,8 @@ export const PdfPrintPanel = forwardRef<
               autoCapitalize="none"
               autoCorrect={false}
             />
+          ) : null}
+            </>
           ) : null}
           {error ? <Text style={styles.err}>{error}</Text> : null}
         </View>
@@ -420,6 +443,7 @@ const styles = themedStyles((c, scheme) => ({
     borderTopColor: c.hairline,
     gap: 8,
   },
+  pagesHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   groupLabel: { ...Type.bodyMedium, color: c.text },
   groupHint: { fontWeight: '400', color: c.textSecondary, fontSize: 12 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

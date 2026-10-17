@@ -2,7 +2,7 @@ import { ptToMm } from '@/lib/pdf-editor/session';
 import { mmToDots } from '@/lib/printer/print-spec';
 
 /** How many raster pixels to render per printed dot, so the final downscale stays crisp. */
-const OVERSAMPLE = 1.5;
+const OVERSAMPLE = 1.0;
 const MIN_RASTER_DPI = 96;
 const MAX_RASTER_DPI = 600;
 /** Largest page bitmap we ask the native renderer for. */
@@ -38,7 +38,7 @@ export function planLabelRender(args: {
   widthMm: number;
   heightMm: number;
   dpi: number;
-  /** Raster pixels per output dot. Print uses 1.5; previews use 1. */
+  /** Raster pixels per output dot. Print and previews both use 1. */
   oversample?: number;
 }): LabelRenderPlan {
   const dotsW = Math.max(1, mmToDots(args.widthMm, args.dpi));

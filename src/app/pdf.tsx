@@ -35,7 +35,12 @@ import { Spacing } from '@/constants/theme';
 import { planLabelRender } from '@/lib/pdf-editor/label-render-plan';
 import { exportEditedPdf } from '@/lib/pdf-editor/export';
 import { copyPdfToCache, loadPdfMetadata, loadPdfPageSizes } from '@/lib/pdf-editor/load';
-import { printEditedPdf, type PdfPrintOptions } from '@/lib/pdf-editor/print';
+import {
+  clearPrintRasterCache,
+  prewarmPrintPages,
+  printEditedPdf,
+  type PdfPrintOptions,
+} from '@/lib/pdf-editor/print';
 import { resolvePrintPageIndices, type PdfPrintSelection } from '@/lib/pdf-editor/session';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import { formatPrintFailure } from '@/lib/printer/print-job';
@@ -43,6 +48,7 @@ import { getPrinterManager } from '@/lib/printer/printer-manager';
 import {
   PREVIEW_DPI,
   clearRasterCache,
+  prefetchNeighborPages,
   rasterPdfPageCached,
   regionImageCached,
 } from '@/lib/pdf-editor/raster';
@@ -131,6 +137,7 @@ export default function PdfEditorScreen() {
     return () => {
       resetSession();
       clearRasterCache();
+      clearPrintRasterCache();
       clearSmartCropCache();
     };
   }, [resetSession]);
@@ -157,7 +164,7 @@ export default function PdfEditorScreen() {
     (async () => {
       try {
         const cached = await copyPdfToCache(rawUri, rawName);
-        const meta = await loadPdfMetadata(cached);
+        const meta = await loadPdfMetadata(cached, 150);
         if (!cancelled) {
           startSession({
             sourceUri: cached,
@@ -183,6 +190,12 @@ export default function PdfEditorScreen() {
     };
   }, [params.docUri, params.uri, params.docName, params.name, refinePageSizes, session, startSession]);
 
+  // On the print step, render the likely first pages now so Print starts sending at once.
+  useEffect(() => {
+    if (step !== 'print' || !session) return;
+    prewarmPrintPages(session, [0, session.currentPageIndex]);
+  }, [step, session]);
+
   const importPdf = useCallback(async () => {
     try {
       const picked = await pickDocumentWithSource({ preset: 'pdf' });
@@ -192,7 +205,7 @@ export default function PdfEditorScreen() {
       }
       setLoading(true);
       const cached = await copyPdfToCache(picked.uri, picked.name);
-      const meta = await loadPdfMetadata(cached);
+      const meta = await loadPdfMetadata(cached, 150);
       startSession({
         sourceUri: cached,
         sourceName: picked.name,
@@ -427,12 +440,19 @@ export default function PdfEditorScreen() {
       return;
     }
     let cancelled = false;
+    let prefetchTimer: ReturnType<typeof setTimeout> | null = null;
     setLoading(true);
     rasterPdfPageCached(session.sourceUri, session.currentPageIndex, previewDpi)
       .then((page) => {
         if (!cancelled) {
           setPageUri(page.uri);
           setRasterPt({ index: session.currentPageIndex, w: page.widthPt, h: page.heightPt });
+          // Warm the next and previous page once this one is on screen, so paging is instant.
+          prefetchTimer = setTimeout(
+            () =>
+              prefetchNeighborPages(session.sourceUri, session.currentPageIndex, session.pageCount, previewDpi),
+            400,
+          );
         }
       })
       .catch((err) => {
@@ -446,6 +466,7 @@ export default function PdfEditorScreen() {
       });
     return () => {
       cancelled = true;
+      if (prefetchTimer) clearTimeout(prefetchTimer);
     };
   }, [session?.sourceUri, session?.currentPageIndex, session?.pageCount, previewDpi]);
 
