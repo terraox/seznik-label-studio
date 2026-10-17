@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 /** Which tour is running. Each screen's overlay renders only for its own tour. */
-export type WalkthroughTour = 'home' | 'canvas' | 'excel';
+export type WalkthroughTour = 'home' | 'canvas' | 'excel' | 'newLabel';
 
 type WalkthroughState = {
   active: boolean;

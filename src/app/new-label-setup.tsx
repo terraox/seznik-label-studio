@@ -50,6 +50,12 @@ import {
   type BarcodeSymbology,
 } from '@/lib/printer/SerialLabelEngine';
 import { createSerialLabelDocument, serialDocumentName } from '@/lib/serial-label-document';
+import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
+import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
+import { AppIcon } from '@/components/app-icon';
+import { NEW_LABEL_WALKTHROUGH } from '@/lib/walkthrough/new-label-steps';
+import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
+import { useWalkthroughStore } from '@/stores/walkthrough-store';
 import { useDataStore } from '@/stores/data-store';
 import { DEFAULT_ELEMENT_STATE } from '@/components/editor/types';
 import { fitTextDefaults } from '@/lib/element-sizing';
@@ -128,6 +134,45 @@ export default function NewLabelSetupScreen() {
     const id = setTimeout(() => firstField.current?.focus(), 400);
     return () => clearTimeout(id);
   }, [params.focusSize]);
+
+  // The tour covers the plain blank-label flow only (not clone, serial or image import).
+  const showTour = !isImportImage && !isSerial && !isSerialEditor && !isClone;
+  const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const stopWalkthrough = useWalkthroughStore((s) => s.stop);
+  const setNewLabelTutorialSeen = useSettingsStore((s) => s.setNewLabelTutorialSeen);
+  const scrollRef = useRef<import('react-native').ScrollView>(null);
+  const scrollY = useRef(0);
+
+  useEffect(() => {
+    if (!showTour) return;
+    setWalkthroughScroller((dy) =>
+      scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + dy), animated: false }),
+    );
+    return () => setWalkthroughScroller(null);
+  }, [showTour]);
+
+  useEffect(() => {
+    if (!showTour) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const maybeStart = () => {
+      if (useSettingsStore.getState().newLabelTutorialSeen) return;
+      timer = setTimeout(() => startWalkthrough('newLabel'), 500);
+    };
+    if (useSettingsStore.persist.hasHydrated()) maybeStart();
+    const unsub = useSettingsStore.persist.onFinishHydration(maybeStart);
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
+  }, [showTour, startWalkthrough]);
+
+  useEffect(
+    () => () => {
+      const { active, tour } = useWalkthroughStore.getState();
+      if (active && tour === 'newLabel') useWalkthroughStore.getState().stop();
+    },
+    [],
+  );
 
   const { errors, canCreate } = validateForm(form);
   const cell = cellSize(form);
@@ -378,10 +423,26 @@ export default function NewLabelSetupScreen() {
                 ? 'Label Clone'
                 : t('editor.newLabel')}
         </Text>
-        <View style={styles.headerSpacer} />
+        {showTour ? (
+          <Pressable
+            onPress={() => startWalkthrough('newLabel')}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Label setup walkthrough"
+            style={({ pressed }) => [styles.helpBtn, pressed && styles.pressed]}>
+            <AppIcon name="info.circle" tintColor={C.onAccent} size={22} />
+          </Pressable>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
       </View>
 
       <FormScrollView
+        ref={scrollRef}
+        onScroll={(e) => {
+          scrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 110 }]}
         bottomOffset={96}
@@ -396,7 +457,7 @@ export default function NewLabelSetupScreen() {
         />
 
         {showLayout ? (
-          <View style={styles.section}>
+          <WalkthroughTarget id="newLabel.shape" style={styles.section}>
             <Text style={styles.sectionHeading}>Shape</Text>
             <SegmentedControl<Shape>
               value={form.shape}
@@ -406,11 +467,11 @@ export default function NewLabelSetupScreen() {
                 { id: 'circle', label: 'Circle' },
               ]}
             />
-          </View>
+          </WalkthroughTarget>
         ) : null}
 
         {showLayout ? (
-          <View style={styles.section}>
+          <WalkthroughTarget id="newLabel.across" style={styles.section}>
             <View style={styles.switchRow}>
               <Text style={styles.switchLabel}>Labels across</Text>
               <Switch
@@ -439,10 +500,10 @@ export default function NewLabelSetupScreen() {
                 }))}
               />
             ) : null}
-          </View>
+          </WalkthroughTarget>
         ) : null}
 
-        <View style={styles.section}>
+        <WalkthroughTarget id="newLabel.size" style={styles.section}>
           <Text style={styles.sectionHeading}>{sizeTitle}</Text>
           {isSerial || isSerialEditor ? (
             <Text style={styles.note}>
@@ -480,7 +541,7 @@ export default function NewLabelSetupScreen() {
               />
             </>
           )}
-        </View>
+        </WalkthroughTarget>
 
         {showLayout && multi ? (
           <View style={styles.section}>
@@ -589,6 +650,7 @@ export default function NewLabelSetupScreen() {
 
       <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }} style={styles.stickyHost}>
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.two + 6 }]}>
+          <WalkthroughTarget id="newLabel.create">
           <Pressable
             onPress={handleCreateLabel}
             disabled={!canCreate}
@@ -597,8 +659,19 @@ export default function NewLabelSetupScreen() {
             style={({ pressed }) => [styles.newButton, !canCreate && styles.newButtonOff, pressed && styles.pressed]}>
             <Text style={styles.newButtonText}>{isSerial || isSerialEditor ? 'Open on canvas' : isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
           </Pressable>
+          </WalkthroughTarget>
         </View>
       </KeyboardStickyView>
+      {showTour ? (
+        <WalkthroughOverlay
+          tour="newLabel"
+          steps={NEW_LABEL_WALKTHROUGH}
+          onFinish={() => {
+            setNewLabelTutorialSeen(true);
+            stopWalkthrough();
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -616,6 +689,7 @@ const styles = themedStyles((c) => ({
   backChevron: { color: c.onAccent, fontSize: 32, fontWeight: '300', lineHeight: 36 },
   headerTitle: { flex: 1, textAlign: 'center', color: c.onAccent, fontSize: 17, fontWeight: '500' },
   headerSpacer: { width: 36 },
+  helpBtn: { width: 36, alignItems: 'flex-end' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, gap: 14 },
   section: { gap: 8 },
