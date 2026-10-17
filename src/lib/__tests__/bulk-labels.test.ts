@@ -403,6 +403,29 @@ test('guessBulkSlotKind maps common Excel headers', () => {
   assert.equal(guessBulkSlotKind('QR'), 'qrcode');
 });
 
+test('copies column index is stored and does not change projected elements', () => {
+  const doc = createBulkLabelDocument({
+    name: 'copies',
+    widthMm: 50,
+    heightMm: 40,
+    excelFileId: 'xls_test',
+    sheetIndex: 0,
+    sheet,
+    mappings,
+    copiesColumnIndex: 3,
+  });
+  assert.equal(doc?.bulk?.copiesColumnIndex, 3);
+  assert.ok(doc?.bulk?.slots.every((slot) => slot.columnIndex !== 3));
+  const plain = created();
+  const marked = projectBulkDocument(
+    { ...plain, bulk: { ...plain.bulk!, copiesColumnIndex: 1 } },
+    sheet,
+    0,
+  );
+  const unmarked = projectBulkDocument(plain, sheet, 0);
+  assert.deepEqual(marked.elements, unmarked.elements);
+});
+
 test('display head prefixes text slot values', () => {
   const doc = createBulkLabelDocument({
     name: 'headed',

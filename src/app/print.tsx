@@ -61,6 +61,7 @@ import {
 } from '@/constants/rat-tail-143';
 import { dataPageCount, resolveDocumentData } from '@/lib/data-binding';
 import { projectBulkDocument, resolveBulkSheet } from '@/lib/bulk-labels';
+import { MAX_JOB_LABELS, planBulkPrint } from '@/lib/bulk-row-copies';
 import {
   createLabelDocument,
   generateId,
@@ -541,6 +542,7 @@ export default function PrintScreen() {
   }, [baseDocument, defaultPreset, defaults.labelWidth, defaults.labelHeight, cableFlagJob, ratTail143Job]);
 
   const [copies, setCopies] = useState(1);
+  const [printProgress, setPrintProgress] = useState<string | null>(null);
   const [darkness, setDarkness] = useState<number | null>(null);
   const [speed, setSpeed] = useState<number | null>(null);
   const [orientation, setOrientation] = useState<(typeof ORIENTATIONS)[number]>('0°');
@@ -704,6 +706,13 @@ export default function PrintScreen() {
     return 1;
   }, [isPdfJob, pdfPages.length, isExcelJob, excelSheet, baseDocument, printingSettings.autoPages]);
 
+  const bulkPrintPlan = useMemo(() => {
+    if (!baseDocument?.bulk) return null;
+    const sheet = resolveBulkSheet(excelFiles, baseDocument.bulk);
+    if (!sheet) return null;
+    return planBulkPrint(sheet, baseDocument.bulk.copiesColumnIndex ?? null, copies);
+  }, [baseDocument, excelFiles, copies]);
+
   const buildPageDocument = useCallback(
     (page: number): LabelDocument | null => {
       if (baseDocument?.bulk) {
@@ -737,44 +746,51 @@ export default function PrintScreen() {
     ],
   );
 
+  const applyDisplayTransforms = useCallback(
+    (preview: LabelDocument | null): LabelDocument | null => {
+      if (!preview || !printSize) return preview;
+      if (ratTail143Job) {
+        return refitRatTail143Document(preview);
+      }
+      if (cableFlagJob) {
+        return cableFlagPrintDocument(preview);
+      }
+      if (jewelryDieCutJob && sourceDocument) {
+        // Freeze author mm positions — no softFit/refit on the print path.
+        const frozen = canonicalizeJewelryDieCutDocument(sourceDocument);
+        if (printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) {
+          return tileDocumentThreeUpDieCut54(frozen);
+        }
+        if (printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_2UP) {
+          return tileDocumentTwoUpDieCut37(frozen);
+        }
+        // Single Label Tag: crop leftmost 14×96 column (not full sheet SIZE).
+        return extractJewelryFirstColumnDocument(frozen);
+      }
+      if (isFitLabelImageOnlyDocument(preview)) {
+        return refitFitLabelDocument(preview, printSize.widthMm, printSize.heightMm);
+      }
+      return applyPrintSize(preview, printPreset, printSize);
+    },
+    [
+      printSize,
+      printPreset,
+      jewelryDieCutJob,
+      cableFlagJob,
+      ratTail143Job,
+      sourceDocument,
+    ],
+  );
+
   const previewDocument = useMemo(
     () => buildPageDocument(Math.min(pageIndex, pageCount - 1)),
     [buildPageDocument, pageIndex, pageCount],
   );
 
-  const displayDocument = useMemo(() => {
-    if (!previewDocument || !printSize) return previewDocument;
-    if (ratTail143Job && previewDocument) {
-      return refitRatTail143Document(previewDocument);
-    }
-    if (cableFlagJob && previewDocument) {
-      return cableFlagPrintDocument(previewDocument);
-    }
-    if (jewelryDieCutJob && sourceDocument) {
-      // Freeze author mm positions — no softFit/refit on the print path.
-      const frozen = canonicalizeJewelryDieCutDocument(sourceDocument);
-      if (printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) {
-        return tileDocumentThreeUpDieCut54(frozen);
-      }
-      if (printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_2UP) {
-        return tileDocumentTwoUpDieCut37(frozen);
-      }
-      // Single Label Tag: crop leftmost 14×96 column (not full sheet SIZE).
-      return extractJewelryFirstColumnDocument(frozen);
-    }
-    if (isFitLabelImageOnlyDocument(previewDocument)) {
-      return refitFitLabelDocument(previewDocument, printSize.widthMm, printSize.heightMm);
-    }
-    return applyPrintSize(previewDocument, printPreset, printSize);
-  }, [
-    previewDocument,
-    printSize,
-    printPreset,
-    jewelryDieCutJob,
-    cableFlagJob,
-    ratTail143Job,
-    sourceDocument,
-  ]);
+  const displayDocument = useMemo(
+    () => applyDisplayTransforms(previewDocument),
+    [applyDisplayTransforms, previewDocument],
+  );
 
   const jobDpi = (() => {
     const raw = jewelryJobDpi ?? cableJobDpi ?? ratTailJobDpi ?? getPrinterManager().getPrintDpi();
@@ -980,6 +996,25 @@ export default function PrintScreen() {
       return;
     }
 
+    const bulkSheet = baseDocument?.bulk ? resolveBulkSheet(excelFiles, baseDocument.bulk) : null;
+    const bulkPlan =
+      baseDocument?.bulk && bulkSheet
+        ? planBulkPrint(bulkSheet, baseDocument.bulk.copiesColumnIndex ?? null, copies)
+        : null;
+    if (bulkPlan?.allZero) {
+      printingLockRef.current = false;
+      Alert.alert('Nothing to print', 'Every row has 0 copies, so nothing was sent.');
+      return;
+    }
+    if (bulkPlan?.overCap) {
+      printingLockRef.current = false;
+      Alert.alert(
+        'Too many labels',
+        `This job is ${bulkPlan.totalPhysical} labels. The limit is ${MAX_JOB_LABELS}.`,
+      );
+      return;
+    }
+
     useSettingsStore.getState().patchDefaults({ paperType });
     setPrinting(true);
     const timer = new PrintTimingLogger();
@@ -1018,40 +1053,40 @@ export default function PrintScreen() {
       console.info(
         `[print] Advanced params → density=${printDensity} speed=${printSpeed} threshold=${threshold} gap=${gapLength}mm offset=${printOffsetMm.x}x${printOffsetMm.y}mm (${bakeOffset ? 'bitmap' : 'REFERENCE'}) darknessUI=${darkness ?? 'Auto'} speedUI=${speed ?? 'Auto'} bridge=${jobBridge ?? 'none'} densityMode=${darkness == null ? 'auto' : 'manual'} speedMode=${speed == null ? 'auto' : 'manual'} inkSteps=${inkSteps}`,
       );
-      const pageDoc0 = displayDocument ?? previewDocument;
+      const firstPageDoc =
+        applyDisplayTransforms(buildPageDocument(0)) ?? displayDocument ?? previewDocument;
+      const rasterJoshMono = async (doc: LabelDocument): Promise<RasterBitmap | null> => {
+        try {
+          assertHeadlessRasterDocument(doc);
+          await ensurePrintTypefacesForDocument(doc);
+          if (missingPrintTypefaces(doc).length > 0) return null;
+          const t0 = Date.now();
+          const timed = rasterizeDocumentToBitmapTimed(
+            doc,
+            jobDpi,
+            orientationDeg === 0
+              ? joshHeadlessRasterOptions(jobDpi, printOffsetMm.x, printOffsetMm.y, {
+                  threshold,
+                  darknessSteps: inkSteps,
+                })
+              : { threshold, darknessSteps: inkSteps },
+          );
+          console.info(`[JOSH-MONO] raster ${Date.now() - t0} ms`);
+          return timed.result;
+        } catch (err) {
+          console.warn('[JOSH-MONO] raster failed', err);
+          return null;
+        }
+      };
       const joshHeadlessNow =
         manager.isJosh &&
         orientationDeg === 0 &&
-        pageDoc0 != null &&
-        canHeadlessRasterPrint(pageDoc0) &&
-        Math.abs(pageDoc0.widthMm - paper.widthMm) <= 0.2 &&
-        Math.abs(pageDoc0.heightMm - paper.heightMm) <= 0.2;
+        firstPageDoc != null &&
+        canHeadlessRasterPrint(firstPageDoc) &&
+        Math.abs(firstPageDoc.widthMm - paper.widthMm) <= 0.2 &&
+        Math.abs(firstPageDoc.heightMm - paper.heightMm) <= 0.2;
       const joshRasterPromise: Promise<RasterBitmap | null> =
-        joshHeadlessNow && pageDoc0
-          ? (async () => {
-              try {
-                assertHeadlessRasterDocument(pageDoc0);
-                await ensurePrintTypefacesForDocument(pageDoc0);
-                if (missingPrintTypefaces(pageDoc0).length > 0) return null;
-                const t0 = Date.now();
-                const timed = rasterizeDocumentToBitmapTimed(
-                  pageDoc0,
-                  jobDpi,
-                  orientationDeg === 0
-                    ? joshHeadlessRasterOptions(jobDpi, printOffsetMm.x, printOffsetMm.y, {
-                        threshold,
-                        darknessSteps: inkSteps,
-                      })
-                    : { threshold, darknessSteps: inkSteps },
-                );
-                console.info(`[JOSH-MONO] raster ${Date.now() - t0} ms`);
-                return timed.result;
-              } catch (err) {
-                console.warn('[JOSH-MONO] early raster failed', err);
-                return null;
-              }
-            })()
-          : Promise.resolve(null);
+        joshHeadlessNow && firstPageDoc ? rasterJoshMono(firstPageDoc) : Promise.resolve(null);
       const joshConnectPromise = manager.isJosh
         ? manager.ensureConnected().catch((err) => ({ error: err }))
         : Promise.resolve(null);
@@ -1064,10 +1099,21 @@ export default function PrintScreen() {
         ]);
       }
 
-      for (let page = 0; page < pageCount; page++) {
+      const printJobs = bulkPlan
+        ? bulkPlan.rows.map((row) => ({ page: row.rowIndex, sendCopies: row.copies }))
+        : Array.from({ length: pageCount }, (_, page) => ({ page, sendCopies: copies }));
+      let labelsSent = 0;
+      for (let jobIndex = 0; jobIndex < printJobs.length; jobIndex++) {
+        const { page, sendCopies } = printJobs[jobIndex];
+        if (bulkPlan) {
+          labelsSent += sendCopies;
+          setPrintProgress(
+            `Row ${jobIndex + 1} / ${printJobs.length} · ${labelsSent} / ${bulkPlan.totalPhysical} labels`,
+          );
+        }
         const pageStart = Date.now();
-        const sendCopies = copies;
-        const pageDoc = displayDocument ?? previewDocument;
+        const pageDoc =
+          applyDisplayTransforms(buildPageDocument(page)) ?? displayDocument ?? previewDocument;
         const fitLabelExtract = pageDoc != null && isFitLabelImageOnlyDocument(pageDoc);
         if (pageCount > 1) {
           setPageIndex(page);
@@ -1111,7 +1157,11 @@ export default function PrintScreen() {
             manager.isJosh ? joshConnectPromise : manager.ensureConnected().catch((err) => {
               return { error: err };
             }),
-            page === 0 ? joshRasterPromise : Promise.resolve(null),
+            page === 0
+              ? joshRasterPromise
+              : joshHeadlessCandidate && pageDoc
+                ? rasterJoshMono(pageDoc)
+                : Promise.resolve(null),
           ]);
           connectionMs = Date.now() - tConn0;
           joshMonoBitmap = bitmap;
@@ -1445,7 +1495,7 @@ export default function PrintScreen() {
               );
             }
           } catch (err) {
-            if (joshHeadlessMono) {
+            if (joshHeadlessCandidate) {
               console.warn('[print] JOSH headless mono failed, falling back to ViewShot PNG:', err);
               if (!rotatedBase64) {
                 await waitForNextPaint();
@@ -1789,7 +1839,7 @@ export default function PrintScreen() {
         const docForHistory = displayDocument ?? previewDocument;
         addHistoryEntry({
           labelName: jobName,
-          copies: copies * pageCount,
+          copies: bulkPlan ? bulkPlan.totalPhysical : copies * pageCount,
           documentId: params.labelId,
           source: historySource,
           documentSnapshot: docForHistory ?? undefined,
@@ -1804,12 +1854,15 @@ export default function PrintScreen() {
     } finally {
       printingLockRef.current = false;
       setPrinting(false);
+      setPrintProgress(null);
     }
   }, [
     isPdfJob,
     params.docUri,
     previewDocument,
     displayDocument,
+    applyDisplayTransforms,
+    buildPageDocument,
     jobDpi,
     defaults.labelWidth,
     defaults.labelHeight,
@@ -1822,6 +1875,8 @@ export default function PrintScreen() {
     printOffsetMm,
     gapLength,
     copies,
+    baseDocument,
+    excelFiles,
     paperType,
     printingSettings.recordHistory,
     printingSettings.returnPrevious,
@@ -2036,7 +2091,7 @@ export default function PrintScreen() {
           {/* Main Primary Settings Card (Clean & Simple) */}
           <View style={styles.settingsCard}>
             <StepperRow
-              label="Number of Copies"
+              label={baseDocument?.bulk ? 'Multiply all counts' : 'Number of Copies'}
               value={String(copies)}
               valueColor={C.accent}
               minusDisabled={copies <= 1}
@@ -2045,6 +2100,11 @@ export default function PrintScreen() {
               onCommitValue={setCopies}
               bordered
             />
+            {bulkPrintPlan ? (
+              <Text style={styles.bulkTotal}>
+                {bulkPrintPlan.totalPhysical} {bulkPrintPlan.totalPhysical === 1 ? 'label' : 'labels'}
+              </Text>
+            ) : null}
 
             {jewelryDieCutJob ? (
               <View style={styles.cardSection}>
@@ -2264,6 +2324,7 @@ export default function PrintScreen() {
         </View>
       </FormScrollView>
 
+      {printProgress ? <Text style={styles.printProgress}>{printProgress}</Text> : null}
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}>
         {/* Size picker — opens sheet to choose a different paper/label size. */}
         <Pressable
@@ -2492,6 +2553,22 @@ const styles = themedStyles((c, scheme) => ({
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
+  },
+  bulkTotal: {
+    color: c.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+    paddingBottom: 10,
+  },
+  printProgress: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 92,
+    textAlign: 'center',
+    color: c.text,
+    fontSize: 13,
+    fontWeight: '600',
   },
   settingsCard: {
     backgroundColor: c.surface,

@@ -23,6 +23,12 @@ import {
   type BulkColumnMapping,
   type BulkSlotKind,
 } from '@/lib/bulk-labels';
+import {
+  copiesColumnChoices,
+  countChangedCopiesCells,
+  guessCopiesColumnIndex,
+} from '@/lib/bulk-row-copies';
+import type { ExcelSheet } from '@/stores/data-store';
 import { clampLabelMm } from '@/lib/label-geometry';
 import { useDataStore } from '@/stores/data-store';
 import { useLabelStore } from '@/stores/label-store';
@@ -37,6 +43,12 @@ const KINDS: { id: BulkSlotKind; Glyph: typeof KindTextGlyph }[] = [
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function mappingsForSheet(sheet: ExcelSheet, copiesColumnIndex: number | null): BulkColumnMapping[] {
+  return defaultBulkColumnMappings(sheet).map((mapping) =>
+    mapping.columnIndex === copiesColumnIndex ? { ...mapping, include: false } : mapping,
+  );
 }
 
 function paramMm(value: string | string[] | undefined, fallback: number): number {
@@ -76,21 +88,51 @@ export default function ExcelBulkSetupScreen() {
     paramMm(params.heightMm, defaults.labelHeight),
   );
 
+  const [copiesColumnIndex, setCopiesColumnIndex] = useState<number | null>(() =>
+    sheet ? guessCopiesColumnIndex(sheet) : null,
+  );
   const [mappings, setMappings] = useState<BulkColumnMapping[]>(() =>
-    sheet ? defaultBulkColumnMappings(sheet) : [],
+    sheet ? mappingsForSheet(sheet, guessCopiesColumnIndex(sheet)) : [],
   );
   const [displayHead, setDisplayHead] = useState(false);
 
   const columnCount = sheet?.columns.length ?? 0;
   const syncedMappings = useMemo(() => {
+    const chosen =
+      sheet && copiesColumnIndex != null && copiesColumnChoices(sheet).includes(copiesColumnIndex)
+        ? copiesColumnIndex
+        : null;
     if (mappings.length === columnCount) return mappings;
-    return sheet ? defaultBulkColumnMappings(sheet) : [];
-  }, [columnCount, mappings, sheet]);
+    return sheet ? mappingsForSheet(sheet, chosen) : [];
+  }, [columnCount, copiesColumnIndex, mappings, sheet]);
 
   const includedCount = syncedMappings.filter((m) => m.include).length;
   const canConfirm = Boolean(file && sheet && includedCount > 0 && sheet.rows.length > 0);
+  const copiesChoices = sheet ? copiesColumnChoices(sheet) : [];
+  const activeCopiesIndex = copiesChoices.includes(copiesColumnIndex ?? -1) ? copiesColumnIndex : null;
+  const changedCopies = sheet ? countChangedCopiesCells(sheet, activeCopiesIndex) : 0;
+  const copiesColumnName =
+    sheet && activeCopiesIndex != null ? sheet.columns[activeCopiesIndex] ?? 'Copies' : null;
+
+  const selectCopiesColumn = (next: number | null) => {
+    if (!sheet) return;
+    const previous = activeCopiesIndex;
+    setCopiesColumnIndex(next);
+    setMappings((prev) => {
+      const base = prev.length === columnCount ? prev : mappingsForSheet(sheet, next);
+      const defaults = defaultBulkColumnMappings(sheet);
+      return base.map((mapping) => {
+        if (mapping.columnIndex === next) return { ...mapping, include: false };
+        if (previous != null && mapping.columnIndex === previous) {
+          return { ...mapping, include: defaults[mapping.columnIndex]?.include ?? false };
+        }
+        return mapping;
+      });
+    });
+  };
 
   const patchMapping = (columnIndex: number, patch: Partial<BulkColumnMapping>) => {
+    if (columnIndex === activeCopiesIndex) return;
     setMappings((prev) => {
       const base = prev.length === columnCount ? prev : sheet ? defaultBulkColumnMappings(sheet) : [];
       return base.map((m) => (m.columnIndex === columnIndex ? { ...m, ...patch } : m));
@@ -123,6 +165,7 @@ export default function ExcelBulkSetupScreen() {
         barcodeEncodeMode: defaults.barcodeEncodeMode,
         qrErrorLevel: defaults.qrErrorLevel,
         displayHead,
+        copiesColumnIndex: activeCopiesIndex,
       });
       if (!attached) {
         Alert.alert('Unable to create labels', 'Include at least one column.');
@@ -149,6 +192,7 @@ export default function ExcelBulkSetupScreen() {
       barcodeEncodeMode: defaults.barcodeEncodeMode,
       qrErrorLevel: defaults.qrErrorLevel,
       displayHead,
+      copiesColumnIndex: activeCopiesIndex,
     });
     if (!doc) {
       Alert.alert('Unable to create labels', 'Include at least one column.');
@@ -207,8 +251,10 @@ export default function ExcelBulkSetupScreen() {
                 <Pressable
                   key={`${item.name}-${index}`}
                   onPress={() => {
+                    const guessed = guessCopiesColumnIndex(item);
                     setSheetIndex(index);
-                    setMappings(defaultBulkColumnMappings(item));
+                    setCopiesColumnIndex(guessed);
+                    setMappings(mappingsForSheet(item, guessed));
                   }}
                   style={[styles.chip, active && styles.chipOn]}>
                   <Text style={[styles.chipText, active && styles.chipTextOn]} numberOfLines={1}>
@@ -220,37 +266,77 @@ export default function ExcelBulkSetupScreen() {
           </View>
         ) : null}
 
+        <View style={styles.copiesCard}>
+          <Text style={styles.copiesTitle}>
+            {copiesColumnName
+              ? `Copies column: ${copiesColumnName}`
+              : 'Copies column: None — each row prints once'}
+          </Text>
+          <View style={styles.sheetChips}>
+            <Pressable
+              onPress={() => selectCopiesColumn(null)}
+              style={[styles.chip, activeCopiesIndex == null && styles.chipOn]}>
+              <Text style={[styles.chipText, activeCopiesIndex == null && styles.chipTextOn]}>None</Text>
+            </Pressable>
+            {copiesChoices.map((columnIndex) => {
+              const active = columnIndex === activeCopiesIndex;
+              return (
+                <Pressable
+                  key={`copies-${columnIndex}`}
+                  onPress={() => selectCopiesColumn(columnIndex)}
+                  style={[styles.chip, active && styles.chipOn]}>
+                  <Text style={[styles.chipText, active && styles.chipTextOn]} numberOfLines={1}>
+                    {sheet.columns[columnIndex]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {copiesChoices.length === 0 ? (
+            <Text style={styles.copiesNote}>No number columns in this sheet.</Text>
+          ) : null}
+          {changedCopies > 0 ? (
+            <Text style={styles.copiesNote}>
+              {changedCopies === 1 ? '1 value was changed' : `${changedCopies} values were changed`}
+            </Text>
+          ) : null}
+        </View>
+
         {sheet.columns.map((name, columnIndex) => {
           const mapping = syncedMappings[columnIndex] ?? {
             columnIndex,
             include: true,
             kind: guessBulkSlotKind(name),
           };
+          const locked = columnIndex === activeCopiesIndex;
           return (
-            <View key={`${name}-${columnIndex}`} style={styles.columnCard}>
+            <View
+              key={`${name}-${columnIndex}`}
+              style={[styles.columnCard, locked && styles.columnCardLocked]}>
               <Pressable
+                disabled={locked}
                 onPress={() => patchMapping(columnIndex, { include: !mapping.include })}
                 hitSlop={6}
                 style={styles.checkHit}
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked: mapping.include }}>
+                accessibilityState={{ checked: mapping.include, disabled: locked }}>
                 <View style={[styles.check, mapping.include && styles.checkOn]}>
                   {mapping.include ? (
                     <AppIcon name="checkmark" tintColor={C.onAccent} size={13} />
                   ) : null}
                 </View>
               </Pressable>
-              <Text style={styles.columnName} numberOfLines={1}>
-                {name}
+              <Text style={[styles.columnName, locked && styles.columnNameLocked]} numberOfLines={1}>
+                {locked ? `${name} · copies` : name}
               </Text>
               <View style={styles.kindRow}>
                 {KINDS.map(({ id, Glyph }) => (
                   <Pressable
                     key={id}
-                    disabled={!mapping.include}
+                    disabled={locked || !mapping.include}
                     onPress={() => patchMapping(columnIndex, { kind: id })}
-                    style={!mapping.include ? styles.kindOff : undefined}>
-                    <Glyph active={mapping.include && mapping.kind === id} />
+                    style={!locked && !mapping.include ? styles.kindOff : undefined}>
+                    <Glyph active={!locked && mapping.include && mapping.kind === id} />
                   </Pressable>
                 ))}
               </View>
@@ -312,6 +398,15 @@ const styles = themedStyles((c) => ({
   chipOn: { backgroundColor: c.accent },
   chipText: { fontSize: 13, fontWeight: '600', color: c.text },
   chipTextOn: { color: c.onAccent },
+  copiesCard: {
+    backgroundColor: c.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  copiesTitle: { fontSize: 15, fontWeight: '600', color: c.text },
+  copiesNote: { fontSize: 13, color: c.textMuted },
   columnCard: {
     backgroundColor: c.surface,
     borderRadius: 10,
@@ -322,6 +417,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     gap: 10,
   },
+  columnCardLocked: { opacity: 0.45 },
   checkHit: { paddingVertical: 8 },
   check: {
     width: 22,
@@ -335,6 +431,7 @@ const styles = themedStyles((c) => ({
   },
   checkOn: { backgroundColor: c.accent, borderColor: c.accent },
   columnName: { flex: 1, fontSize: 16, fontWeight: '400', color: c.textSecondary },
+  columnNameLocked: { color: c.textDisabled },
   kindRow: { flexDirection: 'row', alignItems: 'center' },
   kindOff: { opacity: 0.35 },
   dock: {

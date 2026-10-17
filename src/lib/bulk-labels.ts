@@ -78,6 +78,8 @@ export type BulkLabelSet = {
   qrErrorLevel: QrErrorLevel;
   /** When true, text slots render as `Column: value`. */
   displayHead?: boolean;
+  /** Sheet column used as per-row copies. Null or absent means every row prints once. */
+  copiesColumnIndex?: number | null;
 };
 
 export function bulkSlotId(columnIndex: number): string {
@@ -454,6 +456,7 @@ export function createBulkLabelDocument(params: {
   barcodeEncodeMode?: string;
   qrErrorLevel?: QrErrorLevel;
   displayHead?: boolean;
+  copiesColumnIndex?: number | null;
 }): LabelDocument | null {
   const slots = mappingsToSlots(params.sheet, params.mappings);
   if (slots.length === 0) return null;
@@ -479,6 +482,7 @@ export function createBulkLabelDocument(params: {
     barcodeEncodeMode,
     qrErrorLevel,
     displayHead: Boolean(params.displayHead),
+    copiesColumnIndex: params.copiesColumnIndex ?? null,
   };
   const doc = createLabelDocument({
     name: params.name,
@@ -506,6 +510,7 @@ export function attachBulkToLabelDocument(
     barcodeEncodeMode?: string;
     qrErrorLevel?: QrErrorLevel;
     displayHead?: boolean;
+    copiesColumnIndex?: number | null;
   },
 ): LabelDocument | null {
   const bulkDoc = createBulkLabelDocument({
@@ -521,6 +526,7 @@ export function attachBulkToLabelDocument(
     barcodeEncodeMode: params.barcodeEncodeMode,
     qrErrorLevel: params.qrErrorLevel,
     displayHead: params.displayHead,
+    copiesColumnIndex: params.copiesColumnIndex,
   });
   if (!bulkDoc?.bulk) return null;
   return {
