@@ -466,10 +466,20 @@ Single build pass, one git commit per logical step (engine, editor, barcode/QR, 
     Count, independent of per-label copies. **Print loop:** the inline loop stays; a cursor is added; printer-core's PrintQueue is not wired in.
 11. Out of scope: date/time serials, sequences from a list, serial on multi-up.
 
-## R1.2 Tracker (updated during the build)
-- [ ] Step 1 Engine + tests (src/lib/serial)
-- [ ] Step 2 Editor: panel, serial bar, preview (text, Counter/degrees, ArcText)
-- [ ] Step 3 Barcode + QR: validation, width-fit, link, shortcut
-- [ ] Step 4 Print: expansion, resolver, totals, progress, cancel, resume, continue
-- [ ] Step 5 Table cells
-- [ ] Step 6 Home entry via size screen
+## R1.2 Tracker (final state of the build pass)
+- [x] Step 1 Engine + tests (src/lib/serial)
+- [x] Step 2 Editor: panel, serial bar, preview (text, Counter/degrees, ArcText)
+- [x] Step 3 Barcode + QR: validation, width-fit, link, shortcut
+- [x] Step 4 Print: expansion, resolver, totals, progress, cancel, resume, continue
+- [x] Step 5 Table cells
+- [x] Step 6 Home entry via size screen
+- [ ] On-device verification (user): see R1.3
+
+## R1.3 Build notes
+- Engine files: `src/lib/serial/` (types, alphabet, decimal, engine, check-digit, legacy, stored, resolve-document, symbology-validate, job). Tests: `npm run test:serial`.
+- `barcode-code128.ts` and the old `SerialLabelEngine.ts` now share `gs1CheckDigit` (the duplicate is gone). The old engine keeps its API and output.
+- Stored text: when a field becomes Serial, `degreesOffset` is set to 0 and the element's text/content is set to the first value, so anything that does not know about Serial (thumbnails, history snapshots) shows label 1. The real value always comes from `resolveDocumentForIndex`.
+- Print: serial 'batch' jobs have a persisted cursor (per label id) and a design hash; 'rows' jobs (Excel/bulk/data sheet) use the row index, have the gate and logs but no cursor. Serial batches are not collated.
+- Temporary `__DEV__` logs `[serial-legacy]` for the legacy off-by-one live in `serial-content.ts` (helper), `data-binding.ts`, `element-renderer.tsx` and `printing/document/convert.ts`. Remove once the old-label behaviour is decided.
+- Home tile `serialLabels` now opens `/new-label-setup?serialEditor=1`. The classic generator (`/serial-label`) is reachable from the size screen link and the route is unchanged. `home-tools.test.ts` was updated for the new href.
+- Not done / not verified: on-device behaviour of every screen; undo coalescing of a serial config edit (relies on patchElement's existing history coalescing); resume cursor for 'rows' jobs; collate for serial batches; whether `projectBulkDocument` keeps extra (non-slot) serial elements in Excel/bulk labels; serial in history reprints.

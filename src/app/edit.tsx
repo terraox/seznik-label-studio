@@ -878,7 +878,7 @@ export default function EditScreen() {
   const addLinkedBarcodeRef = useRef<((fieldId: string) => void) | null>(null);
   const serialEditorValue = useMemo<SerialEditorValue>(
     () => ({
-      count: serialCount,
+      count: doc.bulk ? Math.max(1, doc.bulk.rowCount) : serialCount,
       setCount: (n) =>
         setDoc((prev) => ({
           ...prev,
