@@ -285,10 +285,11 @@ function ContentSection({
   useThemeRefresh();
   return (
     <>
-      <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} />
+      <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} contentKey="content" />
       <SerialBlock
         state={state}
         patch={patch}
+        contentKey="content"
         legacyContent={state.content}
         legacyOffset={state.degreesOffset}
         legacyStepper={

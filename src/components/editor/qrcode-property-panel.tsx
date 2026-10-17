@@ -195,10 +195,11 @@ function ContentTypeSection({
   useThemeRefresh();
   return (
     <>
-      <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} />
+      <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} contentKey="content" />
       <SerialBlock
         state={state}
         patch={patch}
+        contentKey="content"
         legacyContent={state.content}
         legacyOffset={state.degreesOffset}
         target={{ type: 'qrcode', mode: state.encodeMode, level: state.errorLevel, zoneSize: state.zoneSize, widthMm: state.width }}

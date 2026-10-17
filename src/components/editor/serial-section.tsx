@@ -3,7 +3,7 @@ import { Alert, Pressable, Text, View } from 'react-native';
 
 import { useSerialEditor } from '@/components/editor/serial-context';
 import { TextInput } from '@/components/ui/text-input';
-import { firstAndLast, validateConfig } from '@/lib/serial/engine';
+import { firstAndLast, valueAt, validateConfig } from '@/lib/serial/engine';
 import { barcodeSerialIssues, qrSerialIssues } from '@/lib/serial/symbology-validate';
 import { defaultSerialConfig, legacyToSerial } from '@/lib/serial/legacy';
 import {
@@ -25,6 +25,26 @@ export function contentChoiceOf(contentType: string): ContentChoice {
 
 type SerialCarrier = { contentType: string; serial?: SerialConfig };
 
+export type ContentKey = 'text' | 'content';
+
+/**
+ * Keeps the element's stored text in step with its first serial value, with the legacy step set to 0.
+ * Anything that does not know about Serial (thumbnails, history snapshots, templates) then shows the
+ * first label instead of a stale placeholder. The real value always comes from resolveDocumentForIndex.
+ */
+export function storedValuePatch(
+  serial: SerialConfig,
+  key: ContentKey,
+  ctx?: SerialContext,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { serial, degreesOffset: 0 };
+  if (!serial.linkTo) {
+    const first = valueAt(serial, 0, ctx);
+    if (first.ok) out[key] = first.value;
+  }
+  return out;
+}
+
 /**
  * What to patch when the user picks a Content Type. Returns null when nothing should change
  * (already that choice, or serial is blocked). Picking Serial on an old Counter changes nothing:
@@ -35,14 +55,17 @@ export function contentChoicePatch(
   state: SerialCarrier,
   seedText: string,
   blockedReason: string | null,
-): { contentType: 'Manual' | 'Degrees' | 'Data Source'; serial?: SerialConfig } | null {
+  contentKey: ContentKey,
+  encodeMode?: string,
+): Record<string, unknown> | null {
   if (choice === 'Serial') {
     if (state.contentType === 'Degrees') return null;
     if (blockedReason) {
       Alert.alert('Serial labels', blockedReason);
       return null;
     }
-    return { contentType: 'Degrees', serial: state.serial ?? defaultSerialConfig(seedText) };
+    const serial = state.serial ?? defaultSerialConfig(seedText);
+    return { contentType: 'Degrees', ...storedValuePatch(serial, contentKey, { encodeMode }) };
   }
   if (contentChoiceOf(state.contentType) === choice) return null;
   return { contentType: choice };
@@ -155,6 +178,7 @@ export function SerialSection({
   patch: (updates: { serial: SerialConfig }) => void;
   target?: SerialTarget;
 }) {
+  // `patch` here already writes the stored text too (see SerialBlock).
   useThemeRefresh();
   const editor = useSerialEditor();
   const [more, setMore] = useState(false);
@@ -442,12 +466,16 @@ export function ContentTypeRow({
   state,
   patch,
   seedText,
+  contentKey,
+  encodeMode,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Row: React.ComponentType<any>;
   state: SerialCarrier;
   patch: (updates: any) => void;
   seedText: string;
+  contentKey: ContentKey;
+  encodeMode?: string;
 }) {
   const { blockedReason } = useSerialEditor();
   return (
@@ -456,7 +484,7 @@ export function ContentTypeRow({
       options={CONTENT_CHOICES}
       selected={contentChoiceOf(state.contentType)}
       onSelect={(choice: ContentChoice) => {
-        const next = contentChoicePatch(choice, state, seedText, blockedReason);
+        const next = contentChoicePatch(choice, state, seedText, blockedReason, contentKey, encodeMode);
         if (next) patch(next);
       }}
     />
@@ -474,6 +502,7 @@ export function SerialBlock({
   legacyContent,
   legacyOffset,
   target,
+  contentKey,
 }: {
   state: SerialCarrier;
   patch: (updates: any) => void;
@@ -481,15 +510,23 @@ export function SerialBlock({
   legacyContent: string;
   legacyOffset: number;
   target?: SerialTarget;
+  contentKey: ContentKey;
 }) {
   if (state.contentType !== 'Degrees') return null;
   if (state.serial) {
-    return <SerialSection config={state.serial} patch={patch} target={target} />;
+    const ctx = target?.type === 'barcode' ? { encodeMode: target.mode } : undefined;
+    return (
+      <SerialSection
+        config={state.serial}
+        patch={(u) => patch(storedValuePatch(u.serial, contentKey, ctx))}
+        target={target}
+      />
+    );
   }
   return (
     <>
       {legacyStepper}
-      <LegacyCounterNotice content={legacyContent} degreesOffset={legacyOffset} onUpgrade={(serial) => patch({ serial })} />
+      <LegacyCounterNotice content={legacyContent} degreesOffset={legacyOffset} onUpgrade={(serial) => patch(storedValuePatch(serial, contentKey, target?.type === 'barcode' ? { encodeMode: target.mode } : undefined))} />
     </>
   );
 }

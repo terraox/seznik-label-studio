@@ -392,10 +392,11 @@ export function TextPropertyPanel({
       <FormScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
         {activeTab === 'Regular' && (
           <>
-            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.text} />
+            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.text} contentKey="text" />
             <SerialBlock
               state={state}
               patch={patch}
+              contentKey="text"
               legacyContent={state.text}
               legacyOffset={degreesOffset}
               legacyStepper={
@@ -562,10 +563,11 @@ export function TextPropertyPanel({
 
         {activeTab === 'Content' && (
           <>
-            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.text} />
+            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.text} contentKey="text" />
             <SerialBlock
               state={state}
               patch={patch}
+              contentKey="text"
               legacyContent={state.text}
               legacyOffset={degreesOffset}
               legacyStepper={

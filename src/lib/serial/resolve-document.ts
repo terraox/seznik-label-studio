@@ -150,3 +150,19 @@ export function withFreshSerialIds<T extends LabelElement>(el: T, newId: () => s
 export function issuesBlockPrint(issues: SerialIssue[]): boolean {
   return issues.some((i) => i.severity === 'error');
 }
+
+/** Short text of the values a label carries, for the `[serial-print]` log line. */
+export function describeSerialValues(doc: Pick<LabelDocument, 'elements'>, serialIndex: number): string {
+  const fields = collectSerialFields(doc);
+  if (fields.length === 0) return '';
+  const { configs, contexts } = serialMaps(fields);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const f of fields) {
+    if (seen.has(f.config.id)) continue;
+    seen.add(f.config.id);
+    const r = resolveField(configs, f.config.id, serialIndex, contexts);
+    out.push(r.ok ? r.value : SERIAL_ERROR_TEXT);
+  }
+  return out.join(' | ');
+}

@@ -546,10 +546,11 @@ export function BarcodePropertyPanel({
       <FormScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
         {activeTab === 'Regular' && (
           <>
-            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} />
+            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} contentKey="content" encodeMode={state.encodeMode} />
             <SerialBlock
               state={state}
               patch={patch}
+              contentKey="content"
               legacyContent={state.content}
               legacyOffset={1}
               legacyStepper={null}
@@ -645,10 +646,11 @@ export function BarcodePropertyPanel({
 
         {activeTab === 'Content' && (
           <>
-            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} />
+            <ContentTypeRow Row={SegmentRow} state={state} patch={patch} seedText={state.content} contentKey="content" encodeMode={state.encodeMode} />
             <SerialBlock
               state={state}
               patch={patch}
+              contentKey="content"
               legacyContent={state.content}
               legacyOffset={1}
               legacyStepper={null}

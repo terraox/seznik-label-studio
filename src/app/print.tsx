@@ -10,7 +10,6 @@ import {
   PixelRatio,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   useWindowDimensions,
   View,
@@ -61,6 +60,28 @@ import {
   refitRatTail143Document,
 } from '@/constants/rat-tail-143';
 import { dataPageCount, resolveDocumentData } from '@/lib/data-binding';
+import {
+  confirmLabel,
+  designHash,
+  expandSerialBatch,
+  markCancelled,
+  markFailed,
+  newCursor,
+  newJobId,
+  resumeInfo,
+  serialPrintLogLine,
+  type SerialJobCursor,
+} from '@/lib/serial/job';
+import {
+  describeSerialValues,
+  hasSerialFields,
+  resolveDocumentForIndex,
+  serialBatchCount,
+} from '@/lib/serial/resolve-document';
+import { serialPrintGate } from '@/lib/serial/symbology-validate';
+import { SERIAL_CONFIRM_ABOVE } from '@/lib/serial/types';
+import { useSerialContinueStore } from '@/stores/serial-continue-store';
+import { useSerialJobStore } from '@/stores/serial-job-store';
 import { projectBulkDocument, resolveBulkSheet } from '@/lib/bulk-labels';
 import {
   MAX_JOB_LABELS,
@@ -728,15 +749,36 @@ export default function PrintScreen() {
     };
   }, [isPdfJob, params.docUri]);
 
+  // Serial labels. 'batch': the label prints `count` times with the serial advancing. 'rows': an Excel /
+  // bulk / data-sheet label, where the row index is the serial index and Count does not apply.
+  const serialInfo = useMemo(() => {
+    if (isPdfJob || isExcelJob || !baseDocument || !hasSerialFields(baseDocument)) return null;
+    if (baseDocument.bulk) return { mode: 'rows' as const, count: Math.max(1, baseDocument.bulk.rowCount) };
+    const dataPages = excelSheet && printingSettings.autoPages ? dataPageCount(baseDocument, excelSheet) : 1;
+    if (dataPages > 1) return { mode: 'rows' as const, count: dataPages };
+    return { mode: 'batch' as const, count: serialBatchCount(baseDocument) };
+  }, [isPdfJob, isExcelJob, baseDocument, excelSheet, printingSettings.autoPages]);
+
+  // Continue-from-last lives outside the label document (serial-continue-store).
+  const continueEntry = useSerialContinueStore((st) => (params.labelId ? st.byLabel[params.labelId] : undefined));
+  const liveSerialOffset = serialInfo?.mode === 'batch' && continueEntry?.enabled ? continueEntry.offset : 0;
+  /** Offset a running job started with (a resume re-uses the failed job's offset). */
+  const jobSerialOffsetRef = useRef<number | null>(null);
+  const serialOffsetRef = useRef(0);
+  serialOffsetRef.current = jobSerialOffsetRef.current ?? liveSerialOffset;
+  const serialCancelRef = useRef(false);
+  const [serialCancelAsked, setSerialCancelAsked] = useState(false);
+
   const pageCount = useMemo(() => {
     if (isPdfJob) return Math.max(1, pdfPages.length);
     if (baseDocument?.bulk) return Math.max(1, baseDocument.bulk.rowCount);
     if (isExcelJob && excelSheet) return Math.max(1, excelSheet.rows.length);
+    if (serialInfo) return serialInfo.count;
     if (baseDocument && excelSheet && printingSettings.autoPages) {
       return dataPageCount(baseDocument, excelSheet);
     }
     return 1;
-  }, [isPdfJob, pdfPages.length, isExcelJob, excelSheet, baseDocument, printingSettings.autoPages]);
+  }, [isPdfJob, pdfPages.length, isExcelJob, excelSheet, baseDocument, printingSettings.autoPages, serialInfo]);
 
   const bulkPrintPlan = useMemo(() => {
     if (!baseDocument?.bulk) return null;
@@ -750,11 +792,13 @@ export default function PrintScreen() {
     );
   }, [baseDocument, excelFiles, copies]);
 
-  const showCollate = Boolean(
-    baseDocument?.bulk && bulkPrintPlan && collateChangesOrder(bulkPrintPlan.rows),
+  const showCollate = Boolean(baseDocument?.bulk && bulkPrintPlan);
+  // Collate only changes anything once the job repeats.
+  const collateEnabled = Boolean(
+    bulkPrintPlan && collateChangesOrder(bulkPrintPlan.rows, bulkPrintPlan.multiply),
   );
 
-  const buildPageDocument = useCallback(
+  const buildBasePageDocument = useCallback(
     (page: number): LabelDocument | null => {
       if (baseDocument?.bulk) {
         const sheet = resolveBulkSheet(excelFiles, baseDocument.bulk);
@@ -785,6 +829,19 @@ export default function PrintScreen() {
       baseDocument,
       pageCount,
     ],
+  );
+
+  const buildPageDocument = useCallback(
+    (page: number): LabelDocument | null => {
+      const built = buildBasePageDocument(page);
+      // Same resolver as the editor preview: what you see is what prints.
+      if (built && serialInfo) {
+        return resolveDocumentForIndex(built, serialInfo.mode === 'batch' ? page + serialOffsetRef.current : page);
+      }
+      return built;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [buildBasePageDocument, serialInfo, liveSerialOffset],
   );
 
   const applyDisplayTransforms = useCallback(
@@ -1076,8 +1133,106 @@ export default function PrintScreen() {
       return;
     }
 
-    const collateJob = Boolean(bulkPlan && collate && collateChangesOrder(bulkPlan.rows));
+    // ---- Serial labels: resume offer, validation gate and totals. All of it runs before label 1. ----
+    const askChoice = (
+      title: string,
+      message: string,
+      buttons: { text: string; value: string; style?: 'cancel' | 'destructive' }[],
+    ) =>
+      new Promise<string>((resolve) => {
+        Alert.alert(
+          title,
+          message,
+          buttons.map((b) => ({ text: b.text, style: b.style, onPress: () => resolve(b.value) })),
+          { cancelable: true, onDismiss: () => resolve('cancel') },
+        );
+      });
+    const releaseSerial = () => {
+      jobSerialOffsetRef.current = null;
+      serialCancelRef.current = false;
+      setSerialCancelAsked(false);
+      printingLockRef.current = false;
+    };
+    let serialRun: {
+      cursor: SerialJobCursor | null;
+      jobId: string;
+      baseOffset: number;
+      startAt: number;
+      current: number;
+      batch: boolean;
+    } | null = null;
+    if (serialInfo && baseDocument) {
+      if (sourceDocument?.ups) {
+        printingLockRef.current = false;
+        Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
+        return;
+      }
+      const batch = serialInfo.mode === 'batch';
+      const labelId = params.labelId;
+      const hash = designHash(baseDocument);
+      let baseOffset = batch ? liveSerialOffset : 0;
+      let startAt = 0;
+      if (batch && labelId) {
+        const info = resumeInfo(useSerialJobStore.getState().byLabel[labelId], hash);
+        if (info) {
+          const choice = await askChoice(
+            'Continue the earlier print?',
+            `The last print stopped at label ${info.resumeAt + 1} of ${info.total}. Label ${info.resumeAt + 1} may be half printed.` +
+              (info.designChanged ? '\n\nThe label design has changed since then. Continuing uses the current design.' : ''),
+            [
+              { text: `Reprint label ${info.resumeAt + 1}`, value: 'reprint' },
+              ...(info.skipTo < info.total ? [{ text: `Skip to label ${info.skipTo + 1}`, value: 'skip' }] : []),
+              { text: 'Start over', value: 'restart', style: 'destructive' as const },
+              { text: 'Cancel', value: 'cancel', style: 'cancel' as const },
+            ],
+          );
+          if (choice === 'cancel') {
+            printingLockRef.current = false;
+            return;
+          }
+          if (choice === 'reprint' || choice === 'skip') {
+            startAt = choice === 'reprint' ? info.resumeAt : info.skipTo;
+            baseOffset = info.baseOffset;
+          } else {
+            useSerialJobStore.getState().clear(labelId);
+          }
+        }
+      }
+      const gate = serialPrintGate(baseDocument, serialInfo.count, baseOffset, jobDpi);
+      if (gate.issues.length > 0) {
+        printingLockRef.current = false;
+        const lines = gate.issues.slice(0, 3).map((i) => i.message).join('\n\n');
+        Alert.alert('Fix the serial before printing', `${lines}${gate.issues.length > 3 ? `\n\n...and ${gate.issues.length - 3} more.` : ''}\n\nNothing was sent.`);
+        return;
+      }
+      const physical = (serialInfo.count - startAt) * copies;
+      if (physical > SERIAL_CONFIRM_ABOVE) {
+        const ok = await askChoice('Print many labels?', `This job prints ${physical} labels.`, [
+          { text: `Print ${physical}`, value: 'yes' },
+          { text: 'Cancel', value: 'cancel', style: 'cancel' },
+        ]);
+        if (ok !== 'yes') {
+          printingLockRef.current = false;
+          return;
+        }
+      }
+      const jobId = newJobId();
+      const cursor =
+        batch && labelId
+          ? newCursor({ jobId, labelId, designHash: hash, total: serialInfo.count, baseOffset, startAt })
+          : null;
+      if (cursor) useSerialJobStore.getState().save(cursor);
+      jobSerialOffsetRef.current = baseOffset;
+      serialCancelRef.current = false;
+      setSerialCancelAsked(false);
+      serialRun = { cursor, jobId, baseOffset, startAt, current: startAt, batch };
+    }
+
+    const collateJob = Boolean(
+      bulkPlan && collate && collateChangesOrder(bulkPlan.rows, bulkPlan.multiply),
+    );
     let labelsCompleted = 0;
+    let serialCancelled = false;
 
     useSettingsStore.getState().patchDefaults({ paperType });
     setPrinting(true);
@@ -1164,21 +1319,48 @@ export default function PrintScreen() {
       }
 
       const printJobs = bulkPlan
-        ? bulkSendList(bulkPlan.rows, collateJob).map((item) => ({
+        ? bulkSendList(bulkPlan.rows, collateJob, bulkPlan.multiply).map((item) => ({
             page: item.rowIndex,
             sendCopies: item.copies,
             copyNumber: item.copyNumber,
             round: item.round,
           }))
-        : Array.from({ length: pageCount }, (_, page) => ({
-            page,
-            sendCopies: copies,
-            copyNumber: 1,
-            round: 1,
-          }));
+        : serialRun?.batch
+          ? expandSerialBatch({ count: serialInfo!.count, copies, collate: false, startAt: serialRun.startAt }).map((item) => ({
+              page: item.labelIndex,
+              sendCopies: item.copies,
+              copyNumber: item.copyNumber,
+              round: item.round,
+            }))
+          : Array.from({ length: pageCount }, (_, page) => ({
+              page,
+              sendCopies: copies,
+              copyNumber: 1,
+              round: 1,
+            }));
       const rowRasters = new Map<number, CachedRowPrint>();
       for (let jobIndex = 0; jobIndex < printJobs.length; jobIndex++) {
         const { page, sendCopies, copyNumber, round } = printJobs[jobIndex];
+        // Cancel takes effect between labels, so a label is never abandoned half sent.
+        if (serialRun && serialCancelRef.current) {
+          serialCancelled = true;
+          break;
+        }
+        const serialIndexNow = serialRun ? (serialRun.batch ? page + serialRun.baseOffset : page) : 0;
+        const serialLogBase = serialRun
+          ? {
+              jobId: serialRun.jobId,
+              label: page + 1,
+              total: pageCount,
+              serialIndex: serialIndexNow,
+              value: baseDocument ? describeSerialValues(baseDocument, serialIndexNow) : '',
+              copies: sendCopies,
+            }
+          : null;
+        if (serialRun && serialLogBase) {
+          serialRun.current = page;
+          console.info(serialPrintLogLine({ ...serialLogBase, copy: 1, state: 'sent' }));
+        }
         if (bulkPlan) {
           console.info(
             `[print] label ${page} copy ${copyNumber} round ${round} total ${labelsCompleted}/${bulkPlan.totalPhysical} copies ${sendCopies}`,
@@ -1955,6 +2137,17 @@ export default function PrintScreen() {
         }
         labelsCompleted += sendCopies;
         usePrintStatsStore.getState().record(sendCopies);
+        if (serialRun && serialLogBase) {
+          for (let c = 1; c <= sendCopies; c += 1) {
+            console.info(serialPrintLogLine({ ...serialLogBase, copy: c, state: 'confirmed' }));
+          }
+          // Written after EVERY confirmed label, so a crash or pulled cable resumes at the right one.
+          if (serialRun.cursor) {
+            serialRun.cursor = confirmLabel(serialRun.cursor, page);
+            useSerialJobStore.getState().save(serialRun.cursor);
+          }
+          setPrintProgress(`Label ${page + 1} of ${pageCount}`);
+        }
         if (bulkPlan) {
           setPrintProgress(`Printing ${labelsCompleted} of ${bulkPlan.totalPhysical}`);
           if (collateJob && manager.isJosh && jobIndex < printJobs.length - 1) {
@@ -1965,6 +2158,23 @@ export default function PrintScreen() {
             );
             await new Promise<void>((resolve) => setTimeout(resolve, pitchMs));
           }
+        }
+      }
+
+      if (serialRun) {
+        const labelId = params.labelId;
+        const confirmed = serialRun.cursor ? Math.min(serialRun.cursor.total, serialRun.cursor.nextIndex) : pageCount;
+        if (labelId && serialRun.cursor) {
+          if (serialCancelled) useSerialJobStore.getState().save(markCancelled(serialRun.cursor));
+          else useSerialJobStore.getState().clear(labelId);
+        }
+        const continueState = labelId ? useSerialContinueStore.getState().byLabel[labelId] : undefined;
+        if (labelId && serialRun.batch && continueState?.enabled) {
+          useSerialContinueStore.getState().setOffset(labelId, serialRun.baseOffset + (serialCancelled ? confirmed : pageCount));
+        }
+        if (serialCancelled) {
+          Alert.alert('Print cancelled', `${confirmed} of ${pageCount} labels were printed. Print again to continue where it stopped.`);
+          return;
         }
       }
 
@@ -1986,20 +2196,53 @@ export default function PrintScreen() {
       Alert.alert('Print Sent', `${jobName} was sent to ${deviceName ?? 'the printer'}.`);
       if (printingSettings.returnPrevious) router.back();
     } catch (error) {
+      if (serialRun) {
+        if (serialRun.cursor && params.labelId) {
+          const failed = markFailed(serialRun.cursor, serialRun.current);
+          serialRun.cursor = failed;
+          useSerialJobStore.getState().save(failed);
+          const cs = useSerialContinueStore.getState().byLabel[params.labelId];
+          if (cs?.enabled) {
+            useSerialContinueStore.getState().setOffset(params.labelId, serialRun.baseOffset + Math.min(failed.total, failed.nextIndex));
+          }
+        }
+        const idx = serialRun.batch ? serialRun.current + serialRun.baseOffset : serialRun.current;
+        console.info(
+          serialPrintLogLine({
+            jobId: serialRun.jobId,
+            label: serialRun.current + 1,
+            total: pageCount,
+            serialIndex: idx,
+            value: baseDocument ? describeSerialValues(baseDocument, idx) : '',
+            copy: 1,
+            copies,
+            state: 'failed',
+          }),
+        );
+      }
       const message = formatPrintFailure(error);
       if (message) {
         const sent =
           bulkPlan != null
             ? `\n\nSent ${labelsCompleted} of ${bulkPlan.totalPhysical} before the printer stopped.`
-            : '';
+            : serialRun
+              ? `\n\nPrinted ${serialRun.cursor ? Math.min(serialRun.cursor.total, serialRun.cursor.nextIndex) : labelsCompleted} of ${pageCount} labels. Print again to continue where it stopped.`
+              : '';
         Alert.alert('Print Failed', `${message}${sent}`);
       }
     } finally {
       printingLockRef.current = false;
+      jobSerialOffsetRef.current = null;
+      serialCancelRef.current = false;
+      setSerialCancelAsked(false);
       setPrinting(false);
       setPrintProgress(null);
     }
   }, [
+    serialInfo,
+    liveSerialOffset,
+    params.labelId,
+    sourceDocument,
     isPdfJob,
     params.docUri,
     previewDocument,
@@ -2206,7 +2449,7 @@ export default function PrintScreen() {
                 />
               </Pressable>
               <Text style={styles.pageNavText}>
-                {baseDocument?.bulk ? 'Label' : 'Row'} {pageIndex + 1} / {pageCount}
+                {baseDocument?.bulk || serialInfo?.mode === 'batch' ? 'Label' : 'Row'} {pageIndex + 1} / {pageCount}
               </Text>
               <Pressable
                 hitSlop={12}
@@ -2254,23 +2497,45 @@ export default function PrintScreen() {
               onCommitValue={setCopies}
               bordered
             />
+            {serialInfo ? (
+              <Text style={styles.serialTotal}>
+                {serialInfo.mode === 'batch'
+                  ? `${serialInfo.count} labels x ${copies} ${copies === 1 ? 'copy' : 'copies'} = ${serialInfo.count * copies} to print${liveSerialOffset > 0 ? `. Continues after ${liveSerialOffset} already printed.` : '.'}`
+                  : `${serialInfo.count} rows x ${copies} ${copies === 1 ? 'copy' : 'copies'} = ${serialInfo.count * copies} to print.`}
+              </Text>
+            ) : null}
             {showCollate ? (
-              <View style={styles.collateRow}>
-                <View style={styles.collateCopy}>
-                  <Text style={styles.collateLabel}>Collate</Text>
-                  <Text style={styles.collateHelp}>
-                    {collate
-                      ? 'One of each label, then the next set. A label with fewer copies drops out.'
-                      : 'All copies of each label, then the next.'}
-                  </Text>
+              <View style={styles.collateWrap}>
+                <Text style={styles.collateLabel}>Print order</Text>
+                <View style={styles.collateSeg}>
+                  {([false, true] as const).map((on) => {
+                    const selected = collateEnabled && collate === on;
+                    return (
+                      <Pressable
+                        key={String(on)}
+                        disabled={printing || !collateEnabled}
+                        onPress={() => setCollate(on)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected, disabled: !collateEnabled }}
+                        style={[
+                          styles.collateOpt,
+                          selected && styles.collateOptOn,
+                          !collateEnabled && styles.collateOptOff,
+                        ]}>
+                        <Text style={[styles.collateOptText, selected && styles.collateOptTextOn]}>
+                          {on ? 'Collated' : 'Uncollated'}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-                <Switch
-                  value={collate}
-                  onValueChange={setCollate}
-                  disabled={printing}
-                  trackColor={{ false: C.border, true: C.accent }}
-                  thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
-                />
+                <Text style={styles.collateHelp}>
+                  {!collateEnabled
+                    ? 'Set the count above 1 to choose how repeats are ordered.'
+                    : collate
+                      ? `Collated: the whole job prints once, rows 1 to ${baseDocument?.bulk?.rowCount ?? 'N'}, then again, ${copies} times in all.`
+                      : `Uncollated: row by row from the first, each row prints all its labels at once (its count × ${copies}).`}
+                </Text>
               </View>
             ) : null}
             {bulkPrintPlan && baseDocument?.bulk ? (
@@ -2499,6 +2764,19 @@ export default function PrintScreen() {
       </FormScrollView>
 
       {printProgress ? <Text style={styles.printProgress}>{printProgress}</Text> : null}
+      {printing && serialInfo ? (
+        <Pressable
+          onPress={() => {
+            serialCancelRef.current = true;
+            setSerialCancelAsked(true);
+          }}
+          disabled={serialCancelAsked}
+          hitSlop={8}>
+          <Text style={styles.printProgress}>
+            {serialCancelAsked ? 'Stopping after this label...' : 'Cancel after this label'}
+          </Text>
+        </Pressable>
+      ) : null}
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}>
         {/* Size picker — opens sheet to choose a different paper/label size. */}
         <Pressable
@@ -2728,16 +3006,38 @@ const styles = themedStyles((c, scheme) => ({
     width: '100%',
     alignSelf: 'center',
   },
-  collateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  collateWrap: {
+    gap: 8,
     paddingTop: 4,
     paddingBottom: 8,
   },
-  collateCopy: {
+  collateSeg: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  collateOpt: {
     flex: 1,
-    gap: 2,
+    minHeight: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collateOptOn: {
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
+  },
+  collateOptOff: {
+    opacity: 0.5,
+  },
+  collateOptText: {
+    color: c.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  collateOptTextOn: {
+    color: c.accent,
   },
   collateLabel: {
     color: c.text,
@@ -2754,6 +3054,13 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 14,
     fontWeight: '600',
     paddingBottom: 10,
+  },
+  serialTotal: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    fontSize: 12,
+    lineHeight: 16,
+    color: c.textSecondary,
   },
   printProgress: {
     position: 'absolute',
