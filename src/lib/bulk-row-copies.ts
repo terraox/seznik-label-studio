@@ -13,11 +13,16 @@ export type ParsedCopiesCell = {
 
 export type BulkPrintRow = {
   rowIndex: number;
+  /** Labels this row prints in total: its own count times the repeat count. */
   copies: number;
+  /** The row's own count for one pass of the job. Defaults to `copies` when the job is not repeated. */
+  perPass?: number;
 };
 
 export type BulkPrintPlan = {
   rows: BulkPrintRow[];
+  /** How many times the whole job repeats (the print screen's count). */
+  multiply: number;
   totalPhysical: number;
   allZero: boolean;
   overCap: boolean;
@@ -129,29 +134,33 @@ export function copiesChangeSummary(sheet: ExcelSheet, columnIndex: number | nul
 
 export type BulkSend = {
   rowIndex: number;
-  /** Labels in this send. Uncollated is the row count. Collated is always 1. */
+  /** Labels in this send, printed together. */
   copies: number;
-  /** 1-based copy of this row. */
+  /** 1-based pass of the job this send belongs to. Uncollated sends are pass 1. */
   copyNumber: number;
-  /** 1-based round. Uncollated sends are round 1. */
+  /** Same as `copyNumber`. */
   round: number;
 };
 
-/** True when grouped and collated paper orders differ. */
-export function collateChangesOrder(rows: readonly { copies: number }[]): boolean {
-  const printable = rows.filter((row) => row.copies > 0);
-  if (printable.length < 2) return false;
-  return printable.slice(0, -1).some((row) => row.copies > 1);
+/** The order only differs when the job repeats and at least two rows print. */
+export function collateChangesOrder(rows: readonly { copies: number }[], multiply = 2): boolean {
+  if (multiply <= 1) return false;
+  return rows.filter((row) => row.copies > 0).length >= 2;
 }
 
 /**
- * Grouped: one send per row, native copies = the row count.
- * Collated: one send per physical label, copies = 1, rows with fewer copies drop out.
- * A count of 0 is omitted. Sheet parsing never produces 0; callers can still pass one.
+ * Uncollated: rows in order, each printing all its labels together (its count times `multiply`).
+ * Collated: the whole job once, rows 1 to N, then the whole job again, `multiply` times.
+ * A count of 0 is omitted.
  */
-export function bulkSendList(rows: readonly BulkPrintRow[], collate: boolean): BulkSend[] {
+export function bulkSendList(
+  rows: readonly BulkPrintRow[],
+  collate: boolean,
+  multiply = 1,
+): BulkSend[] {
   const printable = rows.filter((row) => row.copies > 0);
-  if (!collate) {
+  const passes = Math.max(1, Math.floor(multiply) || 1);
+  if (!collate || passes === 1) {
     return printable.map((row) => ({
       rowIndex: row.rowIndex,
       copies: row.copies,
@@ -159,27 +168,18 @@ export function bulkSendList(rows: readonly BulkPrintRow[], collate: boolean): B
       round: 1,
     }));
   }
-  const remaining = printable.map((row) => row.copies);
   const sends: BulkSend[] = [];
-  let round = 1;
-  for (;;) {
-    let placed = false;
-    for (let index = 0; index < printable.length; index++) {
-      if (remaining[index] <= 0) continue;
-      const row = printable[index];
-      const copyNumber = row.copies - remaining[index] + 1;
-      remaining[index] -= 1;
+  for (let pass = 1; pass <= passes; pass++) {
+    for (const row of printable) {
       sends.push({
         rowIndex: row.rowIndex,
-        copies: 1,
-        copyNumber,
-        round,
+        copies: row.perPass ?? Math.max(1, Math.round(row.copies / passes)),
+        copyNumber: pass,
+        round: pass,
       });
-      placed = true;
     }
-    if (!placed) return sends;
-    round += 1;
   }
+  return sends;
 }
 
 /** First call stores the factory result. Later calls return that same value. */
@@ -200,12 +200,14 @@ export function planBulkPrint(
   const factor = Math.max(1, Math.floor(Number.isFinite(multiply) ? multiply : 1));
   const rows: BulkPrintRow[] = [];
   for (let rowIndex = 0; rowIndex < sheet.rows.length; rowIndex++) {
-    const copies = resolveRowCopies(sheet, rowIndex, copiesColumnIndex, overrides) * factor;
-    if (copies > 0) rows.push({ rowIndex, copies });
+    const perPass = resolveRowCopies(sheet, rowIndex, copiesColumnIndex, overrides);
+    const copies = perPass * factor;
+    if (copies > 0) rows.push({ rowIndex, copies, perPass });
   }
   const totalPhysical = rows.reduce((sum, row) => sum + row.copies, 0);
   return {
     rows,
+    multiply: factor,
     totalPhysical,
     allZero: sheet.rows.length > 0 && totalPhysical === 0,
     overCap: totalPhysical > MAX_JOB_LABELS,

@@ -47,9 +47,9 @@ test('parseCopiesCell applies the count rules', () => {
 test('planBulkPrint skips 0 and blank rows and multiplies in place', () => {
   const once = planBulkPrint(sheet, 1, 1);
   assert.deepEqual(once.rows, [
-    { rowIndex: 0, copies: 1 },
-    { rowIndex: 1, copies: 3 },
-    { rowIndex: 4, copies: 2 },
+    { rowIndex: 0, copies: 1, perPass: 1 },
+    { rowIndex: 1, copies: 3, perPass: 3 },
+    { rowIndex: 4, copies: 2, perPass: 2 },
   ]);
   assert.equal(once.totalPhysical, 6);
   assert.equal(once.allZero, false);
@@ -100,11 +100,11 @@ test('no column and no overrides with stepper 1 sends one copy of each row', () 
   };
   const plan = planBulkPrint(five, null, 1, {});
   assert.deepEqual(plan.rows, [
-    { rowIndex: 0, copies: 1 },
-    { rowIndex: 1, copies: 1 },
-    { rowIndex: 2, copies: 1 },
-    { rowIndex: 3, copies: 1 },
-    { rowIndex: 4, copies: 1 },
+    { rowIndex: 0, copies: 1, perPass: 1 },
+    { rowIndex: 1, copies: 1, perPass: 1 },
+    { rowIndex: 2, copies: 1, perPass: 1 },
+    { rowIndex: 3, copies: 1, perPass: 1 },
+    { rowIndex: 4, copies: 1, perPass: 1 },
   ]);
 });
 
@@ -178,80 +178,69 @@ test('more than ten adjusted rows stay a single summary', () => {
 });
 
 function rowsOf(...copies: number[]): BulkPrintRow[] {
-  return copies.map((count, rowIndex) => ({ rowIndex, copies: count }));
+  return copies.map((count, rowIndex) => ({ rowIndex, copies: count, perPass: count }));
 }
 
-function paperOrder(rows: BulkPrintRow[], collate: boolean): number[] {
+function paperOrder(rows: BulkPrintRow[], collate: boolean, multiply = 1): number[] {
   const order: number[] = [];
-  for (const send of bulkSendList(rows, collate)) {
+  for (const send of bulkSendList(rows, collate, multiply)) {
     for (let copy = 0; copy < send.copies; copy++) order.push(send.rowIndex);
   }
   return order;
 }
 
-test('counts 3, 1, 2 group together and collate in rounds', () => {
+test('repeat 1 prints each row once in order either way', () => {
   const rows = rowsOf(3, 1, 2);
-  assert.equal(collateChangesOrder(rows), true);
-  assert.deepEqual(bulkSendList(rows, false), [
-    { rowIndex: 0, copies: 3, copyNumber: 1, round: 1 },
-    { rowIndex: 1, copies: 1, copyNumber: 1, round: 1 },
-    { rowIndex: 2, copies: 2, copyNumber: 1, round: 1 },
-  ]);
+  assert.equal(collateChangesOrder(rows, 1), false);
   assert.deepEqual(paperOrder(rows, false), [0, 0, 0, 1, 2, 2]);
-
-  const collated = bulkSendList(rows, true);
-  assert.deepEqual(
-    collated.map((send) => send.rowIndex),
-    [0, 1, 2, 0, 2, 0],
-  );
-  assert.deepEqual(
-    collated.map((send) => send.copies),
-    [1, 1, 1, 1, 1, 1],
-  );
-  assert.deepEqual(
-    collated.map((send) => send.round),
-    [1, 1, 1, 2, 2, 3],
-  );
-  assert.deepEqual(
-    collated.map((send) => send.copyNumber),
-    [1, 1, 1, 2, 2, 3],
-  );
-  assert.deepEqual(paperOrder(rows, true), [0, 1, 2, 0, 2, 0]);
+  assert.deepEqual(paperOrder(rows, true), [0, 0, 0, 1, 2, 2]);
 });
 
-test('counts 1, 1, 3 and 1, 1, 1 print the same either way', () => {
-  const tail = rowsOf(1, 1, 3);
-  assert.equal(collateChangesOrder(tail), false);
-  assert.deepEqual(paperOrder(tail, false), [0, 1, 2, 2, 2]);
-  assert.deepEqual(paperOrder(tail, true), [0, 1, 2, 2, 2]);
-
-  const ones = rowsOf(1, 1, 1);
-  assert.equal(collateChangesOrder(ones), false);
-  assert.deepEqual(paperOrder(ones, false), [0, 1, 2]);
-  assert.deepEqual(paperOrder(ones, true), [0, 1, 2]);
-});
-
-test('stepper 2 on three single rows shows a different collated order', () => {
-  const ones: ExcelSheet = {
-    name: 'Ones',
-    columns: ['Qty'],
-    rows: [['1'], ['1'], ['1']],
-  };
+test('uncollated repeats each row together, row by row from the first', () => {
+  const ones: ExcelSheet = { name: 'Ones', columns: ['Qty'], rows: [['1'], ['1'], ['1']] };
   const plan = planBulkPrint(ones, 0, 2);
+  assert.equal(plan.multiply, 2);
   assert.deepEqual(
     plan.rows.map((row) => row.copies),
     [2, 2, 2],
   );
-  assert.equal(collateChangesOrder(plan.rows), true);
-  assert.deepEqual(paperOrder(plan.rows, false), [0, 0, 1, 1, 2, 2]);
-  assert.deepEqual(paperOrder(plan.rows, true), [0, 1, 2, 0, 1, 2]);
+  assert.equal(collateChangesOrder(plan.rows, plan.multiply), true);
+  assert.deepEqual(paperOrder(plan.rows, false, plan.multiply), [0, 0, 1, 1, 2, 2]);
+});
+
+test('collated prints the whole job once, then again', () => {
+  const ones: ExcelSheet = { name: 'Ones', columns: ['Qty'], rows: [['1'], ['1'], ['1']] };
+  const plan = planBulkPrint(ones, 0, 2);
+  const sends = bulkSendList(plan.rows, true, plan.multiply);
+  assert.deepEqual(
+    sends.map((send) => send.rowIndex),
+    [0, 1, 2, 0, 1, 2],
+  );
+  assert.deepEqual(
+    sends.map((send) => send.round),
+    [1, 1, 1, 2, 2, 2],
+  );
+  assert.equal(plan.totalPhysical, 6);
+});
+
+test('row counts stay grouped inside each pass', () => {
+  const sheetCounts: ExcelSheet = {
+    name: 'C',
+    columns: ['Qty'],
+    rows: [['3'], ['1'], ['2']],
+  };
+  const plan = planBulkPrint(sheetCounts, 0, 2);
+  assert.deepEqual(paperOrder(plan.rows, false, plan.multiply), [0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 2]);
+  assert.deepEqual(paperOrder(plan.rows, true, plan.multiply), [0, 0, 0, 1, 2, 2, 0, 0, 0, 1, 2, 2]);
+  assert.equal(plan.totalPhysical, 12);
 });
 
 test('a zero-copy row is left out of both orders', () => {
-  const rows = rowsOf(0, 3, 1);
-  assert.deepEqual(paperOrder(rows, false), [1, 1, 1, 2]);
-  assert.deepEqual(paperOrder(rows, true), [1, 2, 1, 1]);
-  assert.equal(collateChangesOrder(rows), true);
+  const sheetCounts: ExcelSheet = { name: 'Z', columns: ['Qty'], rows: [['0'], ['3'], ['1']] };
+  const plan = planBulkPrint(sheetCounts, 0, 2);
+  assert.deepEqual(paperOrder(plan.rows, false, plan.multiply), [1, 1, 1, 1, 1, 1, 2, 2]);
+  assert.deepEqual(paperOrder(plan.rows, true, plan.multiply), [1, 1, 1, 2, 1, 1, 1, 2]);
+  assert.equal(collateChangesOrder(plan.rows, plan.multiply), true);
 });
 
 test('building a send list does not change cached row rasters', () => {
@@ -262,15 +251,15 @@ test('building a send list does not change cached row rasters', () => {
     [2, Uint8Array.from([6])],
   ]);
   const before = [...rasters.entries()].map(([key, bytes]) => [key, Array.from(bytes)] as const);
-  bulkSendList(rows, false);
-  bulkSendList(rows, true);
+  bulkSendList(rows, false, 2);
+  bulkSendList(rows, true, 2);
   for (const [key, bytes] of before) {
     assert.deepEqual(Array.from(rasters.get(key)!), bytes);
   }
 
   const cache = new Map<number, Uint8Array>();
   let calls = 0;
-  for (const send of bulkSendList(rows, true)) {
+  for (const send of bulkSendList(rows, true, 2)) {
     const bitmap = rememberRowRaster(cache, send.rowIndex, () => {
       calls += 1;
       return rasters.get(send.rowIndex)!;
