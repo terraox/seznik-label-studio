@@ -61,7 +61,6 @@ export function LabelPreview({
               </View>
             ))}
           </View>
-          <Text style={styles.dimBottom}>{valid ? `${fmtMm(n > 1 ? totalMm : w)} mm` : '- mm'}</Text>
         </View>
       </View>
     </View>
@@ -274,7 +273,6 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 13,
     fontWeight: '600',
   },
-  dimBottom: { marginTop: 6, textAlign: 'center', fontSize: 12, fontWeight: '600', color: c.textSecondary },
   segment: {
     flexDirection: 'row',
     backgroundColor: c.fill,

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, Switch, Text, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -45,6 +45,12 @@ import {
   type FormState,
   type Shape,
 } from '@/lib/new-label-form';
+import {
+  generateSerialLabelsFromSample,
+  type BarcodeSymbology,
+} from '@/lib/printer/SerialLabelEngine';
+import { createSerialLabelDocument, serialDocumentName } from '@/lib/serial-label-document';
+import { useDataStore } from '@/stores/data-store';
 import { scaleDocumentToSize } from '@/lib/element-sizing';
 import { resolveProfile } from '@/printer-core/profiles';
 import { useLabelStore } from '@/stores/label-store';
@@ -72,11 +78,18 @@ export default function NewLabelSetupScreen() {
     defaultHeight?: string;
     isSingleCanvas?: string;
     isJewelleryTag?: string;
+    serialSample?: string;
+    serialEnd?: string;
+    serialStep?: string;
+    serialPad?: string;
+    serialSymbology?: string;
   }>();
+  const isSerial = Boolean(params.serialSample);
   const isImportImage = Boolean(params.importImageUri);
   const isClone = params.isClone === 'true';
   const defaults = useSettingsStore((s) => s.defaults);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
+  const addExcelFile = useDataStore((s) => s.addExcelFile);
 
   // Connected printer's head width, for the total-width warning. Null when none is connected.
   const printerStatus = usePrinterStore((s) => s.status);
@@ -112,7 +125,7 @@ export default function NewLabelSetupScreen() {
   const cell = cellSize(form);
   const gapMm = parseGapMm(form.gap) ?? 0;
   const multi = form.columns > 1;
-  const showLayout = !isImportImage;
+  const showLayout = !isImportImage && !isSerial;
   const total = cell.w != null ? totalWidthMm(cell.w, form.columns, gapMm) : null;
   const warning = multi && total != null ? widthWarning(total, printerMaxMm) : null;
   const presetValue = presetLabelFor(form.shape, cell.w, cell.h);
@@ -134,6 +147,57 @@ export default function NewLabelSetupScreen() {
       console.log(
         `[new-label] create shape=${form.shape} columns=${form.columns} size=${size.widthMm}x${size.heightMm} gap=${gapMm} image=${isImportImage}`,
       );
+    }
+
+    if (isSerial) {
+      try {
+        const sample = params.serialSample ?? '';
+        const m = sample.match(/(\d+)(\D*)$/);
+        const symbology = (params.serialSymbology ?? 'CODE128') as BarcodeSymbology;
+        const labels = generateSerialLabelsFromSample(
+          sample,
+          { fields: {}, textFieldKey: 'displayText', barcodeFieldKey: 'barcodeValue' },
+          {
+            startNumber: m ? parseInt(m[1], 10) : NaN,
+            endNumber: Number(params.serialEnd),
+            step: Number(params.serialStep) || 1,
+            textPadding: params.serialPad ? Number(params.serialPad) : undefined,
+            barcodeSymbology: symbology,
+          },
+        );
+        const file = addExcelFile({
+          name: serialDocumentName(labels),
+          uri: `serial://label/${Date.now()}`,
+          sheets: [
+            {
+              name: 'Serial',
+              columns: ['Text', 'Barcode'],
+              rows: labels.map((label) => [label.text, label.barcodeValue]),
+            },
+          ],
+          activeSheetIndex: 0,
+          hasHeaderRow: true,
+          dataStartRow: 1,
+        });
+        const doc = createSerialLabelDocument({
+          labels,
+          excelFileId: file.id,
+          widthMm: size.widthMm,
+          heightMm: size.heightMm,
+          barcodeSymbology: symbology,
+          orientation: defaults.orientation,
+          paperType: defaults.paperType,
+        });
+        if (!doc) {
+          Alert.alert('Serial labels', 'The series could not be opened on the canvas.');
+          return;
+        }
+        upsertDocument(doc);
+        router.replace({ pathname: '/edit', params: { labelId: doc.id } });
+      } catch (e: unknown) {
+        Alert.alert('Serial labels', e instanceof Error ? e.message : 'Could not open the canvas.');
+      }
+      return;
     }
 
     if (params.importImageUri) {
@@ -263,7 +327,9 @@ export default function NewLabelSetupScreen() {
           <Text style={styles.backChevron}>‹</Text>
         </Pressable>
         <Text style={styles.headerTitle}>
-          {isImportImage
+          {isSerial
+            ? 'Serial label size'
+            : isImportImage
             ? 'Label Sizing Setup'
             : params.isTwoUps === 'true' && form.columns === 2 && !isClone
               ? '2ups label'
@@ -337,6 +403,12 @@ export default function NewLabelSetupScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>{sizeTitle}</Text>
+          {isSerial ? (
+            <Text style={styles.note}>
+              Width and height of one sticker, in mm. Measure your roll or pick a preset. Every
+              numbered label uses this size. Next you can drag the text and barcode into place.
+            </Text>
+          ) : null}
           {form.shape === 'circle' ? (
             <NumberField
               ref={firstField}
@@ -430,6 +502,9 @@ export default function NewLabelSetupScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>{t('editor.labelName')}</Text>
+          {isSerial ? (
+            <Text style={styles.note}>Only for finding this job later. It is not printed.</Text>
+          ) : null}
           <TextInput
             ref={nameField}
             value={form.name}
@@ -471,7 +546,7 @@ export default function NewLabelSetupScreen() {
             accessibilityRole="button"
             accessibilityState={{ disabled: !canCreate }}
             style={({ pressed }) => [styles.newButton, !canCreate && styles.newButtonOff, pressed && styles.pressed]}>
-            <Text style={styles.newButtonText}>{isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
+            <Text style={styles.newButtonText}>{isSerial ? 'Open on canvas' : isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
           </Pressable>
         </View>
       </KeyboardStickyView>
