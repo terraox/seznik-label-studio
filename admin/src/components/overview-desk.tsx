@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { LayoutTemplate, Printer, Smartphone } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
 import { api } from '@/lib/client';
 import { PRINTERS } from '@/lib/constants';
@@ -42,29 +43,30 @@ export function OverviewDesk() {
       {error ? <p className="err">{error}</p> : null}
       {!data ? <p className="loading">Pulling the latest counts…</p> : (
         <>
-          <section className="stats">
-            <article className="stat">
-              <span className="num">{data.devices.total}</span>
-              <b>Devices</b>
-              <span>{data.devices.active7d} opened the app in the last 7 days. These are installs, not signed-in people.</span>
-            </article>
-            <article className="stat">
-              <span className="num">{data.templates.published}</span>
-              <b>Published templates</b>
-              <span>{data.templates.drafts} still in draft.</span>
-            </article>
-            <article className="stat">
-              <span className="num">{data.prints.lifetime}</span>
-              <b>Prints, lifetime</b>
-              <span>{data.prints.month} this month.</span>
-            </article>
+          <section className="kpis" aria-label="Summary">
+            {[
+              { title: 'Devices', value: data.devices.total, sub: `${data.devices.active7d} opened the app in 7 days`, Icon: Smartphone, color: '#3B82F6' },
+              { title: 'Published templates', value: data.templates.published, sub: `${data.templates.drafts} still in draft`, Icon: LayoutTemplate, color: '#10B981' },
+              { title: 'Prints, lifetime', value: data.prints.lifetime, sub: `${data.prints.month} this month`, Icon: Printer, color: '#8B5CF6' },
+            ].map(({ title, value, sub, Icon, color }) => (
+              <article className="kpi" key={title}>
+                <div className="kpi-top">
+                  <span className="kpi-title">{title}</span>
+                  <span className="kpi-icon" style={{ background: `${color}20`, border: `1px solid ${color}40` }}>
+                    <Icon size={16} color={color} />
+                  </span>
+                </div>
+                <div className="kpi-value">{value.toLocaleString()}</div>
+                <div className="kpi-sub">{sub}</div>
+              </article>
+            ))}
           </section>
-          <section className="windows" aria-label="Print counts">
+          <section className="kpis" aria-label="Print counts">
             {WINDOWS.map(([key, label]) => (
-              <article className="window" key={key}>
-                <b>{label}</b>
-                <strong>{data.prints[key]}</strong>
-                <em>{key === 'last3' || key === 'last7' ? 'Includes today' : 'Print events'}</em>
+              <article className="kpi" key={key}>
+                <span className="kpi-title">{label}</span>
+                <div className="kpi-value">{data.prints[key].toLocaleString()}</div>
+                <div className="kpi-sub">{key === 'last3' || key === 'last7' ? 'Includes today' : 'Print events'}</div>
               </article>
             ))}
           </section>
@@ -78,7 +80,7 @@ export function OverviewDesk() {
                   <b>{row.count}</b>
                 </div>
               ))}
-              <p><a href="/api/export?type=template-usage">Download this table</a></p>
+              <a className="btn small" href="/api/export?type=template-usage">Download CSV</a>
             </section>
             <div className="stack">
               <section className="panel">

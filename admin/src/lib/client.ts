@@ -7,6 +7,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const response = await fetch(path, { ...init, headers });
   if (response.status === 401 && !path.startsWith('/api/auth/login')) {
+    // Clear a stale cookie first, otherwise /login bounces straight back into the desk.
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     window.location.href = '/login';
     throw new Error('Sign in to continue.');
   }

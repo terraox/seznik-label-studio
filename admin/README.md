@@ -1,35 +1,40 @@
-# SEZ Print Desk
+# Seznik Admin Panel (SEZ Print Desk)
 
-Browser desk for the SEZ Print team. It lives in `admin/` so it stays separate from the Expo app and the printer backend.
+Same desk functionality as before (Overview, Library, Feedback, Settings), styled with the Seznik admin-panel UI.
 
 ```bash
 cd admin
+cp .env.example .env   # set SEZ_ADMIN_SECRET + DATABASE_URL
 npm install
+npx prisma db push     # mobile app users table
 npm run dev
 ```
 
 Open http://localhost:3000
 
-Sample sign-in (change these in Settings):
+## Desk sign-in
 
 - Owner: `seznikadmin` / `Seznik01!`
 - Editor: `editor@sez.local` / `sez-editor`
 
+(Change these in Settings.)
+
 ## Pages
 
-1. **Overview** — devices, published templates, and prints for today, the last 3 days, the last 7 days, this month, and lifetime. Template totals and printer names (Dev, LabelX, Tez, TD-404, Josh) are on the same page. CSV downloads sit in the header.
-2. **Library** — upload and manage templates, clipart, and stickers. A template needs a preview image plus the JSON document the phone editor loads (`designWidth`, `designHeight`, `layers`). Clipart accepts SVG or PNG. Stickers accept PNG or WebP.
-3. **Feedback** — reviews (rating, text, template, device, date) and a suggestions inbox (`new`, `reviewing`, `planned`, `rejected`, `shipped`).
-4. **Settings** — who can sign in, and whether they are an owner, editor, or viewer.
+1. **Overview** — devices, published templates, print counts, CSV export
+2. **Library** — templates, clipart, stickers
+3. **Feedback** — reviews and suggestions
+4. **Settings** — admin roles
 
-## Decisions from the brief
+## Mobile app auth (separate)
 
-- The count is **Devices**, not users. The phone app has no accounts. One install is one device.
-- Page 4 is **Settings** (admin roles). Managing templates that are already live sits on the Library page with upload, so you do not publish a file you cannot find again.
-- There was no design folder in the repo. The desk uses the app’s navy (`#214668`) and teal (`#17A6B8`) on warm paper.
+| Route | Purpose |
+|-------|---------|
+| `POST /api/app/register` | name, mobile, password |
+| `POST /api/app/login` | mobile + password |
+| `GET /api/app/me` | current app user |
+| `POST /api/app/printer` | set purchased printer (`tejas` \| `rudra` \| `josh`) |
 
-## Data
+Desk data still lives in `admin/data/store.json` + `admin/data/uploads`. App users live in Postgres via Prisma.
 
-The desk stores records in `admin/data/store.json` and files in `admin/data/uploads`. Both are created on first launch and are gitignored. `schema.sql` is the Postgres shape for when this moves to RDS. Uploaded files are local stand-ins for an S3 bucket; each record stores a URL.
-
-Set `SEZ_ADMIN_SECRET` before this desk is reachable beyond your computer. See `.env.example`.
+API inventory: http://localhost:3000/swagger

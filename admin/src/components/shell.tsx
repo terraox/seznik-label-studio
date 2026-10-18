@@ -3,77 +3,196 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import {
+  LayoutDashboard,
+  Library,
+  MessageSquare,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Calendar,
+  Clock,
+} from 'lucide-react';
+
 import { DeskProviders } from '@/components/desk';
+import { AnimatedThemeToggler } from '@/panel/components/AnimatedThemeToggler';
 import { api } from '@/lib/client';
 import type { Admin } from '@/lib/types';
 
 const NAV = [
-  { href: '/overview', label: 'Overview', hint: 'Devices and prints', idx: '01' },
-  { href: '/content', label: 'Library', hint: 'Templates and art', idx: '02' },
-  { href: '/feedback', label: 'Feedback', hint: 'Reviews and ideas', idx: '03' },
-  { href: '/settings', label: 'Settings', hint: 'Who can edit', idx: '04' },
+  { href: '/overview', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard },
+  { href: '/content', label: 'Library', shortLabel: 'Library', icon: Library },
+  { href: '/feedback', label: 'Feedback', shortLabel: 'Feedback', icon: MessageSquare },
+  { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [admin, setAdmin] = useState<Admin | null>(null);
-  const [open, setOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  // Null until mounted so the server and first client render agree.
+  const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
-    api<Admin>('/api/auth/me').then(setAdmin).catch(() => {});
+    api<Admin>('/api/auth/me')
+      .then(setAdmin)
+      .catch((error: Error) => setLoadError(error.message || 'Could not open the desk.'));
   }, []);
 
-  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => setMobileMenuOpen(false), [pathname]);
+
+  useEffect(() => {
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   async function signOut() {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.href = '/login';
   }
 
+  const formattedDate = now?.toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  });
+  const formattedTime = now?.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+  });
+
   return (
-    <div className="shell">
-      <header className="topbar">
-        <button type="button" onClick={() => setOpen(true)}>Menu</button>
-        <strong>SEZ Print</strong>
-      </header>
-      {open ? <button className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
-      <aside className={open ? 'sidebar open' : 'sidebar'}>
-        <div className="brand">
-          <span className="mark">S</span>
-          <span>
-            <strong>SEZ Print</strong>
-            <small>Desk</small>
-          </span>
-        </div>
-        <nav className="nav" aria-label="Desk">
-          {NAV.map((item) => (
-            <Link key={item.href} href={item.href} className={pathname.startsWith(item.href) ? 'active' : ''} aria-current={pathname.startsWith(item.href) ? 'page' : undefined}>
-              <span className="idx">{item.idx}</span>
-              <span>
-                <strong>{item.label}</strong>
-                <small>{item.hint}</small>
-              </span>
-            </Link>
-          ))}
-        </nav>
-        <div className="side-foot">
-          {admin ? (
-            <div className="who">
-              <span className="avatar">{admin.name.slice(0, 1)}</span>
-              <span>
-                <strong>{admin.name}</strong>
-                <small>{admin.role}</small>
-              </span>
-              <button type="button" className="btn small" onClick={signOut}>Sign out</button>
+    <div className="admin-app-shell">
+      <header className="admin-navbar">
+        <div className="admin-navbar-top">
+          <div className="admin-navbar-brand">
+            <img
+              src="/seznik_logo.png"
+              alt="Seznik"
+              className="navbar-logo"
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 10,
+                objectFit: 'contain',
+                boxShadow: '0 2px 8px rgba(59,130,246,0.18)',
+                flexShrink: 0,
+              }}
+            />
+            <div style={{ minWidth: 0 }}>
+              <h1 className="admin-navbar-title">Seznik Admin Panel</h1>
             </div>
-          ) : null}
+          </div>
+
+          <div className="admin-navbar-right">
+            <button
+              type="button"
+              className="admin-mobile-menu-btn"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+
+            <div className={`admin-navbar-actions${mobileMenuOpen ? ' is-open' : ''}`}>
+              <a
+                href="/swagger"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: '1px solid var(--tab-border)',
+                  background: 'var(--tab-bg)',
+                  color: 'var(--accent-blue)',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                API docs
+              </a>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: '1px solid var(--tab-border)',
+                  background: 'var(--tab-bg)',
+                  fontSize: '0.76rem',
+                  fontWeight: 600,
+                }}
+              >
+                <Calendar size={13} color="var(--accent-blue)" />
+                <span>{formattedDate}</span>
+                <span style={{ opacity: 0.5 }}>|</span>
+                <Clock size={13} color="#10B981" />
+                <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{formattedTime}</span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--navbar-text-muted)' }}>IST</span>
+              </div>
+
+              <AnimatedThemeToggler variant="circle" duration={500} />
+
+              {admin ? (
+                <button type="button" className="admin-logout-btn" onClick={signOut}>
+                  <LogOut size={14} />
+                  <span>
+                    {admin.name}
+                    <small style={{ display: 'block', fontWeight: 500, opacity: 0.7 }}>{admin.role}</small>
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
-      </aside>
-      <div className="main-wrap">
-        <main className="main" id="main">
-          {admin ? <DeskProviders admin={admin}>{children}</DeskProviders> : <p className="loading">Opening the desk…</p>}
-        </main>
-      </div>
+
+        <nav className={`admin-navbar-tabs${mobileMenuOpen ? ' is-open' : ''}`} aria-label="Desk">
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            const active = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`admin-navbar-tab${active ? ' is-active' : ''}`}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon size={15} />
+                <span className="tab-label-full">{item.label}</span>
+                <span className="tab-label-short">{item.shortLabel}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </header>
+
+      <main className="admin-main" id="main">
+        {admin ? (
+          <DeskProviders admin={admin}>{children}</DeskProviders>
+        ) : loadError ? (
+          <div className="note" role="alert">
+            <p style={{ margin: 0 }}>{loadError}</p>
+            <button type="button" className="btn primary" style={{ marginTop: 12 }} onClick={signOut}>
+              Sign in again
+            </button>
+          </div>
+        ) : (
+          <p className="loading">Opening the desk…</p>
+        )}
+      </main>
     </div>
   );
 }

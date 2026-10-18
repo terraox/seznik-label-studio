@@ -1,10 +1,14 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { AlertTriangle, Eye, EyeOff, Lock, LogIn, Shield, UserRound } from 'lucide-react';
+
+import { AnimatedThemeToggler } from '@/panel/components/AnimatedThemeToggler';
 
 export function LoginForm() {
   const [username, setUsername] = useState('seznikadmin');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
 
@@ -33,42 +37,79 @@ export function LoginForm() {
   }
 
   return (
-    <div className="login">
-      <section className="login-hero">
-        <div>
-          <p className="kicker" style={{ color: '#8fd4de' }}>SEZ Print</p>
-          <h1>The desk behind the labels.</h1>
-          <p>See which phones opened the app, what got printed, and keep the template library in one place.</p>
+    <div className="admin-login-shell">
+      <div className="admin-login-theme">
+        <AnimatedThemeToggler variant="circle" duration={500} />
+      </div>
+
+      <form className="admin-login-card" onSubmit={onSubmit}>
+        <div className="admin-login-brand">
+          <img src="/seznik_logo.png" alt="Seznik" className="navbar-logo admin-login-logo" />
+          <span className="badge badge-active admin-login-live">
+            <span className="pulse-dot" style={{ width: 6, height: 6 }} />
+            SEZ PRINT DESK
+          </span>
+          <h1>Seznik Admin Panel</h1>
+          <p>Devices, template library, feedback, and team access for SEZ Print.</p>
         </div>
-      </section>
-      <form className="login-card" onSubmit={onSubmit}>
-        <h2>Sign in</h2>
-        <p className="lede">This desk is for the SEZ team. The phone app stays sign-in free.</p>
-        <label className="field">
-          <span>Username</span>
-          <input
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            autoComplete="username"
-            type="text"
-            required
-          />
-        </label>
-        <label className="field">
-          <span>Password</span>
-          <input
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            autoComplete="current-password"
-            type="password"
-            required
-          />
-        </label>
-        {error ? <p className="err">{error}</p> : null}
-        <div className="form-actions">
-          <button className="btn primary" type="submit" disabled={pending}>
-            {pending ? 'Logging in…' : 'Login'}
-          </button>
+
+        {error ? (
+          <div className="admin-login-error" role="alert">
+            <AlertTriangle size={16} />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        <div className="admin-login-fields">
+          <label className="admin-login-field" htmlFor="desk-user">
+            Username
+          </label>
+          <div className="admin-login-input-wrap">
+            <UserRound size={16} className="admin-login-input-icon" aria-hidden />
+            <input
+              id="desk-user"
+              type="text"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="seznikadmin"
+              required
+            />
+          </div>
+
+          <label className="admin-login-field" htmlFor="desk-password">
+            Password
+          </label>
+          <div className="admin-login-input-wrap admin-login-input-wrap--password">
+            <Lock size={16} className="admin-login-input-icon" aria-hidden />
+            <input
+              id="desk-password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              required
+            />
+            <button
+              type="button"
+              className="admin-login-eye"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" className="admin-login-submit" disabled={pending}>
+          <LogIn size={16} />
+          {pending ? 'Signing in…' : 'Sign in to console'}
+        </button>
+
+        <div className="admin-login-foot">
+          <Shield size={13} />
+          Authorized operators only
         </div>
       </form>
     </div>
