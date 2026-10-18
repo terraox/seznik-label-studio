@@ -473,7 +473,9 @@ export default function NewLabelSetupScreen() {
         {showLayout ? (
           <WalkthroughTarget id="newLabel.across" style={styles.section}>
             <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Labels across</Text>
+              <Text style={styles.switchLabel}>
+                Labels across ({multi ? `${form.columns} ups` : 'e.g. 2 ups, 3 ups'})
+              </Text>
               <Switch
                 value={multi}
                 onValueChange={(on) => patch({ columns: on ? 2 : 1 })}
@@ -482,7 +484,7 @@ export default function NewLabelSetupScreen() {
               />
             </View>
             <Text style={styles.note}>
-              Use this when your roll is wide enough to print two or more labels side by side in one pass, such as 2-up tags or small stickers. Off prints one label per feed.
+              Turn this on when your roll is wide enough to print two or more labels next to each other in one go, such as small tags or stickers. Off prints one label at a time.
             </Text>
             {multi ? (
               <StepperRow

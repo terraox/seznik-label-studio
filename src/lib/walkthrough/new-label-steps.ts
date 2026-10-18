@@ -19,7 +19,7 @@ export const NEW_LABEL_WALKTHROUGH: readonly WalkthroughStep[] = [
     target: 'newLabel.across',
     scrolls: true,
     title: 'Labels across',
-    body: 'Turn this on if your roll fits 2 or more labels side by side. Leave it off for one label per row.',
+    body: 'Turn this on if your roll is wide enough to print 2 or more labels next to each other. Leave it off for one label at a time.',
   },
   {
     id: 'size',

@@ -222,7 +222,9 @@ export default function ExcelPrintScreen() {
 
         <View style={styles.section}>
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Labels across</Text>
+            <Text style={styles.switchLabel}>
+              Labels across ({multi ? `${form.columns} ups` : 'e.g. 2 ups, 3 ups'})
+            </Text>
             <Switch
               value={multi}
               onValueChange={(on) => patch({ columns: on ? 2 : 1 })}
@@ -231,7 +233,7 @@ export default function ExcelPrintScreen() {
             />
           </View>
           <Text style={styles.note}>
-            Use this when your roll is wide enough to print two or more labels side by side in one pass. Off prints one label per feed.
+            Turn this on when your roll is wide enough to print two or more labels next to each other in one go. Off prints one label at a time.
           </Text>
           {multi ? (
             <StepperRow
