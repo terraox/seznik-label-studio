@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Mobile app account. Password is stored hashed (bcrypt).
+model User {
+  id               String    @id @default(cuid())
+  name             String
+  mobile           String    @unique
+  passwordHash     String
+  /// Purchased printer: tejas | rudra | josh
+  printerName      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  lastLoginAt      DateTime?
+
+  @@index([printerName])
+  @@map("AppUser")
+}
