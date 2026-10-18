@@ -368,24 +368,19 @@ export default function ExcelBulkSetupScreen() {
 
         <WalkthroughTarget id="excel.copies">
         <View style={styles.copiesCard}>
-          <Text style={styles.copiesTitle}>How many labels for each row?</Text>
+          <Text style={styles.copiesTitle}>Quantity column (optional)</Text>
           <Text style={styles.copiesNote}>
             {copiesColumnName
-              ? `Each row prints the number in "${copiesColumnName}". Rows with a blank or 0 are skipped.`
-              : 'Every row prints 1 label. To print more, pick the column that has the number.'}
+              ? `Quantity comes from "${copiesColumnName}". Blank or 0 rows are skipped.`
+              : 'Optional. Tap a column that holds quantities, or leave it and set copies when printing.'}
           </Text>
           <View style={styles.sheetChips}>
-            <Pressable
-              onPress={() => selectCopiesColumn(null)}
-              style={[styles.chip, activeCopiesIndex == null && styles.chipOn]}>
-              <Text style={[styles.chipText, activeCopiesIndex == null && styles.chipTextOn]}>1 each</Text>
-            </Pressable>
             {copiesChoices.map((columnIndex) => {
               const active = columnIndex === activeCopiesIndex;
               return (
                 <Pressable
                   key={`copies-${columnIndex}`}
-                  onPress={() => selectCopiesColumn(columnIndex)}
+                  onPress={() => selectCopiesColumn(active ? null : columnIndex)}
                   style={[styles.chip, active && styles.chipOn]}>
                   <Text style={[styles.chipText, active && styles.chipTextOn]} numberOfLines={1}>
                     {sheet.columns[columnIndex]}
@@ -396,7 +391,7 @@ export default function ExcelBulkSetupScreen() {
           </View>
           {copiesChoices.length === 0 ? (
             <Text style={styles.copiesNote}>
-              No column with numbers found. Add one (like Qty) to your sheet to print more than 1 per row.
+              No number column found. Add one (like Qty) to print different quantities.
             </Text>
           ) : null}
           {copiesWarning ? <Text style={styles.copiesNote}>{copiesWarning}</Text> : null}

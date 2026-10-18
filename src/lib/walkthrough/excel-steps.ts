@@ -33,8 +33,8 @@ export const EXCEL_COLUMNS_WALKTHROUGH: readonly WalkthroughStep[] = [
     id: 'copies',
     target: 'excel.copies',
     scrolls: true,
-    title: 'How many labels per row',
-    body: 'Pick "1 each" to print every row once. If your sheet has a column with numbers, such as Qty, pick it and each row prints that many labels. Rows with a blank or 0 are skipped.',
+    title: 'Quantity column',
+    body: 'Optional. Tap a number column (like Qty) to print that many labels per row, tap it again to clear. Blank or 0 rows are skipped. Without one, set copies when printing.',
   },
   {
     id: 'columns',
