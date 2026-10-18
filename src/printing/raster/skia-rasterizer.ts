@@ -37,8 +37,10 @@ import { visibleWrappedLines } from '@/lib/visible-text-layout';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { stretchThenRoundBars } from './barcode-stretch';
 import { whitenOutsideUpsTiles } from './bitmap';
+import type { LabelOrientation } from '@/lib/label-document';
+import { rotateGray } from '@/lib/printer/escpos';
 import { packGrayToMono1bpp } from './bit-packer';
-import { drawJoshEdgeBorder, drawPrintBorder, drawTd404EdgeBorder } from './print-border';
+import { borderStrokeMmOf, drawJoshEdgeBorder, drawPrintBorder, drawTd404EdgeBorder } from './print-border';
 import { borderShapeForMedia } from './border-shapes';
 import { applyInkDarkness, rectsToPx, scanCodeRectsMm } from './ink-darkness';
 import { drawQrMeet } from './qr-meet';
@@ -66,6 +68,16 @@ export type RasterizeOptions = {
    * (border included) moves by the same amount. Ink pushed past an edge is cropped.
    */
   shiftDots?: { x: number; y: number };
+  /**
+   * TD-404 production. Rotate the finished label by this many degrees clockwise in dots
+   * (exact quarter turns, no resampling), so rotated jobs go out as the same mono bitmap
+   * as unrotated ones. `shiftDots` then moves the label in its own frame (before the turn);
+   * `paperShiftDots` and the border layer work in the paper frame (after it). Needs
+   * `edgeBorders`. 90/270 swap the page: the bitmap is `heightMm` wide and `widthMm` tall.
+   */
+  rotationDeg?: LabelOrientation;
+  /** With `rotationDeg`: printer registration shift in the rotated paper frame. */
+  paperShiftDots?: { x: number; y: number };
   /**
    * Byte-align the page width. `floor` (default, TD-404) drops a partial last byte.
    * `ceil` (JOSH) keeps those dots and pads white on the right.
@@ -361,7 +373,17 @@ export function rasterizeDocumentToBitmapTimed(
   dpi: number,
   options: RasterizeOptions = {},
 ): RasterizeTiming {
-  const page = packedPageDots(doc.widthMm, doc.heightMm, dpi, options.pageWidthPack ?? 'floor');
+  const rotationDeg: LabelOrientation =
+    options.rotationDeg != null && options.edgeBorders != null && (options.dotScale ?? 1) === 1
+      ? options.rotationDeg
+      : 0;
+  // A rotated label is drawn on its own full-width page (no byte crop) and cropped after the turn.
+  const page = packedPageDots(
+    doc.widthMm,
+    doc.heightMm,
+    dpi,
+    rotationDeg !== 0 ? 'ceil' : (options.pageWidthPack ?? 'floor'),
+  );
   const { packedW, packedH } = page;
   const threshold = options.threshold ?? 160;
   activeDotScale = Math.max(1, Math.round(options.dotScale ?? 1));
@@ -419,7 +441,28 @@ export function rasterizeDocumentToBitmapTimed(
       pitch: mmToDots(tile.cellWidthMm + tile.gapMm, dpi) * scale,
     });
   }
-  if (activeEdgeBorders) {
+  let outWidth = surfW;
+  let outHeight = surfH;
+  if (activeEdgeBorders && rotationDeg !== 0) {
+    const turned = turnLabelToPaper(gray, surfW, page, rotationDeg, doc, dpi, options.paperShiftDots);
+    gray = turned.gray;
+    outWidth = turned.width;
+    outHeight = turned.height;
+    gray = mergeEdgeBorders(
+      gray,
+      turned.paperDoc,
+      dpi,
+      outWidth,
+      outHeight,
+      {
+        x: Math.round(options.edgeBorders?.shiftDots?.x ?? 0),
+        y: Math.round(options.edgeBorders?.shiftDots?.y ?? 0),
+      },
+      threshold,
+      steps,
+      borderGapMm,
+    );
+  } else if (activeEdgeBorders) {
     // Same crop the native side applied before (sizeDotsW), then the border layer.
     whitenColumns(gray, surfW, surfH, page.sizeDotsW);
     gray = mergeEdgeBorders(
@@ -444,8 +487,8 @@ export function rasterizeDocumentToBitmapTimed(
   const tPack0 = performance.now();
   const packed = packGrayToMono1bpp(
     gray,
-    surfW,
-    surfH,
+    outWidth,
+    outHeight,
     threshold,
     options.target?.mono1bppBuffer,
   );
@@ -453,15 +496,15 @@ export function rasterizeDocumentToBitmapTimed(
 
   const result: RasterBitmap = options.target
     ? (() => {
-        options.target!.widthDots = surfW;
-        options.target!.heightDots = surfH;
+        options.target!.widthDots = outWidth;
+        options.target!.heightDots = outHeight;
         options.target!.bytesPerRow = packed.bytesPerRow;
         options.target!.mono1bppBuffer = packed.mono1bppBuffer;
         return options.target!;
       })()
     : {
-        widthDots: surfW,
-        heightDots: packedH * activeDotScale,
+        widthDots: outWidth,
+        heightDots: rotationDeg !== 0 ? outHeight : packedH * activeDotScale,
         bytesPerRow: packed.bytesPerRow,
         mono1bppBuffer: packed.mono1bppBuffer,
       };
@@ -477,6 +520,61 @@ export function rasterizeDocumentToBitmapTimed(
     backend: surface.backend,
     result,
     gray,
+  };
+}
+
+/**
+ * Rotated TD-404 job. `gray` is the finished label page (label frame, user shift applied,
+ * `surfW` wide). Crop it to the label, turn it, fit the result to the paper's byte-packed
+ * width, then apply the printer registration shift in the paper frame.
+ */
+function turnLabelToPaper(
+  gray: Uint8Array,
+  surfW: number,
+  page: { sizeDotsW: number; sizeDotsH: number },
+  rotationDeg: LabelOrientation,
+  doc: LabelDocument,
+  dpi: number,
+  paperShiftDots?: { x: number; y: number },
+): { gray: Uint8Array; width: number; height: number; paperDoc: LabelDocument } {
+  const labelW = page.sizeDotsW;
+  const labelH = page.sizeDotsH;
+  const cropped = new Uint8Array(labelW * labelH);
+  for (let y = 0; y < labelH; y++) {
+    cropped.set(gray.subarray(y * surfW, y * surfW + labelW), y * labelW);
+  }
+  const turned = rotateGray({ width: labelW, height: labelH, gray: cropped }, rotationDeg);
+  const quarter = rotationDeg === 90 || rotationDeg === 270;
+  // Borders are drawn on the paper page, so their boxes turn with it (a full-bleed border stays
+  // full-bleed; a 2-up cell border keeps framing the same half).
+  const turnBox = (el: Extract<LabelElement, { type: 'border' }>) => {
+    const { left: l, top: t, width: w, height: h } = el;
+    const W = doc.widthMm;
+    const H = doc.heightMm;
+    if (rotationDeg === 90) return { ...el, left: H - t - h, top: l, width: h, height: w };
+    if (rotationDeg === 270) return { ...el, left: t, top: W - l - w, width: h, height: w };
+    return { ...el, left: W - l - w, top: H - t - h };
+  };
+  const paperDoc = {
+    ...doc,
+    widthMm: quarter ? doc.heightMm : doc.widthMm,
+    heightMm: quarter ? doc.widthMm : doc.heightMm,
+    elements: doc.elements.map((el) => (el.type === 'border' ? turnBox(el) : el)),
+  };
+  const paper = packedPageDots(paperDoc.widthMm, paperDoc.heightMm, dpi, 'floor');
+  const width = paper.packedW;
+  const height = turned.height;
+  const fitted = new Uint8Array(width * height);
+  fitted.fill(255);
+  const copyW = Math.min(width, turned.width);
+  for (let y = 0; y < height; y++) {
+    fitted.set(turned.gray.subarray(y * turned.width, y * turned.width + copyW), y * width);
+  }
+  return {
+    gray: shiftGray(fitted, width, height, Math.round(paperShiftDots?.x ?? 0), Math.round(paperShiftDots?.y ?? 0)),
+    width,
+    height,
+    paperDoc,
   };
 }
 
@@ -520,7 +618,7 @@ function mergeEdgeBorders(
   for (const el of sortLayers(doc.elements)) {
     if (activeBakeFeed && isEdgeBorder(el, doc)) {
       drawTd404EdgeBorder({ fillRect }, el, dpi, pageDots, shift);
-      const o = td404BorderOuterDots(pageDots.widthDots, pageDots.heightDots, dpi, td404BorderGapMm(el.edgeGapMm));
+      const o = td404BorderOuterDots(pageDots.widthDots, pageDots.heightDots, dpi, td404BorderGapMm(el.edgeGapMm), borderStrokeMmOf(el));
       console.info(
         `[TD404-BORDER] layer x ${o.x0}-${o.x1} y ${o.y0}-${o.y1} dots of ${pageDots.widthDots}x${pageDots.heightDots} | shift ${shift.x},${shift.y}`,
       );

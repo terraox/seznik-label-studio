@@ -14,7 +14,7 @@ import { fitLabelSize, mediaShapeClipStyle } from '@/lib/label-geometry';
 import { printGridKnockoutsMm, printGridSpacingMm } from '@/lib/print-grid';
 import { printRulerEnabled } from '@/lib/print-ruler';
 import { dotsPerMm, rectMmToDots, td404BorderGapMm, td404BorderOuterDots } from '@/lib/printer/print-spec';
-import { borderCoversBitmap } from '@/printing/raster/print-border';
+import { borderCoversBitmap, borderStrokeMmOf } from '@/printing/raster/print-border';
 import { canvasFillFromDocument, sortLayers, templateUsesDieCutBackground } from '@/lib/template-schema';
 import { referenceImageDisplayUri } from '@/lib/reference-image';
 
@@ -210,7 +210,7 @@ function LabelElements({
             bakeTd404Feed &&
             element.type === 'border' &&
             borderCoversBitmap(element, printDpi, pageW, pageH)
-              ? td404BorderOuterDots(pageW, pageH, printDpi, td404BorderGapMm(element.edgeGapMm))
+              ? td404BorderOuterDots(pageW, pageH, printDpi, td404BorderGapMm(element.edgeGapMm), borderStrokeMmOf(element))
               : null;
           const box = outer
             ? {

@@ -30,12 +30,21 @@ export type DrawPrintBorderOpts = {
   mediaShape?: string;
 };
 
-/** A full-label frame sits within this of every page edge. A cell border does not. */
-const PAGE_BORDER_SLACK_MM = 6;
+/** Line width of a border element in mm, falling back to its style's default. */
+export function borderStrokeMmOf(el: { lineWidth?: number; borderStyle?: string | null }): number {
+  return el.lineWidth != null && el.lineWidth > 0 ? el.lineWidth : borderStrokeFallbackMm(el.borderStyle);
+}
+
+/** A full-label frame is centred on the page: its left and right margins match, as do top and bottom. */
+const PAGE_BORDER_SYMMETRY_MM = 1;
 
 /**
  * True when this border is the frame of the whole bitmap.
  * A 2-up cell border covers one half, so it must keep its own rectangle.
+ *
+ * Symmetric margins identify a full frame at any distance from the edge. The old test required
+ * every edge to be within 6 mm of the page, so a border set 6 mm or more from the edge stopped
+ * counting as a full frame and was printed without the calibrated position.
  */
 export function borderCoversBitmap(
   el: { left: number; top: number; width: number; height: number },
@@ -44,12 +53,21 @@ export function borderCoversBitmap(
   bitmapHeightDots: number,
 ): boolean {
   if (bitmapWidthDots <= 0 || bitmapHeightDots <= 0) return false;
-  const slack = mmToDots(PAGE_BORDER_SLACK_MM, dpi);
+  const tol = mmToDots(PAGE_BORDER_SYMMETRY_MM, dpi);
   const x0 = mmToDots(el.left, dpi);
   const y0 = mmToDots(el.top, dpi);
   const x1 = mmToDots(el.left + el.width, dpi);
   const y1 = mmToDots(el.top + el.height, dpi);
-  return x0 <= slack && y0 <= slack && x1 >= bitmapWidthDots - slack && y1 >= bitmapHeightDots - slack;
+  const marginLeft = x0;
+  const marginRight = bitmapWidthDots - x1;
+  const marginTop = y0;
+  const marginBottom = bitmapHeightDots - y1;
+  return (
+    marginLeft >= -tol &&
+    marginTop >= -tol &&
+    Math.abs(marginLeft - marginRight) <= tol &&
+    Math.abs(marginTop - marginBottom) <= tol
+  );
 }
 
 /** Inward frame from the border element's rectangle, clipped to the sent bitmap. */
@@ -72,7 +90,7 @@ export function drawPrintBorder(
   let x1: number;
   let y1: number;
   if (baked) {
-    const outer = td404BorderOuterDots(bitmapW, bitmapH, dpi, td404BorderGapMm(el.edgeGapMm));
+    const outer = td404BorderOuterDots(bitmapW, bitmapH, dpi, td404BorderGapMm(el.edgeGapMm), borderStrokeMmOf(el));
     x0 = outer.x0 * s;
     y0 = outer.y0 * s;
     x1 = outer.x1 * s;
@@ -217,7 +235,7 @@ export function drawTd404EdgeBorder(
     );
     return;
   }
-  const outer = td404BorderOuterDots(label.widthDots, label.heightDots, dpi, td404BorderGapMm(el.edgeGapMm));
+  const outer = td404BorderOuterDots(label.widthDots, label.heightDots, dpi, td404BorderGapMm(el.edgeGapMm), borderStrokeMmOf(el));
   drawInwardFrameInBox(
     target,
     Math.max(1, outer.x1 - outer.x0),

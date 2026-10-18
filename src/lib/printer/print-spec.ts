@@ -116,13 +116,34 @@ export const TD404_MEDIA_ORIGIN_H_MM = 0;
 export const TD404_ELEMENT_SHIFT_H_MM = 0;
 export const TD404_ELEMENT_SHIFT_V_MM = 2;
 
+/**
+ * Rudra element shift. Its scale preview showed content 3 mm too low with the Tejas shift
+ * (0, 2), so Rudra moves 3 mm up: (0, -1).
+ */
+export const RUDRA_ELEMENT_SHIFT_MM = { x: 0, y: -1 };
+
+/** True when Rudra is the selected printer. Tejas (and no store at all) is false. */
+function rudraSelected(): boolean {
+  try {
+    // Lazy: the store pulls in AsyncStorage, which pure raster code and tests must not load.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { usePrinterStore } = require('@/stores/printer-store');
+    return usePrinterStore.getState().selectedPrinterModel === 'rudra';
+  } catch {
+    return false;
+  }
+}
+
 export function td404ContentShiftMm(offsetMm: { x: number; y: number } = { x: 0, y: 0 }): {
   x: number;
   y: number;
 } {
+  const shift = rudraSelected()
+    ? RUDRA_ELEMENT_SHIFT_MM
+    : { x: TD404_ELEMENT_SHIFT_H_MM, y: TD404_ELEMENT_SHIFT_V_MM };
   return {
-    x: offsetMm.x + TD404_ELEMENT_SHIFT_H_MM,
-    y: offsetMm.y + TD404_ELEMENT_SHIFT_V_MM,
+    x: offsetMm.x + shift.x,
+    y: offsetMm.y + shift.y,
   };
 }
 
@@ -132,6 +153,14 @@ export function td404ContentShiftDots(
 ): { x: number; y: number } {
   const shift = td404ContentShiftMm(offsetMm);
   return { x: mmToDots(shift.x, dpi), y: mmToDots(shift.y, dpi) };
+}
+
+/** User H/V offset alone, in dots, for a rotated TD-404 job (label frame, before the turn). */
+export function td404UserShiftDots(
+  dpi: number,
+  offsetMm: { x: number; y: number } = { x: 0, y: 0 },
+): { x: number; y: number } {
+  return { x: mmToDots(offsetMm.x, dpi), y: mmToDots(offsetMm.y, dpi) };
 }
 
 /**
@@ -177,21 +206,22 @@ export const TD404_DIECUT_CENTER_OFFSET_MM = { x: 0.25, y: 1 };
 /**
  * Rudra's media registration. Print at gap 3 with the Tejas offset (0.25, 1), read off the
  * label (left/right/top/bottom, mm): 2.5 / 1.5 / 4.5 / 0.5. The border sat 0.5 mm too far
- * right and 2 mm too low, so the centre moved to (-0.25, -1).
+ * right and 2 mm too low, so the centre moved to (-0.25, -1). The next Rudra print needed the
+ * border 0.5 mm further left: (-0.75, -1).
  */
-export const RUDRA_DIECUT_CENTER_OFFSET_MM = { x: -0.25, y: -1 };
+export const RUDRA_DIECUT_CENTER_OFFSET_MM = { x: -0.25, y: -1.5 };
+
+/**
+ * Rudra 50x30 at gap 3, measured from the border centre to the die-cut (left/right/top/bottom):
+ * 2.5 / 3 / 3.5 / 2.5, and the same pattern at gap 2. Top was 1 mm bigger than bottom, so y moves
+ * 0.5 mm up (-1.5). Left was 0.5 mm smaller than right, and the two summed 0.5 mm short, so x
+ * moves 0.5 mm right (-0.25) and the border is 0.5 mm narrower on the right.
+ */
+export const RUDRA_BORDER_WIDTH_EXTRA_MM = -0.5;
 
 /** Die-cut centre offset for the selected printer. Tejas unless Rudra is selected. */
 export function td404DiecutCenterOffsetMm(): { x: number; y: number } {
-  try {
-    // Lazy: the store pulls in AsyncStorage, which pure raster code and tests must not load.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { usePrinterStore } = require('@/stores/printer-store');
-    if (usePrinterStore.getState().selectedPrinterModel === 'rudra') return RUDRA_DIECUT_CENTER_OFFSET_MM;
-  } catch {
-    // No store (tests, headless): Tejas.
-  }
-  return TD404_DIECUT_CENTER_OFFSET_MM;
+  return rudraSelected() ? RUDRA_DIECUT_CENTER_OFFSET_MM : TD404_DIECUT_CENTER_OFFSET_MM;
 }
 
 /**
@@ -214,6 +244,9 @@ export const TD404_BORDER_BOTTOM_MM = TD404_BORDER_GAP_MM - TD404_DIECUT_CENTER_
  */
 export const TD404_BORDER_SHIFT_MM = { x: 0, y: 0 };
 
+/** Line width (Solid Medium, the default) the TD-404 border offsets were measured with. */
+export const TD404_BORDER_REF_STROKE_MM = 0.55;
+
 /**
  * Outer edge of a TD-404 border in printer dots. Finds the die-cut centre
  * (label centre plus the media registration offset), then grows half of
@@ -224,19 +257,27 @@ export function td404BorderOuterDots(
   heightDots: number,
   dpi: number,
   gapMm: number = TD404_BORDER_GAP_MM,
+  strokeMm?: number,
 ): { x0: number; y0: number; x1: number; y1: number } {
-  const extra = mmToDots(TD404_BORDER_WIDTH_EXTRA_MM, dpi);
+  const extra = mmToDots(rudraSelected() ? RUDRA_BORDER_WIDTH_EXTRA_MM : TD404_BORDER_WIDTH_EXTRA_MM, dpi);
   const offset = td404DiecutCenterOffsetMm();
   const cx = widthDots / 2 + mmToDots(offset.x, dpi) + extra / 2;
   const cy = heightDots / 2 + mmToDots(offset.y, dpi);
-  const gap = mmToDots(gapMm, dpi);
+  // The distance is to the CENTRE of the line, so a thicker line must grow outward and a thinner
+  // one inward. The offsets above were fitted at TD404_BORDER_REF_STROKE_MM, so that stroke is
+  // the zero point and the calibrated print does not move.
+  const strokeBiasMm = strokeMm != null && strokeMm > 0 ? (strokeMm - TD404_BORDER_REF_STROKE_MM) / 2 : 0;
+  const gap = mmToDots(gapMm - strokeBiasMm, dpi);
   const halfW = Math.max(0.5, widthDots / 2 - gap + extra / 2);
   const halfH = Math.max(0.5, heightDots / 2 - gap);
+  // The bitmap is the only thing that can be printed. Where the die-cut sits outside it (Rudra's
+  // bitmap starts 1.5 mm inside the label), a small distance would put a side off the bitmap and
+  // that side vanished. Clamp to the bitmap so the side prints at the nearest possible spot.
   return {
-    x0: Math.round(cx - halfW),
-    y0: Math.round(cy - halfH),
-    x1: Math.round(cx + halfW),
-    y1: Math.round(cy + halfH),
+    x0: Math.max(0, Math.round(cx - halfW)),
+    y0: Math.max(0, Math.round(cy - halfH)),
+    x1: Math.min(widthDots, Math.round(cx + halfW)),
+    y1: Math.min(heightDots, Math.round(cy + halfH)),
   };
 }
 

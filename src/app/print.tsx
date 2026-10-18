@@ -128,6 +128,7 @@ import {
   createPrintSpec,
   TD404_BORDER_GAP_MM,
   td404ContentShiftDots,
+  td404UserShiftDots,
   td404ContentShiftMm,
   td404EdgeBorderOptions,
 } from '@/lib/printer/print-spec';
@@ -1256,9 +1257,11 @@ export default function PrintScreen() {
       });
       const { density: printDensity, threshold, speed: qualitySpeed, dither } = quality;
       const inkSteps = darknessSteps(darkness, jobCaps);
-      // TD-404 at 0°: the saved offset, plus 1 mm right and 1 mm down, is drawn
+      // TD-404 at 0°: the saved offset, plus the fixed element shift, is drawn
       // into the elements. The border is a later layer and stays put. Rotated
-      // jobs send the saved offset on REFERENCE instead.
+      // headless jobs do the same in dots (offset before the turn, registration
+      // after it) and send 0 on REFERENCE; only the ViewShot fallback of a
+      // rotated job still sends the saved offset on REFERENCE.
       const bakeOffset = manager.usesTd404CommandSet && orientationDeg === 0;
       const offsetH = bakeOffset ? 0 : printOffsetMm.x;
       const offsetV = bakeOffset ? 0 : printOffsetMm.y;
@@ -1408,13 +1411,14 @@ export default function PrintScreen() {
           }
         }
 
+        // Rotated jobs are turned in dots too: the doc is the un-turned label, the paper is turned.
+        const quarterTurn = orientationDeg === 90 || orientationDeg === 270;
         td404HeadlessMono =
           manager.usesTd404CommandSet &&
-          orientationDeg === 0 &&
           pageDoc != null &&
           canHeadlessRasterPrint(pageDoc) &&
-          Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
-          Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
+          Math.abs(pageDoc.widthMm - (quarterTurn ? paper.heightMm : paper.widthMm)) <= 0.2 &&
+          Math.abs(pageDoc.heightMm - (quarterTurn ? paper.widthMm : paper.heightMm)) <= 0.2;
         joshHeadlessCandidate =
           manager.isJosh &&
           orientationDeg === 0 &&
@@ -1877,7 +1881,15 @@ export default function PrintScreen() {
                   darknessSteps: inkSteps,
                   bakeTd404Feed: true,
                   edgeBorders: td404EdgeBorderOptions(jobDpi),
-                  shiftDots: bakeOffset ? td404ContentShiftDots(jobDpi, printOffsetMm) : undefined,
+                  // 0°: offset and registration shift the elements together. Rotated: the offset
+                  // moves the label before the turn, registration is applied to the paper after it.
+                  ...(orientationDeg === 0
+                    ? { shiftDots: td404ContentShiftDots(jobDpi, printOffsetMm) }
+                    : {
+                        rotationDeg: orientationDeg,
+                        shiftDots: td404UserShiftDots(jobDpi, printOffsetMm),
+                        paperShiftDots: td404ContentShiftDots(jobDpi),
+                      }),
                 });
                 bitmap = timed.result;
                 rasterizeMs = timed.rasterizeMs;
@@ -1891,14 +1903,15 @@ export default function PrintScreen() {
                 widthDots: bitmap.widthDots,
                 heightDots: bitmap.heightDots,
                 bytesPerRow: bitmap.bytesPerRow,
-                widthMm: pageDoc.widthMm,
-                heightMm: pageDoc.heightMm,
+                widthMm: paper.widthMm,
+                heightMm: paper.heightMm,
                 gapMm: td404Job?.gapMm ?? gapLength,
                 copies: sendCopies,
                 density: td404Job?.density ?? printDensity,
                 speed: td404Job?.speed ?? printSpeed,
-                vOffsetMm: offsetV,
-                hOffsetMm: offsetH,
+                // Everything is already in the bitmap: no printer-side shift.
+                vOffsetMm: 0,
+                hOffsetMm: 0,
                 media: td404Job?.media ?? media,
                 dpi: jobDpi,
               });
@@ -2735,7 +2748,7 @@ export default function PrintScreen() {
                     });
                     const total = `H ${printOffsetMm.x.toFixed(2)} mm, V ${printOffsetMm.y.toFixed(2)} mm`;
                     if (!unrotatedJob) {
-                      return `Total offset ${total} (this printer plus Label Settings). Rotated jobs send it on REFERENCE.`;
+                      return `Total offset ${total} (this printer plus Label Settings). The label is turned in dots, elements move and the border stays put.`;
                     }
                     return `Total offset ${total} (this printer plus Label Settings), plus 0 mm across and 2 mm down on text and codes. The border is its own layer and stays ${TD404_BORDER_GAP_MM} mm from the die-cut on every side.`;
                   })()}

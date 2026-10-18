@@ -110,7 +110,7 @@ export function BorderPropertyPanel({
       <View style={styles.divider} />
       <View style={styles.gapRow}>
         <Text style={styles.rowLabel}>
-          Distance from edge (mm, {gapMin}–{gapMax})
+          Distance to line centre (mm, {gapMin}–{gapMax})
         </Text>
         <TextInput
           style={styles.gapInput}
