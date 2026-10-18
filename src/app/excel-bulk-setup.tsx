@@ -370,7 +370,7 @@ export default function ExcelBulkSetupScreen() {
         <View style={styles.copiesCard}>
           <View style={styles.displayHeadRow}>
             <Text style={[styles.copiesTitle, { flex: 1 }]}>
-              Print a different number of copies for each label?
+              Print a different number of copies for each label
             </Text>
             <Switch
               value={differentCopies}
