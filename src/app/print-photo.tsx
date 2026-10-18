@@ -19,7 +19,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 
 import { PhotoFramePreview } from '@/components/photo-frame-preview';
-import { PrintSizeSelector } from '@/components/print-size-selector';
 import { getPhotoFrame } from '@/constants/photo-frames';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { type LabelSizeMm } from '@/lib/label-geometry';
@@ -211,7 +210,6 @@ export default function PrintPhotoScreen() {
   const [antiColor, setAntiColor] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [footerHeight, setFooterHeight] = useState(72);
-  const [sizeSheetOpen, setSizeSheetOpen] = useState(false);
   const [printSize, setPrintSize] = useState<LabelSizeMm | null>(null);
   const [suggestedSize, setSuggestedSize] = useState<LabelSizeMm | null>(() => {
     const w = Number(params.imageWidth);
@@ -793,7 +791,10 @@ export default function PrintPhotoScreen() {
         </Pressable>
         <Pressable
           disabled={printing}
-          onPress={() => setSizeSheetOpen(true)}
+          onPress={() => {
+            pendingPrintRef.current = true;
+            setPrintSize({ widthMm: jobWidthMm, heightMm: jobHeightMm });
+          }}
           style={({ pressed }) => [styles.printBtn, (pressed || printing) && styles.pressed]}>
           {printing ? (
             <ActivityIndicator color="#FFFFFF" /* theme-fixed: on accent button */ />
@@ -803,19 +804,6 @@ export default function PrintPhotoScreen() {
         </Pressable>
       </View>
 
-      <PrintSizeSelector
-        visible={sizeSheetOpen}
-        intent={isFrame ? 'label' : 'artwork'}
-        suggestedSize={isFrame ? null : suggestedSize}
-        initialWidthMm={jobWidthMm}
-        initialHeightMm={jobHeightMm}
-        onCancel={() => setSizeSheetOpen(false)}
-        onSelect={(size) => {
-          pendingPrintRef.current = true;
-          setPrintSize(size);
-          setSizeSheetOpen(false);
-        }}
-      />
       {imageSourceSheet}
     </View>
   );

@@ -24,7 +24,6 @@ import {
   DEFAULT_QRCODE_STATE,
 } from '@/components/editor/types';
 import { LabelPreview } from '@/components/label-preview';
-import { PrintSizeSelector } from '@/components/print-size-selector';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Type } from '@/constants/ui';
 import {
@@ -657,7 +656,6 @@ export default function PrintScreen() {
   const [zoom, setZoom] = useState(1);
   const [pageIndex, setPageIndex] = useState(0);
   const [printing, setPrinting] = useState(false);
-  const [sizeSheetOpen, setSizeSheetOpen] = useState(false);
   const [printSize, setPrintSize] = useState<LabelSizeMm>(defaultPrintSize);
   const [printPreset, setPrintPreset] = useState<PrintSizePreset | null>(defaultPreset);
   const [showAdvanced, setShowAdvanced] = useState(true);
@@ -2778,24 +2776,6 @@ export default function PrintScreen() {
         </Pressable>
       ) : null}
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}>
-        {/* Size picker — opens sheet to choose a different paper/label size. */}
-        <Pressable
-          disabled={printing || isPdfJob || ratTail143Job || cableFlagJob}
-          onPress={() => setSizeSheetOpen(true)}
-          hitSlop={8}
-          style={({ pressed }) => [
-            styles.sizeBtn,
-            (pressed || isPdfJob || ratTail143Job || cableFlagJob) && styles.pressed,
-          ]}>
-          <AppIcon name="rectangle.dashed" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on a coloured button */ />
-          <Text style={styles.sizeBtnText} numberOfLines={1}>
-            {ratTail143Job
-              ? `${RAT_TAIL_143_PRINT.widthMm.toFixed(2)}×${RAT_TAIL_143_PRINT.heightMm.toFixed(2)}mm`
-              : activeDoc
-                ? `${(Math.round(activeDoc.widthMm * 100) / 100).toFixed(2)}×${(Math.round(activeDoc.heightMm * 100) / 100).toFixed(2)}mm`
-                : 'Size'}
-          </Text>
-        </Pressable>
         {/* Print button — prints the active label at its selected/previewed dimensions */}
         <Pressable
           disabled={printing}
@@ -2811,19 +2791,6 @@ export default function PrintScreen() {
           )}
         </Pressable>
       </View>
-
-      <PrintSizeSelector
-        visible={sizeSheetOpen}
-        initialWidthMm={previewDocument?.widthMm ?? defaults.labelWidth}
-        initialHeightMm={previewDocument?.heightMm ?? defaults.labelHeight}
-        onCancel={() => setSizeSheetOpen(false)}
-        onSelect={(size, preset) => {
-          const media = printMediaSizeMm(size.widthMm, size.heightMm);
-          setPrintSize(media);
-          setPrintPreset(preset);
-          setSizeSheetOpen(false);
-        }}
-      />
     </View>
   );
 }
@@ -3248,21 +3215,6 @@ const styles = themedStyles((c, scheme) => ({
     backgroundColor: c.successFill,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sizeBtn: {
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: c.neutralFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 14,
-    gap: 6,
-  },
-  sizeBtnText: {
-    color: c.onAccent,
-    fontSize: 12,
-    fontWeight: '600',
   },
   printBtn: {
     flex: 1,

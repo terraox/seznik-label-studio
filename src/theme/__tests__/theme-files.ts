@@ -125,7 +125,6 @@ export const CONVERTED_FILES: string[] = [
   'src/components/pdf-editor/pdf-sharpness-tool.tsx',
   'src/components/pdf-editor/pdf-tool-panel.tsx',
   'src/components/pdf-editor/pdf-watermark-tool.tsx',
-  'src/components/print-size-selector.tsx',
   'src/components/printers/battery-level-icon.tsx',
   'src/components/printers/connect/advanced-connect.tsx',
   'src/components/printers/connect/bluetooth-blockers.tsx',
