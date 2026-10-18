@@ -6,6 +6,8 @@ export type LastBridgeDevice = {
   id: string;
   name: string;
   consumer: ConsumerPrinterId;
+  /** Epoch ms of the last successful connection. Missing on entries saved before this existed. */
+  connectedAt?: number;
 };
 
 /** Default native transport when the user picks a family card on Connect. */

@@ -11,6 +11,8 @@ type LastConnectedPrinterProps = {
   bridgeLabel: string;
   deviceName: string;
   deviceId: string;
+  /** Epoch ms of the last successful connection. */
+  connectedAt?: number;
   connecting: boolean;
   visible: boolean;
   nearby: boolean;
@@ -24,6 +26,7 @@ export function LastConnectedPrinter({
   bridgeLabel,
   deviceName,
   deviceId,
+  connectedAt,
   connecting,
   visible,
   nearby,
@@ -37,6 +40,7 @@ export function LastConnectedPrinter({
   const displayName = deviceName?.trim() || modelName;
   const mac = normalizePrinterMac(deviceId);
   const status = statusCopy({ nearby, scanning, autoConnectPaused });
+  const last = connectedAt ? formatLastConnected(connectedAt) : null;
 
   return (
     <View style={styles.wrap}>
@@ -55,6 +59,13 @@ export function LastConnectedPrinter({
                 <Text style={[styles.statusText, { color: status.tone }]}>{status.label}</Text>
               </View>
             </View>
+            {last ? (
+              <View style={styles.lastWrap} accessibilityLabel={`Last connected ${last.date} ${last.time}`}>
+                <Text style={styles.lastLabel}>Last connected</Text>
+                <Text style={styles.lastDate}>{last.date}</Text>
+                <Text style={styles.lastTime}>{last.time}</Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.chips}>
@@ -95,6 +106,20 @@ export function LastConnectedPrinter({
       </View>
     </View>
   );
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Date on one line, time on the next, in the phone's local time. */
+function formatLastConnected(ms: number): { date: string; time: string } {
+  const d = new Date(ms);
+  const hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const h12 = hours % 12 === 0 ? 12 : hours % 12;
+  return {
+    date: `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+    time: `${h12}:${minutes} ${hours < 12 ? 'am' : 'pm'}`,
+  };
 }
 
 function statusCopy({
@@ -171,6 +196,10 @@ const styles = themedStyles((c, scheme) => ({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 13, fontWeight: '700' },
+  lastWrap: { alignItems: 'flex-end', gap: 1 },
+  lastLabel: { fontSize: 10, fontWeight: '700', color: c.textMuted, letterSpacing: 0.3, textTransform: 'uppercase' },
+  lastDate: { fontSize: 12, fontWeight: '700', color: c.text },
+  lastTime: { fontSize: 12, fontWeight: '600', color: c.textSecondary },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexDirection: 'row',

@@ -152,6 +152,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
             id: deviceId,
             name: deviceName,
             consumer,
+            connectedAt: Date.now(),
           };
           return {
             status: 'connected',

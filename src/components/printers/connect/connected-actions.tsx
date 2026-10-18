@@ -16,9 +16,6 @@ type ConnectedActionsProps = {
   showBattery?: boolean;
   testing: boolean;
   onTest: () => void;
-  /** Shown only for printers that can report their label size. */
-  onMeasure?: () => void;
-  measuring?: boolean;
   onDisconnect: () => void;
   onDiagnostics: () => void;
 };
@@ -31,8 +28,6 @@ export function ConnectedActions({
   showBattery = true,
   testing,
   onTest,
-  onMeasure,
-  measuring = false,
   onDisconnect,
   onDiagnostics,
 }: ConnectedActionsProps) {
@@ -57,23 +52,6 @@ export function ConnectedActions({
         style={({ pressed }) => [styles.primary, testing && styles.disabled, pressed && styles.pressed]}>
         {testing ? <ActivityIndicator color={C.onAccent} /> : <Text style={styles.primaryText}>Print a test label</Text>}
       </Pressable>
-      {onMeasure ? (
-        <Pressable
-          onPress={onMeasure}
-          disabled={measuring || testing}
-          android_ripple={androidRipple}
-          style={({ pressed }) => [
-            styles.measureBtn,
-            (measuring || testing) && styles.disabled,
-            pressed && styles.pressed,
-          ]}>
-          {measuring ? (
-            <ActivityIndicator color={C.accent} />
-          ) : (
-            <Text style={styles.link}>Print label size</Text>
-          )}
-        </Pressable>
-      ) : null}
       <View style={styles.row}>
         <Pressable
           onPress={onDisconnect}
@@ -137,16 +115,6 @@ const styles = themedStyles((c, scheme) => ({
     minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  measureBtn: {
-    alignSelf: 'stretch',
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: c.accentSoft,
-    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

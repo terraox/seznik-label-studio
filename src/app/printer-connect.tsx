@@ -17,6 +17,7 @@ import {
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import {
   CONSUMER_PRINTERS,
+  isConsumerPrinterId,
   toDriverModel,
   type ConsumerPrinterId,
 } from '@/constants/printer-models';
@@ -33,6 +34,7 @@ import {
   type DiscoveredPrinter,
 } from '@/lib/printer/printer-manager';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
+import { useAuthStore } from '@/stores/auth-store';
 import { normalizePrinterMac, usePrinterStore } from '@/stores/printer-store';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
@@ -124,6 +126,7 @@ export default function PrinterConnectScreen() {
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
   const sdkId = usePrinterStore((s) => s.sdkId);
   const transport = usePrinterStore((s) => s.transport);
+  const purchasedPrinterId = useAuthStore((s) => s.user?.printerId);
   const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
   const showBattery = printerReportsBattery({ sdkId, transport });
   const setSelectedPrinterModel = usePrinterStore((s) => s.setSelectedPrinterModel);
@@ -134,7 +137,6 @@ export default function PrinterConnectScreen() {
   const [scanning, setScanning] = useState(false);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
-  const [measuring, setMeasuring] = useState(false);
   const [nativeHint, setNativeHint] = useState<string | null>(null);
   const [scanErrors, setScanErrors] = useState<string[]>([]);
   /** True once a scan finished with no errors, so 'not in the list' reliably means unpaired. */
@@ -211,7 +213,9 @@ export default function PrinterConnectScreen() {
       return;
     }
     const token = ++scanTokenRef.current;
-    setDevices([]);
+    // Keep the current list on screen while rescanning (clearing it made the list flicker
+    // empty and refill). Devices not seen again are dropped when the scan finishes.
+    const seenThisScan = new Set<string>();
     setScanning(true);
     setNativeHint(null);
     setScanErrors([]);
@@ -219,6 +223,7 @@ export default function PrinterConnectScreen() {
     try {
       const result = await getPrinterManager().startModelScan(toDriverModel(target), (device) => {
         if (!mountedRef.current || token !== scanTokenRef.current) return;
+        seenThisScan.add(device.id.toUpperCase());
         setDevices((prev) => {
           const key = device.id.toUpperCase();
           const idx = prev.findIndex((item) => item.id.toUpperCase() === key);
@@ -230,6 +235,7 @@ export default function PrinterConnectScreen() {
         void attemptAutoConnectLast(device);
       });
       if (mountedRef.current && token === scanTokenRef.current) {
+        setDevices((prev) => prev.filter((item) => seenThisScan.has(item.id.toUpperCase())));
         setScanErrors(result.errors);
         setScanCleanDone(result.errors.length === 0);
         if (result.errors.some((entry) => isBluetoothOffError(entry))) setBluetoothOn(false);
@@ -253,6 +259,18 @@ export default function PrinterConnectScreen() {
     }
   }, [attemptAutoConnectLast, refreshCaps, selectedModel]);
 
+  // The focus effect below must run only when the screen gains or loses focus. If it listed
+  // these callbacks as dependencies, any change to them (selected printer, connecting id) would
+  // run its cleanup, stop the scan, and restart it: that is the flicker.
+  const startScanRef = useRef(startScan);
+  startScanRef.current = startScan;
+  const attemptAutoConnectLastRef = useRef(attemptAutoConnectLast);
+  attemptAutoConnectLastRef.current = attemptAutoConnectLast;
+  const refreshCapsRef = useRef(refreshCaps);
+  refreshCapsRef.current = refreshCaps;
+  const purchasedPrinterIdRef = useRef(purchasedPrinterId);
+  purchasedPrinterIdRef.current = purchasedPrinterId;
+
   const handleModelChange = (modelId: ConsumerPrinterId) => {
     if (modelId === selectedModel) return;
     if (getPrinterManager().isConnectionHealthy()) return;
@@ -269,7 +287,7 @@ export default function PrinterConnectScreen() {
   useFocusEffect(
     useCallback(() => {
       mountedRef.current = true;
-      refreshCaps();
+      refreshCapsRef.current();
       let cancelled = false;
 
       const syncConnection = (allowScan: boolean) => {
@@ -289,10 +307,22 @@ export default function PrinterConnectScreen() {
         if (!allowScan || store.status === 'scanning') {
           return;
         }
-        if (!mgr.isAutoReconnectSuppressed()) {
-          void attemptAutoConnectLast().catch(() => {});
+        const begin = () => {
+          if (cancelled) return;
+          if (!mgr.isAutoReconnectSuppressed()) {
+            void attemptAutoConnectLastRef.current().catch(() => {});
+          }
+          void startScanRef.current(usePrinterStore.getState().selectedPrinterModel).catch(() => {});
+        };
+        // On open, pre-select the printer they registered (bridge follows automatically).
+        const purchased = purchasedPrinterIdRef.current;
+        if (isConsumerPrinterId(purchased) && purchased !== store.selectedPrinterModel) {
+          store.setSelectedPrinterModel(purchased);
+          // Let the re-render hand the scan callbacks the new model before scanning.
+          setTimeout(begin, 60);
+          return;
         }
-        void startScan(store.selectedPrinterModel).catch(() => {});
+        begin();
       };
 
       syncConnection(true);
@@ -305,7 +335,7 @@ export default function PrinterConnectScreen() {
           getPrinterManager().stopScan();
         }
       };
-    }, [attemptAutoConnectLast, refreshCaps, startScan]),
+    }, []),
   );
 
   useEffect(() => {
@@ -464,7 +494,11 @@ export default function PrinterConnectScreen() {
     try {
       const ok = await getPrinterManager().reconnectLastForConsumer(selectedModel, { userRequested: true });
       if (!ok) {
-        Alert.alert('Could not connect', 'Turn the printer on and stay on this screen — we will connect when it appears.');
+        const reason = getPrinterManager().getLastErrorMessage();
+        Alert.alert(
+          'Could not connect',
+          `${reason ? `${reason}\n\n` : ''}Turn the printer on and stay on this screen — we will connect when it appears.`,
+        );
         void startScan(selectedModel);
       }
     } catch (error) {
@@ -504,18 +538,6 @@ export default function PrinterConnectScreen() {
     }
   };
 
-  const handleMeasureLabelSize = async () => {
-    setMeasuring(true);
-    try {
-      await getPrinterManager().printLabelSize();
-      Alert.alert('Scale sent', `${printer.shortName} is calibrating. Read the last number on the printed scale: that is the label length in mm.`);
-    } catch (error) {
-      Alert.alert('Could not print size', error instanceof Error ? error.message : 'Try again.');
-    } finally {
-      setMeasuring(false);
-    }
-  };
-
   const showBluetoothSettings =
     Platform.OS !== 'web' &&
     !showConnected &&
@@ -539,10 +561,6 @@ export default function PrinterConnectScreen() {
               showBattery={showBattery}
               testing={testing}
               onTest={() => void handleTestPrint()}
-              onMeasure={
-                getPrinterManager().canPrintLabelSize ? () => void handleMeasureLabelSize() : undefined
-              }
-              measuring={measuring}
               onDisconnect={() => void handleDisconnect()}
               onDiagnostics={() => router.push('/printer-diagnostics')}
             />
@@ -554,6 +572,7 @@ export default function PrinterConnectScreen() {
             bridgeLabel={bridgeDisplayLabel(activeBridge)}
             deviceName={lastForBridge?.name ?? ''}
             deviceId={lastForBridge?.id ?? ''}
+            connectedAt={lastForBridge?.connectedAt}
             connecting={Boolean(lastForBridge && connectingId === lastForBridge.id)}
             visible={Boolean(lastForBridge && caps.canScan && bluetoothOn && !lastUnpaired)}
             nearby={lastNearby}

@@ -910,6 +910,11 @@ class PrinterManager {
     return this.getActivePrinterProfile().dpi;
   }
 
+  /** Last connect or reconnect failure, so the screen can show the real reason. */
+  getLastErrorMessage(): string | null {
+    return this.lastErrorMessage;
+  }
+
   getLastScanError(): string | null {
     return this.lastScanError;
   }
@@ -1207,15 +1212,33 @@ class PrinterManager {
       return bluetoothOffScanResult();
     }
     const store = usePrinterStore.getState();
+    console.info(
+      `[scan] start model=${model} consumer=${store.selectedPrinterModel} status=${store.status} state=${this.connectionState} connected=${this.isConnected}`,
+    );
+    // These early returns used to report 0 printers, which the screen showed as "not found
+    // nearby". Say what actually happened instead.
     if (this.isConnected) {
+      console.info('[scan] skipped: already connected');
       onFinished?.();
-      return { paired: 0, nearby: 0, errors: [] };
+      return { paired: 0, nearby: 0, errors: ['A printer is already connected. Disconnect it to scan again.'] };
     }
     if (store.status === 'connecting' || this.connectionState === 'connecting') {
-      onFinished?.();
-      return { paired: 0, nearby: 0, errors: [] };
+      // A background reconnect to a printer that is off can hang for many seconds and used to
+      // block every scan. A scan on the connect screen wins: drop that attempt (its generation
+      // is now stale, so connectModel returns without touching state) and close its socket.
+      console.info('[scan] cancelling the in-progress connection attempt so the scan can run');
+      this.connectGeneration++;
+      this.manualConnectMac = null;
+      this.connectInFlight = null;
+      this.connectInFlightDeviceId = null;
+      this.connectAttemptStartedAtMs = 0;
+      this.connectionState = 'disconnected';
+      await this.disconnect({ forSwitch: true }).catch(() => {});
+      if (usePrinterStore.getState().status === 'connecting') {
+        usePrinterStore.getState().setStatus('disconnected');
+      }
     }
-    store.setStatus('scanning');
+    usePrinterStore.getState().setStatus('scanning');
     // Wait for the previous native discovery to stop, or its late stop cancels this new scan.
     await this.stopScanAsync();
 
@@ -1408,9 +1431,13 @@ class PrinterManager {
       }
     }
 
-    if (store.status === 'scanning') {
-      store.setStatus(this.isConnected ? 'connected' : 'disconnected');
+    // `store` is the snapshot from before setStatus('scanning'), so read the live state:
+    // otherwise the status stays 'scanning' after the scan, which blocks auto-reconnect and
+    // stops the screen from scanning again when it regains focus.
+    if (usePrinterStore.getState().status === 'scanning') {
+      usePrinterStore.getState().setStatus(this.isConnected ? 'connected' : 'disconnected');
     }
+    console.info(`[scan] done model=${model} paired=${paired} nearby=${nearby} errors=${JSON.stringify(errors)}`);
     onFinished?.();
     return { paired, nearby, errors };
   }
