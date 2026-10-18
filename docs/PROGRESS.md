@@ -57,10 +57,10 @@ Each completed sub-task is logged with the following structure:
      - Defined `LiveRulerBounds` containing shared values for `leftMm`, `topMm`, `widthMm`, `heightMm`, and `visible`.
      - In `src/app/edit.tsx`, initialized `liveRulerBounds` and synced them with React selection state when idle.
   2. **UI-Thread Animated Ruler Projection Overlay:**
-     - Updated `HorizontalRuler` and `VerticalRuler` in [`src/components/canvas-rulers.tsx`](./src/components/canvas-rulers.tsx) to render an `Animated.View` selection overlay driven by `useAnimatedStyle`.
+     - Updated `HorizontalRuler` and `VerticalRuler` in [`src/components/canvas-rulers.tsx`](../src/components/canvas-rulers.tsx) to render an `Animated.View` selection overlay driven by `useAnimatedStyle`.
      - The overlay computes continuous millimeter-to-pixel projection on the GPU compositor at 120 fps without causing SVG tick or label re-renders.
   3. **Direct Worklet Streaming in Transformers:**
-     - In [`src/components/editor/konva-transformer.tsx`](./src/components/editor/konva-transformer.tsx) and [`src/components/editor/skia-canvas.tsx`](./src/components/editor/skia-canvas.tsx), gesture worklets directly write clamped coordinates to `liveBounds` shared values on every frame during both translation drag (`bodyDragGesture`) and resize (`createHandleGesture`, `widthResizeGesture`, `heightResizeGesture`).
+     - In [`src/components/editor/konva-transformer.tsx`](../src/components/editor/konva-transformer.tsx) and [`src/components/editor/skia-canvas.tsx`](../src/components/editor/skia-canvas.tsx), gesture worklets directly write clamped coordinates to `liveBounds` shared values on every frame during both translation drag (`bodyDragGesture`) and resize (`createHandleGesture`, `widthResizeGesture`, `heightResizeGesture`).
 - **Verification & Quality Gate Results:**
   - `npx tsc --noEmit`: 0 errors.
   - `npm run test:labelx`: 100% PASS.
@@ -98,7 +98,7 @@ Each completed sub-task is logged with the following structure:
 ### Architectural Correction & Implementation Log: Dual-Reconciler Shared-Value Bridge, Barcode Module Rendering & QR 1:1 Square Lock
 > **Superseded (Tasks 1.1 & 1.2), noted 2026-09-23:** Everything in this entry was built and verified on the Skia editor prototype (`/dev-skia-test`). Task 1.4, logged the same day, kept the live editor on Konva, so none of it is on the live editor path. The record is kept as history. The live Konva equivalents (pinned-origin resize, QR square lock, headroom clamping) are logged under the Standalone Bugfixes above.
 
-- **Scope:** Skia canvas rendering tree, symbology module generation & Reanimated shared-value bridges ([`src/components/editor/skia-canvas.tsx`](./src/components/editor/skia-canvas.tsx), [`src/components/editor/skia-element-renderer.tsx`](./src/components/editor/skia-element-renderer.tsx), [`src/app/dev-skia-test.tsx`](./src/app/dev-skia-test.tsx)).
+- **Scope:** Skia canvas rendering tree, symbology module generation & Reanimated shared-value bridges ([`src/components/editor/skia-canvas.tsx`](../src/components/editor/skia-canvas.tsx), [`src/components/editor/skia-element-renderer.tsx`](../src/components/editor/skia-element-renderer.tsx), [`src/app/dev-skia-test.tsx`](../src/app/dev-skia-test.tsx)).
 - **Date Completed:** 2026-09-18
 - **Retraction & Root Cause Clarification:**
   - **Task 1.1 & Task 1.2 Part B Previous Verification Retraction:**
@@ -226,7 +226,7 @@ Each completed sub-task is logged with the following structure:
 - **What Was Done:**
   1. **Integer Module Snapping & Quiet Zone Integration in `BarcodeContent`:**
      - Exported `barcodeModulesForMode` in `src/lib/barcode-code128.ts` to provide raw module sequences for all supported 1D modes (`CODE-128`, `CODE-39`, `ITF`, `UPC-A`, `EAN-13`, `EAN-8`).
-     - Wired `snap1DBarcodeModules` into `BarcodeContent` in [`src/components/editor/element-renderer.tsx`](./src/components/editor/element-renderer.tsx), replacing the old floating-point `bar.x * widthPx` path math with hardware-quantized, integer-dot-aligned bar positions (`snapped.bars`).
+     - Wired `snap1DBarcodeModules` into `BarcodeContent` in [`src/components/editor/element-renderer.tsx`](../src/components/editor/element-renderer.tsx), replacing the old floating-point `bar.x * widthPx` path math with hardware-quantized, integer-dot-aligned bar positions (`snapped.bars`).
      - Enforced ISO/IEC $10\times$ quiet zones on left and right borders and automatic container centering (`snapped.offsetXMm`), eliminating edge-bleed and dot-jitter on thermal printheads.
   2. **Authentic 2D Matrix Rendering in `QrcodeContent`:**
      - Wired `encodeDataMatrix` (ISO/IEC 16022 ECC 200) for DataMatrix elements, rendering real square and rectangular matrix modules in single-path SVG with clean quiet zones.

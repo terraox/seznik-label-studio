@@ -309,9 +309,9 @@ These three rules are fixed. Later changes to multi-select must not break them.
 
 **Surfaces:** editor sub-toolbar size readout (`src/app/edit.tsx`, `LabelSizeEditor` draft then Scale/Keep). Excel bulk: one prompt, then `sharedGeometry`, `slotTemplates`, and every `rowGeometryOverrides` row (`resizeBulkDocumentToSize`). Label Settings uses the same prompt (`sizeHandling` on `patchLabelDocument`). Rat-tail 14.3×101.6 wrap stays blocked. Clone/2-up creation stays always-scale.
 
-**Print PDF excluded.** [`src/app/pdf.tsx`](src/app/pdf.tsx) / [`src/stores/pdf-edit-store.ts`](src/stores/pdf-edit-store.ts) are a raster crop session (`outputSize`), not `LabelDocument` elements. Mapping Scale/Keep onto that crop is a possible future task, not this one.
+**Print PDF excluded.** [`src/app/pdf.tsx`](../src/app/pdf.tsx) / [`src/stores/pdf-edit-store.ts`](../src/stores/pdf-edit-store.ts) are a raster crop session (`outputSize`), not `LabelDocument` elements. Mapping Scale/Keep onto that crop is a possible future task, not this one.
 
-**Wiring:** [`src/lib/stock-size.ts`](src/lib/stock-size.ts) `applyDocumentStockSize`; keep helper in [`src/lib/element-sizing.ts`](src/lib/element-sizing.ts); bulk in [`src/lib/bulk-labels.ts`](src/lib/bulk-labels.ts). Tests: `src/lib/editor/__tests__/stock-size.test.ts`, bulk resize cases in `src/lib/__tests__/bulk-labels.test.ts`, existing `template-resizing.test.ts` for scale/border pin.
+**Wiring:** [`src/lib/stock-size.ts`](../src/lib/stock-size.ts) `applyDocumentStockSize`; keep helper in [`src/lib/element-sizing.ts`](../src/lib/element-sizing.ts); bulk in [`src/lib/bulk-labels.ts`](../src/lib/bulk-labels.ts). Tests: `src/lib/editor/__tests__/stock-size.test.ts`, bulk resize cases in `src/lib/__tests__/bulk-labels.test.ts`, existing `template-resizing.test.ts` for scale/border pin.
 
 ---
 

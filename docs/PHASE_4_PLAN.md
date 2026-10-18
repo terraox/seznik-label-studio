@@ -48,10 +48,10 @@ flowchart TD
 
 Confirmed from source, not from the architecture narrative. This verdict only authorizes **which** bridge Stage B will use. It does **not** authorize starting Stage B before GATE-A.
 
-- Live path is [`printPngLabel`](modules/td404-tejas-printer/android/src/main/java/expo/modules/td404tejasprinter/Td404TejasPrinterModule.kt) → `printPngLabelNative`: Base64 PNG decode, optional rotate, scale to `floor(mm × dotsPerMm / 8) × 8`, luminance threshold (default 160) or Floyd–Steinberg, MSB-first pack, TSPL `BITMAP` mode 0, then `writeBytesToSocketSync` on our RFCOMM socket.
+- Live path is [`printPngLabel`](../modules/td404-tejas-printer/android/src/main/java/expo/modules/td404tejasprinter/Td404TejasPrinterModule.kt) → `printPngLabelNative`: Base64 PNG decode, optional rotate, scale to `floor(mm × dotsPerMm / 8) × 8`, luminance threshold (default 160) or Floyd–Steinberg, MSB-first pack, TSPL `BITMAP` mode 0, then `writeBytesToSocketSync` on our RFCOMM socket.
 - Wire polarity already in that function: buffer prefilled `0xFF` (white = 1), black clears the bit (black = 0). MSB first (`bitIndex = 7 - (x & 7)`).
-- [`printRaw`](modules/td404-tejas-printer/android/src/main/java/expo/modules/td404tejasprinter/Td404TejasPrinterModule.kt) already writes a `ByteArray` through the same paced socket writer. A full TSPL job can be sent without a new entry point.
-- [`encodeTscBitmapJob`](src/lib/printer/tsc.ts) already wraps a 1-bit raster in TSPL and XORs `0xFF`, so a black=1 logical buffer becomes the same black=0 wire format. It does **not** match the live header: JS emits `DIRECTION 0,0` and omits `SET TEAR ON` / `OFFSET 0 mm`; native emits `DIRECTION 1` plus those commands. Reusing the JS encoder unchanged would change print geometry versus today's TD-404 path.
+- [`printRaw`](../modules/td404-tejas-printer/android/src/main/java/expo/modules/td404tejasprinter/Td404TejasPrinterModule.kt) already writes a `ByteArray` through the same paced socket writer. A full TSPL job can be sent without a new entry point.
+- [`encodeTscBitmapJob`](../src/lib/printer/tsc.ts) already wraps a 1-bit raster in TSPL and XORs `0xFF`, so a black=1 logical buffer becomes the same black=0 wire format. It does **not** match the live header: JS emits `DIRECTION 0,0` and omits `SET TEAR ON` / `OFFSET 0 mm`; native emits `DIRECTION 1` plus those commands. Reusing the JS encoder unchanged would change print geometry versus today's TD-404 path.
 
 Closest alternative is Dev (also contract B, hand-built TSPL). It is worse for this proof: writes go through AutoReplyPrint `CP_Port_Write`, `commandSet` can fall into ESC/POS, and width is capped near 378 dots. Josh, Label X, and Tez decode a PNG inside a vendor SDK and have no raw TSPL socket we own. Pull-forward stays TD-404.
 
@@ -98,7 +98,7 @@ Capture procedure for a later [`PERF_BASELINE.md`](./PERF_BASELINE.md). Not a St
 
 ### Frozen fixture (every number in this phase)
 
-- Stock: 50.00 × 30.00 mm, gap, TD-404 profile 304 DPI → [`dotsPerMm`](src/lib/printer/print-spec.ts) returns **12**, so the page is **600 × 360** dots (already byte-aligned: 75 bytes/row).
+- Stock: 50.00 × 30.00 mm, gap, TD-404 profile 304 DPI → [`dotsPerMm`](../src/lib/printer/print-spec.ts) returns **12**, so the page is **600 × 360** dots (already byte-aligned: 75 bytes/row).
 - Elements, millimetres, origin top-left of the label:
   - Border: rectangle inset 1.0 mm, stroke 0.35 mm, black, no fill.
   - Text: box at (3, 3) mm, size 44 × 8 mm, `autoWrapping` not `Close`, string `Phase 4 baseline label 50x30 text wrap check`, left align, default family, `allowFontScaling` equivalent off.
@@ -109,7 +109,7 @@ Capture procedure for a later [`PERF_BASELINE.md`](./PERF_BASELINE.md). Not a St
 
 Same phone, same unit, app warm (one discarded print first):
 
-- `capture_ms`: print tap → `captureRef()` resolve in [`src/app/print.tsx`](src/app/print.tsx) (today this is bundled with `ensureConnected` inside `capture+verify`; baseline splits them).
+- `capture_ms`: print tap → `captureRef()` resolve in [`src/app/print.tsx`](../src/app/print.tsx) (today this is bundled with `ensureConnected` inside `capture+verify`; baseline splits them).
 - `transport_write_ms`: native `writeMs` already returned by `printPngLabel` (`tWrite - tEncode`).
 - `decode_ms` / `encode_ms`: already in that return map and in logcat `Td404Printer` `PRINT-TRACE`.
 - `total_ms`: tap → `writeBytesToSocketSync` return.
@@ -152,7 +152,7 @@ A dev build (`npx expo run:android`, not Expo Go), a bonded TD-404/Tejas/Rudra w
 
 ## Part 2 — Rasterizer plan (Stage A: Tasks 4.1–4.2)
 
-New modules, not the existing gray engine. [`UniversalRenderer`](src/printing/renderer/UniversalRenderer.ts) plus [`text.ts`](src/printing/renderer/text.ts) is a 5×7 bitmap font and [`barcode.ts`](src/printing/renderer/barcode.ts) stretches normalized bar fractions (`bar.x * w`). That engine is not Phase 4 and must not become the print path.
+New modules, not the existing gray engine. [`UniversalRenderer`](../src/printing/renderer/UniversalRenderer.ts) plus [`text.ts`](../src/printing/renderer/text.ts) is a 5×7 bitmap font and [`barcode.ts`](../src/printing/renderer/barcode.ts) stretches normalized bar fractions (`bar.x * w`). That engine is not Phase 4 and must not become the print path.
 
 API:
 
@@ -170,13 +170,13 @@ export function rasterizeDocumentToBitmap(
 ```
 
 - Input: `LabelDocument`, `dpi` (304 → 12 dots/mm via `dotsPerMm`, never `304/25.4`).
-- Surface: `Skia.Surface.MakeOffscreen(widthDots, heightDots)` from installed `@shopify/react-native-skia` 2.2.12. Confirm `MakeOffscreen` and `Paragraph` on that version at implementation time; [`skia-element-renderer.tsx`](src/components/editor/skia-element-renderer.tsx) already imports the package.
+- Surface: `Skia.Surface.MakeOffscreen(widthDots, heightDots)` from installed `@shopify/react-native-skia` 2.2.12. Confirm `MakeOffscreen` and `Paragraph` on that version at implementation time; [`skia-element-renderer.tsx`](../src/components/editor/skia-element-renderer.tsx) already imports the package.
 - Draw pure black or white. No grayscale except images, which are blitted then thresholded at **160** to match native `printPngLabel`. Fixture has no image, so the 15 ms path does no dither.
 - Page size uses the same pack-down as native: `packedW = max(8, floor(sizeDotsW / 8) * 8)`, `packedH = sizeDotsH`. Negative offsets are baked into pixels before `BITMAP 0,0`, same as native.
 
 ### Element drawing
 
-- **Text (highest visual-parity risk vs the editor).** Skia `Paragraph` with width = element width in dots, `matchFont` via the same `resolveFontFamily` the editor uses, `allowFontScaling` ignored (system font scale must not apply). `autoWrapping === 'Close'` → one line, clip. Otherwise wrap on that width. `verticalDisplay` → one character per line, matching [`TextContent`](src/components/editor/element-renderer.tsx). Align left / center / right; `spacing` maps to justify as the editor does. Multi-line wrap is checked by **line-break indices and line count** against a fixture, not by hoping glyphs match Android `TextView`.
+- **Text (highest visual-parity risk vs the editor).** Skia `Paragraph` with width = element width in dots, `matchFont` via the same `resolveFontFamily` the editor uses, `allowFontScaling` ignored (system font scale must not apply). `autoWrapping === 'Close'` → one line, clip. Otherwise wrap on that width. `verticalDisplay` → one character per line, matching [`TextContent`](../src/components/editor/element-renderer.tsx). Align left / center / right; `spacing` maps to justify as the editor does. Multi-line wrap is checked by **line-break indices and line count** against a fixture, not by hoping glyphs match Android `TextView`.
 - **1D barcode.** See correctness definition below. Call `snap1DBarcodeModules(rawModules, widthMm, jobDpi, false)` and fill `Rect`s at `originDotX + bar.dotX` by `bar.dotWidth`, height in dots. Do not multiply `bar.x * widthPx`.
 - **QR / DataMatrix / PDF417.** Build the matrix with the existing encoders (`generateQrMatrix`, `encodeDataMatrix`, `encodePdf417`), then call `snap2DMatrixToHardwareDots` and paint each black module as an N×N dot rect at the returned `dotSize`, plus `offsetXMm` / `offsetYMm` converted with `dotsPerMm`. Do not recompute module size.
 - **Shapes, lines, borders.** Skia paths. Stroke width = `max(1, round(mm * dotsPerMm))`. Axis-aligned borders snap to integer dots.
@@ -185,7 +185,7 @@ export function rasterizeDocumentToBitmap(
 
 ### Barcode “correctness” — Task 2.3 contradiction, resolved for Stage A
 
-[`PROGRESS.md`](./PROGRESS.md) Task 2.3 (dated 2026-09-19) states that [`BarcodeContent`](src/components/editor/element-renderer.tsx) replaced floating-point `bar.x * widthPx` with integer-dot-aligned `snapped.bars`. **That claim does not match current source.** Verified when this plan was written:
+[`PROGRESS.md`](./PROGRESS.md) Task 2.3 (dated 2026-09-19) states that [`BarcodeContent`](../src/components/editor/element-renderer.tsx) replaced floating-point `bar.x * widthPx` with integer-dot-aligned `snapped.bars`. **That claim does not match current source.** Verified when this plan was written:
 
 - `snap1DBarcodeModules(rawModules, widthMm, 203, false)` — DPI is hardcoded **203**, quiet zone off.
 - SVG still draws `bar.x * widthPx` / `bar.width * widthPx` with `preserveAspectRatio="none"`. `dotX` / `dotWidth` are unused.
@@ -193,7 +193,7 @@ export function rasterizeDocumentToBitmap(
 
 Stage A does **not** wait on fixing the editor. **Print “correct” (post GATE-A parity pass) means the packed 1-bit buffer matches the editor / flag-off thresholded bitmap** (same 600×360 grid, threshold 160), not merely that Code128/QR scan-decode. 4.4b decode remains a regression check.
 
-Headless 1D now uses the same snap as [`BarcodeContent`](src/components/editor/element-renderer.tsx) (`snap1DBarcodeModules(..., 203, false)`) then stretch-then-round `bar.x * boxW` into job-DPI dots. Headless QR uses SVG `meet` integer cells. `barcode-snapping.ts` is unchanged so the editor still snaps at 203 and stretches in SVG.
+Headless 1D now uses the same snap as [`BarcodeContent`](../src/components/editor/element-renderer.tsx) (`snap1DBarcodeModules(..., 203, false)`) then stretch-then-round `bar.x * boxW` into job-DPI dots. Headless QR uses SVG `meet` integer cells. `barcode-snapping.ts` is unchanged so the editor still snaps at 203 and stretches in SVG.
 
 **Correct 1D (Stage A 4.4b, decode only):** Expanding the packed buffer must still yield `BASELINE50X30`. Module widths after stretch-then-round are checked for scannability (run-width ratio), not only decode.
 
@@ -208,7 +208,7 @@ A bit-identical diff against a physical printer scan is still **not** a Stage A 
 Logical buffer before TSPL invert:
 
 - 8 pixels → 1 byte, MSB first: `(p0<<7)|(p1<<6)|...|p7`.
-- Set bit = black (ink). Matches [`thresholdGray`](src/printing/raster/bitmap.ts).
+- Set bit = black (ink). Matches [`thresholdGray`](../src/printing/raster/bitmap.ts).
 - Row width `bytesPerRow = packedW / 8`. Trailing bits in a short row stay 0 (white) in the logical buffer.
 - Native splice or `encodeTscBitmapJob`'s `^ 0xFF` produces wire black=0 / white=1. Invert in exactly one place, and only when encoding TSPL (Stage B). Stage A tests the logical buffer.
 
@@ -235,9 +235,9 @@ Prefer a **new** native entry point `printMonoLabel` beside `printPngLabel`, not
 - No `BitmapFactory`, no scale, no threshold, no dither on this path.
 - `printPngLabel` stays as it is.
 
-`printRaw` plus a corrected JS header is a fallback if we want zero Kotlin for the first hardware try. It is not the planned contract: the header must match native `DIRECTION 1`, and the bridge fallback in [`printTd404Raw`](modules/td404-tejas-printer/src/index.ts) base64-encodes on failure, which hides timing. A dedicated entry returns `writeMs` without a PNG.
+`printRaw` plus a corrected JS header is a fallback if we want zero Kotlin for the first hardware try. It is not the planned contract: the header must match native `DIRECTION 1`, and the bridge fallback in [`printTd404Raw`](../modules/td404-tejas-printer/src/index.ts) base64-encodes on failure, which hides timing. A dedicated entry returns `writeMs` without a PNG.
 
-Isolation: a dev-only flag, default **off**, read only in the `usesTd404CommandSet` branch of [`src/app/print.tsx`](src/app/print.tsx). Off → today's `tryNativeSdkPngPrint`. On → rasterize then `printMonoLabel`. Other SDKs stay on ViewShot. Flag off is the rollback.
+Isolation: a dev-only flag, default **off**, read only in the `usesTd404CommandSet` branch of [`src/app/print.tsx`](../src/app/print.tsx). Off → today's `tryNativeSdkPngPrint`. On → rasterize then `printMonoLabel`. Other SDKs stay on ViewShot. Flag off is the rollback.
 
 A 50×30 job is 27,000 payload bytes, under the 32 KB fast-write cutoff in `writeBytesToSocketSync`.
 
@@ -282,14 +282,14 @@ If any gate fails, the phase is not done, regardless of how much else works. Sta
 
 ## Part 6 — Structured log
 
-One machine-readable line per print, via [`logPrintTrace`](src/printing/trace.ts) (already `key=value`). Stage name: `PIPELINE`.
+One machine-readable line per print, via [`logPrintTrace`](../src/printing/trace.ts) (already `key=value`). Stage name: `PIPELINE`.
 
 **Stage C split:**
 
 - `path=viewshot` fields can land with Task 4.0 (needed for baseline). Do not wait for GATE-A.
 - `path=headless_skia` fields land only after Task 4.3 exists.
 
-Emitted from the TD-404 branch in [`src/app/print.tsx`](src/app/print.tsx) after native write returns.
+Emitted from the TD-404 branch in [`src/app/print.tsx`](../src/app/print.tsx) after native write returns.
 
 | Field | Meaning |
 |---|---|
