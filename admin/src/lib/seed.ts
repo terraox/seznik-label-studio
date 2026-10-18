@@ -1,4 +1,3 @@
-import { hashPassword } from './passwords';
 import { writeTextFile } from './files';
 import type { Asset, Database, Device, PrintEvent, Review, Suggestion, Template } from './types';
 
@@ -232,31 +231,15 @@ export async function sampleParts() {
   return { files, devices, prints, templates, clipart, stickers: stickerAssets, reviews, suggestions };
 }
 
+/** A fresh desk has no admins; the first one comes from BOOTSTRAP_ADMIN_EMAIL (see boot.ts). */
 export async function createInitial(): Promise<Database> {
-  const parts = await sampleParts();
-  const createdAt = new Date().toISOString();
+  const empty = process.env.NODE_ENV === 'production';
+  const parts = empty
+    ? { devices: [], prints: [], templates: [], clipart: [], stickers: [], reviews: [], suggestions: [] }
+    : await sampleParts();
   return {
     version: 1,
-    admins: [
-      {
-        id: 'adm_owner',
-        name: 'SEZ Owner',
-        email: 'seznikadmin',
-        role: 'owner',
-        active: true,
-        createdAt,
-        passwordHash: hashPassword('Seznik01!'),
-      },
-      {
-        id: 'adm_editor',
-        name: 'Library editor',
-        email: 'editor@sez.local',
-        role: 'editor',
-        active: true,
-        createdAt,
-        passwordHash: hashPassword('sez-editor'),
-      },
-    ],
+    admins: [],
     devices: parts.devices,
     prints: parts.prints,
     templates: parts.templates,

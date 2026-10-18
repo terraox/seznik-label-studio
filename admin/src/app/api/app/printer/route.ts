@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { bearerUserId } from '@/lib/app-session';
+import { authenticateApp } from '@/lib/app-auth';
 import { corsPreflight, withCors } from '@/lib/cors';
 import { isAppPrinterId, printerDisplayName } from '@/lib/printers';
 import { prisma } from '@/lib/prisma';
@@ -11,10 +11,9 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
-  const userId = bearerUserId(request.headers.get('authorization'));
-  if (!userId) {
-    return withCors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
-  }
+  const auth = await authenticateApp(request);
+  if (auth.error) return auth.error;
+  const userId = auth.user.id;
 
   try {
     const body = (await request.json()) as { printerId?: string };

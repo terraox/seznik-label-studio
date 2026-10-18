@@ -29,3 +29,9 @@ export function toCsv(headers: string[], rows: (string | number)[][]) {
   for (const row of rows) lines.push(row.map(csvEscape).join(','));
   return `\uFEFF${lines.join('\n')}`;
 }
+
+/** CSV cell safe against spreadsheet formula injection (=, +, -, @, tab, CR at the start). */
+export function csvSafe(value: string | number | null | undefined) {
+  const text = String(value ?? '');
+  return csvEscape(/^[=+\-@\t\r]/.test(text) ? `'${text}` : text);
+}

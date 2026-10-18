@@ -7,6 +7,11 @@ import {
   LayoutDashboard,
   Library,
   MessageSquare,
+  Users,
+  ScrollText,
+  Printer,
+  ShoppingBag,
+  Shapes,
   Settings,
   LogOut,
   Menu,
@@ -22,8 +27,13 @@ import type { Admin } from '@/lib/types';
 
 const NAV = [
   { href: '/overview', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard },
+  { href: '/users', label: 'Users', shortLabel: 'Users', icon: Users },
+  { href: '/printers', label: 'Printers', shortLabel: 'Printers', icon: Printer },
+  { href: '/shop', label: 'Shop clicks', shortLabel: 'Shop', icon: ShoppingBag },
+  { href: '/catalog', label: 'Clipart & templates', shortLabel: 'Catalogue', icon: Shapes },
   { href: '/content', label: 'Library', shortLabel: 'Library', icon: Library },
   { href: '/feedback', label: 'Feedback', shortLabel: 'Feedback', icon: MessageSquare },
+  { href: '/audit', label: 'Audit', shortLabel: 'Audit', icon: ScrollText },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings },
 ];
 
@@ -103,26 +113,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </button>
 
             <div className={`admin-navbar-actions${mobileMenuOpen ? ' is-open' : ''}`}>
-              <a
-                href="/swagger"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '6px 12px',
-                  borderRadius: 8,
-                  border: '1px solid var(--tab-border)',
-                  background: 'var(--tab-bg)',
-                  color: 'var(--accent-blue)',
-                  fontSize: '0.76rem',
-                  fontWeight: 700,
-                  textDecoration: 'none',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                API docs
-              </a>
-
               <div
                 style={{
                   display: 'flex',

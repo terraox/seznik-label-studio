@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/guard';
+import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
 import { update } from '@/lib/store';
 import type { SuggestionStatus } from '@/lib/types';
@@ -12,7 +12,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, ctx: Ctx) {
   try {
-    await requireRole('editor');
+    await requirePermission('feedback.edit');
     const { id } = await ctx.params;
     const body = (await request.json()) as { status?: SuggestionStatus; note?: string };
     if (body.status && !STATUSES.includes(body.status)) throw new HttpError(400, 'Pick a status from the list.');

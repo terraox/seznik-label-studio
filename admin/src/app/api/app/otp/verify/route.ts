@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { corsPreflight, withCors } from '@/lib/cors';
 import { checkOtp } from '@/lib/otp-store';
 import { createOtpProof, parsePurpose } from '@/lib/otp-proof';
+import { normalizeMobile } from '@/lib/phone';
 
 export function OPTIONS() {
   return corsPreflight();
@@ -16,12 +17,12 @@ export async function POST(request: Request) {
       purpose?: string;
     };
     const purpose = parsePurpose(body.purpose);
-    const mobile = (body.mobile ?? '').replace(/\D/g, '');
+    const mobile = normalizeMobile(body.mobile);
     const otp = (body.otp ?? '').replace(/\D/g, '');
-    if (!/^[6-9]\d{9}$/.test(mobile) || !otp) {
+    if (!mobile || !otp) {
       return withCors(NextResponse.json({ error: 'Enter the OTP.' }, { status: 400 }));
     }
-    const result = checkOtp(mobile, otp);
+    const result = await checkOtp(mobile, otp);
     if (result === 'blocked') {
       return withCors(
         NextResponse.json(

@@ -1,5 +1,5 @@
 import { saveUpload } from '@/lib/files';
-import { requireRole } from '@/lib/guard';
+import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
 import { nid } from '@/lib/format';
 import { read, update } from '@/lib/store';
@@ -36,7 +36,7 @@ function readFields(form: FormData) {
 
 export async function GET() {
   try {
-    await requireRole('viewer');
+    await requirePermission('catalog.view');
     const templates = await read((db) => db.templates);
     return json({ templates });
   } catch (error) {
@@ -46,7 +46,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireRole('editor');
+    await requirePermission('catalog.edit');
     const fields = readFields(await request.formData());
     if (!(fields.preview instanceof File) || fields.preview.size === 0) {
       throw new HttpError(400, 'Add a preview image. PNG, JPG, or WebP.');

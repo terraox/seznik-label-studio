@@ -6,11 +6,13 @@ import { AlertTriangle, Eye, EyeOff, Lock, LogIn, Shield, UserRound } from 'luci
 import { AnimatedThemeToggler } from '@/panel/components/AnimatedThemeToggler';
 
 export function LoginForm() {
-  const [username, setUsername] = useState('seznikadmin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
+  const [needCode, setNeedCode] = useState(false);
+  const [code, setCode] = useState('');
 
   useEffect(() => {
     fetch('/api/auth/me').then((response) => {
@@ -25,12 +27,20 @@ export function LoginForm() {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email: username, password }),
+      body: JSON.stringify({ username, email: username, password, code: needCode ? code : undefined }),
     });
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    const data = (await response.json().catch(() => ({}))) as { error?: string; step?: string };
     setPending(false);
     if (!response.ok) {
       setError(data.error || 'Could not sign in.');
+      return;
+    }
+    if (data.step === 'setup') {
+      window.location.href = '/setup';
+      return;
+    }
+    if (data.step === 'totp') {
+      setNeedCode(true);
       return;
     }
     window.location.href = '/overview';
@@ -72,7 +82,7 @@ export function LoginForm() {
               autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="seznikadmin"
+              placeholder="you@example.com"
               required
             />
           </div>
@@ -100,6 +110,29 @@ export function LoginForm() {
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
+
+          {needCode ? (
+            <>
+              <label className="admin-login-field" htmlFor="desk-code">
+                Authenticator code
+              </label>
+              <div className="admin-login-input-wrap">
+                <Shield size={16} className="admin-login-input-icon" aria-hidden />
+                <input
+                  id="desk-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="6-digit code"
+                  autoFocus
+                  required
+                />
+              </div>
+            </>
+          ) : null}
         </div>
 
         <button type="submit" className="admin-login-submit" disabled={pending}>

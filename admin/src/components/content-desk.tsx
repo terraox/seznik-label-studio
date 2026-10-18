@@ -5,6 +5,7 @@ import { useDesk, useToast } from '@/components/desk';
 import { Drawer, Field, PageHeader } from '@/components/ui';
 import { api } from '@/lib/client';
 import { CATEGORIES } from '@/lib/constants';
+import { can } from '@/lib/permissions';
 import { blankDocument, sizeFromDocument } from '@/lib/template-doc';
 import type { Asset, AssetKind, Template } from '@/lib/types';
 
@@ -19,7 +20,7 @@ const ACCEPT: Record<AssetKind | 'preview', string> = {
 export function ContentDesk() {
   const desk = useDesk();
   const toast = useToast();
-  const canEdit = desk.role !== 'viewer';
+  const canEdit = can(desk.role, 'catalog.edit');
   const [tab, setTab] = useState<Tab>('templates');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');

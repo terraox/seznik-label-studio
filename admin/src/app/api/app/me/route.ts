@@ -1,29 +1,16 @@
 import { NextResponse } from 'next/server';
 
-import { bearerUserId } from '@/lib/app-session';
+import { authenticateApp } from '@/lib/app-auth';
 import { corsPreflight, withCors } from '@/lib/cors';
-import { prisma } from '@/lib/prisma';
 import { toUserDto } from '@/lib/user-dto';
 
 export function OPTIONS() {
   return corsPreflight();
 }
 
+/** Session check: 401 = signed out, 403 USER_BLOCKED = blocked, otherwise the account. */
 export async function GET(request: Request) {
-  const userId = bearerUserId(request.headers.get('authorization'));
-  if (!userId) {
-    return withCors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
-  }
-
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) {
-    return withCors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
-  }
-
-  return withCors(
-    NextResponse.json({
-      user: toUserDto(user),
-      needsPrinter: !user.printerName,
-    }),
-  );
+  const auth = await authenticateApp(request);
+  if (auth.error) return auth.error;
+  return withCors(NextResponse.json({ user: toUserDto(auth.user), needsPrinter: !auth.user.printerName }));
 }

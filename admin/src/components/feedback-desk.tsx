@@ -1,170 +1,167 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
 import { useDesk, useToast } from '@/components/desk';
 import { PageHeader } from '@/components/ui';
 import { api } from '@/lib/client';
-import { SUGGESTION_STATUSES } from '@/lib/constants';
 import { ago } from '@/lib/format';
-import type { Review, Suggestion, SuggestionStatus, Template } from '@/lib/types';
+import { can } from '@/lib/permissions';
+
+type Item = {
+  id: string; rating: number; category: string; message: string | null; status: string; adminNote: string | null;
+  appVersion: string | null; platform: string | null; createdAt: string; user: { name: string; mobile: string } | null;
+};
+type Data = {
+  total: number; page: number; pageSize: number;
+  summary: { count: number; average: number | null; distribution: { rating: number; count: number }[] };
+  items: Item[];
+};
+
+const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
 export function FeedbackDesk() {
   const desk = useDesk();
   const toast = useToast();
-  const canEdit = desk.role !== 'viewer';
-  const [tab, setTab] = useState<'reviews' | 'suggestions'>('reviews');
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [rating, setRating] = useState('all');
-  const [templateId, setTemplateId] = useState('all');
-  const [sort, setSort] = useState('newest');
-  const [status, setStatus] = useState('all');
+  const canEdit = can(desk.role, 'feedback.edit');
+  const [data, setData] = useState<Data | null>(null);
+  const [rating, setRating] = useState('');
+  const [category, setCategory] = useState('');
+  const [status, setStatus] = useState('');
+  const [q, setQ] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [hideInternal, setHideInternal] = useState(true);
+  const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState('');
   const [note, setNote] = useState('');
-  const [nextStatus, setNextStatus] = useState<SuggestionStatus>('new');
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => {
+    const params = new URLSearchParams({ page: String(page) });
+    if (rating) params.set('rating', rating);
+    if (category) params.set('category', category);
+    if (status) params.set('status', status);
+    if (q.trim()) params.set('q', q.trim());
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (hideInternal) params.set('internal', 'hide');
+    api<Data>(`/api/feedback?${params}`).then((d) => { setData(d); setError(''); }).catch((e: Error) => setError(e.message));
+  }, [page, rating, category, status, q, from, to, hideInternal]);
 
   useEffect(() => {
-    Promise.all([
-      api<{ reviews: Review[] }>('/api/reviews'),
-      api<{ suggestions: Suggestion[] }>('/api/suggestions'),
-      api<{ templates: Template[] }>('/api/templates'),
-    ]).then(([reviewData, suggestionData, templateData]) => {
-      setReviews(reviewData.reviews);
-      setSuggestions(suggestionData.suggestions);
-      setTemplates(templateData.templates);
-    }).catch((reason: Error) => toast(reason.message, 'bad'));
-  }, [toast]);
+    const timer = window.setTimeout(load, q ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [load, q]);
 
-  const templateName = (id: string) => templates.find((item) => item.id === id)?.name ?? 'Unknown template';
-
-  const shownReviews = useMemo(() => {
-    const list = reviews.filter((review) => {
-      if (rating !== 'all' && review.rating !== Number(rating)) return false;
-      if (templateId !== 'all' && review.templateId !== templateId) return false;
-      return true;
-    });
-    list.sort((a, b) => {
-      if (sort === 'highest') return b.rating - a.rating;
-      if (sort === 'lowest') return a.rating - b.rating;
-      if (sort === 'oldest') return +new Date(a.createdAt) - +new Date(b.createdAt);
-      return +new Date(b.createdAt) - +new Date(a.createdAt);
-    });
-    return list;
-  }, [reviews, rating, templateId, sort]);
-
-  const shownSuggestions = suggestions.filter((item) => status === 'all' || item.status === status);
-  const fresh = suggestions.filter((item) => item.status === 'new').length;
-
-  async function saveSuggestion(id: string) {
+  async function save(item: Item, patch: { status?: string; adminNote?: string }) {
     try {
-      const result = await api<{ suggestion: Suggestion }>(`/api/suggestions/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: nextStatus, note }),
-      });
-      setSuggestions((list) => list.map((item) => (item.id === id ? result.suggestion : item)));
-      toast('Suggestion updated');
-    } catch (reason) {
-      toast(reason instanceof Error ? reason.message : 'Could not update', 'bad');
+      await api(`/api/feedback/${item.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      toast('Saved');
+      load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not save', 'bad');
     }
   }
 
+  const summary = data?.summary;
+  const max = Math.max(1, ...(summary?.distribution.map((d) => d.count) ?? [1]));
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); };
+
   return (
     <>
-      <PageHeader
-        kicker="Reviews and suggestions"
-        title="Feedback"
-        lede="Ratings stay tied to a template and a device. Suggestions move from new to shipped."
-      >
-        <a className="btn" href="/api/export?type=reviews">Reviews CSV</a>
-        <a className="btn" href="/api/export?type=suggestions">Suggestions CSV</a>
+      <PageHeader kicker="Feedback" title="Ratings and suggestions" lede="What people send from the app: a 1-5 star rating, a category and an optional note.">
+        <button type="button" className="btn ghost" onClick={load}>Refresh</button>
       </PageHeader>
-      <div className="tabs" style={{ marginBottom: 14 }}>
-        <button type="button" className={tab === 'reviews' ? 'tab active' : 'tab'} onClick={() => setTab('reviews')}>Reviews ({reviews.length})</button>
-        <button type="button" className={tab === 'suggestions' ? 'tab active' : 'tab'} onClick={() => setTab('suggestions')}>Suggestions ({fresh} new)</button>
-      </div>
-      {tab === 'reviews' ? (
-        <>
-          <div className="toolbar">
-            <select className="inline" style={{ width: 'auto' }} value={rating} onChange={(event) => setRating(event.target.value)} aria-label="Rating">
-              <option value="all">All ratings</option>
-              {[5, 4, 3, 2, 1].map((value) => <option key={value} value={value}>{value} {value === 1 ? 'star' : 'stars'}</option>)}
-            </select>
-            <select className="inline" style={{ width: 'auto' }} value={templateId} onChange={(event) => setTemplateId(event.target.value)} aria-label="Template">
-              <option value="all">All templates</option>
-              {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
-            </select>
-            <select className="inline" style={{ width: 'auto' }} value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort">
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="highest">Highest rating</option>
-              <option value="lowest">Lowest rating</option>
-            </select>
-          </div>
-          <div className="stack">
-            {shownReviews.map((review) => (
-              <article className="card-row" key={review.id}>
-                <div className="tile-top">
-                  <strong className="stars" aria-label={`${review.rating} out of 5`}>{'●'.repeat(review.rating)}{'○'.repeat(5 - review.rating)}</strong>
-                  <span className="meta">{ago(review.createdAt)}</span>
-                </div>
-                <p>{review.text}</p>
-                <p className="meta">{templateName(review.templateId)} · {review.deviceId}</p>
-              </article>
-            ))}
-            {shownReviews.length === 0 ? <p className="empty">No reviews match those filters.</p> : null}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="chips" style={{ marginBottom: 14 }}>
-            <button type="button" className={status === 'all' ? 'chip active' : 'chip'} onClick={() => setStatus('all')}>All</button>
-            {SUGGESTION_STATUSES.map((item) => (
-              <button key={item.id} type="button" className={status === item.id ? 'chip active' : 'chip'} onClick={() => setStatus(item.id)}>{item.label}</button>
-            ))}
-          </div>
-          <div className="stack">
-            {shownSuggestions.map((item) => (
-              <article className="card-row" key={item.id}>
-                <div className="tile-top">
-                  <span className={`badge ${item.status}`}>{item.status}</span>
-                  <span className="meta">{ago(item.createdAt)} · {item.deviceId}</span>
-                </div>
-                <p>{item.text}</p>
-                {item.note ? <p className="meta">Note: {item.note}</p> : null}
-                {canEdit ? (
-                  openId === item.id ? (
-                    <div>
-                      <label className="field">
-                        <span>Status</span>
-                        <select value={nextStatus} onChange={(event) => setNextStatus(event.target.value as SuggestionStatus)}>
-                          {SUGGESTION_STATUSES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                        </select>
-                      </label>
-                      <label className="field">
-                        <span>Note for the team</span>
-                        <textarea value={note} onChange={(event) => setNote(event.target.value)} style={{ minHeight: 80 }} />
-                      </label>
-                      <div className="form-actions">
-                        <button type="button" className="btn primary" onClick={() => saveSuggestion(item.id)}>Save</button>
-                        <button type="button" className="btn" onClick={() => setOpenId('')}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn small"
-                      onClick={() => { setOpenId(item.id); setNote(item.note); setNextStatus(item.status); }}
-                    >
-                      Update status
-                    </button>
-                  )
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </>
-      )}
+      {error ? <p className="err">{error}</p> : null}
+
+      <section className="kpis" aria-label="Rating summary">
+        <article className="kpi">
+          <div className="kpi-top"><span className="kpi-title">Average rating</span></div>
+          <div className="kpi-value">{summary ? (summary.average ?? '—') : '…'}</div>
+          <div className="kpi-sub">{summary?.count ?? 0} ratings in total</div>
+        </article>
+        <article className="kpi" style={{ gridColumn: 'span 2' }}>
+          <div className="kpi-top"><span className="kpi-title">Stars</span></div>
+          {summary?.distribution.slice().reverse().map((d) => (
+            <div key={d.rating} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem' }}>
+              <span style={{ width: 28 }}>{d.rating} ★</span>
+              <div style={{ flex: 1, background: 'var(--paper-2)', borderRadius: 4, height: 8 }}>
+                <div style={{ width: `${(d.count / max) * 100}%`, background: '#F59E0B', height: 8, borderRadius: 4 }} />
+              </div>
+              <span style={{ width: 28, textAlign: 'right' }}>{d.count}</span>
+            </div>
+          ))}
+        </article>
+      </section>
+
+      <section className="panel">
+        <div className="toolbar">
+          <input type="search" placeholder="Search text or name" value={q} onChange={(e) => reset(setQ)(e.target.value)} aria-label="Search" />
+          <select value={rating} onChange={(e) => reset(setRating)(e.target.value)} aria-label="Rating">
+            <option value="">All ratings</option>
+            {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} ★</option>)}
+          </select>
+          <select value={category} onChange={(e) => reset(setCategory)(e.target.value)} aria-label="Category">
+            <option value="">All categories</option>
+            <option value="suggestion">Suggestion</option>
+            <option value="bug">Bug</option>
+            <option value="other">Other</option>
+          </select>
+          <select value={status} onChange={(e) => reset(setStatus)(e.target.value)} aria-label="Status">
+            <option value="">All statuses</option>
+            <option value="new">New</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="resolved">Resolved</option>
+          </select>
+          <input type="date" value={from} onChange={(e) => reset(setFrom)(e.target.value)} aria-label="From date" />
+          <input type="date" value={to} onChange={(e) => reset(setTo)(e.target.value)} aria-label="To date" />
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
+            <input type="checkbox" checked={hideInternal} onChange={(e) => reset(setHideInternal)(e.target.checked)} /> Exclude internal accounts
+          </label>
+        </div>
+
+        {data?.items.map((item) => (
+          <article className="card-row" key={item.id} style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <strong style={{ color: '#F59E0B' }}>{stars(item.rating)}</strong>
+              <span>
+                <span className="badge draft">{item.category}</span>{' '}
+                <span className={item.status === 'resolved' ? 'badge shipped' : item.status === 'reviewed' ? 'badge reviewing' : 'badge'}>{item.status}</span>
+              </span>
+            </div>
+            <p style={{ margin: '8px 0' }}>{item.message ?? <em>Rating only</em>}</p>
+            <small>
+              {item.user ? `${item.user.name} · ${item.user.mobile} · ` : ''}{ago(item.createdAt)}
+              {item.appVersion ? ` · app ${item.appVersion}` : ''}{item.platform ? ` · ${item.platform}` : ''}
+            </small>
+            {item.adminNote ? <div className="note" style={{ marginTop: 8 }}>Admin note: {item.adminNote}</div> : null}
+            {canEdit ? (
+              <div className="toolbar" style={{ marginTop: 10, marginBottom: 0 }}>
+                {['new', 'reviewed', 'resolved'].map((s) => (
+                  <button key={s} className={item.status === s ? 'btn small primary' : 'btn small'} disabled={item.status === s} onClick={() => save(item, { status: s })}>{s}</button>
+                ))}
+                {openId === item.id ? (
+                  <>
+                    <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the team" maxLength={1000} />
+                    <button className="btn small primary" onClick={() => { save(item, { adminNote: note }); setOpenId(''); }}>Save note</button>
+                  </>
+                ) : (
+                  <button className="btn small ghost" onClick={() => { setOpenId(item.id); setNote(item.adminNote ?? ''); }}>{item.adminNote ? 'Edit note' : 'Add note'}</button>
+                )}
+              </div>
+            ) : null}
+          </article>
+        ))}
+        {data && data.items.length === 0 ? <p>No feedback matches.</p> : null}
+
+        <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
+          <button className="btn small" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
+          <span>Page {page} of {pages} · {data?.total ?? 0} items</span>
+          <button className="btn small" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button>
+        </div>
+      </section>
     </>
   );
 }

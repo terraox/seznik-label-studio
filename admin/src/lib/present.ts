@@ -1,3 +1,4 @@
+import { normalizeRole } from './permissions';
 import type { Admin, AdminRecord } from './types';
 
 export function publicAdmin(admin: AdminRecord): Admin {
@@ -5,8 +6,10 @@ export function publicAdmin(admin: AdminRecord): Admin {
     id: admin.id,
     name: admin.name,
     email: admin.email,
-    role: admin.role,
+    role: normalizeRole(admin.role),
     active: admin.active,
     createdAt: admin.createdAt,
+    totpEnabled: !!admin.totpSecret,
+    mustChangePassword: !!admin.mustChangePassword,
   };
 }

@@ -1,6 +1,6 @@
 import { PRINTERS } from '@/lib/constants';
 import { toCsv } from '@/lib/format';
-import { requireRole } from '@/lib/guard';
+import { requirePermission } from '@/lib/guard';
 import { fail, HttpError } from '@/lib/http';
 import { read } from '@/lib/store';
 
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    await requireRole('viewer');
+    await requirePermission('users.export');
     const type = new URL(request.url).searchParams.get('type');
     const file = await read((db) => {
       const templateName = (id: string) => db.templates.find((item) => item.id === id)?.name ?? '';

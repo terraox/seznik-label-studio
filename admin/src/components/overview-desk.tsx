@@ -1,121 +1,150 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { LayoutTemplate, Printer, Smartphone } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Cable, Printer, Star, UserPlus, Users } from 'lucide-react';
+
+import { AnalyticsFooter, type FooterInfo } from '@/components/analytics-footer';
 import { PageHeader } from '@/components/ui';
 import { api } from '@/lib/client';
-import { PRINTERS } from '@/lib/constants';
-import { ago } from '@/lib/format';
-import type { Telemetry } from '@/lib/types';
+
+type Summary = {
+  users: { total: number; active: number; blocked: number; newLast7Days: number; internalAccounts: number };
+  prints: { lifetimeLabels: number };
+  printerModels: number;
+  rating: { average: number | null; count: number };
+  footer: FooterInfo;
+};
+type Prints = {
+  lifetime: { labels: number; jobs: number };
+  last7Days: { labels: number; jobs: number };
+  thisMonth: { labels: number; jobs: number };
+  daily: { day: string; labels: number; jobs: number }[];
+};
+type LabelRow = { rank: number; labelKey: string; display: string; kind: string; labelsPrinted: number; jobs: number; users: number };
 
 const WINDOWS = [
-  ['today', 'Today'],
-  ['last3', 'Last 3 days'],
-  ['last7', 'Last 7 days'],
-  ['month', 'This month'],
-  ['lifetime', 'Lifetime'],
-] as const;
+  { id: '7d', label: 'Last 7 days' },
+  { id: 'month', label: 'This month' },
+  { id: 'all', label: 'Lifetime' },
+];
 
 export function OverviewDesk() {
-  const [data, setData] = useState<Telemetry | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [prints, setPrints] = useState<Prints | null>(null);
+  const [labels, setLabels] = useState<LabelRow[]>([]);
+  const [windowId, setWindowId] = useState('all');
+  const [hideInternal, setHideInternal] = useState(true);
   const [error, setError] = useState('');
 
-  function load() {
-    setError('');
-    api<Telemetry>('/api/telemetry').then(setData).catch((reason: Error) => setError(reason.message));
-  }
+  const load = useCallback(() => {
+    const q = hideInternal ? 'internal=hide' : '';
+    Promise.all([
+      api<Summary>(`/api/stats/summary?${q}`),
+      api<Prints>(`/api/stats/prints?${q}`),
+      api<{ labels: LabelRow[] }>(`/api/stats/labels?${q}&window=${windowId}&limit=20`),
+    ])
+      .then(([s, p, l]) => {
+        setSummary(s);
+        setPrints(p);
+        setLabels(l.labels);
+        setError('');
+      })
+      .catch((e: Error) => setError(e.message));
+  }, [hideInternal, windowId]);
 
-  useEffect(load, []);
+  useEffect(load, [load]);
 
-  const max = Math.max(1, ...(data?.byTemplate.map((row) => row.count) ?? [1]));
+  const cards = [
+    { title: 'Total users', value: summary?.users.total, sub: `${summary?.users.active ?? 0} active · ${summary?.users.blocked ?? 0} blocked`, Icon: Users, color: '#3B82F6' },
+    { title: 'New in 7 days', value: summary?.users.newLast7Days, sub: 'registered recently', Icon: UserPlus, color: '#8B5CF6' },
+    { title: 'Labels printed', value: summary?.prints.lifetimeLabels, sub: 'lifetime, sent to a printer', Icon: Printer, color: '#10B981' },
+    { title: 'Printer models', value: summary?.printerModels, sub: 'unique, after merge rules', Icon: Cable, color: '#F59E0B' },
+    { title: 'Average rating', value: summary ? (summary.rating.average ?? '—') : undefined, sub: `${summary?.rating.count ?? 0} ratings`, Icon: Star, color: '#EF4444' },
+  ];
+
+  const totals = [
+    { title: 'Lifetime', block: prints?.lifetime },
+    { title: 'Last 7 days', block: prints?.last7Days },
+    { title: 'This month (IST)', block: prints?.thisMonth },
+  ];
 
   return (
     <>
-      <PageHeader
-        kicker="Telemetry"
-        title="How the app is being used"
-        lede="Which phones have opened the app, what is published, and what actually printed."
-      >
-        <a className="btn" href="/api/export?type=devices">Devices CSV</a>
-        <a className="btn" href="/api/export?type=prints">Prints CSV</a>
+      <PageHeader kicker="Overview" title="How the app is being used" lede="People, printers and labels printed. Windows use India time; the last 7 days is a rolling 7 x 24 hours.">
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
+          <input type="checkbox" checked={hideInternal} onChange={(e) => setHideInternal(e.target.checked)} />
+          Exclude internal / test accounts{summary ? ` (${summary.users.internalAccounts})` : ''}
+        </label>
         <button type="button" className="btn ghost" onClick={load}>Refresh</button>
       </PageHeader>
       {error ? <p className="err">{error}</p> : null}
-      {!data ? <p className="loading">Pulling the latest counts…</p> : (
-        <>
-          <section className="kpis" aria-label="Summary">
-            {[
-              { title: 'Devices', value: data.devices.total, sub: `${data.devices.active7d} opened the app in 7 days`, Icon: Smartphone, color: '#3B82F6' },
-              { title: 'Published templates', value: data.templates.published, sub: `${data.templates.drafts} still in draft`, Icon: LayoutTemplate, color: '#10B981' },
-              { title: 'Prints, lifetime', value: data.prints.lifetime, sub: `${data.prints.month} this month`, Icon: Printer, color: '#8B5CF6' },
-            ].map(({ title, value, sub, Icon, color }) => (
-              <article className="kpi" key={title}>
-                <div className="kpi-top">
-                  <span className="kpi-title">{title}</span>
-                  <span className="kpi-icon" style={{ background: `${color}20`, border: `1px solid ${color}40` }}>
-                    <Icon size={16} color={color} />
-                  </span>
-                </div>
-                <div className="kpi-value">{value.toLocaleString()}</div>
-                <div className="kpi-sub">{sub}</div>
-              </article>
-            ))}
-          </section>
-          <section className="kpis" aria-label="Print counts">
-            {WINDOWS.map(([key, label]) => (
-              <article className="kpi" key={key}>
-                <span className="kpi-title">{label}</span>
-                <div className="kpi-value">{data.prints[key].toLocaleString()}</div>
-                <div className="kpi-sub">{key === 'last3' || key === 'last7' ? 'Includes today' : 'Print events'}</div>
-              </article>
-            ))}
-          </section>
-          <div className="split">
-            <section className="panel">
-              <h2>Prints by template</h2>
-              {data.byTemplate.map((row) => (
-                <div className="bar-row" key={row.id}>
-                  <span>{row.name}</span>
-                  <div className="bar" aria-hidden><i style={{ width: `${(row.count / max) * 100}%` }} /></div>
-                  <b>{row.count}</b>
-                </div>
-              ))}
-              <a className="btn small" href="/api/export?type=template-usage">Download CSV</a>
-            </section>
-            <div className="stack">
-              <section className="panel">
-                <h2>Printers</h2>
-                <div className="mix" aria-hidden>
-                  {data.byPrinter.filter((row) => row.count > 0).map((row) => (
-                    <span key={row.id} style={{ flex: row.count, background: PRINTERS.find((item) => item.id === row.id)?.color }} />
-                  ))}
-                </div>
-                <div className="legend">
-                  {data.byPrinter.map((row) => (
-                    <span key={row.id}>
-                      <i style={{ background: PRINTERS.find((item) => item.id === row.id)?.color }} />
-                      {row.label} · {row.count}
-                    </span>
-                  ))}
-                </div>
-              </section>
-              <section className="panel">
-                <h2>Latest prints</h2>
-                <ul className="feed">
-                  {data.recent.map((row) => (
-                    <li key={row.id}>
-                      <strong>{row.templateName}</strong>
-                      <span>{ago(row.at)}</span>
-                      <small>{row.printer}</small>
-                      <small>{row.device}</small>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+
+      <section className="kpis" aria-label="Summary">
+        {cards.map(({ title, value, sub, Icon, color }) => (
+          <article className="kpi" key={title}>
+            <div className="kpi-top">
+              <span className="kpi-title">{title}</span>
+              <span className="kpi-icon" style={{ background: `${color}20`, border: `1px solid ${color}40` }}><Icon size={16} color={color} /></span>
             </div>
-          </div>
-        </>
-      )}
+            <div className="kpi-value">{value === undefined ? '…' : typeof value === 'number' ? value.toLocaleString() : value}</div>
+            <div className="kpi-sub">{sub}</div>
+          </article>
+        ))}
+      </section>
+
+      <section className="kpis" aria-label="Print totals">
+        {totals.map(({ title, block }) => (
+          <article className="kpi" key={title}>
+            <div className="kpi-top"><span className="kpi-title">Labels · {title}</span></div>
+            <div className="kpi-value">{block ? block.labels.toLocaleString() : '…'}</div>
+            <div className="kpi-sub">{block ? `${block.jobs.toLocaleString()} print job${block.jobs === 1 ? '' : 's'}` : ''}</div>
+          </article>
+        ))}
+      </section>
+
+      <section className="panel">
+        <h2>Labels printed per day (last 30 days)</h2>
+        <div style={{ width: '100%', height: 240 }}>
+          <ResponsiveContainer>
+            <BarChart data={prints?.daily ?? []} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="day" tickFormatter={(d: string) => d.slice(5)} interval={4} fontSize={11} />
+              <YAxis allowDecimals={false} fontSize={11} width={40} />
+              <Tooltip formatter={(v) => [Number(v ?? 0).toLocaleString(), 'Labels']} labelFormatter={(d) => `${d} (IST)`} />
+              <Bar dataKey="labels" fill="#3B82F6" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="panel" style={{ marginTop: 14 }}>
+        <h2>Most printed labels</h2>
+        <div className="chips" style={{ marginBottom: 12 }}>
+          {WINDOWS.map((w) => (
+            <button key={w.id} type="button" className={windowId === w.id ? 'chip active' : 'chip'} onClick={() => setWindowId(w.id)}>{w.label}</button>
+          ))}
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table">
+            <thead><tr><th>#</th><th>Label</th><th>Labels printed</th><th>Jobs</th><th>People</th></tr></thead>
+            <tbody>
+              {labels.map((l) => (
+                <tr key={l.labelKey}>
+                  <td>{l.rank}</td>
+                  <td>{l.display} {l.kind === 'template' ? <span className="badge draft">template</span> : null}</td>
+                  <td>{l.labelsPrinted.toLocaleString()}</td>
+                  <td>{l.jobs.toLocaleString()}</td>
+                  <td>{l.users}</td>
+                </tr>
+              ))}
+              {labels.length === 0 ? <tr><td colSpan={5}>Nothing printed in this window yet.</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <AnalyticsFooter footer={summary?.footer} />
     </>
   );
 }

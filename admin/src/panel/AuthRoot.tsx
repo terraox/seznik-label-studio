@@ -96,7 +96,7 @@ const SupportAuthRoot: React.FC = () => {
 export const AuthRoot: React.FC = () => {
   const [isSupport, setIsSupport] = useState(() => isSupportRoute());
   const [status, setStatus] = useState<AuthStatus>('loading');
-  const [userId, setUserId] = useState('SezAdmin');
+  const [userId, setUserId] = useState('');
 
   useEffect(() => {
     const sync = () => setIsSupport(isSupportRoute());

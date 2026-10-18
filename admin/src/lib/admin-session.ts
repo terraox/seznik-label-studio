@@ -1,18 +1,27 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { cookies } from 'next/headers';
 
+import { getSecret } from './secrets';
+
 const COOKIE = 'seznik_admin_session';
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function secret() {
-  return process.env.ADMIN_SESSION_SECRET || 'dev-admin-session-secret';
+  return getSecret('ADMIN_SESSION_SECRET');
 }
 
-export function getAdminCredentials() {
-  return {
-    userId: process.env.ADMIN_USER_ID || 'SezAdmin',
-    password: process.env.ADMIN_PASSWORD || 'SeznikAdmin310!',
-  };
+/** The /api/admin sign-in is off unless both variables are set (no built-in login). */
+export function getAdminCredentials(): { userId: string; password: string } | null {
+  const userId = (process.env.ADMIN_USER_ID ?? '').trim();
+  const password = process.env.ADMIN_PASSWORD ?? '';
+  if (!userId || password.length < 16) return null;
+  return { userId, password };
+}
+
+export function sameText(a: string, b: string): boolean {
+  const x = createHmac('sha256', 'cmp').update(a).digest();
+  const y = createHmac('sha256', 'cmp').update(b).digest();
+  return timingSafeEqual(x, y);
 }
 
 export function createSessionToken(userId: string): string {

@@ -1,5 +1,5 @@
 import { saveUpload } from '@/lib/files';
-import { requireRole } from '@/lib/guard';
+import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
 import { nid } from '@/lib/format';
 import { read, update } from '@/lib/store';
@@ -20,7 +20,7 @@ function kindOf(value: string): AssetKind {
 
 export async function GET() {
   try {
-    await requireRole('viewer');
+    await requirePermission('catalog.view');
     const data = await read((db) => ({ clipart: db.clipart, stickers: db.stickers }));
     return json(data);
   } catch (error) {
@@ -30,7 +30,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireRole('editor');
+    await requirePermission('catalog.edit');
     const form = await request.formData();
     const name = String(form.get('name') ?? '').trim();
     const kind = kindOf(String(form.get('kind') ?? ''));

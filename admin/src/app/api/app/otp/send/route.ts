@@ -2,13 +2,11 @@ import { NextResponse } from 'next/server';
 
 import { corsPreflight, withCors } from '@/lib/cors';
 import { sendOtpSms } from '@/lib/msg91';
-import { discardOtp, issueOtp } from '@/lib/otp-store';
-import {
-  RESEND_COOLDOWN_MS,
-  recordSend,
-  sendWaitSeconds,
-} from '@/lib/otp-throttle';
+import { blockedResponse, upgradeRequired } from '@/lib/app-auth';
+import { devBypassCode, discardOtp, issueOtp } from '@/lib/otp-store';
+import { RESEND_COOLDOWN_MS, takeSendSlot } from '@/lib/otp-throttle';
 import { parsePurpose } from '@/lib/otp-proof';
+import { normalizeMobile } from '@/lib/phone';
 import { prisma } from '@/lib/prisma';
 
 export function OPTIONS() {
@@ -17,20 +15,25 @@ export function OPTIONS() {
 
 export async function POST(request: Request) {
   try {
+    const old = await upgradeRequired(request);
+    if (old) return old;
     const body = (await request.json().catch(() => ({}))) as {
       mobile?: string;
       purpose?: string;
     };
     const purpose = parsePurpose(body.purpose);
-    const mobile = (body.mobile ?? '').replace(/\D/g, '');
-    if (!/^[6-9]\d{9}$/.test(mobile)) {
+    const mobile = normalizeMobile(body.mobile);
+    if (!mobile) {
       return withCors(
         NextResponse.json({ error: 'Enter a valid 10-digit mobile number.' }, { status: 400 }),
       );
     }
 
+    const claim = await prisma.registeredPhone.findUnique({ where: { mobile } });
+    if (purpose === 'register' && claim?.blocked) return blockedResponse(claim.blockReason);
     const existing = await prisma.user.findUnique({ where: { mobile } });
-    if (purpose === 'register' && existing) {
+    if (purpose === 'login' && existing?.status === 'blocked') return blockedResponse(existing.blockMessage);
+    if (purpose === 'register' && (existing || claim)) {
       return withCors(
         NextResponse.json(
           { error: 'This number is already registered. Please log in.' },
@@ -47,7 +50,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { wait, capped } = sendWaitSeconds(mobile);
+    const { wait, capped } = await takeSendSlot(mobile);
     if (wait > 0) {
       return withCors(
         NextResponse.json(
@@ -62,13 +65,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await sendOtpSms(mobile, issueOtp(mobile));
+    const otp = await issueOtp(mobile, purpose);
+    const result = devBypassCode(mobile) ? { ok: true as const } : await sendOtpSms(mobile, otp);
     if (!result.ok) {
-      discardOtp(mobile);
+      await discardOtp(mobile);
       return withCors(NextResponse.json({ error: result.error }, { status: 502 }));
     }
 
-    recordSend(mobile);
     return withCors(NextResponse.json({ ok: true, resendAfter: RESEND_COOLDOWN_MS / 1000 }));
   } catch (err) {
     console.error('otp send failed', err);

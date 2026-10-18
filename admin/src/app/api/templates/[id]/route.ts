@@ -1,5 +1,5 @@
 import { removeUpload, saveUpload } from '@/lib/files';
-import { requireRole } from '@/lib/guard';
+import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
 import { update } from '@/lib/store';
 import { normalizeDocument, parseTemplateJson } from '@/lib/template-doc';
@@ -12,7 +12,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, ctx: Ctx) {
   try {
-    await requireRole('editor');
+    await requirePermission('catalog.edit');
     const { id } = await ctx.params;
     const contentType = request.headers.get('content-type') ?? '';
     const template = await update(async (db) => {
@@ -66,7 +66,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
 export async function DELETE(_request: Request, ctx: Ctx) {
   try {
-    await requireRole('editor');
+    await requirePermission('catalog.edit');
     const { id } = await ctx.params;
     await update(async (db) => {
       const index = db.templates.findIndex((item) => item.id === id);

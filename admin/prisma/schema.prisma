@@ -1,24 +1,353 @@
+// Source of truth for the Postgres tables. Keep admin/docs/database.dbml in step:
+//   npm run check:dbml   fails when a model or column is missing from the diagram.
+// Change flow:  edit this file -> npm run db:migrate -- --name <what_changed> -> update the .dbml.
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-/// Mobile app account. Password is stored hashed (bcrypt).
+enum UserStatus {
+  active
+  blocked
+}
+
+enum StatusAction {
+  block
+  unblock
+  force_logout
+}
+
+// ───────────────────────── Mobile app accounts ─────────────────────────
+
+/// Mobile app account. Password is stored hashed (bcrypt). `mobile` is the normalised 10-digit number.
 model User {
-  id               String    @id @default(cuid())
-  name             String
-  mobile           String    @unique
-  passwordHash     String
+  id                String     @id @default(cuid())
+  name              String
+  mobile            String     @unique
+  passwordHash      String
   /// Purchased printer: tejas | rudra | josh
-  printerName      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  lastLoginAt      DateTime?
+  printerName       String?
+  status            UserStatus @default(active)
+  blockedAt         DateTime?
+  /// Admin sign-in (email/username) that blocked the account.
+  blockedBy         String?
+  /// Shown to the user on the blocked screen.
+  blockMessage      String?
+  /// Visible to admins only.
+  blockInternalNote String?
+  /// Bumped on block / force-logout; app tokens carry the value they were issued with.
+  tokenVersion      Int        @default(0)
+  /// Labels sent to a connected printer (kept equal to SUM(PrintEvent.labelsCount)).
+  printCountTotal   Int        @default(0)
+  lastPrintAt       DateTime?
+  lastSeenAt        DateTime?
+  appVersion        String?
+  platform          String?
+  deviceModel       String?
+  /// Test / staff accounts; hidden from headline numbers by a toggle.
+  isInternal        Boolean    @default(false)
+  passwordUpdatedAt DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  lastLoginAt       DateTime?
+
+  statusEvents   UserStatusEvent[]
+  registeredAs   RegisteredPhone?
+  printEvents    PrintEvent[]
+  connections    PrinterConnection[]
+  feedback       Feedback[]
+  productClicks  ProductClick[]
 
   @@index([printerName])
+  @@index([status])
+  @@index([createdAt])
   @@map("AppUser")
+}
+
+/// Permanent claim on a mobile number. Rows are never deleted, so a number can register once,
+/// even after the account is removed. An admin can also pre-block a number with no account.
+model RegisteredPhone {
+  mobile            String    @id
+  userId            String?   @unique
+  firstRegisteredAt DateTime  @default(now())
+  blocked           Boolean   @default(false)
+  blockReason       String?
+  blockedAt         DateTime?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([blocked])
+}
+
+/// Every block, unblock and forced logout, newest last.
+model UserStatusEvent {
+  id           String       @id @default(cuid())
+  userId       String
+  action       StatusAction
+  /// User-visible text (block) or the unblock note.
+  message      String?
+  internalNote String?
+  adminEmail   String
+  createdAt    DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// ───────────────────────── Printers and printing ─────────────────────────
+
+model Printer {
+  id              String   @id @default(cuid())
+  /// Name exactly as the SDK reports it.
+  nameRaw         String   @unique
+  modelNormalised String
+  /// dev | tez | josh | labelx | td404 | unknown
+  sdkFamily       String   @default("unknown")
+  firstSeenAt     DateTime @default(now())
+
+  connections PrinterConnection[]
+  printEvents PrintEvent[]
+
+  @@index([modelNormalised])
+}
+
+/// Admin-editable merge / rename rules for printer names.
+model PrinterAlias {
+  id              String   @id @default(cuid())
+  pattern         String   @unique
+  displayName     String
+  modelNormalised String
+  createdAt       DateTime @default(now())
+}
+
+/// One successful connect (not retries or reconnect flaps).
+model PrinterConnection {
+  id         String   @id @default(cuid())
+  /// Client-generated id; makes retries safe.
+  eventId    String   @unique
+  userId     String
+  printerId  String
+  /// bt_spp | ble | wifi
+  transport  String
+  occurredAt DateTime
+  receivedAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  printer Printer @relation(fields: [printerId], references: [id])
+
+  @@index([userId, occurredAt])
+  @@index([printerId])
+}
+
+/// One finished print job. A printer is mandatory: nothing is counted without a connected printer.
+model PrintEvent {
+  id                   String   @id @default(cuid())
+  eventId              String   @unique
+  jobId                String
+  /// Null once the account is deleted (events are kept, anonymised).
+  userId               String?
+  printerId            String
+  /// manual_size | template | excel_bulk | pdf | photo | scan | serial | other
+  source               String
+  labelWidthMm         Float
+  labelHeightMm        Float
+  templateId           String?
+  templateNameSnapshot String?
+  /// manual:{W}x{H} or template:{id}:{W}x{H}
+  labelKey             String
+  jobs                 Int      @default(1)
+  /// Physical labels confirmed sent (headline number).
+  labelsCount          Int
+  ups                  Int      @default(1)
+  appVersion           String?
+  occurredAt           DateTime
+  receivedAt           DateTime @default(now())
+
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  printer Printer @relation(fields: [printerId], references: [id])
+
+  @@index([occurredAt])
+  @@index([userId, occurredAt])
+  @@index([labelKey])
+  @@index([printerId])
+}
+
+// ───────────────────────── Feedback and shop ─────────────────────────
+
+model Feedback {
+  id         String   @id @default(cuid())
+  eventId    String   @unique
+  userId     String
+  /// 1 to 5
+  rating     Int
+  /// suggestion | bug | other
+  category   String
+  message    String?
+  appVersion String?
+  platform   String?
+  /// new | reviewed | resolved
+  status     String   @default("new")
+  adminNote  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([rating])
+  @@index([status, createdAt])
+}
+
+model ProductClick {
+  id                  String   @id @default(cuid())
+  eventId             String   @unique
+  userId              String
+  /// Stable product id from the app's bundled shop catalogue.
+  productKey          String
+  productNameSnapshot String
+  /// labels | printers
+  category            String
+  source              String   @default("shop_buy")
+  occurredAt          DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([productKey, occurredAt])
+}
+
+// ───────────────────────── Clipart and template library ─────────────────────────
+
+model CatalogCategory {
+  id        String    @id @default(cuid())
+  /// clipart | template
+  kind      String
+  name      String
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  items CatalogItem[]
+
+  @@index([kind, sortOrder])
+}
+
+model CatalogItem {
+  id            String    @id @default(cuid())
+  kind          String
+  categoryId    String
+  name          String
+  /// Storage key of the sanitised SVG (local disk in development, S3 key in production).
+  svgKey        String
+  thumbKey      String?
+  widthMm       Float?
+  heightMm      Float?
+  viewBox       String?
+  fileSizeBytes Int
+  /// sha256 of the sanitised file.
+  contentHash   String
+  version       Int       @default(1)
+  /// draft | published
+  status        String    @default("draft")
+  /// Catalogue-wide counter used for delta sync.
+  revision      Int
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  category CatalogCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@index([revision])
+}
+
+/// Lets the app learn which items were deleted since its last sync.
+model CatalogTombstone {
+  itemId    String   @id
+  revision  Int
+  deletedAt DateTime @default(now())
+
+  @@index([revision])
+}
+
+// ───────────────────────── Platform ─────────────────────────
+
+/// Desk (admin panel) sign-ins. Passwords are scrypt hashes; the TOTP key is the authenticator secret.
+model AdminAccount {
+  id                 String   @id
+  name               String
+  /// Sign-in name, stored lower-case (an email or a plain username such as seznikadmin).
+  email              String   @unique
+  /// superadmin | support | content | viewer
+  role               String   @default("support")
+  active             Boolean  @default(true)
+  passwordHash       String
+  mustChangePassword Boolean  @default(false)
+  /// Password is owned by ADMIN_FIXED_PASSWORD in the environment and re-applied on every start.
+  fixedCredentials   Boolean  @default(false)
+  credsVersion       Int      @default(1)
+  totpSecret         String?
+  pendingTotpSecret  String?
+  /// Last accepted authenticator time step; stops a code being used twice.
+  lastTotpStep       Int?
+  lastLoginAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  auditEntries AdminAuditLog[]
+}
+
+/// adminEmail is copied so history stays readable if an account is later renamed.
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  adminEmail String
+  action     String
+  targetType String
+  targetId   String
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  admin AdminAccount @relation(fields: [adminId], references: [id])
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
+}
+
+/// SMS one-time codes (hashed). Replaces the old in-memory store so it works across servers.
+model OtpCode {
+  id         String    @id @default(cuid())
+  mobile     String
+  /// register | login
+  purpose    String
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([mobile, createdAt])
+}
+
+/// Fixed-window counters (OTP sends, login attempts).
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+  updatedAt   DateTime @updatedAt
+}
+
+/// Key/value settings the app reads from /api/app/config (admin contact, minimum build).
+model AppConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }

@@ -5,6 +5,7 @@ import {
   createSessionToken,
   getAdminCredentials,
   getSessionUserId,
+  sameText,
   sessionCookieValue,
 } from '@/lib/admin-session';
 import { APP_PRINTER_OPTIONS } from '@/lib/printers';
@@ -39,11 +40,14 @@ async function handle(request: Request, ctx: Ctx) {
   if (path === 'login' && method === 'POST') {
     const body = (await parseBody(request)) as { userId?: string; password?: string } | null;
     const creds = getAdminCredentials();
+    if (!creds) {
+      return NextResponse.json({ error: 'This sign-in is not enabled.' }, { status: 503 });
+    }
     if (
       !body?.userId ||
       !body.password ||
-      body.userId !== creds.userId ||
-      body.password !== creds.password
+      !sameText(body.userId, creds.userId) ||
+      !sameText(body.password, creds.password)
     ) {
       return NextResponse.json({ error: 'Invalid user ID or password' }, { status: 401 });
     }

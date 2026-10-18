@@ -5,6 +5,7 @@ import { useDesk, useToast } from '@/components/desk';
 import { Field, PageHeader } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ROLES } from '@/lib/constants';
+import { can } from '@/lib/permissions';
 import type { Admin, Role } from '@/lib/types';
 
 export function SettingsDesk() {
@@ -14,7 +15,7 @@ export function SettingsDesk() {
   const [name, setName] = useState(me.name);
   const [password, setPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
-  const [create, setCreate] = useState({ name: '', email: '', password: '', role: 'editor' as Role });
+  const [create, setCreate] = useState({ name: '', email: '', password: '', role: 'support' as Role });
   const [confirmReset, setConfirmReset] = useState(false);
 
   function load() {
@@ -43,7 +44,7 @@ export function SettingsDesk() {
     event.preventDefault();
     try {
       await api('/api/admins', { method: 'POST', body: JSON.stringify(create) });
-      setCreate({ name: '', email: '', password: '', role: 'editor' });
+      setCreate({ name: '', email: '', password: '', role: 'support' });
       toast('They can sign in now');
       load();
     } catch (reason) {
@@ -117,7 +118,7 @@ export function SettingsDesk() {
                 <td>{admin.name}</td>
                 <td>{admin.email}</td>
                 <td>
-                  {me.role === 'owner' && admin.id !== me.id ? (
+                  {can(me.role, 'admins.manage') && admin.id !== me.id ? (
                     <select value={admin.role} onChange={(event) => changeRole(admin, event.target.value as Role)} aria-label={`Role for ${admin.name}`}>
                       {ROLES.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
                     </select>
@@ -126,7 +127,7 @@ export function SettingsDesk() {
                   )}
                 </td>
                 <td>
-                  {me.role === 'owner' && admin.id !== me.id ? (
+                  {can(me.role, 'admins.manage') && admin.id !== me.id ? (
                     <button type="button" className="btn small" onClick={() => setActive(admin, !admin.active)}>
                       {admin.active ? 'Disable' : 'Enable'}
                     </button>
@@ -138,7 +139,7 @@ export function SettingsDesk() {
             ))}
           </tbody>
         </table>
-        {me.role === 'owner' ? (
+        {can(me.role, 'admins.manage') ? (
           <form onSubmit={addPerson}>
             <h3>Add someone</h3>
             <div className="sizes">
@@ -159,7 +160,7 @@ export function SettingsDesk() {
           </form>
         ) : null}
       </section>
-      {me.role === 'owner' ? (
+      {can(me.role, 'admins.manage') ? (
         <section className="note" style={{ marginTop: 14 }}>
           <h2>Sample library</h2>
           <p>Restores the sample templates, art, prints, and feedback. People who can sign in stay as they are. Uploaded files in the library are removed.</p>

@@ -1,0 +1,376 @@
+// SEZ Print database diagram (DBML). Paste into https://dbdiagram.io to see it.
+// Docs: https://dbml.dbdiagram.io/docs
+//
+// Source of truth: admin/prisma/schema.prisma. After changing it, update this file and run
+//   npm run check:dbml     (fails when a table or column is missing here)
+//
+// Legend
+//   [BUILT]  table exists in Postgres and is used by code today
+//   [READY]  table exists in Postgres, filled by a later phase (print events, feedback, catalogue...)
+//   [FILE]   not in Postgres: lives in admin/data/store.json until it moves in a later step
+//            (today only the demo desk content: templates, clipart, reviews, suggestions)
+
+Project sez_print {
+  database_type: 'PostgreSQL'
+  Note: 'SEZ Print mobile app accounts, printing analytics, feedback, shop clicks, clipart/template catalogue and admin audit.'
+}
+
+Enum UserStatus {
+  active
+  blocked
+}
+
+Enum StatusAction {
+  block
+  unblock
+  force_logout
+}
+
+// ─────────────── Accounts and blocking [BUILT] ───────────────
+
+Table AppUser {
+  id varchar [pk, note: 'cuid']
+  name varchar [not null]
+  mobile varchar [unique, not null, note: 'Normalised 10-digit Indian number (6-9 first digit)']
+  passwordHash varchar [not null, note: 'bcrypt. Never returned by any API']
+  printerName varchar [note: 'Printer the user says they bought: tejas | rudra | josh']
+  status UserStatus [not null, default: 'active']
+  blockedAt timestamp
+  blockedBy varchar [note: 'Admin who blocked']
+  blockMessage varchar [note: 'Shown to the user on the blocked screen']
+  blockInternalNote varchar [note: 'Admins only']
+  tokenVersion int [not null, default: 0, note: 'Bumped on block / sign-out; app tokens must carry the current value']
+  printCountTotal int [not null, default: 0, note: 'Labels sent to a connected printer']
+  lastPrintAt timestamp
+  lastSeenAt timestamp
+  appVersion varchar
+  platform varchar
+  deviceModel varchar
+  isInternal boolean [not null, default: false, note: 'Test / staff account']
+  passwordUpdatedAt timestamp
+  deletedAt timestamp
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+  lastLoginAt timestamp
+
+  indexes {
+    printerName
+    status
+    createdAt
+  }
+  Note: '[BUILT] One row per registered mobile app user.'
+}
+
+Table RegisteredPhone {
+  mobile varchar [pk, note: 'Same normalised number as AppUser.mobile']
+  userId varchar [unique, note: 'Null for a number an admin pre-blocked']
+  firstRegisteredAt timestamp [not null]
+  blocked boolean [not null, default: false]
+  blockReason varchar
+  blockedAt timestamp
+
+  indexes {
+    blocked
+  }
+  Note: '[BUILT] Permanent claim on a number. Rows are never deleted, so a number can sign up once only.'
+}
+
+Table UserStatusEvent {
+  id varchar [pk]
+  userId varchar [not null]
+  action StatusAction [not null]
+  message varchar [note: 'User-visible text (block) or the unblock note']
+  internalNote varchar
+  adminEmail varchar [not null]
+  createdAt timestamp [not null]
+
+  indexes {
+    (userId, createdAt)
+  }
+  Note: '[BUILT] Every block, unblock and forced sign-out.'
+}
+
+// ─────────────── Printing [READY] ───────────────
+
+Table Printer {
+  id varchar [pk]
+  nameRaw varchar [unique, not null, note: 'Exactly as the SDK reports it']
+  modelNormalised varchar [not null]
+  sdkFamily varchar [not null, default: 'unknown', note: 'dev | tez | josh | labelx | td404 | unknown']
+  firstSeenAt timestamp [not null]
+
+  indexes {
+    modelNormalised
+  }
+  Note: '[READY] Distinct printer names seen.'
+}
+
+Table PrinterAlias {
+  id varchar [pk]
+  pattern varchar [unique, not null]
+  displayName varchar [not null]
+  modelNormalised varchar [not null]
+  createdAt timestamp [not null]
+  Note: '[READY] Admin-editable merge / rename rules for printer names.'
+}
+
+Table PrinterConnection {
+  id varchar [pk]
+  eventId varchar [unique, not null, note: 'Client uuid: makes retries safe']
+  userId varchar [not null]
+  printerId varchar [not null]
+  transport varchar [not null, note: 'bt_spp | ble | wifi']
+  occurredAt timestamp [not null]
+  receivedAt timestamp [not null]
+
+  indexes {
+    (userId, occurredAt)
+    printerId
+  }
+  Note: '[READY] One successful connect (not retries or flaps).'
+}
+
+Table PrintEvent {
+  id varchar [pk]
+  eventId varchar [unique, not null]
+  jobId varchar [not null]
+  userId varchar [note: 'Null once the account is deleted (events are kept)']
+  printerId varchar [not null, note: 'Mandatory: no printer, no count']
+  source varchar [not null, note: 'manual_size | template | excel_bulk | pdf | photo | scan | serial | other']
+  labelWidthMm float [not null]
+  labelHeightMm float [not null]
+  templateId varchar
+  templateNameSnapshot varchar
+  labelKey varchar [not null, note: 'manual:{W}x{H} or template:{id}:{W}x{H}']
+  jobs int [not null, default: 1]
+  labelsCount int [not null, note: 'Physical labels confirmed sent (headline number)']
+  ups int [not null, default: 1]
+  appVersion varchar
+  occurredAt timestamp [not null]
+  receivedAt timestamp [not null]
+
+  indexes {
+    occurredAt
+    (userId, occurredAt)
+    labelKey
+    printerId
+  }
+  Note: '[READY] One finished print job.'
+}
+
+// ─────────────── Feedback and shop [READY] ───────────────
+
+Table Feedback {
+  id varchar [pk]
+  eventId varchar [unique, not null]
+  userId varchar [not null]
+  rating int [not null, note: '1 to 5']
+  category varchar [not null, note: 'suggestion | bug | other']
+  message varchar
+  appVersion varchar
+  platform varchar
+  status varchar [not null, default: 'new', note: 'new | reviewed | resolved']
+  adminNote varchar
+  createdAt timestamp [not null]
+
+  indexes {
+    rating
+    (status, createdAt)
+  }
+  Note: '[READY] Star ratings and suggestions from the app.'
+}
+
+Table ProductClick {
+  id varchar [pk]
+  eventId varchar [unique, not null]
+  userId varchar [not null]
+  productKey varchar [not null, note: 'Product id from the app shop catalogue']
+  productNameSnapshot varchar [not null]
+  category varchar [not null, note: 'labels | printers']
+  source varchar [not null, default: 'shop_buy']
+  occurredAt timestamp [not null]
+
+  indexes {
+    (productKey, occurredAt)
+  }
+  Note: '[READY] A tap on a shop product.'
+}
+
+// ─────────────── Clipart and template library [READY] ───────────────
+
+Table CatalogCategory {
+  id varchar [pk]
+  kind varchar [not null, note: 'clipart | template']
+  name varchar [not null]
+  sortOrder int [not null, default: 0]
+  createdAt timestamp [not null]
+  deletedAt timestamp
+
+  indexes {
+    (kind, sortOrder)
+  }
+  Note: '[READY]'
+}
+
+Table CatalogItem {
+  id varchar [pk]
+  kind varchar [not null]
+  categoryId varchar [not null]
+  name varchar [not null]
+  svgKey varchar [not null, note: 'Storage key of the sanitised SVG']
+  thumbKey varchar
+  widthMm float
+  heightMm float
+  viewBox varchar
+  fileSizeBytes int [not null]
+  contentHash varchar [not null, note: 'sha256 of the sanitised file']
+  version int [not null, default: 1]
+  status varchar [not null, default: 'draft', note: 'draft | published']
+  revision int [not null, note: 'Catalogue-wide counter for delta sync']
+  createdBy varchar [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+  deletedAt timestamp
+
+  indexes {
+    categoryId
+    revision
+  }
+  Note: '[READY] One clipart or template SVG.'
+}
+
+Table CatalogTombstone {
+  itemId varchar [pk]
+  revision int [not null]
+  deletedAt timestamp [not null]
+
+  indexes {
+    revision
+  }
+  Note: '[READY] Tells the app which items were deleted since its last sync.'
+}
+
+// ─────────────── Platform ───────────────
+
+Table AdminAuditLog {
+  id varchar [pk]
+  adminId varchar [not null]
+  adminEmail varchar [not null]
+  action varchar [not null, note: 'user.block | user.unblock | user.force_logout | phone.block | config.update | users.export ...']
+  targetType varchar [not null]
+  targetId varchar [not null]
+  before json
+  after json
+  ip varchar
+  createdAt timestamp [not null]
+
+  indexes {
+    createdAt
+    (targetType, targetId)
+  }
+  Note: '[BUILT] Written for every admin write and every export.'
+}
+
+Table OtpCode {
+  id varchar [pk]
+  mobile varchar [not null]
+  purpose varchar [not null, note: 'register | login']
+  codeHash varchar [not null, note: 'HMAC of the code, never the code']
+  attempts int [not null, default: 0]
+  expiresAt timestamp [not null]
+  consumedAt timestamp
+  createdAt timestamp [not null]
+
+  indexes {
+    (mobile, createdAt)
+  }
+  Note: '[BUILT] SMS one-time codes (replaces the old in-memory store).'
+}
+
+Table RateLimit {
+  key varchar [pk, note: 'e.g. otp-cooldown:98xxxxxx10, login:98xxxxxx10']
+  count int [not null]
+  windowStart timestamp [not null]
+  updatedAt timestamp [not null]
+  Note: '[BUILT] Fixed-window counters shared by every server.'
+}
+
+Table AppConfig {
+  key varchar [pk, note: 'adminContact | minAppBuild | legacyCutoff']
+  value json [not null]
+  updatedAt timestamp [not null]
+  Note: '[BUILT] Settings the app reads from GET /api/app/config.'
+}
+
+// ─────────────── Not in Postgres yet [FILE] ───────────────
+
+Table AdminAccount {
+  id varchar [pk]
+  name varchar [not null]
+  email varchar [unique, not null, note: 'Sign-in name (lower-case), e.g. seznikadmin']
+  role varchar [not null, default: 'support', note: 'superadmin | support | content | viewer']
+  active boolean [not null, default: true]
+  passwordHash varchar [not null, note: 'scrypt']
+  mustChangePassword boolean [not null, default: false]
+  fixedCredentials boolean [not null, default: false, note: 'Password comes from ADMIN_FIXED_PASSWORD in the environment']
+  credsVersion int [not null, default: 1]
+  totpSecret varchar [note: 'Authenticator key']
+  pendingTotpSecret varchar
+  lastTotpStep int [note: 'Last accepted 30 s step; blocks code reuse']
+  lastLoginAt timestamp
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+  Note: '[BUILT] The admin team (desk sign-ins).'
+}
+
+// ─────────────── Relationships ───────────────
+
+Ref: RegisteredPhone.userId - AppUser.id // one number <-> at most one account
+Ref: UserStatusEvent.userId > AppUser.id
+Ref: PrinterConnection.userId > AppUser.id
+Ref: PrinterConnection.printerId > Printer.id
+Ref: PrintEvent.userId > AppUser.id
+Ref: PrintEvent.printerId > Printer.id
+Ref: Feedback.userId > AppUser.id
+Ref: ProductClick.userId > AppUser.id
+Ref: CatalogItem.categoryId > CatalogCategory.id
+Ref: AdminAuditLog.adminId > AdminAccount.id
+
+// ─────────────── Sample rows (made-up, to read the structure) ───────────────
+
+Records AppUser(id, name, mobile, printerName, status, tokenVersion, printCountTotal, isInternal) {
+  'u1', 'Asha Verma', '9876500001', 'tejas', 'active', 0, 240, false
+  'u2', 'Ravi Kumar', '9876500002', 'rudra', 'blocked', 1, 12, false
+  'u3', 'QA Phone', '9876500003', 'josh', 'active', 0, 0, true
+}
+
+Records RegisteredPhone(mobile, userId, blocked, blockReason) {
+  '9876500001', 'u1', false, null
+  '9876500002', 'u2', true, 'Misuse of the app'
+  '9876500003', 'u3', false, null
+  '9000000000', null, true, 'Pre-blocked by admin'
+}
+
+Records UserStatusEvent(id, userId, action, message, adminEmail) {
+  'e1', 'u2', 'block', 'Misuse of the app', 'seznikadmin'
+}
+
+Records Printer(id, nameRaw, modelNormalised, sdkFamily) {
+  'p1', 'Seznik Tejas_1A2B', 'Tejas', 'tez'
+  'p2', 'TD404-77AF', 'TD-404', 'td404'
+}
+
+Records PrintEvent(id, eventId, jobId, userId, printerId, source, labelWidthMm, labelHeightMm, labelKey, labelsCount) {
+  'pe1', 'ev-001', 'job-001', 'u1', 'p1', 'manual_size', 50, 30, 'manual:50x30', 6
+  'pe2', 'ev-002', 'job-002', 'u1', 'p1', 'template', 50, 30, 'template:jewel-01:50x30', 20
+}
+
+Records CatalogCategory(id, kind, name, sortOrder) {
+  'c1', 'template', 'Jewellery', 1
+  'c2', 'clipart', 'Festival', 1
+}
+
+Records AppConfig(key, value) {
+  'minAppBuild', 0
+  'legacyCutoff', false
+}

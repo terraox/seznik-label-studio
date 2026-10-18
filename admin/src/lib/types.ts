@@ -1,4 +1,5 @@
-export type Role = 'owner' | 'editor' | 'viewer';
+export type { Role } from './permissions';
+import type { Role } from './permissions';
 
 export type Admin = {
   id: string;
@@ -7,9 +8,20 @@ export type Admin = {
   role: Role;
   active: boolean;
   createdAt: string;
+  totpEnabled?: boolean;
+  mustChangePassword?: boolean;
 };
 
-export type AdminRecord = Admin & { passwordHash: string };
+export type AdminRecord = Admin & {
+  passwordHash: string;
+  /** Set once the credentials were issued by this code. Older records are switched off at boot. */
+  credsVersion?: number;
+  totpSecret?: string;
+  pendingTotpSecret?: string;
+  lastTotpStep?: number;
+  /** Password comes from ADMIN_FIXED_USERNAME / ADMIN_FIXED_PASSWORD (no forced change); TOTP still applies. */
+  fixedCredentials?: boolean;
+};
 
 export type Device = {
   id: string;

@@ -1,5 +1,5 @@
 import { removeUpload, saveUpload } from '@/lib/files';
-import { requireRole } from '@/lib/guard';
+import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
 import { update } from '@/lib/store';
 import type { AssetKind } from '@/lib/types';
@@ -22,7 +22,7 @@ function locate(db: { clipart: { id: string }[]; stickers: { id: string }[] }, i
 
 export async function PATCH(request: Request, ctx: Ctx) {
   try {
-    await requireRole('editor');
+    await requirePermission('catalog.edit');
     const { id } = await ctx.params;
     const form = await request.formData();
     const name = String(form.get('name') ?? '').trim();
@@ -50,7 +50,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
 export async function DELETE(_request: Request, ctx: Ctx) {
   try {
-    await requireRole('editor');
+    await requirePermission('catalog.edit');
     const { id } = await ctx.params;
     await update(async (db) => {
       const kind = locate(db, id);

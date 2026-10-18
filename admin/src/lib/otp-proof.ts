@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
+import { getSecret } from './secrets';
+
 const TTL_MS = 15 * 60 * 1000;
 
 export type OtpPurpose = 'register' | 'login';
@@ -9,7 +11,7 @@ export function parsePurpose(value: unknown): OtpPurpose {
 }
 
 function secret() {
-  return process.env.ADMIN_SESSION_SECRET || 'dev-admin-session-secret';
+  return getSecret('OTP_HASH_SECRET');
 }
 
 function sign(payload: string) {

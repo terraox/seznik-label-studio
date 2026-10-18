@@ -49,7 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   autoRefreshInterval,
   onSelectAutoRefreshInterval,
   setAutoRefreshInterval,
-  userId = 'SezAdmin',
+  userId = 'Admin',
   onLogout,
 }) => {
   const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
