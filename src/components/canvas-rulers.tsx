@@ -143,7 +143,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
 
         {/* Ticks: touching the bottom divider line at y = RULER_SIZE - 1 */}
         {ticks.map((tick) => {
-          const h = tickLen(tick.kind, 7, 5, 3);
+          const h = tickLen(tick.kind, 10, 7, 4);
           const isStart = tick.mm < 0.001;
           const isEnd = Math.abs(tick.mm - lengthMm) < 0.01;
           const isMajor = tick.kind === 'major';
@@ -301,7 +301,7 @@ export const VerticalRuler = memo(function VerticalRuler({
 
         {/* Ticks: touching the right divider line at x = RULER_SIZE - 1 */}
         {ticks.map((tick) => {
-          const w = tickLen(tick.kind, 7, 5, 3);
+          const w = tickLen(tick.kind, 10, 7, 4);
           const isStart = tick.mm < 0.001;
           const isEnd = Math.abs(tick.mm - lengthMm) < 0.01;
           const isMajor = tick.kind === 'major';
