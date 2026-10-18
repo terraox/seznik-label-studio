@@ -1027,11 +1027,11 @@ export default function PrintScreen() {
       if (!manager.isConnected) {
         printingLockRef.current = false;
         Alert.alert(
-          'Printer Not Connected',
-          'Connect a Tejas, Rudra, or Josh printer before printing.',
+          'Connect a printer first',
+          'No printer is connected. Connect your printer first. You can print only after it is connected.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Connect', onPress: () => router.push('/printer-connect') },
+            { text: 'Connect printer', onPress: () => router.push('/printer-connect') },
           ],
         );
         return;
@@ -1083,11 +1083,11 @@ export default function PrintScreen() {
     if (!manager.isConnected) {
       printingLockRef.current = false;
       Alert.alert(
-        'Printer Not Connected',
-        'Connect a Tejas, Rudra, or Josh printer before printing.',
+        'Connect a printer first',
+        'No printer is connected. Connect your printer first. You can print only after it is connected.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Connect', onPress: () => router.push('/printer-connect') },
+          { text: 'Connect printer', onPress: () => router.push('/printer-connect') },
         ],
       );
       return;

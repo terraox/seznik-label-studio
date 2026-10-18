@@ -194,12 +194,12 @@ export function LabelEditor({
       } catch {
         setPrinting(false);
         Alert.alert(
-          'Printer Not Connected',
-          'Would you like to connect your Bluetooth thermal printer now?',
+          'Connect a printer first',
+          'No printer is connected. Connect your printer first. You can print only after it is connected.',
           [
             { text: 'Cancel', style: 'cancel' },
             {
-              text: 'Connect Printer',
+              text: 'Connect printer',
               onPress: () => router.push('/printer-connect'),
             },
           ],

@@ -110,12 +110,12 @@ function PdfScreenContent() {
         if (!manager.isConnected) {
           setPrinting(false);
           Alert.alert(
-            'Printer Not Connected',
-            'Please connect your thermal printer before printing.',
+            'Connect a printer first',
+            'No printer is connected. Connect your printer first. You can print only after it is connected.',
             [
               { text: 'Cancel', style: 'cancel' },
               {
-                text: 'Connect',
+                text: 'Connect printer',
                 onPress: () => {
                   setModalVisible(false);
                   router.push('/printer-connect');
@@ -204,12 +204,12 @@ function PdfScreenContent() {
     const manager = getPrinterManager();
     if (!manager.isConnected) {
       Alert.alert(
-        'Printer Not Connected',
-        'Please connect a Tejas, Rudra, or Josh printer before printing.',
+        'Connect a printer first',
+        'No printer is connected. Connect your printer first. You can print only after it is connected.',
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Connect',
+            text: 'Connect printer',
             onPress: () => {
               setModalVisible(false);
               router.push('/printer-connect');
