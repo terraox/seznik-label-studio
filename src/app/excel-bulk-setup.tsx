@@ -368,19 +368,17 @@ export default function ExcelBulkSetupScreen() {
 
         <WalkthroughTarget id="excel.copies">
         <View style={styles.copiesCard}>
-          <Text style={styles.copiesTitle}>
-            {copiesColumnName
-              ? `Copies column: ${copiesColumnName}`
-              : 'Copies column: None — each row prints once'}
-          </Text>
+          <Text style={styles.copiesTitle}>How many labels for each row?</Text>
           <Text style={styles.copiesNote}>
-            Each row starts from this column. You can change one label’s count in the editor. A blank cell or 0 skips that row, so it is not printed. Text and numbers outside 0–99 are adjusted. None prints every row once.
+            {copiesColumnName
+              ? `Each row prints the number in "${copiesColumnName}". Rows with a blank or 0 are skipped.`
+              : 'Every row prints 1 label. To print more, pick the column that has the number.'}
           </Text>
           <View style={styles.sheetChips}>
             <Pressable
               onPress={() => selectCopiesColumn(null)}
               style={[styles.chip, activeCopiesIndex == null && styles.chipOn]}>
-              <Text style={[styles.chipText, activeCopiesIndex == null && styles.chipTextOn]}>None</Text>
+              <Text style={[styles.chipText, activeCopiesIndex == null && styles.chipTextOn]}>1 each</Text>
             </Pressable>
             {copiesChoices.map((columnIndex) => {
               const active = columnIndex === activeCopiesIndex;
@@ -397,7 +395,9 @@ export default function ExcelBulkSetupScreen() {
             })}
           </View>
           {copiesChoices.length === 0 ? (
-            <Text style={styles.copiesNote}>No number columns in this sheet.</Text>
+            <Text style={styles.copiesNote}>
+              No column with numbers found. Add one (like Qty) to your sheet to print more than 1 per row.
+            </Text>
           ) : null}
           {copiesWarning ? <Text style={styles.copiesNote}>{copiesWarning}</Text> : null}
         </View>
@@ -430,7 +430,7 @@ export default function ExcelBulkSetupScreen() {
                 </View>
               </Pressable>
               <Text style={[styles.columnName, locked && styles.columnNameLocked]} numberOfLines={1}>
-                {locked ? `${name} · copies` : name}
+                {locked ? `${name} · label count` : name}
               </Text>
               <View style={styles.kindRow}>
                 {KINDS.map(({ id, Glyph }) => (

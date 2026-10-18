@@ -26,15 +26,15 @@ export const EXCEL_WALKTHROUGH: readonly WalkthroughStep[] = [
 export const EXCEL_COLUMNS_WALKTHROUGH: readonly WalkthroughStep[] = [
   {
     id: 'welcome',
-    title: 'Columns and copies',
-    body: 'This page decides what is printed and how many labels each row makes. Open it again from the ? button.',
+    title: 'Columns and label count',
+    body: 'This page decides what goes on the label and how many labels each row makes. Open it again from the ? button.',
   },
   {
     id: 'copies',
     target: 'excel.copies',
     scrolls: true,
-    title: 'Number of copies',
-    body: 'Pick a column of numbers, such as Copies or Qty. Each row starts at that count, and you can change it on the label in the editor. A blank cell or 0 skips that row, so it is not printed. Text and numbers outside 0–99 are adjusted. None prints every row once. The chosen column is greyed out and is not printed on the label.',
+    title: 'How many labels per row',
+    body: 'Pick "1 each" to print every row once. If your sheet has a column with numbers, such as Qty, pick it and each row prints that many labels. Rows with a blank or 0 are skipped.',
   },
   {
     id: 'columns',
