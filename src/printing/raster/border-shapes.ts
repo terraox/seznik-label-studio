@@ -551,6 +551,8 @@ type Outline = {
   depth: (px: number, py: number) => number;
   around: (px: number, py: number) => number;
   perimeter: number;
+  /** Set by ellipse outlines: centre and radii, which the circular decorative styles are placed from. */
+  geom?: { cx: number; cy: number; rx: number; ry: number };
   /** Per row: candidate x spans (half-open) that may hold ink no deeper than `maxDepth`. */
   rowSpans: (py: number, maxDepth: number) => [number, number][];
 };
@@ -604,6 +606,7 @@ function ellipseOutline(w: number, h: number, circle: boolean): Outline {
       return (Math.atan2((py - cy) / ry, (px - cx) / rx) + Math.PI) / (2 * Math.PI);
     },
     perimeter: 2 * Math.PI * Math.sqrt((rx * rx + ry * ry) / 2),
+    geom: { cx, cy, rx, ry },
     rowSpans(py, maxDepth) {
       const outer = halfWidth(py, rx, ry);
       if (outer <= 0) return [];
@@ -696,6 +699,184 @@ function stripeParams(t: number, unitsPerMm: number) {
   return { band, period, edge };
 }
 
+
+/**
+ * Circle and ellipse versions of the decorative styles. Without these every decorative style fell
+ * back to the same plain ring, so they all looked alike (and heavy). Returns null for styles that
+ * are just a ring. Features are placed by angle round the outline, and ink is tested per pixel.
+ */
+function roundDecorativeInk(
+  style: BorderStyleId,
+  outline: Outline,
+  t: number,
+  unitsPerMm: number,
+): { maxDepth: number; ink: (d: number, around: number, i: number, j: number) => boolean } | null {
+  const g = outline.geom;
+  if (!g) return null;
+  const { cx, cy, rx, ry } = g;
+  const perim = outline.perimeter;
+  const TAU = Math.PI * 2;
+  const u = unitsPerMm;
+  const frac = (px: number, py: number) => (Math.atan2((py - cy) / ry, (px - cx) / rx) + Math.PI) / TAU;
+  const at = (fr: number, inset: number): [number, number] => {
+    const th = fr * TAU - Math.PI;
+    return [cx + (rx - inset) * Math.cos(th), cy + (ry - inset) * Math.sin(th)];
+  };
+  const wrap = (v: number) => Math.abs(v - Math.round(v));
+  const thin = Math.max(1, Math.round(t * 0.5));
+  // Distance from the nearest of n evenly spaced feature centres, then that centre's position.
+  const nearest = (fr: number, n: number): number => Math.round(fr * n) / n;
+  const bead = (px: number, py: number, n: number, inset: number, r: number) => {
+    const [bx, by] = at(nearest(frac(px, py), n), inset);
+    return Math.hypot(px - bx, py - by) < r;
+  };
+  // The four diagonal positions, where a rectangle's corners would be.
+  const DIAG = [0.125, 0.375, 0.625, 0.875];
+  const nearDiag = (fr: number, half: number) => DIAG.some((c) => wrap(fr - c) <= half);
+  const diagCentre = (fr: number) => DIAG.reduce((best, c) => (wrap(fr - c) < wrap(fr - best) ? c : best), DIAG[0]);
+  const arcHalf = (len: number) => len / perim;
+
+  switch (style) {
+    case 'beaded': {
+      const r = Math.max(t, Math.round(0.7 * u));
+      const n = Math.max(8, Math.round(perim / Math.max(r * 3, Math.round(3 * u))));
+      return {
+        maxDepth: r * 2 + 1,
+        ink: (d, _a, i, j) =>
+          Math.abs(d - r) < thin / 2 + 0.5 || bead(i + 0.5, j + 0.5, n, r, r),
+      };
+    }
+    case 'scallop': {
+      const r = Math.max(t, Math.round(0.8 * u));
+      const n = Math.max(6, Math.round(perim / (r * 2)));
+      return {
+        maxDepth: r + 1,
+        ink: (d, _a, i, j) => d < thin || bead(i + 0.5, j + 0.5, n, 0, r),
+      };
+    }
+    case 'zigzag': {
+      const amp = Math.max(t * 2, Math.round(1.4 * u));
+      const n = Math.max(8, Math.round(perim / Math.max(t * 3, Math.round(2.6 * u))));
+      return {
+        maxDepth: amp + t + 1,
+        ink: (d, around) => {
+          const p = (((around * n) % 1) + 1) % 1;
+          const a = amp * (1 - Math.abs(2 * p - 1));
+          return d >= a && d < a + t;
+        },
+      };
+    }
+    case 'rope': {
+      const band = Math.max(t * 2, Math.round(1.8 * u));
+      const stride = Math.max(2, Math.round(band * 0.8));
+      return {
+        maxDepth: band,
+        ink: (d, around) => (((around * perim + d) % stride) + stride) % stride < Math.max(1, t * 0.9),
+      };
+    }
+    case 'corner-dots': {
+      const r = Math.max(t, Math.round(0.9 * u));
+      const inset = r + Math.round(0.4 * u);
+      return {
+        maxDepth: inset + r + 1,
+        ink: (d, _a, i, j) => {
+          if (d < t) return true;
+          const px = i + 0.5;
+          const py = j + 0.5;
+          const [bx, by] = at(diagCentre(frac(px, py)), inset);
+          return Math.hypot(px - bx, py - by) < r;
+        },
+      };
+    }
+    case 'industrial': {
+      const r = Math.max(t, Math.round(0.6 * u));
+      const inset = t + Math.round(0.6 * u) + r;
+      return {
+        maxDepth: inset + r + 1,
+        ink: (d, _a, i, j) => d < t || bead(i + 0.5, j + 0.5, 8, inset, r),
+      };
+    }
+    case 'corner-brackets': {
+      const arm = Math.max(t * 2, Math.round(Math.max(3 * u, Math.min(rx, ry) * 2 * 0.18)));
+      return { maxDepth: t, ink: (_d, around) => nearDiag(around, arcHalf(arm)) };
+    }
+    case 'crosshair': {
+      const size = Math.max(t * 3, Math.round(Math.max(3 * u, Math.min(rx, ry) * 2 * 0.14)));
+      const inset = Math.round(size / 2) + t;
+      return {
+        maxDepth: inset + size,
+        ink: (_d, _a, i, j) => {
+          const px = i + 0.5;
+          const py = j + 0.5;
+          const [bx, by] = at(diagCentre(frac(px, py)), inset);
+          const dx = Math.abs(px - bx);
+          const dy = Math.abs(py - by);
+          return (dx < t / 2 && dy < size / 2) || (dy < t / 2 && dx < size / 2);
+        },
+      };
+    }
+    case 'octagon':
+      // Eight short breaks, one per octagon corner.
+      return {
+        maxDepth: t,
+        ink: (_d, around) => {
+          const f = (around * 8) % 1;
+          return Math.min(f, 1 - f) > 0.04 + (t / perim) * 4;
+        },
+      };
+    case 'deco-corner':
+    case 'ornate-corner': {
+      const ornate = style === 'ornate-corner';
+      const arm = Math.max(t * 3, Math.round(Math.max(4 * u, Math.min(rx, ry) * 2 * (ornate ? 0.26 : 0.22))));
+      const gap = Math.max(t + 1, Math.round(t * (ornate ? 2.4 : 2.2)));
+      const innerArm = Math.max(t * 2, Math.round(arm * 0.6));
+      const innerT = Math.max(1, Math.round(t * 0.6));
+      const dotR = Math.max(1, Math.round(t * (ornate ? 0.9 : 0.8)));
+      return {
+        maxDepth: gap + innerT + dotR * 2 + 1,
+        ink: (d, around, i, j) => {
+          if (d < t && nearDiag(around, arcHalf(arm))) return true;
+          if (d >= gap && d < gap + innerT && nearDiag(around, arcHalf(innerArm))) return true;
+          const px = i + 0.5;
+          const py = j + 0.5;
+          const c = diagCentre(frac(px, py));
+          const [sx, sy] = at(c, dotR);
+          if (Math.hypot(px - sx, py - sy) < dotR) return true;
+          if (ornate) {
+            // A bead at each arm tip.
+            for (const side of [-1, 1]) {
+              const [tx, ty] = at(c + side * arcHalf(arm), t / 2);
+              if (Math.hypot(px - tx, py - ty) < dotR) return true;
+            }
+          }
+          return false;
+        },
+      };
+    }
+    case 'double-bead': {
+      const outer = t;
+      const innerOffset = Math.max(t + 1, Math.round(t * 2.2));
+      const innerT = Math.max(1, Math.round(t * 0.55));
+      const channel = Math.max(t + 1, Math.round(innerOffset * 0.55));
+      const r = Math.max(1, Math.round(t * 0.5));
+      const n = Math.max(8, Math.round(perim / Math.max(r * 3, Math.round(3 * u))));
+      return {
+        maxDepth: innerOffset + innerT,
+        ink: (d, _a, i, j) =>
+          d < outer || d >= innerOffset || bead(i + 0.5, j + 0.5, n, channel, r),
+      };
+    }
+    case 'shadow-box':
+      // A heavier lower-right arc, like the drop shadow on the rectangle.
+      return {
+        maxDepth: Math.max(t + 1, Math.round(t * 1.8)),
+        ink: (d, around) => d < t || (around > 0.5 && around < 0.75),
+      };
+    default:
+      return null;
+  }
+}
+
 /** Ink for one style on a curved outline (rounded rect, pill, circle, ellipse). */
 function outlineBands(
   x: number,
@@ -763,8 +944,11 @@ function outlineBands(
           return distance < 0.045;
         });
       });
-    default:
+    default: {
+      const round = roundDecorativeInk(style, outline, t, unitsPerMm);
+      if (round) return rasterOutline(x, y, w, h, outline, round.maxDepth, round.ink);
       return rasterOutline(x, y, w, h, outline, t, () => true);
+    }
   }
 }
 

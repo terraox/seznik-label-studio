@@ -220,14 +220,18 @@ function printOutlineShape(doc: LabelDocument): string | undefined {
   return doc.upsTile?.shape ?? doc.mediaShape;
 }
 
-/** Borders drawn in the post-shift pass (JOSH): visible, unrotated, rectangular die-cut. */
+/**
+ * Borders drawn in the post-shift pass: visible and unrotated. JOSH only does this for a
+ * rectangular die-cut. TD-404 does it for round die-cuts too: otherwise a circle border is drawn
+ * with the content and moves with the element shift, so its gaps to the die-cut come out unequal.
+ */
 function isEdgeBorder(el: LabelElement, doc: LabelDocument): el is Extract<LabelElement, { type: 'border' }> {
   return (
     el.type === 'border' &&
     el.needPrinting !== false &&
     el.visible !== false &&
     (el.rotation ?? 0) % 360 === 0 &&
-    borderShapeForMedia(printOutlineShape(doc)) === 'rect'
+    (activeBakeFeed || borderShapeForMedia(printOutlineShape(doc)) === 'rect')
   );
 }
 
@@ -617,7 +621,7 @@ function mergeEdgeBorders(
   }
   for (const el of sortLayers(doc.elements)) {
     if (activeBakeFeed && isEdgeBorder(el, doc)) {
-      drawTd404EdgeBorder({ fillRect }, el, dpi, pageDots, shift);
+      drawTd404EdgeBorder({ fillRect }, el, dpi, pageDots, shift, borderShapeForMedia(printOutlineShape(doc)));
       const o = td404BorderOuterDots(pageDots.widthDots, pageDots.heightDots, dpi, td404BorderGapMm(el.edgeGapMm), borderStrokeMmOf(el));
       console.info(
         `[TD404-BORDER] layer x ${o.x0}-${o.x1} y ${o.y0}-${o.y1} dots of ${pageDots.widthDots}x${pageDots.heightDots} | shift ${shift.x},${shift.y}`,

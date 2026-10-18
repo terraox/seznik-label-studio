@@ -8,6 +8,7 @@ import {
   borderStrokeDots,
   borderStrokeFallbackMm,
   drawInwardFrameInBox,
+  type BorderShape,
   type FrameFillTarget,
 } from '@/printing/raster/border-frame';
 
@@ -211,6 +212,7 @@ export function drawTd404EdgeBorder(
   dpi: number,
   label: EdgeBorderPage,
   shift: { x: number; y: number },
+  shape: BorderShape = 'rect',
 ): void {
   // A 2-up cell border only frames its own half, so it keeps its rectangle. Snapping it to the
   // page edge would merge both cells into one frame.
@@ -230,7 +232,7 @@ export function drawTd404EdgeBorder(
       x0 + shift.x,
       y0 + shift.y,
       { left: 0, right: 0, top: 0, bottom: 0 },
-      'rect',
+      shape,
       1,
     );
     return;
@@ -246,7 +248,7 @@ export function drawTd404EdgeBorder(
     outer.x0 + shift.x,
     outer.y0 + shift.y,
     { left: 0, right: 0, top: 0, bottom: 0 },
-    'rect',
+    shape,
     1,
   );
 }
