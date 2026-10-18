@@ -141,6 +141,8 @@ type SettingsStoreState = {
   excelColumnsTutorialSeen: boolean;
   /** The blank-label size page tour has been seen (or skipped) at least once. */
   newLabelTutorialSeen: boolean;
+  /** Print PDF screens whose tour was seen (or skipped): 'pick' | 'size' | 'edit' | 'print'. */
+  pdfTourSeen: string[];
   /** PDF crop: the one-time "tap again for the bigger block" hint has been shown. */
   smartCropHintSeen: boolean;
   /** Settings → Appearance. Follow system by default. */
@@ -159,6 +161,7 @@ type SettingsStoreState = {
   setExcelTutorialSeen: (seen: boolean) => void;
   setExcelColumnsTutorialSeen: (seen: boolean) => void;
   setNewLabelTutorialSeen: (seen: boolean) => void;
+  markPdfTourSeen: (screen: string) => void;
   setSmartCropHintSeen: (seen: boolean) => void;
   setAppearance: (appearance: AppearancePreference) => void;
   setProfilePhotoUri: (uri: string | null) => void;
@@ -177,6 +180,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       excelTutorialSeen: false,
       excelColumnsTutorialSeen: false,
       newLabelTutorialSeen: false,
+      pdfTourSeen: [],
       smartCropHintSeen: false,
       appearance: 'light',
       profilePhotoUri: null,
@@ -195,6 +199,8 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setExcelTutorialSeen: (seen) => set({ excelTutorialSeen: seen }),
       setExcelColumnsTutorialSeen: (seen) => set({ excelColumnsTutorialSeen: seen }),
       setNewLabelTutorialSeen: (seen) => set({ newLabelTutorialSeen: seen }),
+      markPdfTourSeen: (screen) =>
+        set((s) => (s.pdfTourSeen.includes(screen) ? s : { pdfTourSeen: [...s.pdfTourSeen, screen] })),
       setSmartCropHintSeen: (seen) => set({ smartCropHintSeen: seen }),
       setAppearance: (appearance) => set({ appearance }),
       setProfilePhotoUri: (profilePhotoUri) => set({ profilePhotoUri }),

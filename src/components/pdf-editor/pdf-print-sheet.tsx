@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/text-input';
 
 import { AppIcon } from '@/components/app-icon';
+import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { QualityControl, type QualityStepperProps } from '@/components/quality-control';
 import { Type } from '@/constants/ui';
 import { defaultLabelSettings } from '@/lib/label-settings';
@@ -235,6 +236,7 @@ export const PdfPrintPanel = forwardRef<
       ) : null}
 
       <View style={styles.card}>
+        <WalkthroughTarget id="pdf.copies">
         <SettingRow
           label="Number of Copies"
           value={String(copies)}
@@ -244,8 +246,9 @@ export const PdfPrintPanel = forwardRef<
           onMinus={() => setCopies((n) => Math.max(1, n - 1))}
           onPlus={() => setCopies((n) => Math.min(99, n + 1))}
         />
+        </WalkthroughTarget>
 
-        <View style={styles.section}>
+        <WalkthroughTarget id="pdf.pages" style={styles.section}>
           <Pressable
             onPress={() => setShowPages((v) => !v)}
             accessibilityRole="button"
@@ -311,7 +314,7 @@ export const PdfPrintPanel = forwardRef<
             </>
           ) : null}
           {error ? <Text style={styles.err}>{error}</Text> : null}
-        </View>
+        </WalkthroughTarget>
 
         <View style={[styles.section, styles.tip]}>
           <View style={styles.tipText}>
@@ -330,6 +333,7 @@ export const PdfPrintPanel = forwardRef<
           </Pressable>
         </View>
 
+        <WalkthroughTarget id="pdf.advanced">
         <Pressable onPress={() => setShowAdvanced((v) => !v)} style={[styles.section, styles.advHead]}>
           <View style={styles.advLeft}>
             <AppIcon name="gearshape" size={18} tintColor={C.textSecondary} />
@@ -344,6 +348,7 @@ export const PdfPrintPanel = forwardRef<
             </View>
           </View>
         </Pressable>
+        </WalkthroughTarget>
         {showAdvanced ? (
           <View style={styles.advBody}>
             {qualityCaps.density !== 'legacy' ? (

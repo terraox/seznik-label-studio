@@ -5,7 +5,7 @@ export const CANVAS_WALKTHROUGH: readonly WalkthroughStep[] = [
   {
     id: 'welcome',
     title: 'This is the label canvas',
-    body: 'A short tour of how to design a label. You can replay it anytime from Setting → Canvas Walkthrough.',
+    body: 'A short tour of how to design a label. You can replay it anytime by tapping the help icon (?) in the top bar.',
   },
   {
     id: 'canvas',

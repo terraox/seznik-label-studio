@@ -4677,6 +4677,13 @@ export default function EditScreen() {
     </PositionLayerActionsProvider>
   );
 
+  const handleStartCanvasWalkthrough = useCallback(() => {
+    setSelectedIds([]);
+    setPrimaryId(null);
+    setPanelOpen(false);
+    startWalkthrough('canvas');
+  }, [setSelectedIds, setPrimaryId, setPanelOpen, startWalkthrough]);
+
   return (
     <SerialEditorContext.Provider value={serialEditorValue}>
     <View style={styles.root}>
@@ -4685,6 +4692,8 @@ export default function EditScreen() {
           <Pressable
             onPress={requestLeave}
             hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
             <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
           </Pressable>
@@ -4692,6 +4701,14 @@ export default function EditScreen() {
             {doc.name}
             {dirty ? ' •' : ''}
           </Text>
+          <Pressable
+            onPress={handleStartCanvasWalkthrough}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Canvas walkthrough"
+            style={({ pressed }) => [styles.helpBtn, pressed && styles.pressed]}>
+            <AppIcon name="questionmark.circle.fill" tintColor={C.onHeader} size={20} />
+          </Pressable>
         </View>
 
         <View
@@ -5361,8 +5378,14 @@ const styles = themedStyles((c, scheme) => ({
     color: c.onAccent,
     fontSize: 13,
     fontWeight: '500',
-    flex: 1,
+    flexShrink: 1,
     minWidth: 0,
+  },
+  helpBtn: {
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   headerActions: {
     flexDirection: 'row',

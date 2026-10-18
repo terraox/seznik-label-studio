@@ -23,6 +23,11 @@ import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor
 import { PdfRotateTool } from '@/components/pdf-editor/pdf-rotate-tool';
 import { PdfSharpnessTool } from '@/components/pdf-editor/pdf-sharpness-tool';
 import { PdfToolPanel, type PdfToolId } from '@/components/pdf-editor/pdf-tool-panel';
+import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
+import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
+import { PDF_WALKTHROUGHS } from '@/lib/walkthrough/pdf-steps';
+import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
+import { useWalkthroughStore } from '@/stores/walkthrough-store';
 import { PrinterConnectionPill } from '@/components/printers/printer-connection-pill';
 import { PdfWatermarkTool } from '@/components/pdf-editor/pdf-watermark-tool';
 import {
@@ -108,6 +113,11 @@ export default function PdfEditorScreen() {
   const setSmartCropHintSeen = useSettingsStore((s) => s.setSmartCropHintSeen);
 
   const [step, setStep] = useState<Step>('pick');
+  const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const stopWalkthrough = useWalkthroughStore((s) => s.stop);
+  const markPdfTourSeen = useSettingsStore((s) => s.markPdfTourSeen);
+  const scrollRef = useRef<import('react-native').ScrollView>(null);
+  const scrollY = useRef(0);
   const [tool, setTool] = useState<PdfToolId | null>(null);
   const [pageUri, setPageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -284,6 +294,40 @@ export default function PdfEditorScreen() {
       }
     },
     [deviceName, printing, session],
+  );
+
+  useEffect(() => {
+    setWalkthroughScroller((dy) =>
+      scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + dy), animated: false }),
+    );
+    return () => setWalkthroughScroller(null);
+  }, []);
+
+  // Each screen has its own tour: it opens the first time that screen is shown.
+  const hasIncomingDoc = Boolean(params.docUri || params.uri);
+  useEffect(() => {
+    const running = useWalkthroughStore.getState();
+    if (running.active && running.tour === 'pdf') running.stop();
+    if (step === 'pick' && hasIncomingDoc) return; // a shared PDF skips straight to Size
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const maybeStart = () => {
+      if (useSettingsStore.getState().pdfTourSeen.includes(step)) return;
+      timer = setTimeout(() => startWalkthrough('pdf'), 600);
+    };
+    if (useSettingsStore.persist.hasHydrated()) maybeStart();
+    const unsub = useSettingsStore.persist.onFinishHydration(maybeStart);
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
+  }, [step, hasIncomingDoc, startWalkthrough]);
+
+  useEffect(
+    () => () => {
+      const { active, tour } = useWalkthroughStore.getState();
+      if (active && tour === 'pdf') useWalkthroughStore.getState().stop();
+    },
+    [],
   );
 
   const goBack = () => {
@@ -581,13 +625,23 @@ export default function PdfEditorScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {STEP_TITLE[step]}
         </Text>
+        <Pressable
+          onPress={() => startWalkthrough('pdf')}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Help for this screen"
+          style={({ pressed }) => [styles.headerHelp, pressed && styles.pressed]}>
+          <AppIcon name="info.circle" tintColor={C.onAccent} size={22} />
+        </Pressable>
         {step === 'edit' && session ? (
-          <Pressable
-            onPress={() => setStep('print')}
-            hitSlop={8}
-            style={({ pressed }) => [styles.headerNext, pressed && styles.pressed]}>
-            <Text style={styles.headerNextText}>Next</Text>
-          </Pressable>
+          <WalkthroughTarget id="pdf.headerNext">
+            <Pressable
+              onPress={() => setStep('print')}
+              hitSlop={8}
+              style={({ pressed }) => [styles.headerNext, pressed && styles.pressed]}>
+              <Text style={styles.headerNextText}>Next</Text>
+            </Pressable>
+          </WalkthroughTarget>
         ) : null}
         <PrinterConnectionPill />
       </View>
@@ -627,11 +681,16 @@ export default function PdfEditorScreen() {
         </View>
       ) : step === 'size' ? (
         <FormScrollView
+          ref={scrollRef}
+          onScroll={(e) => {
+            scrollY.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={styles.fileRow}>
+          <WalkthroughTarget id="pdf.file" style={styles.fileRow}>
             <View style={styles.fileIcon}>
               <AppIcon name="doc.text" size={22} tintColor={C.accent} />
             </View>
@@ -646,12 +705,14 @@ export default function PdfEditorScreen() {
             <Pressable onPress={() => void importPdf()} hitSlop={8} disabled={loading}>
               <Text style={styles.change}>Change</Text>
             </Pressable>
-          </View>
-          <PdfOutputSizeRow value={session.outputSize} onChange={setOutputSize} preview={sizePreview} />
+          </WalkthroughTarget>
+          <WalkthroughTarget id="pdf.size">
+            <PdfOutputSizeRow value={session.outputSize} onChange={setOutputSize} preview={sizePreview} />
+          </WalkthroughTarget>
         </FormScrollView>
       ) : step === 'edit' ? (
         <View style={styles.editColumn}>
-          <View style={styles.cropStage}>
+          <WalkthroughTarget id="pdf.stage" style={styles.cropStage}>
             {renderViewer({
               crop: tool === 'crop',
               watermark: tool === 'watermark',
@@ -663,7 +724,7 @@ export default function PdfEditorScreen() {
                 <ActivityIndicator color={C.accent} />
               </View>
             ) : null}
-          </View>
+          </WalkthroughTarget>
           <PdfToolPanel
             active={tool}
             bottomInset={Math.max(insets.bottom, 8)}
@@ -764,12 +825,17 @@ export default function PdfEditorScreen() {
         </View>
       ) : (
         <FormScrollView
+          ref={scrollRef}
+          onScroll={(e) => {
+            scrollY.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
           style={styles.scroll}
           bottomOffset={100}
           contentContainerStyle={styles.printContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={styles.previewArea}>
+          <WalkthroughTarget id="pdf.preview" style={styles.previewArea}>
             <View style={styles.previewShadow}>
               {renderViewer({ crop: false, watermark: false, hideHint: true })}
             </View>
@@ -787,7 +853,7 @@ export default function PdfEditorScreen() {
               />
             ) : null}
             {loading ? <ActivityIndicator color={C.onAccent} style={{ marginTop: 8 }} /> : null}
-          </View>
+          </WalkthroughTarget>
           <View style={styles.printSettings}>
             <PdfPrintPanel
               ref={printPanelRef}
@@ -808,6 +874,7 @@ export default function PdfEditorScreen() {
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 8) + Spacing.two + 6 }]}>
         {step === 'print' && session ? (
           <View style={styles.printActions}>
+            <WalkthroughTarget id="pdf.export" style={styles.exportSlot}>
             <Pressable
               onPress={() => void exportPdf()}
               disabled={exporting || printing}
@@ -818,6 +885,8 @@ export default function PdfEditorScreen() {
               ]}>
               <Text style={styles.exportBtnText}>{exporting ? 'Exporting…' : 'Export'}</Text>
             </Pressable>
+            </WalkthroughTarget>
+            <WalkthroughTarget id="pdf.print" style={styles.printSlot}>
             <Pressable
               onPress={() => {
                 if (!printerLive) {
@@ -840,8 +909,10 @@ export default function PdfEditorScreen() {
                 <Text style={styles.primaryText}>{printerLive ? 'Print' : 'Connect printer'}</Text>
               )}
             </Pressable>
+            </WalkthroughTarget>
           </View>
         ) : (
+          <WalkthroughTarget id={step === 'pick' || !session ? 'pdf.import' : 'pdf.next'}>
           <Pressable
             onPress={() => {
               if (step === 'pick' || !session) {
@@ -862,10 +933,19 @@ export default function PdfEditorScreen() {
               <Text style={styles.primaryText}>{step === 'pick' || !session ? 'Import PDF' : 'Next'}</Text>
             )}
           </Pressable>
+          </WalkthroughTarget>
         )}
       </View>
       )}
       {documentSourceSheet}
+      <WalkthroughOverlay
+        tour="pdf"
+        steps={PDF_WALKTHROUGHS[step]}
+        onFinish={() => {
+          markPdfTourSeen(step);
+          stopWalkthrough();
+        }}
+      />
     </View>
   );
 }
@@ -887,6 +967,9 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 17,
     fontWeight: '600',
   },
+  headerHelp: { paddingHorizontal: 6, paddingVertical: 6 },
+  exportSlot: { flex: 1 },
+  printSlot: { flex: 1.4 },
   headerNext: { paddingHorizontal: 8, paddingVertical: 6, marginRight: 4 },
   headerNextText: { color: c.onAccent, fontSize: 16, fontWeight: '700' },
   pageLoading: {

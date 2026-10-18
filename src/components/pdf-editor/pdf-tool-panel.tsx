@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { AppIcon } from '@/components/app-icon';
+import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export type PdfToolId = 'crop' | 'rotate' | 'sharpness' | 'watermark' | 'color';
@@ -51,8 +52,8 @@ export function PdfToolPanel({
         {TOOLS.map((t) => {
           const isActive = active === t.id;
           return (
+            <WalkthroughTarget key={t.id} id={`pdf.tool.${t.id}`} style={styles.toolSlot}>
             <Pressable
-              key={t.id}
               disabled={disabled}
               accessibilityRole="button"
               accessibilityLabel={t.label}
@@ -61,6 +62,7 @@ export function PdfToolPanel({
               style={[styles.tool, isActive && styles.toolOn, disabled && styles.toolOff]}>
               <AppIcon name={t.icon} size={22} tintColor={isActive ? C.accent : C.textSecondary} />
             </Pressable>
+            </WalkthroughTarget>
           );
         })}
       </View>
@@ -86,8 +88,8 @@ const styles = themedStyles((c) => ({
     paddingHorizontal: 8,
     paddingTop: 4,
   },
+  toolSlot: { flex: 1 },
   tool: {
-    flex: 1,
     height: 44,
     borderRadius: 10,
     alignItems: 'center',
