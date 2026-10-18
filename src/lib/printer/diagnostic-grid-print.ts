@@ -5,6 +5,7 @@ import {
   GRID_SPACING_MIN_MM,
   clampGridSpacingMm,
 } from '@/lib/editor/canvas-grid';
+import { defaultLabelSettings, resolveLabelSettings } from '@/lib/label-settings';
 import { printLabelDocumentMainPipeline } from '@/lib/printer/main-pipeline-print';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 
@@ -59,6 +60,24 @@ export function parseGridSpacingMm(
   return { spacingMm: clampGridSpacingMm(spacingMm) };
 }
 
+/** Gap between labels the tests tell the printer about; starts at the configured label gap. */
+export function defaultDiagnosticGapMm(): number {
+  return defaultLabelSettings().gapLengthMm;
+}
+
+export const DIAGNOSTIC_GAP_PRESETS_MM = [0, 2, 2.5, 3, 4];
+
+export function parseGapMm(text: string): { gapMm: number } | { error: string } {
+  const gapMm = Number.parseFloat(text.replace(',', '.'));
+  if (!Number.isFinite(gapMm)) {
+    return { error: 'Enter the gap between labels in millimetres.' };
+  }
+  if (gapMm < 0 || gapMm > 20) {
+    return { error: 'Gap must be 0–20 mm.' };
+  }
+  return { gapMm: Math.round(gapMm * 10) / 10 };
+}
+
 export type DiagnosticPatternKind = 'grid' | 'ruler';
 
 export function buildDiagnosticPatternDocument(
@@ -66,6 +85,7 @@ export function buildDiagnosticPatternDocument(
   heightMm: number,
   kind: DiagnosticPatternKind,
   gridSpacingMm: number,
+  gapMm: number = defaultDiagnosticGapMm(),
 ): LabelDocument {
   const spacingMm = clampGridSpacingMm(gridSpacingMm);
   const doc = createLabelDocument({
@@ -78,6 +98,8 @@ export function buildDiagnosticPatternDocument(
   return {
     ...doc,
     settings: {
+      ...resolveLabelSettings(doc),
+      gapLengthMm: gapMm,
       printGrid: kind === 'grid',
       printGridSpacingMm: spacingMm,
       printRuler: kind === 'ruler',
@@ -90,6 +112,7 @@ async function printDiagnosticPattern(
   heightMm: number,
   kind: DiagnosticPatternKind,
   gridSpacingMm: number,
+  gapMm: number,
 ): Promise<void> {
   const manager = getPrinterManager();
   if (
@@ -101,8 +124,8 @@ async function printDiagnosticPattern(
     ) {
     throw new Error('Grid and ruler tests need a native label printer (TD-404, Josh, Tez, Dev, or Label X).');
   }
-  const doc = buildDiagnosticPatternDocument(widthMm, heightMm, kind, gridSpacingMm);
-  await printLabelDocumentMainPipeline(doc, { gapMm: 3 });
+  const doc = buildDiagnosticPatternDocument(widthMm, heightMm, kind, gridSpacingMm, gapMm);
+  await printLabelDocumentMainPipeline(doc, { gapMm });
 }
 
 /** Interior mm grid only (no border, no edge ruler). */
@@ -110,11 +133,16 @@ export async function printDiagnosticGridTest(
   widthMm: number,
   heightMm: number,
   gridSpacingMm: number,
+  gapMm: number,
 ): Promise<void> {
-  await printDiagnosticPattern(widthMm, heightMm, 'grid', gridSpacingMm);
+  await printDiagnosticPattern(widthMm, heightMm, 'grid', gridSpacingMm, gapMm);
 }
 
 /** Edge mm scale ruler only (no border, no interior grid). */
-export async function printDiagnosticRulerTest(widthMm: number, heightMm: number): Promise<void> {
-  await printDiagnosticPattern(widthMm, heightMm, 'ruler', clampGridSpacingMm(5));
+export async function printDiagnosticRulerTest(
+  widthMm: number,
+  heightMm: number,
+  gapMm: number,
+): Promise<void> {
+  await printDiagnosticPattern(widthMm, heightMm, 'ruler', clampGridSpacingMm(5), gapMm);
 }

@@ -31,7 +31,10 @@ import {
 import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
 import { GRID_SPACING_PRESETS_MM } from '@/lib/editor/canvas-grid';
 import {
+  DIAGNOSTIC_GAP_PRESETS_MM,
   DIAGNOSTIC_GRID_SIZE_PRESETS,
+  defaultDiagnosticGapMm,
+  parseGapMm,
   parseGridSpacingMm,
   parseLabelSizeMm,
   printDiagnosticGridTest,
@@ -100,6 +103,7 @@ export default function PrinterDiagnosticsScreen() {
   const [gridSpacingMm, setGridSpacingMm] = useState(
     String(suggestedDiagnosticGridSpacingMm(DIAGNOSTIC_GRID_SIZE_PRESETS[0].widthMm, DIAGNOSTIC_GRID_SIZE_PRESETS[0].heightMm)),
   );
+  const [gapMmText, setGapMmText] = useState(() => String(defaultDiagnosticGapMm()));
   const [gridTestOpen, setGridTestOpen] = useState(false);
   const [gapReportLine, setGapReportLine] = useState<string | null>(null);
 
@@ -222,6 +226,12 @@ export default function PrinterDiagnosticsScreen() {
       Alert.alert('Label size', parsed.error);
       return;
     }
+    const gapParsed = parseGapMm(gapMmText);
+    if ('error' in gapParsed) {
+      Alert.alert('Label gap', gapParsed.error);
+      return;
+    }
+    const { gapMm } = gapParsed;
     let gridSpacing = 5;
     if (kind === 'grid') {
       const spacingParsed = parseGridSpacingMm(gridSpacingMm);
@@ -237,14 +247,14 @@ export default function PrinterDiagnosticsScreen() {
       const label = kind === 'grid' ? 'grid' : 'scale ruler';
       log(
         kind === 'grid'
-          ? `Printing ${label} at ${parsed.widthMm}×${parsed.heightMm} mm, ${gridSpacing} mm spacing…`
-          : `Printing ${label} at ${parsed.widthMm}×${parsed.heightMm} mm…`,
+          ? `Printing ${label} at ${parsed.widthMm}×${parsed.heightMm} mm, ${gridSpacing} mm spacing, ${gapMm} mm gap…`
+          : `Printing ${label} at ${parsed.widthMm}×${parsed.heightMm} mm, ${gapMm} mm gap…`,
       );
       const t0 = Date.now();
       if (kind === 'grid') {
-        await printDiagnosticGridTest(parsed.widthMm, parsed.heightMm, gridSpacing);
+        await printDiagnosticGridTest(parsed.widthMm, parsed.heightMm, gridSpacing, gapMm);
       } else {
-        await printDiagnosticRulerTest(parsed.widthMm, parsed.heightMm);
+        await printDiagnosticRulerTest(parsed.widthMm, parsed.heightMm, gapMm);
       }
       log(`${label} sent in ${Date.now() - t0} ms.`);
     } catch (error) {
@@ -473,6 +483,36 @@ export default function PrinterDiagnosticsScreen() {
                     keyboardType="decimal-pad"
                     style={styles.mmInput}
                     placeholder="5"
+                  />
+                </View>
+                <Text style={styles.fieldLabel}>Gap between labels (mm)</Text>
+                <View style={styles.presetWrap}>
+                  {DIAGNOSTIC_GAP_PRESETS_MM.map((mm) => {
+                    const selected = Number.parseFloat(gapMmText.replace(',', '.')) === mm;
+                    return (
+                      <Pressable
+                        key={mm}
+                        onPress={() => setGapMmText(String(mm))}
+                        style={({ pressed }) => [
+                          styles.presetChip,
+                          selected && styles.presetChipOn,
+                          pressed && styles.pressed,
+                        ]}>
+                        <Text style={[styles.presetChipText, selected && styles.presetChipTextOn]}>
+                          {mm} mm
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={styles.mmField}>
+                  <Text style={styles.fieldLabel}>Custom gap (0–20 mm)</Text>
+                  <TextInput
+                    value={gapMmText}
+                    onChangeText={setGapMmText}
+                    keyboardType="decimal-pad"
+                    style={styles.mmInput}
+                    placeholder="3"
                   />
                 </View>
                 <ActionButton
