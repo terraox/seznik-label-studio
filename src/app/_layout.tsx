@@ -8,6 +8,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { FeedbackPrompt } from '@/components/feedback-prompt';
 import { IntroScreen } from '@/components/intro-screen';
 import { NavigationBarScrim } from '@/components/navigation-bar-scrim';
 import { IosAlertHost } from '@/components/ui/ios-alert-host';
@@ -208,6 +209,7 @@ function AppRoot() {
           />
         </Stack>
       ) : null}
+      <FeedbackPrompt enabled={appReady && signedIn && !needsPrinter} />
       {splashDone ? null : <IntroScreen onFinish={handleSplashFinish} onDone={handleSplashDone} />}
       <NavigationBarScrim />
     </ThemeProvider>

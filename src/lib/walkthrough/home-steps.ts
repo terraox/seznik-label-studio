@@ -55,7 +55,7 @@ const BASE_STEPS: readonly WalkthroughStep[] = [
     target: 'home.labelTypes',
     scrolls: true,
     title: 'Ready-made label types',
-    body: '2-Up, Shipping, Jewellery and Fit Image labels come with a layout already set up.',
+    body: 'Multi Label, Shipping, Jewellery and Fit Image labels come with a layout already set up.',
   },
   {
     id: 'shop',

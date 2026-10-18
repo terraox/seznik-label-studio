@@ -43,6 +43,8 @@ import { packGrayToMono1bpp } from './bit-packer';
 import { borderStrokeMmOf, drawJoshEdgeBorder, drawPrintBorder, drawTd404EdgeBorder } from './print-border';
 import { borderShapeForMedia } from './border-shapes';
 import { applyInkDarkness, rectsToPx, scanCodeRectsMm } from './ink-darkness';
+import { usesModedPrint } from './image-element-settings';
+import { readyImageTile } from './image-tiles';
 import { drawQrMeet } from './qr-meet';
 import {
   makeOffscreenSurface,
@@ -125,7 +127,10 @@ function vectorClipart(el: LabelElement): { ops: ClipartDrawOp[]; viewBox: SvgVi
 
 function isUnsupportedPrintType(el: LabelElement): boolean {
   if (el.type === 'clipart') return vectorClipart(el) == null;
-  return el.type === 'image' || UNSUPPORTED.has(el.type);
+  // A moded image whose dots were prepared (prepareImageTiles) is drawn here; every other image
+  // still needs the capture path, exactly as before.
+  if (el.type === 'image') return !(usesModedPrint(el) && readyImageTile(el) !== null);
+  return UNSUPPORTED.has(el.type);
 }
 
 function collectUnsupportedHeadlessElements(doc: LabelDocument): { types: Set<string>; ids: string[] } {
@@ -300,6 +305,21 @@ function drawDocumentToSurface(
       throw new Error(`Unsupported print element type: ${el.type}`);
     }
     const box = placementBox(el, dpi);
+    if (el.type === 'image') {
+      const tile = activeDotScale === 1 && usesModedPrint(el) ? readyImageTile(el, dpi) : null;
+      if (!tile) {
+        throw new Error('Unsupported print element type: image (decode not wired in Stage A host path)');
+      }
+      surface.blitGray(
+        box.x0 + Math.round((box.w - tile.width) / 2),
+        box.y0 + Math.round((box.h - tile.height) / 2),
+        tile.width,
+        tile.height,
+        tile.gray,
+        tile.mask,
+      );
+      continue;
+    }
     const draw = () => {
       switch (el.type) {
         case 'text':
@@ -343,8 +363,6 @@ function drawDocumentToSurface(
           }
           break;
         }
-        case 'image':
-          throw new Error('Unsupported print element type: image (decode not wired in Stage A host path)');
         default:
           throw new Error(`Unsupported print element type: ${(el as LabelElement).type}`);
       }

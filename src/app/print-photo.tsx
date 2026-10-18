@@ -23,11 +23,25 @@ import { getPhotoFrame } from '@/constants/photo-frames';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { type LabelSizeMm } from '@/lib/label-geometry';
 import { decodeGalleryImage } from '@/lib/printer/gallery-decode';
-import { pngBase64ToGray, rotateGray } from '@/lib/printer/escpos';
+import { grayToPngBase64, pngBase64ToGray, rotateGray, type GrayRaster } from '@/lib/printer/escpos';
 import { flipHorizontal } from '@/lib/printer/exif-orientation';
 import { formatPrintSize, suggestPrintSizeFromAspect } from '@/lib/print-sizes';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
-import { createPrintGeometry } from '@/lib/printer/print-spec';
+import { createPrintGeometry, rectMmToDots } from '@/lib/printer/print-spec';
+import {
+  bridgeSupportsImageModes,
+  modedJobDpi,
+  printGrayWithImageMode,
+} from '@/lib/printer/image-mode-print';
+import {
+  IMAGE_MODES,
+  IMAGE_MODE_HELP,
+  IMAGE_MODE_LABEL,
+  normalizeImageSettings,
+  renderPageToMono,
+  resampleGray,
+  type ImageMode,
+} from '@/printing/raster/image-modes';
 import {
     formatPrintFailure,
     orientedPrintSize,
@@ -208,6 +222,11 @@ export default function PrintPhotoScreen() {
   const [vOffset, setVOffset] = useState(0);
   const [flipH, setFlipH] = useState(false);
   const [antiColor, setAntiColor] = useState(false);
+  // Image print modes (TD-404 and Josh). Photos default to Floyd-Steinberg on this screen only.
+  const [printMode, setPrintMode] = useState<ImageMode>('floyd');
+  const [brightness, setBrightness] = useState(0);
+  const [contrast, setContrast] = useState(0);
+  const modesAvailable = connected && !isFrame && bridgeSupportsImageModes();
   const [printing, setPrinting] = useState(false);
   const [footerHeight, setFooterHeight] = useState(72);
   const [printSize, setPrintSize] = useState<LabelSizeMm | null>(null);
@@ -414,7 +433,30 @@ export default function PrintPhotoScreen() {
         sourceGrayH: gray.height,
         fit: 'stretch',
       });
-      const printed = await printArtworkJob({
+      let printed: Awaited<ReturnType<typeof printArtworkJob>> | null = null;
+      if (modesAvailable && bridgeSupportsImageModes()) {
+        // Finished dots at the label's dot size, sent as-is. The preview above is the same pipeline.
+        await printGrayWithImageMode({
+          gray,
+          widthMm: geometry.widthMm,
+          heightMm: geometry.heightMm,
+          settings: normalizeImageSettings({
+            mode: printMode,
+            threshold,
+            brightness,
+            contrast,
+            invert: false, // Anti-color already inverted `gray` above
+          }),
+          name: 'Print Photo',
+          paperType,
+          copies,
+          gapMm: photoPaper.gapMm,
+          darkness,
+          speed,
+          offsetMm: { x: hOffset, y: vOffset },
+        });
+      } else {
+      printed = await printArtworkJob({
         widthMm: geometry.widthMm,
         heightMm: geometry.heightMm,
         gray,
@@ -430,7 +472,8 @@ export default function PrintPhotoScreen() {
         offsetXmm: hOffset,
         offsetYmm: vOffset,
       });
-      logPrintTrace('PHOTO_BITMAP_VS_SIZE', {
+      }
+      if (printed) logPrintTrace('PHOTO_BITMAP_VS_SIZE', {
         expectedW: geometry.sizeDotsW,
         expectedH: geometry.sizeDotsH,
         packedW: geometry.bitmapDotsW,
@@ -492,6 +535,10 @@ export default function PrintPhotoScreen() {
     printSize,
     suggestedSize,
     photoRotation,
+    modesAvailable,
+    printMode,
+    brightness,
+    contrast,
   ]);
 
   useEffect(() => {
@@ -523,6 +570,64 @@ export default function PrintPhotoScreen() {
         )
       : printCaptureSize.widthPx;
   const thresholdPct = useMemo(() => grayThreshold / 255, [grayThreshold]);
+
+  // Live preview made by the same pipeline the print uses, at the printer's dots.
+  const solidThreshold = Math.min(250, Math.max(10, grayThreshold + (darkness != null ? (darkness - 8) * 10 : 0)));
+  const decodedRef = useRef<{ uri: string; gray: GrayRaster } | null>(null);
+  const [modePreview, setModePreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!modesAvailable || !primaryPhoto) {
+      setModePreview(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          if (decodedRef.current?.uri !== primaryPhoto) {
+            decodedRef.current = { uri: primaryPhoto, gray: (await decodeGalleryImage(primaryPhoto)).gray };
+          }
+          if (cancelled) return;
+          let gray = decodedRef.current.gray;
+          if (flipH) gray = flipHorizontal(gray);
+          if (antiColor) {
+            const inverted = new Uint8Array(gray.gray.length);
+            for (let i = 0; i < inverted.length; i += 1) inverted[i] = 255 - gray.gray[i];
+            gray = { ...gray, gray: inverted };
+          }
+          if (photoRotation) gray = rotateGray(gray, photoRotation);
+          const box = rectMmToDots(0, 0, jobWidthMm, jobHeightMm, modedJobDpi());
+          const w = Math.max(1, box.widthDots);
+          const h = Math.max(1, box.heightDots);
+          const mono = renderPageToMono(
+            resampleGray(gray.gray, gray.width, gray.height, w, h),
+            w,
+            h,
+            normalizeImageSettings({ mode: printMode, threshold: solidThreshold, brightness, contrast }),
+          );
+          if (!cancelled) setModePreview(`data:image/png;base64,${grayToPngBase64({ width: w, height: h, gray: mono })}`);
+        } catch {
+          if (!cancelled) setModePreview(null);
+        }
+      })();
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    modesAvailable,
+    primaryPhoto,
+    flipH,
+    antiColor,
+    photoRotation,
+    jobWidthMm,
+    jobHeightMm,
+    printMode,
+    solidThreshold,
+    brightness,
+    contrast,
+  ]);
 
   return (
     <View style={styles.root}>
@@ -568,10 +673,10 @@ export default function PrintPhotoScreen() {
                   },
                 ]}>
                 <Image
-                  source={{ uri: primaryPhoto }}
+                  source={{ uri: modesAvailable && modePreview ? modePreview : primaryPhoto }}
                   style={[
                     StyleSheet.absoluteFillObject,
-                    { transform: [{ rotate: `${photoRotation}deg` }] },
+                    modesAvailable && modePreview ? null : { transform: [{ rotate: `${photoRotation}deg` }] },
                   ]}
                   contentFit="fill"
                 />
@@ -631,6 +736,42 @@ export default function PrintPhotoScreen() {
           </Text>
         )}
 
+        {modesAvailable ? (
+          <View style={[styles.card, { width: contentWidth - 24 }]}>
+            <Text style={styles.groupLabel}>Print mode</Text>
+            <ChipGroup
+              options={IMAGE_MODES.map((m) => IMAGE_MODE_LABEL[m])}
+              selected={IMAGE_MODE_LABEL[printMode]}
+              onSelect={(label) => {
+                const next = IMAGE_MODES.find((m) => IMAGE_MODE_LABEL[m] === label);
+                if (next) setPrintMode(next);
+              }}
+            />
+            <Text style={styles.hint}>{IMAGE_MODE_HELP[printMode]}</Text>
+            {printMode === 'solid' ? (
+              <StepperRow
+                label="Threshold"
+                value={String(grayThreshold)}
+                onMinus={() => setGrayThreshold((v) => Math.max(1, v - 8))}
+                onPlus={() => setGrayThreshold((v) => Math.min(254, v + 8))}
+                bordered
+              />
+            ) : null}
+            <StepperRow
+              label="Brightness"
+              value={String(brightness)}
+              onMinus={() => setBrightness((v) => Math.max(-100, v - 10))}
+              onPlus={() => setBrightness((v) => Math.min(100, v + 10))}
+              bordered
+            />
+            <StepperRow
+              label="Contrast"
+              value={String(contrast)}
+              onMinus={() => setContrast((v) => Math.max(-100, v - 10))}
+              onPlus={() => setContrast((v) => Math.min(100, v + 10))}
+            />
+          </View>
+        ) : (
         <View style={[styles.card, { width: contentWidth - 24 }]}>
           <Text style={styles.groupLabel}>Color Mode</Text>
           <ChipGroup options={COLOR_MODES} selected={colorMode} onSelect={setColorMode} />
@@ -658,6 +799,7 @@ export default function PrintPhotoScreen() {
             </Pressable>
           </View>
         </View>
+        )}
 
         <View style={[styles.card, { width: contentWidth - 24 }]}>
           <StepperRow

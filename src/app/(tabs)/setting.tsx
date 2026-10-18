@@ -96,12 +96,18 @@ function SettingRow({
   );
 }
 
-const PROFILE_NAME = 'User';
-const PROFILE_PHONE = 'XXXXX';
+/** 9876543210 -> +91 98765 43210. Anything that is not 10 digits is shown as saved. */
+function formatMobile(mobile: string): string {
+  const digits = mobile.replace(/\D/g, '');
+  return digits.length === 10 ? `+91 ${digits.slice(0, 5)} ${digits.slice(5)}` : mobile;
+}
 
 function ProfileCard() {
   const styles = useStyles();
   const c = useColors();
+  const user = useAuthStore((s) => s.user);
+  const profileName = user?.name?.trim() || 'User';
+  const profilePhone = user?.mobile ? formatMobile(user.mobile) : null;
   const photoUri = useSettingsStore((s) => s.profilePhotoUri);
   const setPhotoUri = useSettingsStore((s) => s.setProfilePhotoUri);
 
@@ -159,7 +165,7 @@ function ProfileCard() {
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.avatarImg} contentFit="cover" />
           ) : (
-            <Text style={styles.avatarInitial}>{PROFILE_NAME.charAt(0).toUpperCase()}</Text>
+            <Text style={styles.avatarInitial}>{profileName.charAt(0).toUpperCase()}</Text>
           )}
         </View>
         <View style={styles.avatarBadge}>
@@ -167,11 +173,13 @@ function ProfileCard() {
         </View>
       </Pressable>
       <View style={styles.profileCopy}>
-        <Text style={styles.profileName} numberOfLines={1}>{PROFILE_NAME}</Text>
+        <Text style={styles.profileName} numberOfLines={1}>{profileName}</Text>
+        {profilePhone ? (
         <View style={styles.phonePill}>
           <AppIcon name="phone.fill" tintColor={c.textSecondary} size={12} />
-          <Text style={styles.profilePhone} numberOfLines={1}>{PROFILE_PHONE}</Text>
+          <Text style={styles.profilePhone} numberOfLines={1}>{profilePhone}</Text>
         </View>
+        ) : null}
       </View>
       </View>
       <View style={styles.statsRow}>

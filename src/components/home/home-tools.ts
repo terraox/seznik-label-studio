@@ -26,7 +26,7 @@ export const HOME_TOOLS = {
   pdf: { label: 'PDF', href: '/pdf', icon: 'document-text-outline', group: 'file' },
   photo: { label: 'Photo', href: '/print-photo-modal', icon: 'images-outline', group: 'file' },
   twoUps: {
-    label: '2-Up Label',
+    label: 'Multi Label',
     href: '/new-label-setup?isTwoUps=true',
     icon: 'copy-outline',
     group: 'labelType',

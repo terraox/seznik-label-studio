@@ -138,34 +138,10 @@ export default function ShopScreen() {
     );
   }
 
-  const hero =
-    category === 'printers'
-      ? {
-          eyebrow: 'Machines',
-          title: 'Seznik printers on Amazon.',
-          body: 'Browse Seznik machines and open the product page. Store links are used when Amazon is unavailable.',
-        }
-      : {
-          eyebrow: 'Supplies',
-          title: 'Label rolls on Amazon.',
-          body: 'Browse Seznik stock and open the product page.',
-        };
-
   const noun = category === 'printers' ? 'printers' : 'labels';
 
   const header = (
     <View style={styles.headerBlock}>
-      <View style={styles.hero}>
-        <View style={styles.heroCopy}>
-          <Text style={styles.heroEyebrow}>{hero.eyebrow}</Text>
-          <Text style={styles.heroTitle}>{hero.title}</Text>
-          <Text style={styles.heroBody}>{hero.body}</Text>
-        </View>
-        <View style={styles.heroMark}>
-          <AppIcon name="bag.fill" tintColor={C.onAccent} size={22} />
-        </View>
-      </View>
-
       <View style={styles.pills}>
         {CATEGORIES.map((item) => {
           const active = item.id === category;
@@ -357,47 +333,6 @@ const styles = themedStyles((c) => ({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: GRID_GAP,
-  },
-  hero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    backgroundColor: '#16324C',
-    borderRadius: 22,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    overflow: 'hidden',
-  },
-  heroCopy: {
-    flex: 1,
-    gap: 6,
-  },
-  heroEyebrow: {
-    color: '#7ED4DE',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  heroTitle: {
-    color: c.onAccent,
-    fontSize: 18,
-    lineHeight: 23,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  heroBody: {
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  heroMark: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: c.accentFill,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   pills: {
     flexDirection: 'row',

@@ -68,6 +68,18 @@ export type ImageElementState = {
   workingHeightPx?: number;
   /** Fit Label extract: print this image from printUri, not a canvas screenshot. */
   fitLabelSource?: boolean;
+  /**
+   * Print mode: 'solid' | 'floyd' | 'atkinson' | 'ordered'. All five fields below are additive:
+   * when none is set the image prints exactly as before (colorMode / grayThreshold / antiColor).
+   */
+  imageMode?: 'solid' | 'floyd' | 'atkinson' | 'ordered';
+  /** Solid cutoff, 1..254. */
+  threshold?: number;
+  /** -100..100 */
+  brightness?: number;
+  /** -100..100 */
+  contrast?: number;
+  invert?: boolean;
 };
 
 export type ClipartElementState = {

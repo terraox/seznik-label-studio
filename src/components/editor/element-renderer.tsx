@@ -1,3 +1,6 @@
+import { ModedTileImage } from "@/components/editor/moded-tile-image";
+import { useModedTile } from "@/components/editor/use-moded-tile";
+import { usesModedPrint } from "@/printing/raster/image-element-settings";
 import { computeArcTextLayout } from "@/lib/editor/arctext-layout";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Platform, StyleSheet, Text, View } from "react-native";
@@ -1584,6 +1587,10 @@ function ImageContent({
         break;
       }
     }
+  }
+  const modedView = useModedTile(element, displayUri);
+  if (usesModedPrint(element)) {
+    return <ModedTileImage view={modedView} widthPx={widthPx} heightPx={heightPx} />;
   }
   return (
     <MonoImagePreview

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { registerWalkthroughTarget } from '@/lib/walkthrough/registry';
@@ -8,6 +8,22 @@ import { useTranslation } from '@/lib/i18n';
 import { makeStyles, useColors } from '@/theme';
 
 const ANDROID_BAR_HEIGHT = 62;
+
+/** Selected tab reads bold in the accent colour; the others stay lighter and muted. */
+function tabLabel({ focused, color, children }: { focused: boolean; color: string; children: string }) {
+  return (
+    <Text
+      numberOfLines={1}
+      style={{
+        color,
+        fontSize: 11,
+        fontWeight: focused ? '700' : '500',
+        marginBottom: Platform.OS === 'ios' ? 0 : 4,
+      }}>
+      {children}
+    </Text>
+  );
+}
 
 export default function AppTabs() {
   const { t } = useTranslation();
@@ -25,7 +41,7 @@ export default function AppTabs() {
         headerShown: false,
         tabBarActiveTintColor: c.accent,
         tabBarInactiveTintColor: c.textMuted,
-        tabBarLabelStyle: styles.label,
+        tabBarLabel: tabLabel,
         tabBarItemStyle: styles.item,
         tabBarStyle: barStyle,
         tabBarBackground: () => (
@@ -43,21 +59,21 @@ export default function AppTabs() {
         name="index"
         options={{
           title: t('tab.home'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size + 2} color={color} />,
         }}
       />
       <Tabs.Screen
         name="template"
         options={{
           title: t('tab.template'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={size + 2} color={color} />,
         }}
       />
       <Tabs.Screen
         name="shop"
         options={{
           title: t('tab.shop'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="bag-handle" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="bag-handle" size={size + 2} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -65,7 +81,7 @@ export default function AppTabs() {
         options={{
           title: t('tab.help'),
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="help-circle-outline" size={size} color={color} />
+            <Ionicons name="help-circle" size={size + 2} color={color} />
           ),
         }}
       />
@@ -74,7 +90,7 @@ export default function AppTabs() {
         options={{
           title: t('tab.setting'),
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
+            <Ionicons name="settings" size={size + 2} color={color} />
           ),
         }}
       />
@@ -123,12 +139,8 @@ const useStyles = makeStyles((c, scheme) => ({
     height: StyleSheet.hairlineWidth,
     backgroundColor: scheme === 'light' ? 'rgba(23, 166, 184, 0.35)' : c.hairline, // theme-fixed: light teal hairline
   },
-  label: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: Platform.OS === 'ios' ? 0 : 4,
-  },
   item: {
-    paddingTop: 2,
+    paddingTop: 4,
+    gap: 2,
   },
 }));

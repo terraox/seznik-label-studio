@@ -1,3 +1,5 @@
+import { bridgeSupportsImageModes, printGrayWithImageMode } from '@/lib/printer/image-mode-print';
+import { normalizeImageSettings, type ImageMode } from '@/printing/raster/image-modes';
 import { defaultLabelSettings } from '@/lib/label-settings';
 import { renderEditedPdfPages } from '@/lib/pdf-editor/export';
 import { pageNeedsComposer, renderLabelPageGray, type LabelPageRaster } from '@/lib/pdf-editor/render-label';
@@ -138,6 +140,11 @@ export type PdfPrintOptions = {
   /** Total offsets: printer calibration plus label offset. */
   hOffsetMm: number;
   vOffsetMm: number;
+  /**
+   * Photo dots on TD-404 and Josh. Left out or 'solid' prints exactly as before; a dither mode
+   * dithers only the photos on a page, so text and barcodes stay crisp.
+   */
+  imageMode?: ImageMode;
 };
 
 export async function printEditedPdf(
@@ -219,6 +226,28 @@ export async function printEditedPdf(
         : fitted;
 
       try {
+        if (options?.imageMode && options.imageMode !== 'solid' && bridgeSupportsImageModes()) {
+          // The offsets above already include the saved calibration; the pipeline adds it again.
+          const calKey = printer.deviceId ?? printer.sdkId ?? 'unknown';
+          const cal = printer.printCalibration[calKey];
+          await printGrayWithImageMode({
+            gray: page.gray,
+            widthMm,
+            heightMm,
+            settings: normalizeImageSettings({ mode: options.imageMode, threshold: quality.threshold }),
+            photosOnly: true,
+            name: session.sourceName || 'PDF page',
+            paperType: paper,
+            copies,
+            gapMm: paperCommand.gapMm,
+            darkness: options.darkness ?? null,
+            speed: options.speed ?? null,
+            offsetMm: { x: hOffsetMm - (cal?.hOffsetMm ?? 0), y: vOffsetMm - (cal?.vOffsetMm ?? 0) },
+          });
+          pagesPrinted++;
+          usePrintStatsStore.getState().record(copies);
+          continue;
+        }
         await sendArtworkJob({
           widthMm,
           heightMm,

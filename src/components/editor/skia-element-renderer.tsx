@@ -1,3 +1,5 @@
+import { useModedTile } from '@/components/editor/use-moded-tile';
+import { usesModedPrint } from '@/printing/raster/image-element-settings';
 import React, { memo, useEffect, useMemo, useState } from 'react';
 import { type SharedValue, useDerivedValue } from 'react-native-reanimated';
 import {
@@ -540,7 +542,10 @@ export const SkiaImageElement = memo(function SkiaImageElement({
   grayThreshold = 128,
   tile = false,
   contentFit = 'contain',
+  element,
 }: {
+  /** The image element, for the new print modes. Without it (or without a mode) the old preview runs. */
+  element?: Extract<LabelElement, { type: 'image' }>;
   uri: string;
   widthPx: number;
   heightPx: number;
@@ -555,6 +560,24 @@ export const SkiaImageElement = memo(function SkiaImageElement({
   const skiaImg = useImage(uri);
   const w = Math.max(1, widthPx);
   const h = Math.max(1, heightPx);
+  const modedView = useModedTile(element, uri);
+  const modedImage = useMemo(() => {
+    if (!modedView) return null;
+    const { width, height, gray } = modedView.tile;
+    const rgba = new Uint8Array(width * height * 4);
+    for (let i = 0; i < gray.length; i++) {
+      const o = i * 4;
+      rgba[o] = gray[i];
+      rgba[o + 1] = gray[i];
+      rgba[o + 2] = gray[i];
+      rgba[o + 3] = 255;
+    }
+    return Skia.Image.MakeImage(
+      { width, height, colorType: ColorType.RGBA_8888, alphaType: AlphaType.Unpremul },
+      Skia.Data.fromBytes(rgba),
+      width * 4,
+    );
+  }, [modedView]);
   const mode = resolveEditorColorMode(colorMode);
   const [processed, setProcessed] = useState(skiaImg);
   useEffect(() => {
@@ -602,6 +625,13 @@ export const SkiaImageElement = memo(function SkiaImageElement({
   const tileW = processed ? Math.max(8, processed.width()) : w;
   const tileH = processed ? Math.max(8, processed.height()) : h;
   const display = processed ?? skiaImg;
+
+  if (element && usesModedPrint(element)) {
+    if (!modedView || !modedImage) return null;
+    const dw = Math.max(1, (modedView.tile.width / modedView.boxWidthDots) * w);
+    const dh = Math.max(1, (modedView.tile.height / modedView.boxHeightDots) * h);
+    return <Image image={modedImage} x={(w - dw) / 2} y={(h - dh) / 2} width={dw} height={dh} fit="fill" />;
+  }
 
   return (
     <Group transform={transforms.length > 0 ? transforms : undefined}>
@@ -870,6 +900,7 @@ export const SkiaElementView = memo(function SkiaElementView({
     case 'image':
       return (
         <SkiaImageElement
+          element={element}
           uri={element.uri}
           widthPx={widthPx}
           heightPx={heightPx}

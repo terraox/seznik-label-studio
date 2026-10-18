@@ -209,7 +209,7 @@ export const TD404_DIECUT_CENTER_OFFSET_MM = { x: 0.25, y: 1 };
  * right and 2 mm too low, so the centre moved to (-0.25, -1). The next Rudra print needed the
  * border 0.5 mm further left: (-0.75, -1).
  */
-export const RUDRA_DIECUT_CENTER_OFFSET_MM = { x: -0.25, y: -1.5 };
+export const RUDRA_DIECUT_CENTER_OFFSET_MM = { x: -0.25, y: -1 };
 
 /**
  * Rudra 50x30 at gap 3, measured from the border centre to the die-cut (left/right/top/bottom):
@@ -217,7 +217,7 @@ export const RUDRA_DIECUT_CENTER_OFFSET_MM = { x: -0.25, y: -1.5 };
  * 0.5 mm up (-1.5). Left was 0.5 mm smaller than right, and the two summed 0.5 mm short, so x
  * moves 0.5 mm right (-0.25) and the border is 0.5 mm narrower on the right.
  */
-export const RUDRA_BORDER_WIDTH_EXTRA_MM = -0.5;
+export const RUDRA_BORDER_WIDTH_EXTRA_MM = 0;
 
 /** Die-cut centre offset for the selected printer. Tejas unless Rudra is selected. */
 export function td404DiecutCenterOffsetMm(): { x: number; y: number } {

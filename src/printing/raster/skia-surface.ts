@@ -10,6 +10,7 @@ import { splitPrintTextSegments } from '@/lib/text/emoji-segments';
 import { inkSquare } from '@/lib/clipart/ink-bounds';
 import { clipartOpToSvgPath, separateSvgArcFlags, type ClipartDrawOp } from '@/lib/clipart/parse-svg';
 
+import { blitTileViaRects } from './blit-tile';
 import { fillEllipse, fillRect, makeDotSurface, strokeRect, type DotSurface } from './dot-surface';
 import {
   drawEmojiSegmentAsImage,
@@ -58,6 +59,11 @@ export type RasterSurface = {
   backend: RasterSurfaceBackend;
   width: number;
   height: number;
+  /**
+   * Finished image dots (0 = ink, 255 = paper), copied 1:1 with no resampling. Call it outside
+   * `withRotation`: a turned image is turned before it gets here.
+   */
+  blitGray: (x: number, y: number, w: number, h: number, gray: Uint8Array, mask: Uint8Array | null) => void;
   fillRect: (x: number, y: number, w: number, h: number, gray: number) => void;
   strokeRect: (x: number, y: number, w: number, h: number, stroke: number, gray: number) => void;
   fillEllipse: (cx: number, cy: number, rx: number, ry: number, gray: number) => void;
@@ -388,6 +394,22 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
     backend: 'skia',
     width: widthDots,
     height: heightDots,
+    blitGray(x, y, w, h, gray, mask) {
+      blitTileViaRects(
+        (rx, ry, rw, rh, g) => {
+          fillPaint.setColor(grayToColor(skiaMod, g));
+          fillPaint.setStyle(PaintStyle.Fill);
+          fillPaint.setAntiAlias(false);
+          canvas.drawRect(Skia.XYWHRect(Math.round(rx), Math.round(ry), Math.max(1, rw), Math.max(1, rh)), fillPaint);
+        },
+        Math.round(x),
+        Math.round(y),
+        w,
+        h,
+        gray,
+        mask,
+      );
+    },
     fillRect(x, y, w, h, gray) {
       fillPaint.setColor(grayToColor(skiaMod, gray));
       fillPaint.setStyle(PaintStyle.Fill);
@@ -682,6 +704,20 @@ function makeDotRasterSurface(dot: DotSurface): RasterSurface {
     backend: 'dot-buffer',
     width: dot.width,
     height: dot.height,
+    blitGray(x, y, w, h, gray, mask) {
+      const ox = Math.round(x);
+      const oy = Math.round(y);
+      for (let ty = 0; ty < h; ty++) {
+        const py = oy + ty;
+        if (py < 0 || py >= dot.height) continue;
+        for (let tx = 0; tx < w; tx++) {
+          const px = ox + tx;
+          if (px < 0 || px >= dot.width) continue;
+          if (mask && mask[ty * w + tx] === 0) continue;
+          dot.gray[py * dot.width + px] = gray[ty * w + tx];
+        }
+      }
+    },
     fillRect: paintRect,
     strokeRect(x, y, w, h, stroke, gray) {
       if (!rot) {

@@ -149,6 +149,7 @@ import {
   type RasterBitmap,
 } from '@/printing/raster/skia-rasterizer';
 import { warmupPrintRasterSurface } from '@/printing/raster/skia-surface';
+import { prepareImageTiles } from '@/printing/raster/image-tiles';
 import { TD404_HEADLESS_SKIA_PRINT } from '@/printing/raster/td404-headless-flag';
 import { loadInstalledFontsIntoRuntime } from '@/lib/fonts/runtime';
 import { ensurePrintTypefacesForDocument, missingPrintTypefaces } from '@/printing/raster/print-typeface';
@@ -1275,6 +1276,13 @@ export default function PrintScreen() {
       );
       const firstPageDoc =
         applyDisplayTransforms(buildPageDocument(0)) ?? displayDocument ?? previewDocument;
+      // Images set to a Dither mode are turned into finished dots once, here, so the headless raster
+      // can draw them. TD-404 and Josh only: other bridges keep the old image path.
+      const prepareModedImages = async (doc: LabelDocument | null | undefined) => {
+        if (!doc || !(manager.usesTd404CommandSet || manager.isJosh)) return;
+        await prepareImageTiles(doc, jobDpi);
+      };
+      await prepareModedImages(firstPageDoc);
       const rasterJoshMono = async (doc: LabelDocument): Promise<RasterBitmap | null> => {
         try {
           assertHeadlessRasterDocument(doc);
@@ -1402,6 +1410,7 @@ export default function PrintScreen() {
         pageDoc =
           applyDisplayTransforms(buildPageDocument(page)) ?? displayDocument ?? previewDocument;
         fitLabelExtract = pageDoc != null && isFitLabelImageOnlyDocument(pageDoc);
+        await prepareModedImages(pageDoc);
         if (pageCount > 1) {
           setPageIndex(page);
           if (!fitLabelExtract && !manager.isJosh) {

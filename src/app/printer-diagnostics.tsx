@@ -29,6 +29,8 @@ import {
   printPaperTypeTestRow,
 } from '@/lib/printer/paper-type-test-sheet';
 import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
+import { ditherTestAvailable, printDitherTestSheet } from '@/lib/printer/dither-test-sheet';
+import { IMAGE_MODES, IMAGE_MODE_LABEL } from '@/printing/raster/image-modes';
 import { GRID_SPACING_PRESETS_MM } from '@/lib/editor/canvas-grid';
 import {
   DIAGNOSTIC_GAP_PRESETS_MM,
@@ -199,6 +201,20 @@ export default function PrinterDiagnosticsScreen() {
       log(`Sent ${paperType}: ${setting}`);
     } catch (error) {
       fail('Paper type test failed', error);
+    } finally {
+      setBusy(null);
+      refresh();
+    }
+  };
+
+  const printDitherSheet = async () => {
+    setBusy('dither-sheet');
+    try {
+      log('Printing the dither test sheet (4 labels)…');
+      const sent = await printDitherTestSheet();
+      log(`Sent in order: ${sent.map((m) => IMAGE_MODE_LABEL[m]).join(', ')}`);
+    } catch (error) {
+      fail('Dither test failed', error);
     } finally {
       setBusy(null);
       refresh();
@@ -568,6 +584,30 @@ export default function PrinterDiagnosticsScreen() {
                 </View>
               ))
             )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Dither test sheet</Text>
+            <Text style={styles.sizeHint}>
+              Prints {IMAGE_MODES.length} labels (50 x 30 mm), one per image mode, in this order:{' '}
+              {IMAGE_MODES.map((m) => IMAGE_MODE_LABEL[m]).join(', ')}. Each has a photo, a gradient, a logo,
+              text and a QR code. TD-404 and Josh only.
+            </Text>
+            <Text style={styles.sizeHint}>
+              Check on paper: (1) Solid has hard black and white only, no gray, and the gradient is a sharp
+              step. (2) Floyd-Steinberg shows smooth shading from fine random dots. (3) Atkinson is lighter,
+              with more white and crisper edges. (4) Ordered shows a regular pattern, no random dots. (5) In
+              every mode the logo, text and QR code look the same and stay sharp, and the QR code scans.
+              (6) Dots should be clean single dots with no smearing or lines. (7) The photo is not stretched
+              or shifted between modes. Photograph all four labels.
+            </Text>
+            <ActionButton
+              label="Print dither test sheet"
+              icon="printer"
+              busy={busy === 'dither-sheet'}
+              disabled={busy !== null || !linked || !ditherTestAvailable()}
+              onPress={() => void printDitherSheet()}
+            />
           </View>
 
           <View style={styles.card}>

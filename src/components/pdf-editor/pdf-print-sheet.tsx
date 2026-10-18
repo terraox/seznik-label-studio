@@ -5,6 +5,8 @@ import { TextInput } from '@/components/ui/text-input';
 
 import { AppIcon } from '@/components/app-icon';
 import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
+import { bridgeSupportsImageModes } from '@/lib/printer/image-mode-print';
+import { IMAGE_MODES, IMAGE_MODE_HELP, IMAGE_MODE_LABEL, type ImageMode } from '@/printing/raster/image-modes';
 import { QualityControl, type QualityStepperProps } from '@/components/quality-control';
 import { Type } from '@/constants/ui';
 import { defaultLabelSettings } from '@/lib/label-settings';
@@ -127,6 +129,9 @@ export const PdfPrintPanel = forwardRef<
   const [hOffset, setHOffset] = useState(savedCalibration?.hOffsetMm ?? 0);
   const [vOffset, setVOffset] = useState(savedCalibration?.vOffsetMm ?? 0);
   const [showAdvanced, setShowAdvanced] = useState(true);
+  // Photo dots: Solid prints as before; a dither mode dithers only photos on a page.
+  const [photoMode, setPhotoMode] = useState<ImageMode>('solid');
+  const photoModesAvailable = bridgeSupportsImageModes();
 
   // Offsets saved for a printer load when it connects.
   const loadedKey = useRef(calibrationKey);
@@ -163,8 +168,9 @@ export const PdfPrintPanel = forwardRef<
       gapMm,
       hOffsetMm: Math.round((hOffset + labelDefaults.hOffsetMm) * 100) / 100,
       vOffsetMm: Math.round((vOffset + labelDefaults.vOffsetMm) * 100) / 100,
+      imageMode: photoModesAvailable ? photoMode : undefined,
     }),
-    [darkness, gapMm, hOffset, labelDefaults.hOffsetMm, labelDefaults.vOffsetMm, speed, vOffset],
+    [darkness, gapMm, hOffset, labelDefaults.hOffsetMm, labelDefaults.vOffsetMm, photoMode, photoModesAvailable, speed, vOffset],
   );
 
   const [mode, setMode] = useState<Mode>('all');
@@ -332,6 +338,30 @@ export const PdfPrintPanel = forwardRef<
             </Text>
           </Pressable>
         </View>
+
+        {photoModesAvailable ? (
+          <View style={styles.section}>
+            <Text style={styles.groupLabel}>Photo print mode</Text>
+            <View style={styles.chipRow}>
+              {IMAGE_MODES.map((item) => {
+                const selected = photoMode === item;
+                return (
+                  <Pressable
+                    key={item}
+                    disabled={printing}
+                    onPress={() => setPhotoMode(item)}
+                    style={[styles.chip, selected && styles.chipOn]}>
+                    <Text style={[styles.chipText, selected && styles.chipTextOn]}>{IMAGE_MODE_LABEL[item]}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.sub}>
+              {IMAGE_MODE_HELP[photoMode]}
+              {photoMode === 'solid' ? '' : ' Only photos are dithered. Text and barcodes stay sharp.'}
+            </Text>
+          </View>
+        ) : null}
 
         <WalkthroughTarget id="pdf.advanced">
         <Pressable onPress={() => setShowAdvanced((v) => !v)} style={[styles.section, styles.advHead]}>

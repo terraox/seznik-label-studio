@@ -22,6 +22,7 @@ import { td404ContentShiftDots, td404EdgeBorderOptions } from '@/lib/printer/pri
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { unpackMono1bppToGray } from '@/printing/raster/bit-packer';
+import { prepareImageTiles } from '@/printing/raster/image-tiles';
 import { ensurePrintTypefacesForDocument, missingPrintTypefaces } from '@/printing/raster/print-typeface';
 import {
   assertHeadlessRasterDocument,
@@ -37,6 +38,9 @@ export type MainPipelinePrintOptions = {
   assertInk?: boolean;
   /** Added to stored H/V calibration for this job only (e.g. Josh test strip tune). */
   offsetExtraMm?: { x?: number; y?: number };
+  /** Manual darkness / speed (null or left out = Auto, which is what every caller used before). */
+  darkness?: number | null;
+  speed?: number | null;
 };
 
 export const JOSH_HEADLESS_EMPTY = 'JOSH_HEADLESS_EMPTY';
@@ -77,6 +81,8 @@ async function rasterizeForPipeline(
   threshold: number,
   inkSteps: number,
 ): Promise<{ bitmap: RasterBitmap; gray: Uint8Array }> {
+  // Images set to a Dither mode become finished dots first (TD-404 and Josh only).
+  if (manager.usesTd404CommandSet || manager.isJosh) await prepareImageTiles(doc, jobDpi);
   if (!canHeadlessRasterPrint(doc)) {
     throw new Error('This label uses elements that require the Print screen capture path.');
   }
@@ -134,14 +140,14 @@ export async function printLabelDocumentMainPipeline(
   const jobCaps = qualityCapsFor(jobBridge);
   const defaults = useSettingsStore.getState();
   const quality = resolvePrintQuality({
-    darkness: null,
-    speed: null,
+    darkness: options.darkness ?? null,
+    speed: options.speed ?? null,
     grayThreshold: defaults.grayThreshold,
     colorMode: defaults.colorMode,
     caps: jobCaps,
   });
   const { density: printDensity, threshold, speed: printSpeed, dither } = quality;
-  const inkSteps = darknessSteps(null, jobCaps);
+  const inkSteps = darknessSteps(options.darkness ?? null, jobCaps);
   const rawDpi = manager.getPrintDpi();
   const jobDpi = manager.isJosh ? joshEffectiveDpi(rawDpi) : rawDpi;
   const bakeOffset = manager.usesTd404CommandSet;
