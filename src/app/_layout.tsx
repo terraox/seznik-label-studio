@@ -17,7 +17,7 @@ import { useIncomingSharedFile } from '@/lib/file-import/use-incoming-shared-fil
 import { startInstalledFontHydration } from '@/lib/fonts/runtime';
 import { hydrateUserClipartSvgs } from '@/lib/clipart/user-storage';
 import { migrateLegacyUserFiles } from '@/lib/user-files/migrate';
-// import { useAuthStore } from '@/stores/auth-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
 import { AppThemeProvider, DarkColors, useScheme, useSettingsHydrated } from '@/theme';
 
@@ -93,11 +93,9 @@ function AppRoot() {
   const [splashDone, setSplashDone] = useState(false);
   const handleSplashFinish = useCallback(() => setAppReady(true), []);
   const handleSplashDone = useCallback(() => setSplashDone(true), []);
-  // Login / register is switched off for now: the app always opens signed in.
-  // const authHydrated = useAuthStore((s) => s.hydrated);
-  // const signedIn = useAuthStore((s) => s.sessionPhone !== null);
-  const authHydrated = true;
-  const signedIn = true;
+  const authHydrated = useAuthStore((s) => s.hydrated);
+  const signedIn = useAuthStore((s) => s.token !== null);
+  const needsPrinter = useAuthStore((s) => s.needsPrinter);
 
   // A spreadsheet shared to the app opens Data File once the app is ready and signed in.
   useIncomingSharedFile();
@@ -113,13 +111,14 @@ function AppRoot() {
       <StatusBar style="light" />
       {appReady && authHydrated && settingsHydrated ? (
         <Stack screenOptions={{ headerShown: false }}>
-          {/* Login / register switched off for now.
           <Stack.Protected guard={!signedIn}>
             <Stack.Screen name="login" />
             <Stack.Screen name="register" options={{ animation: 'slide_from_right' }} />
           </Stack.Protected>
-          */}
-          <Stack.Protected guard={signedIn}>
+          <Stack.Protected guard={signedIn && needsPrinter}>
+            <Stack.Screen name="select-printer" options={{ animation: 'slide_from_right' }} />
+          </Stack.Protected>
+          <Stack.Protected guard={signedIn && !needsPrinter}>
             <Stack.Screen name="(tabs)" />
           </Stack.Protected>
           <Stack.Screen name="edit" options={{ animation: 'slide_from_right' }} />

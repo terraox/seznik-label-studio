@@ -35,7 +35,7 @@ import {
   useColors,
   type AppearancePreference,
 } from '@/theme';
-// import { useAuthStore } from '@/stores/auth-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
 type IconName = AppIconName;
@@ -213,7 +213,7 @@ export default function SettingScreen() {
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const appearanceKey =
     APPEARANCE_OPTIONS.find((o) => o.value === appearance)?.key ?? 'setting.appearanceSystem';
-  // const logout = useAuthStore((s) => s.logout);
+  const logout = useAuthStore((s) => s.logout);
 
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
 
@@ -236,11 +236,10 @@ export default function SettingScreen() {
     );
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLogout = () => {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: () => undefined },
+      { text: 'Log out', style: 'destructive', onPress: logout },
     ]);
   };
 
@@ -348,16 +347,6 @@ export default function SettingScreen() {
               showDivider
             />
             <SettingRow
-              label={t('setting.canvasWalkthrough')}
-              icon="square.dashed"
-              onPress={() => {
-                // Opens a blank label so the tour has a canvas to point at.
-                router.push('/edit');
-                startWalkthrough('canvas');
-              }}
-              showDivider
-            />
-            <SettingRow
               label={t('setting.feedback')}
               icon="square.and.pencil"
               onPress={handleFeedback}
@@ -366,7 +355,6 @@ export default function SettingScreen() {
             <SettingRow label={t('setting.aboutUs')} icon="info.circle" onPress={handleAbout} />
           </SettingGroup>
 
-          {/* Log out hidden while login is switched off.
           <SettingGroup>
             <SettingRow
               label="Log out"
@@ -374,7 +362,6 @@ export default function SettingScreen() {
               onPress={handleLogout}
             />
           </SettingGroup>
-          */}
         </View>
       </ScrollView>
 

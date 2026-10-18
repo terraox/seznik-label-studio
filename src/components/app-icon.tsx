@@ -73,6 +73,7 @@ const ION: Record<string, IoniconsName> = {
   'lock.open': 'lock-open-outline',
   magnifyingglass: 'search-outline',
   mic: 'mic-outline',
+  person: 'person-outline',
   photo: 'image-outline',
   'photo.artframe': 'images-outline',
   'photo.on.rectangle': 'images-outline',

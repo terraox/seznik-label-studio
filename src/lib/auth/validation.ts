@@ -1,6 +1,6 @@
-/** Placeholder OTP until an SMS provider is wired up. */
-export const DEMO_OTP = '0000';
-export const OTP_LENGTH = DEMO_OTP.length;
+export const OTP_LENGTH = 6;
+/** Seconds before the next OTP can be requested (also enforced by the server). */
+export const OTP_RESEND_SECONDS = 60;
 
 export const PHONE_LENGTH = 10;
 
