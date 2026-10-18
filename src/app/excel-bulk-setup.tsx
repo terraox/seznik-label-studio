@@ -132,13 +132,13 @@ export default function ExcelBulkSetupScreen() {
     paramMm(params.heightMm, defaults.labelHeight),
   );
 
-  const [copiesColumnIndex, setCopiesColumnIndex] = useState<number | null>(() =>
-    sheet ? guessCopiesColumnIndex(sheet) : null,
-  );
+  // Off by default: every label prints once until the user asks for different copies.
+  const [copiesColumnIndex, setCopiesColumnIndex] = useState<number | null>(null);
   const [mappings, setMappings] = useState<BulkColumnMapping[]>(() =>
-    sheet ? mappingsForSheet(sheet, guessCopiesColumnIndex(sheet)) : [],
+    sheet ? mappingsForSheet(sheet, null) : [],
   );
   const [displayHead, setDisplayHead] = useState(false);
+  const [differentCopies, setDifferentCopies] = useState(false);
   const labelName = firstParam(params.labelName);
   const circle = firstParam(params.mediaShape) === 'circle';
   const across = Number.parseInt(firstParam(params.columns) ?? '1', 10);
@@ -351,10 +351,10 @@ export default function ExcelBulkSetupScreen() {
                 <Pressable
                   key={`${item.name}-${index}`}
                   onPress={() => {
-                    const guessed = guessCopiesColumnIndex(item);
                     setSheetIndex(index);
-                    setCopiesColumnIndex(guessed);
-                    setMappings(mappingsForSheet(item, guessed));
+                    setCopiesColumnIndex(null);
+                    setDifferentCopies(false);
+                    setMappings(mappingsForSheet(item, null));
                   }}
                   style={[styles.chip, active && styles.chipOn]}>
                   <Text style={[styles.chipText, active && styles.chipTextOn]} numberOfLines={1}>
@@ -368,32 +368,57 @@ export default function ExcelBulkSetupScreen() {
 
         <WalkthroughTarget id="excel.copies">
         <View style={styles.copiesCard}>
-          <Text style={styles.copiesTitle}>Quantity column (optional)</Text>
-          <Text style={styles.copiesNote}>
-            {copiesColumnName
-              ? `Quantity comes from "${copiesColumnName}". Blank or 0 rows are skipped.`
-              : 'Optional. Tap a column that holds quantities, or leave it and set copies when printing.'}
-          </Text>
-          <View style={styles.sheetChips}>
-            {copiesChoices.map((columnIndex) => {
-              const active = columnIndex === activeCopiesIndex;
-              return (
-                <Pressable
-                  key={`copies-${columnIndex}`}
-                  onPress={() => selectCopiesColumn(active ? null : columnIndex)}
-                  style={[styles.chip, active && styles.chipOn]}>
-                  <Text style={[styles.chipText, active && styles.chipTextOn]} numberOfLines={1}>
-                    {sheet.columns[columnIndex]}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {copiesChoices.length === 0 ? (
-            <Text style={styles.copiesNote}>
-              No number column found. Add one (like Qty) to print different quantities.
+          <View style={styles.displayHeadRow}>
+            <Text style={[styles.copiesTitle, { flex: 1 }]}>
+              Print a different number of copies for each label?
             </Text>
-          ) : null}
+            <Switch
+              value={differentCopies}
+              onValueChange={(on) => {
+                setDifferentCopies(on);
+                if (!on) {
+                  selectCopiesColumn(null);
+                } else if (sheet && activeCopiesIndex == null) {
+                  // Pre-pick the obvious one (like Qty) so most people only have to switch this on.
+                  const guess = guessCopiesColumnIndex(sheet);
+                  if (guess != null) selectCopiesColumn(guess);
+                }
+              }}
+              trackColor={{ false: C.border, true: C.accent }}
+              thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+            />
+          </View>
+          {differentCopies ? (
+            <>
+              <Text style={styles.copiesNote}>
+                {copiesColumnName
+                  ? `Each label prints as many times as the number in "${copiesColumnName}". Labels with a blank or 0 there are not printed.`
+                  : 'Choose the column that has the number of copies for each label.'}
+              </Text>
+              <View style={styles.sheetChips}>
+                {copiesChoices.map((columnIndex) => {
+                  const active = columnIndex === activeCopiesIndex;
+                  return (
+                    <Pressable
+                      key={`copies-${columnIndex}`}
+                      onPress={() => selectCopiesColumn(active ? null : columnIndex)}
+                      style={[styles.chip, active && styles.chipOn]}>
+                      <Text style={[styles.chipText, active && styles.chipTextOn]} numberOfLines={1}>
+                        {sheet.columns[columnIndex]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {copiesChoices.length === 0 ? (
+                <Text style={styles.copiesNote}>
+                  No column with numbers was found. Add a column with the copies (like Qty) to your sheet.
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.copiesNote}>Every label prints once. Turn this on to print some labels more than once.</Text>
+          )}
           {copiesWarning ? <Text style={styles.copiesNote}>{copiesWarning}</Text> : null}
         </View>
         </WalkthroughTarget>
