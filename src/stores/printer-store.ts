@@ -37,6 +37,8 @@ export type PrintCalibrationEntry = {
 type PrinterStoreState = {
   status: PrinterConnectionStatus;
   selectedPrinterModel: ConsumerPrinterId;
+  /** Printer the user last connected when it was not their purchased one. Null = open the purchased printer. */
+  preferredPrinterModel: ConsumerPrinterId | null;
   deviceId: string | null;
   deviceName: string | null;
   transport: PrinterTransport | null;
@@ -65,9 +67,13 @@ type PrinterStoreState = {
   printCalibration: Record<string, PrintCalibrationEntry>;
   /** Printer battery 0–100 while connected. Null when the printer does not report it. Not persisted. */
   batteryPercent: number | null;
+  /** Josh battery bars 1-4 from the printer voltage. Null when not reported. Not persisted. */
+  batteryBars: number | null;
   setStatus: (status: PrinterConnectionStatus) => void;
   setBatteryPercent: (batteryPercent: number | null) => void;
+  setBatteryBars: (batteryBars: number | null) => void;
   setSelectedPrinterModel: (model: ConsumerPrinterId) => void;
+  setPreferredPrinterModel: (model: ConsumerPrinterId | null) => void;
   setDevCommandSet: (cmd: 'tspl' | 'escpos') => void;
   setPrintCalibration: (key: string, entry: PrintCalibrationEntry) => void;
   setConnectedDevice: (
@@ -115,6 +121,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
     (set) => ({
       status: 'disconnected',
       selectedPrinterModel: 'tejas',
+      preferredPrinterModel: null,
       deviceId: null,
       deviceName: null,
       transport: null,
@@ -129,10 +136,13 @@ export const usePrinterStore = create<PrinterStoreState>()(
       devCommandSet: 'tspl',
       printCalibration: {},
       batteryPercent: null,
+      batteryBars: null,
 
       setStatus: (status) => set({ status }),
       setBatteryPercent: (batteryPercent) => set({ batteryPercent }),
+      setBatteryBars: (batteryBars) => set({ batteryBars }),
       setSelectedPrinterModel: (selectedPrinterModel) => set({ selectedPrinterModel }),
+      setPreferredPrinterModel: (preferredPrinterModel) => set({ preferredPrinterModel }),
       setDevCommandSet: (devCommandSet) => set({ devCommandSet }),
       setPrintCalibration: (key, entry) =>
         set((state) => ({
@@ -202,6 +212,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
           sdkId: null,
           backendPrinterId: null,
           batteryPercent: null,
+          batteryBars: null,
         }),
 
       addHistoryEntry: (entry) => {
@@ -217,6 +228,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         selectedPrinterModel: state.selectedPrinterModel,
+        preferredPrinterModel: state.preferredPrinterModel,
         lastDeviceId: state.lastDeviceId,
         lastDeviceName: state.lastDeviceName,
         lastDeviceForModel: state.lastDeviceForModel,

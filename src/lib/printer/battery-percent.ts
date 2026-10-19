@@ -13,3 +13,8 @@ export function normalizeBatteryPercent(raw: unknown): number | null {
   if (rounded < 0 || rounded > 100) return null;
   return rounded;
 }
+
+/** Josh shows bars out of 4 from the printer voltage, never a percentage. */
+export function isJoshPrinter(ctx: { sdkId?: string | null; transport?: string | null }): boolean {
+  return ctx.sdkId === 'josh' || ctx.transport === 'josh-lpapi';
+}
