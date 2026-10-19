@@ -19,14 +19,13 @@ const LEGACY_HOME_HREFS = [
   '/print-photo-modal',
   '/new-label-setup?isTwoUps=true',
   '/shipping-label',
-  '/jewellery-label',
   '/customize-template',
   '/img-to-label',
   '/new-label-setup?serialEditor=1',
 ];
 
 const GRID_COLUMNS = 3;
-const LABEL_TYPE_COLUMNS = 4;
+const LABEL_TYPE_COLUMNS = 3;
 
 const allIds = Object.keys(HOME_TOOLS) as HomeToolId[];
 
@@ -69,6 +68,6 @@ test('3-column ToolGrid groups have length 3', () => {
   }
 });
 
-test('Label types row has exactly 4 tiles', () => {
+test('Label types row has exactly 3 tiles', () => {
   assert.equal(LABEL_TYPE_TOOLS.length, LABEL_TYPE_COLUMNS);
 });

@@ -49,7 +49,6 @@ export const CONVERTED_FILES: string[] = [
   'src/app/excel-data-preview.tsx',
   'src/app/excel-print.tsx',
   'src/app/font-library.tsx',
-  'src/app/jewellery-label.tsx',
   'src/app/label-settings.tsx',
   'src/app/language-switch.tsx',
   'src/app/new-label-setup.tsx',

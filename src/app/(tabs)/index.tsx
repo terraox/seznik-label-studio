@@ -150,7 +150,7 @@ export default function HomeScreen() {
           <View style={styles.section}>
             <SectionHeading>Label types</SectionHeading>
             <WalkthroughTarget id="home.labelTypes">
-              <ToolGrid ids={LABEL_TYPE_TOOLS} columns={4} />
+              <ToolGrid ids={LABEL_TYPE_TOOLS} columns={3} />
             </WalkthroughTarget>
           </View>
 

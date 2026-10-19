@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 143.41 212.76">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #fff;
+        stroke-width: .27px;
+      }
+
+      .cls-1, .cls-2, .cls-3, .cls-4, .cls-5 {
+        stroke: #000;
+        stroke-miterlimit: 10;
+      }
+
+      .cls-2, .cls-3, .cls-4, .cls-5 {
+        fill: none;
+      }
+
+      .cls-2, .cls-5 {
+        stroke-width: .28px;
+      }
+
+      .cls-3, .cls-4 {
+        stroke-width: .28px;
+      }
+
+      .cls-4 {
+        stroke-dasharray: 2.77 2.77;
+      }
+
+      .cls-5 {
+        stroke-dasharray: 2.77 2.77;
+      }
+    </style>
+  </defs>
+  <g id="Layer_1-2" data-name="Layer 1">
+    <g>
+      <g>
+        <path class="cls-1" d="M5.8,85.13V5.8C5.8,2.69,8.35.14,11.47.14h12.75c3.12,0,5.67,2.55,5.67,5.67v79.33"/>
+        <path class="cls-1" d="M29.88,85.13h35.41c3.12,0,5.67,2.55,5.67,5.67v117.58c0,2.34-1.91,4.25-4.25,4.25H5.8c-3.12,0-5.67-2.55-5.67-5.67v-116.16c0-3.12,2.55-5.67,5.67-5.67"/>
+      </g>
+      <g>
+        <path class="cls-1" d="M78.11,85.13V5.8c0-3.12,2.55-5.67,5.67-5.67h12.75c3.12,0,5.67,2.55,5.67,5.67v79.33"/>
+        <path class="cls-1" d="M102.2,85.13h35.41c3.12,0,5.67,2.55,5.67,5.67v117.58c0,2.34-1.91,4.25-4.25,4.25h-60.91c-3.12,0-5.67-2.55-5.67-5.67v-116.16c0-3.12,2.55-5.67,5.67-5.67"/>
+      </g>
+      <g>
+        <line class="cls-2" x1="112.46" y1="212.62" x2="112.46" y2="211.24"/>
+        <line class="cls-5" x1="112.46" y1="208.46" x2="112.46" y2="87.89"/>
+        <line class="cls-2" x1="112.46" y1="86.5" x2="112.46" y2="85.11"/>
+      </g>
+      <g>
+        <line class="cls-3" x1="36.18" y1="212.62" x2="36.18" y2="211.24"/>
+        <line class="cls-4" x1="36.18" y1="208.46" x2="36.18" y2="87.87"/>
+        <line class="cls-3" x1="36.18" y1="86.48" x2="36.18" y2="85.1"/>
+      </g>
+    </g>
+  </g>
+</svg>

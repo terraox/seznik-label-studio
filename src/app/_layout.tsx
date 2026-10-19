@@ -200,10 +200,6 @@ function AppRoot() {
             options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen
-            name="jewellery-label"
-            options={{ presentation: 'transparentModal', animation: 'fade' }}
-          />
-          <Stack.Screen
             name="serial-label"
             options={{ animation: 'slide_from_right' }}
           />

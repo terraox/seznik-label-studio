@@ -8,7 +8,6 @@ import {
   TIME_DISPLAY_SAMPLE,
   createTableState,
 } from '@/components/editor/types';
-import { buildIndustryPreviewElements } from '@/constants/industry-template-elements';
 import { buildJewelryTemplateElements, canonicalizeJewelryDieCutDocument } from '@/constants/jewelry-template-elements';
 import { isJewelryDieCutPreviewType } from '@/constants/jewelry-diecut';
 import { buildRatTail143Elements } from '@/constants/rat-tail-143';
@@ -130,24 +129,6 @@ function frameShape(widthMm: number, heightMm: number, rounded = true): LabelEle
   };
 }
 
-function circleShape(widthMm: number, heightMm: number): LabelElement {
-  const d = Math.max(2, Math.min(widthMm, heightMm) - 0.8);
-  return {
-    ...DEFAULT_SHAPE_STATE,
-    id: generateId(),
-    type: 'shape',
-    figureShape: 'circle',
-    left: (widthMm - d) / 2,
-    top: (heightMm - d) / 2,
-    width: d,
-    height: d,
-    lineWidth: 0.45,
-    fill: false,
-    fillColor: undefined,
-    drawingColorIndex: 1,
-  };
-}
-
 function timeElement(frame: Frame, fontSize: number): LabelElement {
   const minWidth = measureTextWidthMm(TIME_DISPLAY_SAMPLE, fontSize) + 1.5;
   return {
@@ -195,11 +176,6 @@ export function buildTemplateElements(
 
   if (previewType?.startsWith('jew-')) {
     return buildJewelryTemplateElements(previewType, w, h);
-  }
-
-  if (previewType) {
-    const specific = buildIndustryPreviewElements(previewType, name, w, h);
-    if (specific) return specific;
   }
 
   const effectiveCategory = previewType ? categoryForPreview(previewType, category) : category;
