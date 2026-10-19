@@ -40,6 +40,7 @@ export function FeedbackFormModal({
       visible={visible}
       onClose={onCancel}
       plainScroll
+      cardMaxWidth={320}
       title={title}
       message={message}
       buttons={[

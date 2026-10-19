@@ -3,7 +3,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   type TextInputProps,
@@ -36,8 +35,9 @@ export type IosAlertModalProps = {
   dismissOnBackdrop?: boolean;
   cardMaxWidth?: number;
   /**
-   * Use a plain scroll view for the body. The keyboard-aware one adds keyboard-height padding of its own,
-   * which makes a card that is already lifted by the keyboard grow taller when a field is focused.
+   * Compact form mode for dialogs that hold a text field. The card sits near the top of the screen,
+   * sized to its content, with no keyboard avoidance: the keyboard can open without moving, stretching
+   * or covering it. (The keyboard-aware scroll view and a centred card stretch and hide the buttons on Android.)
    */
   plainScroll?: boolean;
 };
@@ -54,11 +54,11 @@ export function IosAlertModal({
   cardMaxWidth = 280,
   plainScroll = false,
 }: IosAlertModalProps) {
-  const BodyScroll = plainScroll ? ScrollView : FormScrollView;
   const { height: windowHeight } = useWindowDimensions();
   const styles = useStyles();
   const handleBack = onRequestClose ?? onClose;
   const handleBackdrop = dismissOnBackdrop ? (onClose ?? onRequestClose) : undefined;
+  const Overlay = plainScroll ? View : KeyboardAvoidingView;
 
   return (
     <Modal
@@ -67,22 +67,29 @@ export function IosAlertModal({
       animationType="fade"
       statusBarTranslucent
       onRequestClose={handleBack}>
-      <KeyboardAvoidingView
-        behavior="padding"
-        style={styles.overlay}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
+      <Overlay
+        {...(plainScroll ? {} : { behavior: 'padding' as const, keyboardVerticalOffset: Platform.OS === 'ios' ? 20 : 0 })}
+        style={[styles.overlay, plainScroll && styles.overlayTop]}>
         <Pressable style={styles.backdrop} onPress={handleBackdrop} />
-        <View style={[styles.card, { maxWidth: cardMaxWidth, maxHeight: Math.round(windowHeight * 0.8) }]}>
-          <BodyScroll
-            bounces={false}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            style={styles.bodyScroll}
-            contentContainerStyle={styles.body}>
-            {!!title && <Text style={styles.title}>{title}</Text>}
-            {!!message && <Text style={styles.message}>{message}</Text>}
-            {children}
-          </BodyScroll>
+        <View style={[styles.card, { maxWidth: cardMaxWidth }, !plainScroll && { maxHeight: Math.round(windowHeight * 0.8) }]}>
+          {plainScroll ? (
+            <View style={styles.body}>
+              {!!title && <Text style={styles.title}>{title}</Text>}
+              {!!message && <Text style={styles.message}>{message}</Text>}
+              {children}
+            </View>
+          ) : (
+            <FormScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={styles.bodyScroll}
+              contentContainerStyle={styles.body}>
+              {!!title && <Text style={styles.title}>{title}</Text>}
+              {!!message && <Text style={styles.message}>{message}</Text>}
+              {children}
+            </FormScrollView>
+          )}
 
           {/* Buttons footer */}
           {buttons.length === 2 ? (
@@ -158,7 +165,7 @@ export function IosAlertModal({
             </View>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </Overlay>
     </Modal>
   );
 }
@@ -184,6 +191,10 @@ const useStyles = makeStyles((c, scheme) => ({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
+  },
+  overlayTop: {
+    justifyContent: 'flex-start',
+    paddingTop: 72,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
