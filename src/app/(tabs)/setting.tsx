@@ -6,8 +6,6 @@ import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Alert,
-  Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +23,8 @@ import { copyImportIntoSezprint } from '@/lib/user-files/root';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { usePrintHistoryStore } from '@/stores/print-history-store';
+import { FeedbackFormModal } from '@/components/feedback-form';
+import { useFeedbackStore } from '@/stores/feedback-store';
 import { printCounts, usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import {
@@ -225,15 +225,13 @@ export default function SettingScreen() {
 
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
 
-  const handleFeedback = () => {
-    const query = encodeURIComponent('sez print');
-    const url =
-      Platform.OS === 'ios'
-        ? `https://apps.apple.com/search?term=${query}`
-        : `https://play.google.com/store/search?q=${query}&c=apps`;
-    Linking.openURL(url).catch(() =>
-      Alert.alert('Unavailable', 'Could not open the app store on this device.'),
-    );
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const handleFeedback = () => setFeedbackOpen(true);
+  const sendFeedback = (rating: number, text: string) => {
+    setFeedbackOpen(false);
+    // Saved on the phone and sent to the admin desk's Feedback table with the next batch of events.
+    useFeedbackStore.getState().submit(rating, text, usePrintStatsStore.getState().lifetime);
+    Alert.alert('Thank you', 'Your feedback has been sent.');
   };
 
   const handleAbout = () => {
@@ -381,6 +379,14 @@ export default function SettingScreen() {
           selected: o.value === appearance,
           onPress: () => setAppearance(o.value),
         }))}
+      />
+
+      <FeedbackFormModal
+        visible={feedbackOpen}
+        title="Evaluation & Feedback"
+        message="How would you rate Sez Print? Your review goes straight to our team."
+        onCancel={() => setFeedbackOpen(false)}
+        onSubmit={sendFeedback}
       />
     </View>
   );
