@@ -3,6 +3,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   type TextInputProps,
@@ -34,6 +35,11 @@ export type IosAlertModalProps = {
   /** Tap outside the card. Hardware back still uses `onRequestClose` or `onClose`. */
   dismissOnBackdrop?: boolean;
   cardMaxWidth?: number;
+  /**
+   * Use a plain scroll view for the body. The keyboard-aware one adds keyboard-height padding of its own,
+   * which makes a card that is already lifted by the keyboard grow taller when a field is focused.
+   */
+  plainScroll?: boolean;
 };
 
 export function IosAlertModal({
@@ -46,7 +52,9 @@ export function IosAlertModal({
   onRequestClose,
   dismissOnBackdrop = true,
   cardMaxWidth = 280,
+  plainScroll = false,
 }: IosAlertModalProps) {
+  const BodyScroll = plainScroll ? ScrollView : FormScrollView;
   const { height: windowHeight } = useWindowDimensions();
   const styles = useStyles();
   const handleBack = onRequestClose ?? onClose;
@@ -65,7 +73,7 @@ export function IosAlertModal({
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
         <Pressable style={styles.backdrop} onPress={handleBackdrop} />
         <View style={[styles.card, { maxWidth: cardMaxWidth, maxHeight: Math.round(windowHeight * 0.8) }]}>
-          <FormScrollView
+          <BodyScroll
             bounces={false}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -74,7 +82,7 @@ export function IosAlertModal({
             {!!title && <Text style={styles.title}>{title}</Text>}
             {!!message && <Text style={styles.message}>{message}</Text>}
             {children}
-          </FormScrollView>
+          </BodyScroll>
 
           {/* Buttons footer */}
           {buttons.length === 2 ? (

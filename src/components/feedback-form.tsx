@@ -39,6 +39,7 @@ export function FeedbackFormModal({
     <IosAlertModal
       visible={visible}
       onClose={onCancel}
+      plainScroll
       title={title}
       message={message}
       buttons={[
