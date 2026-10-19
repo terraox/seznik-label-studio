@@ -14,11 +14,14 @@ import {
 import { flushEvents } from '@/lib/telemetry/events';
 import { usePrinterStore } from '@/stores/printer-store';
 
-function applyPurchasedPrinter(printerId: string | null | undefined) {
+function applyPurchasedPrinter(printerId: string | null | undefined, chosen = false) {
   // Every sign-in / session refresh also sends any usage events waiting on the phone.
   void flushEvents();
   if (!isConsumerPrinterId(printerId)) return;
-  usePrinterStore.getState().setSelectedPrinterModel(printerId);
+  const printer = usePrinterStore.getState();
+  // Choosing a printer here starts over; otherwise the printer last connected wins.
+  if (chosen) printer.setPreferredPrinterModel(null);
+  printer.setSelectedPrinterModel(chosen ? printerId : (printer.preferredPrinterModel ?? printerId));
 }
 
 type AuthStoreState = {
@@ -94,7 +97,7 @@ export const useAuthStore = create<AuthStoreState>()(
         try {
           const result = await setPurchasedPrinter(token, printerId);
           set({ user: result.user, needsPrinter: false });
-          applyPurchasedPrinter(printerId);
+          applyPurchasedPrinter(printerId, true);
           return { ok: true };
         } catch (err) {
           return {
