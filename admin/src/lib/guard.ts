@@ -1,20 +1,26 @@
 import { cookies } from 'next/headers';
 import { COOKIE } from './constants';
-import { toRecord } from './admin-db';
 import { HttpError } from './http';
-import { can, type Permission } from './permissions';
-import { prisma } from './prisma';
+import type { Permission } from './permissions';
 import { verifySession } from './session';
-import type { AdminRecord } from './types';
+import type { Admin } from './types';
 
-/** The signed-in admin, or 401. Stops with 403 when their role lacks `permission`. */
-export async function requirePermission(permission: Permission): Promise<AdminRecord> {
+/** The one admin. Their sign-in comes from ADMIN_FIXED_USERNAME / ADMIN_FIXED_PASSWORD in the environment. */
+export function ownerAdmin(): Admin {
+  return {
+    id: 'owner',
+    name: 'Admin',
+    email: (process.env.ADMIN_FIXED_USERNAME ?? '').trim().toLowerCase(),
+    role: 'superadmin',
+    active: true,
+    createdAt: new Date(0).toISOString(),
+  };
+}
+
+/** The signed-in admin, or 401. With a single admin every permission is granted. */
+export async function requirePermission(_permission: Permission): Promise<Admin> {
   const jar = await cookies();
   const session = await verifySession(jar.get(COOKIE)?.value);
-  if (!session || session.scope) throw new HttpError(401, 'Sign in to continue.');
-  const row = await prisma.adminAccount.findUnique({ where: { id: session.id } });
-  if (!row || !row.active) throw new HttpError(401, 'Sign in to continue.');
-  const admin = toRecord(row);
-  if (!can(admin.role, permission)) throw new HttpError(403, 'You do not have access to that.');
-  return admin;
+  if (!session) throw new HttpError(401, 'Sign in to continue.');
+  return ownerAdmin();
 }

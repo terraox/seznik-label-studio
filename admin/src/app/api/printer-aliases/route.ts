@@ -1,4 +1,3 @@
-import { audit } from '@/lib/audit';
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
 import { prisma } from '@/lib/prisma';
@@ -37,7 +36,6 @@ export async function POST(request: Request) {
       });
       return [created, result.count] as const;
     });
-    await audit(admin, 'printer.alias.create', 'printer_alias', alias.id, undefined, { pattern, model, printersChanged: moved }, request);
     return json({ alias, printersChanged: moved }, 201);
   } catch (error) {
     return fail(error);

@@ -1,4 +1,3 @@
-import { audit } from '@/lib/audit';
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
 import { normalizePrinterName } from '@/lib/printer-registry';
@@ -33,7 +32,6 @@ export async function DELETE(request: Request, ctx: Ctx) {
         }
       }
     });
-    await audit(admin, 'printer.alias.delete', 'printer_alias', id, { pattern: alias.pattern, model: alias.modelNormalised }, { printersReverted: reverted }, request);
     return json({ ok: true, printersReverted: reverted });
   } catch (error) {
     return fail(error);

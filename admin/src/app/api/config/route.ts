@@ -1,4 +1,3 @@
-import { audit } from '@/lib/audit';
 import { readAppConfig } from '@/lib/app-config';
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
@@ -46,7 +45,6 @@ export async function PUT(request: Request) {
     }
     if (typeof body.legacyCutoff === 'boolean') await set('legacyCutoff', body.legacyCutoff);
     const after = await readAppConfig();
-    await audit(admin, 'config.update', 'config', 'app', before as never, after as never, request);
     return json(after);
   } catch (error) {
     return fail(error);

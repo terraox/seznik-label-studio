@@ -12,7 +12,7 @@
 
 Project sez_print {
   database_type: 'PostgreSQL'
-  Note: 'SEZ Print mobile app accounts, printing analytics, feedback, shop clicks, clipart/template catalogue and admin audit.'
+  Note: 'SEZ Print mobile app accounts, printing analytics, feedback, shop clicks, clipart/template catalogue.'
 }
 
 Enum UserStatus {
@@ -269,25 +269,6 @@ Table CatalogTombstone {
 
 // ─────────────── Platform ───────────────
 
-Table AdminAuditLog {
-  id varchar [pk]
-  adminId varchar [not null]
-  adminEmail varchar [not null]
-  action varchar [not null, note: 'user.block | user.unblock | user.force_logout | phone.block | config.update | users.export ...']
-  targetType varchar [not null]
-  targetId varchar [not null]
-  before json
-  after json
-  ip varchar
-  createdAt timestamp [not null]
-
-  indexes {
-    createdAt
-    (targetType, targetId)
-  }
-  Note: '[BUILT] Written for every admin write and every export.'
-}
-
 Table OtpCode {
   id varchar [pk]
   mobile varchar [not null]
@@ -321,25 +302,6 @@ Table AppConfig {
 
 // ─────────────── Not in Postgres yet [FILE] ───────────────
 
-Table AdminAccount {
-  id varchar [pk]
-  name varchar [not null]
-  email varchar [unique, not null, note: 'Sign-in name (lower-case), e.g. seznikadmin']
-  role varchar [not null, default: 'support', note: 'superadmin | support | content | viewer']
-  active boolean [not null, default: true]
-  passwordHash varchar [not null, note: 'scrypt']
-  mustChangePassword boolean [not null, default: false]
-  fixedCredentials boolean [not null, default: false, note: 'Password comes from ADMIN_FIXED_PASSWORD in the environment']
-  credsVersion int [not null, default: 1]
-  totpSecret varchar [note: 'Authenticator key']
-  pendingTotpSecret varchar
-  lastTotpStep int [note: 'Last accepted 30 s step; blocks code reuse']
-  lastLoginAt timestamp
-  createdAt timestamp [not null]
-  updatedAt timestamp [not null]
-  Note: '[BUILT] The admin team (desk sign-ins).'
-}
-
 // ─────────────── Relationships ───────────────
 
 Ref: RegisteredPhone.userId - AppUser.id // one number <-> at most one account
@@ -353,7 +315,6 @@ Ref: PrintEvent.printerId > Printer.id
 Ref: Feedback.userId > AppUser.id
 Ref: ProductClick.userId > AppUser.id
 Ref: CatalogItem.categoryId > CatalogCategory.id
-Ref: AdminAuditLog.adminId > AdminAccount.id
 
 // ─────────────── Sample rows (made-up, to read the structure) ───────────────
 

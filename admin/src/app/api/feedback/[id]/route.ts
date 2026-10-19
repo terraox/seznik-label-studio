@@ -1,4 +1,3 @@
-import { audit } from '@/lib/audit';
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
 import { prisma } from '@/lib/prisma';
@@ -24,7 +23,6 @@ export async function PATCH(request: Request, ctx: Ctx) {
     if (body.adminNote !== undefined) data.adminNote = body.adminNote.trim().slice(0, 1000) || null;
     if (Object.keys(data).length === 0) throw new HttpError(400, 'Nothing to change.');
     const saved = await prisma.feedback.update({ where: { id }, data });
-    await audit(admin, 'feedback.update', 'feedback', id, { status: before.status, adminNote: before.adminNote }, { status: saved.status, adminNote: saved.adminNote }, request);
     return json({ ok: true, status: saved.status, adminNote: saved.adminNote });
   } catch (error) {
     return fail(error);

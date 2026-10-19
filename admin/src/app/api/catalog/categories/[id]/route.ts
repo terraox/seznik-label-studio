@@ -1,4 +1,3 @@
-import { audit } from '@/lib/audit';
 import { nextRevision } from '@/lib/catalog/service';
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
@@ -31,7 +30,6 @@ export async function PATCH(request: Request, ctx: Ctx) {
     if (Object.keys(data).length === 0) throw new HttpError(400, 'Nothing to change.');
     const saved = await prisma.catalogCategory.update({ where: { id }, data });
     await prisma.$transaction((tx) => nextRevision(tx));
-    await audit(admin, 'catalog.category.update', 'catalog_category', id, { name: cat.name, sortOrder: cat.sortOrder }, data, request);
     return json({ category: { id, kind: saved.kind, name: saved.name, sortOrder: saved.sortOrder } });
   } catch (error) {
     return fail(error);
@@ -49,7 +47,6 @@ export async function DELETE(request: Request, ctx: Ctx) {
     if (live > 0) throw new HttpError(409, `This category still has ${live} item${live === 1 ? '' : 's'}. Move or delete them first.`);
     await prisma.catalogCategory.update({ where: { id }, data: { deletedAt: new Date() } });
     await prisma.$transaction((tx) => nextRevision(tx));
-    await audit(admin, 'catalog.category.delete', 'catalog_category', id, { name: cat.name }, undefined, request);
     return json({ ok: true });
   } catch (error) {
     return fail(error);

@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -58,12 +58,13 @@ model User {
   updatedAt         DateTime   @updatedAt
   lastLoginAt       DateTime?
 
-  statusEvents   UserStatusEvent[]
-  registeredAs   RegisteredPhone?
-  printEvents    PrintEvent[]
-  connections    PrinterConnection[]
-  feedback       Feedback[]
-  productClicks  ProductClick[]
+  statusEvents  UserStatusEvent[]
+  registeredAs  RegisteredPhone?
+  printEvents   PrintEvent[]
+  connections   PrinterConnection[]
+  printers      UserPrinter[]
+  feedback      Feedback[]
+  productClicks ProductClick[]
 
   @@index([printerName])
   @@index([status])
@@ -301,50 +302,6 @@ model CatalogTombstone {
 }
 
 // ───────────────────────── Platform ─────────────────────────
-
-/// Desk (admin panel) sign-ins. Passwords are scrypt hashes; the TOTP key is the authenticator secret.
-model AdminAccount {
-  id                 String   @id
-  name               String
-  /// Sign-in name, stored lower-case (an email or a plain username such as seznikadmin).
-  email              String   @unique
-  /// superadmin | support | content | viewer
-  role               String   @default("support")
-  active             Boolean  @default(true)
-  passwordHash       String
-  mustChangePassword Boolean  @default(false)
-  /// Password is owned by ADMIN_FIXED_PASSWORD in the environment and re-applied on every start.
-  fixedCredentials   Boolean  @default(false)
-  credsVersion       Int      @default(1)
-  totpSecret         String?
-  pendingTotpSecret  String?
-  /// Last accepted authenticator time step; stops a code being used twice.
-  lastTotpStep       Int?
-  lastLoginAt        DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  auditEntries AdminAuditLog[]
-}
-
-/// adminEmail is copied so history stays readable if an account is later renamed.
-model AdminAuditLog {
-  id         String   @id @default(cuid())
-  adminId    String
-  adminEmail String
-  action     String
-  targetType String
-  targetId   String
-  before     Json?
-  after      Json?
-  ip         String?
-  createdAt  DateTime @default(now())
-
-  admin AdminAccount @relation(fields: [adminId], references: [id])
-
-  @@index([createdAt])
-  @@index([targetType, targetId])
-}
 
 /// SMS one-time codes (hashed). Replaces the old in-memory store so it works across servers.
 model OtpCode {

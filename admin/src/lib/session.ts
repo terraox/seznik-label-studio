@@ -1,10 +1,7 @@
 import { COOKIE, SESSION_MS } from './constants';
 import { getSecret } from './secrets';
 
-/** `setup` sessions may only finish first-login setup (new password + TOTP). */
-export type Session = { id: string; exp: number; scope?: 'setup' };
-
-export const SETUP_MS = 15 * 60 * 1000;
+export type Session = { id: string; exp: number };
 
 function secret() {
   return getSecret('SEZ_ADMIN_SECRET');
@@ -34,10 +31,8 @@ async function key(usage: 'sign' | 'verify') {
   );
 }
 
-export async function signSession(id: string, scope?: 'setup') {
-  const payload: Session = scope
-    ? { id, exp: Date.now() + SETUP_MS, scope }
-    : { id, exp: Date.now() + SESSION_MS };
+export async function signSession(id: string) {
+  const payload: Session = { id, exp: Date.now() + SESSION_MS };
   const body = b64urlEncode(new TextEncoder().encode(JSON.stringify(payload)));
   const sig = await crypto.subtle.sign('HMAC', await key('sign'), new TextEncoder().encode(body));
   return `${body}.${b64urlEncode(new Uint8Array(sig))}`;
@@ -64,7 +59,7 @@ export async function verifySession(token: string | undefined | null): Promise<S
   }
 }
 
-export function sessionCookie(token: string, scope?: 'setup') {
+export function sessionCookie(token: string) {
   return {
     name: COOKIE,
     value: token,
@@ -72,7 +67,7 @@ export function sessionCookie(token: string, scope?: 'setup') {
       httpOnly: true,
       sameSite: 'lax' as const,
       path: '/',
-      maxAge: (scope ? SETUP_MS : SESSION_MS) / 1000,
+      maxAge: SESSION_MS / 1000,
       secure: process.env.NODE_ENV === 'production',
     },
   };

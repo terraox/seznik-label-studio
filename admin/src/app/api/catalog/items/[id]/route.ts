@@ -1,4 +1,3 @@
-import { audit } from '@/lib/audit';
 import { cleanName, itemDto, nextRevision } from '@/lib/catalog/service';
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
@@ -46,9 +45,6 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
     if (Object.keys(data).length === 0) throw new HttpError(400, 'Nothing to change.');
     const saved = await prisma.$transaction(async (tx) => tx.catalogItem.update({ where: { id }, data: { ...data, revision: await nextRevision(tx) } }));
-    await audit(admin, 'catalog.item.update', 'catalog_item', id,
-      { name: item.name, categoryId: item.categoryId, status: item.status, widthMm: item.widthMm, heightMm: item.heightMm },
-      data as never, request);
     return json({ item: itemDto(saved) });
   } catch (error) {
     return fail(error);
@@ -67,7 +63,6 @@ export async function DELETE(request: Request, ctx: Ctx) {
       await tx.catalogItem.update({ where: { id }, data: { deletedAt: new Date(), revision } });
       await tx.catalogTombstone.upsert({ where: { itemId: id }, update: { revision, deletedAt: new Date() }, create: { itemId: id, revision } });
     });
-    await audit(admin, 'catalog.item.delete', 'catalog_item', id, { name: item.name, kind: item.kind }, undefined, request);
     return json({ ok: true });
   } catch (error) {
     return fail(error);

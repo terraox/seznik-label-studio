@@ -1,5 +1,4 @@
 import { requirePermission } from '@/lib/guard';
-import { audit } from '@/lib/audit';
 import { fail, HttpError, json } from '@/lib/http';
 import { prisma } from '@/lib/prisma';
 import { toAdminUserDto } from '@/lib/user-dto';
@@ -21,7 +20,6 @@ export async function POST(request: Request, ctx: Ctx) {
       await tx.userStatusEvent.create({ data: { userId: id, action: 'force_logout', adminEmail: admin.email } });
       return updated;
     });
-    await audit(admin, 'user.force_logout', 'user', id, undefined, { tokenVersion: user.tokenVersion }, request);
     return json({ user: toAdminUserDto(user) });
   } catch (error) {
     return fail(error);

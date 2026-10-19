@@ -1,5 +1,4 @@
 import { requirePermission } from '@/lib/guard';
-import { audit } from '@/lib/audit';
 import { fail, HttpError, json } from '@/lib/http';
 import { normalizeMobile } from '@/lib/phone';
 import { prisma } from '@/lib/prisma';
@@ -52,7 +51,6 @@ export async function POST(request: Request) {
     } else {
       await prisma.registeredPhone.delete({ where: { mobile } });
     }
-    await audit(admin, blocked ? 'phone.block' : 'phone.unblock', 'phone', mobile, undefined, { blocked, reason }, request);
     return json({ ok: true });
   } catch (error) {
     return fail(error);

@@ -1,4 +1,3 @@
-import { audit } from '@/lib/audit';
 import { MAX_SVG_BYTES, sanitizeSvg } from '@/lib/catalog/sanitize-svg';
 import { stagingKey } from '@/lib/catalog/service';
 import { requirePermission } from '@/lib/guard';
@@ -60,7 +59,6 @@ export async function POST(request: Request) {
         duplicateOf: twin,
       });
     }
-    await audit(admin, 'catalog.upload', 'catalog', 'staging', undefined, { files: files.length, accepted: results.filter((r) => r.ok).length }, request);
     return json({ results });
   } catch (error) {
     return fail(error);

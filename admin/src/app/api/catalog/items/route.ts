@@ -1,6 +1,5 @@
 import type { Prisma } from '@prisma/client';
 
-import { audit } from '@/lib/audit';
 import { cleanName, asKind, itemDto, loadStaged, nextRevision, publishFiles } from '@/lib/catalog/service';
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
@@ -74,7 +73,6 @@ export async function POST(request: Request) {
     });
     await storage().delete(body.stagingKey!).catch(() => {});
     const sameName = await prisma.catalogItem.count({ where: { categoryId: category.id, deletedAt: null, id: { not: created.id }, name: { equals: name, mode: 'insensitive' } } });
-    await audit(admin, 'catalog.item.create', 'catalog_item', created.id, undefined, { name, kind, category: category.name, status, hash: clean.hash }, request);
     return json({ item: itemDto(created), warnings: sameName ? ['Another item in this category has the same name.'] : [] }, 201);
   } catch (error) {
     return fail(error);

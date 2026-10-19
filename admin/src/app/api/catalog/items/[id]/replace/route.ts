@@ -1,4 +1,3 @@
-import { audit } from '@/lib/audit';
 import { itemDto, loadStaged, nextRevision, publishFiles } from '@/lib/catalog/service';
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
@@ -38,7 +37,6 @@ export async function POST(request: Request, ctx: Ctx) {
       }),
     );
     await storage().delete(body.stagingKey!).catch(() => {});
-    await audit(admin, 'catalog.item.replace', 'catalog_item', id, { hash: item.contentHash, version: item.version }, { hash: clean.hash, version: saved.version }, request);
     return json({ item: itemDto(saved) });
   } catch (error) {
     return fail(error);

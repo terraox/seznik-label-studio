@@ -1,4 +1,3 @@
-import { assertSecrets, ensureAdmins } from './lib/boot';
+import { assertSecrets } from './lib/boot-secrets';
 
 assertSecrets();
-await ensureAdmins();

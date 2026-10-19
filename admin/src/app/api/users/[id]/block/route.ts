@@ -1,5 +1,4 @@
 import { requirePermission } from '@/lib/guard';
-import { audit } from '@/lib/audit';
 import { fail, HttpError, json } from '@/lib/http';
 import { prisma } from '@/lib/prisma';
 import { toAdminUserDto } from '@/lib/user-dto';
@@ -45,7 +44,6 @@ export async function POST(request: Request, ctx: Ctx) {
       });
       return updated;
     });
-    await audit(admin, 'user.block', 'user', id, { status: 'active' }, { status: 'blocked', message, internalNote }, request);
     return json({ user: toAdminUserDto(user) });
   } catch (error) {
     return fail(error);
