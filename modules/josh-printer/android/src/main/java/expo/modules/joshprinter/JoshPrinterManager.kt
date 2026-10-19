@@ -58,6 +58,8 @@ class JoshPrinterManager(private val context: Context) {
         private const val BATTERY_DEBUG_TAG = "JoshBattery"
         private const val BATTERY_POLL_MS = 300L
         private const val BATTERY_POLL_TIMEOUT_MS = 3_000L
+        private const val STATUS_POLL_TIMEOUT_MS = 3_000L
+        private const val STATUS_SETTLE_MS = 300L
         private const val DISCOVERY_TIMEOUT_MS = 15_000L
         private const val CONNECT_TIMEOUT_MS = 20_000L
         private const val CONNECT_RETRY_DELAY_MS = 1_500L
@@ -165,6 +167,12 @@ class JoshPrinterManager(private val context: Context) {
     private var lastJobDensity = Int.MIN_VALUE
     private var lastJobSpeed = Int.MIN_VALUE
     private val jobIdCounter = AtomicInteger(0)
+    // Per-job progress counters for the JS progress line. SDK events carry no total, so native supplies it.
+    @Volatile private var progressCopies = 1
+    @Volatile private var progressStartCount = 0
+    @Volatile private var progressDataEndedCount = 0
+    @Volatile private var progressSuccessCount = 0
+    @Volatile private var lastFailReasonCode: Int? = null
     private var printSubmitFallback: Runnable? = null
     private var printDataEndedFallback: Runnable? = null
 
@@ -233,8 +241,20 @@ class JoshPrinterManager(private val context: Context) {
             addiInfo: Any?
         ) {
             Log.i(TAG, "[JOSH-PRINT-P4:HARDWARE-PROGRESS] progress=$progress addiInfo=$addiInfo")
+            // addiInfo (from reading the SDK): StartCopy/DataEnded/Success carry an Integer copy index,
+            // Failed carries the PrintFailReason enum, Connected carries the PrinterAddress.
+            val sdkCopy = (addiInfo as? Number)?.toInt()
+            when (progress) {
+                PrintProgress.Connected -> emitJobProgress("CONNECTED", mapOf("copies" to progressCopies))
+                PrintProgress.StartCopy -> {
+                    progressStartCount += 1
+                    emitJobProgress("START_COPY", mapOf("copy" to progressStartCount, "copies" to progressCopies, "sdkCopy" to sdkCopy))
+                }
+                else -> Unit
+            }
             when (progress) {
                 PrintProgress.Success -> {
+                    progressSuccessCount += 1
                     Log.i(TAG, "[JOSH-PRINT-P4:HARDWARE-ACK] Physical print confirmed by printer hardware!")
                     cancelPrintFallbacks()
                     lastPrintSuccess = true
@@ -246,6 +266,7 @@ class JoshPrinterManager(private val context: Context) {
                     cancelPrintFallbacks()
                     lastPrintSuccess = false
                     val reason = addiInfo?.toString() ?: "Print job failed"
+                    lastFailReasonCode = (addiInfo as? IDzPrinter.PrintFailReason)?.ordinal
                     Log.e(TAG, "[JOSH-PRINT-P4:HARDWARE-FAIL] Physical print failed at hardware level: $reason")
                     lastError = "JOSH_PRINT_FAILED: $reason"
                     printLatch?.countDown()
@@ -253,6 +274,8 @@ class JoshPrinterManager(private val context: Context) {
                 }
                 PrintProgress.DataEnded -> {
                     Log.i(TAG, "[JOSH-PRINT-P3:DATA-TRANSMITTED] Bluetooth byte transmission completed, waiting for hardware print confirmation...")
+                    progressDataEndedCount += 1
+                    emitJobProgress("DATA_ENDED", mapOf("copy" to progressDataEndedCount, "copies" to progressCopies, "sdkCopy" to sdkCopy))
                     printDataEndedFallback?.let { mainHandler.removeCallbacks(it) }
                     val dataEndedRunnable = Runnable {
                         if (printLatch != null && isPrinting.get() && !lastPrintSuccess) {
@@ -1655,6 +1678,11 @@ class JoshPrinterManager(private val context: Context) {
         printLatch = latch
 
         val copyCount = copies.coerceAtLeast(1)
+        progressCopies = copyCount
+        progressStartCount = 0
+        progressDataEndedCount = 0
+        progressSuccessCount = 0
+        lastFailReasonCode = null
         val session = applyLpapiJobSessionParams(
             currentApi,
             jobId,
@@ -1953,6 +1981,64 @@ class JoshPrinterManager(private val context: Context) {
         }
     }
 
+    /**
+     * Full PrinterParam snapshot for the diagnostics screen. From reading the SDK, refreshPrinterParam()
+     * only posts a request (returns true at once) and the reply later overwrites the param, so this
+     * polls until a field changes, then settles briefly. Never queries while a print is running.
+     */
+    fun readPrinterStatus(timeoutMs: Long = STATUS_POLL_TIMEOUT_MS): Map<String, Any?> {
+        if (isPrinting.get()) return mapOf("available" to false, "busy" to true)
+        if (!isConnected()) return mapOf("available" to false, "busy" to false)
+        val dz2 = IDzPrinter.Factory.getInstance() as? IDzPrinter2 ?: return mapOf("available" to false, "busy" to false)
+        return try {
+            val before = printerStatusSignature(dz2.getPrinterParam())
+            val accepted = dz2.refreshPrinterParam()
+            val start = System.currentTimeMillis()
+            var changed = false
+            while (accepted && System.currentTimeMillis() - start < timeoutMs.coerceIn(200L, STATUS_POLL_TIMEOUT_MS)) {
+                Thread.sleep(BATTERY_POLL_MS)
+                if (isPrinting.get()) break
+                if (printerStatusSignature(dz2.getPrinterParam()) != before) {
+                    changed = true
+                    Thread.sleep(STATUS_SETTLE_MS)
+                    break
+                }
+            }
+            val p = dz2.getPrinterParam() ?: return mapOf("available" to false, "busy" to false)
+            val out = mapOf(
+                "available" to true,
+                "busy" to false,
+                "refreshAccepted" to accepted,
+                "changedAfterRefresh" to changed,
+                "waitedMs" to (System.currentTimeMillis() - start),
+                "printerHeadTem" to p.printerHeadTem,
+                "batteryVoltage" to p.batteryVoltage,
+                "batteryCount" to p.batteryCount,
+                "batteryVoltageCount" to p.batteryVoltageCount,
+                "chargeStatus" to p.chargeStatus,
+                "isConnectedAdapter" to p.isConnectedAdapter,
+                "printerStatus" to p.printerStatus,
+                "printPages" to p.printPages,
+                "printLines" to p.printLines,
+                "workLines" to p.workLines,
+                "nullLines" to p.nullLines,
+                "gapType" to p.gapType,
+                "supportedGapTypes" to (p.supportedGapTypes?.toList() ?: emptyList<Int>()),
+            )
+            Log.i(TAG, "[JOSH-STATUS] $out")
+            out
+        } catch (e: Exception) {
+            Log.w(TAG, "readPrinterStatus failed", e)
+            mapOf("available" to false, "busy" to false)
+        }
+    }
+
+    private fun printerStatusSignature(p: IDzPrinter2.PrinterParam?): String {
+        if (p == null) return "null"
+        return "${p.printerHeadTem}|${p.batteryVoltage}|${p.batteryCount}|${p.batteryVoltageCount}|${p.chargeStatus}|" +
+            "${p.isConnectedAdapter}|${p.printerStatus}|${p.printPages}|${p.printLines}|${p.workLines}|${p.nullLines}"
+    }
+
     private fun logPrinterGapReport(reason: String) {
         if (!isConnected()) {
             Log.i(TAG, "printer gap report skipped ($reason): not connected")
@@ -2170,7 +2256,7 @@ class JoshPrinterManager(private val context: Context) {
         printLatch?.countDown()
 
         val jobId = "JOSH-PRINT-${String.format("%03d", jobIdCounter.get())}"
-        emitPrintProgress(jobId, "SUCCESS", emptyMap())
+        emitPrintProgress(jobId, "SUCCESS", mapOf("copy" to progressSuccessCount, "copies" to progressCopies))
     }
 
     private fun handlePrintFailed(reason: String) {
@@ -2182,7 +2268,25 @@ class JoshPrinterManager(private val context: Context) {
         printLatch?.countDown()
 
         val jobId = "JOSH-PRINT-${String.format("%03d", jobIdCounter.get())}"
-        emitPrintProgress(jobId, "FAILED", mapOf("reason" to reason))
+        // printerStatus is read from the cached PrinterParam only; no query is sent while a job runs.
+        val cachedStatus = try {
+            (IDzPrinter.Factory.getInstance() as? IDzPrinter2)?.getPrinterParam()?.printerStatus
+        } catch (e: Exception) {
+            null
+        }
+        Log.i(TAG, "[JOSH-STATUS] print failed reason=$reason reasonCode=$lastFailReasonCode printerStatus=$cachedStatus")
+        emitPrintProgress(
+            jobId,
+            "FAILED",
+            mapOf(
+                "reason" to reason,
+                "reasonCode" to lastFailReasonCode,
+                "printerStatus" to cachedStatus,
+                "copy" to progressDataEndedCount,
+                "copies" to progressCopies,
+            ),
+        )
+        lastFailReasonCode = null
         emitError("JOSH_PRINT_FAILED", reason)
     }
 
@@ -2206,6 +2310,11 @@ class JoshPrinterManager(private val context: Context) {
 
     private fun emitError(code: String, message: String) {
         listener?.onError(code, message)
+    }
+
+    private fun emitJobProgress(progress: String, data: Map<String, Any?>) {
+        val jobId = "JOSH-PRINT-${String.format("%03d", jobIdCounter.get())}"
+        emitPrintProgress(jobId, progress, data)
     }
 
     private fun emitPrintProgress(jobId: String, progress: String, data: Map<String, Any?>) {

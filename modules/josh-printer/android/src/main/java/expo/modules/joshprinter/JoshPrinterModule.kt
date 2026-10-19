@@ -176,6 +176,21 @@ class JoshPrinterModule : Module() {
       }
     }
 
+    AsyncFunction("readPrinterStatus") { timeoutMs: Int, promise: Promise ->
+      val mgr = getOrInitManager()
+      if (mgr == null) {
+        promise.resolve(mapOf("available" to false, "busy" to false))
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        try {
+          promise.resolve(mgr.readPrinterStatus(timeoutMs.toLong()))
+        } catch (e: Exception) {
+          promise.reject("ERR_JOSH_STATUS", e.message ?: "Failed to read printer status", e)
+        }
+      }
+    }
+
     AsyncFunction("getBatteryLevel") { promise: Promise ->
       val mgr = getOrInitManager()
       if (mgr == null) {

@@ -82,6 +82,28 @@ export type JoshPngLabelOptions = {
   alignment?: 'left' | 'center';
 };
 
+/** Raw PrinterParam snapshot from native readPrinterStatus (older APKs lack the method). */
+export type JoshPrinterStatusRaw = {
+  available: boolean;
+  busy?: boolean;
+  refreshAccepted?: boolean;
+  changedAfterRefresh?: boolean;
+  waitedMs?: number;
+  printerHeadTem?: number;
+  batteryVoltage?: number;
+  batteryCount?: number;
+  batteryVoltageCount?: string | null;
+  chargeStatus?: number;
+  isConnectedAdapter?: boolean;
+  printerStatus?: number;
+  printPages?: number;
+  printLines?: number;
+  workLines?: number;
+  nullLines?: number;
+  gapType?: number;
+  supportedGapTypes?: number[];
+};
+
 type NativeJoshPrinter = {
   isAvailable(): boolean;
   isBluetoothEnabled?(): boolean;
@@ -111,6 +133,7 @@ type NativeJoshPrinter = {
     supportedGapTypes?: number[];
     line?: string;
   }>;
+  readPrinterStatus?(timeoutMs: number): Promise<JoshPrinterStatusRaw>;
   debugLogBattery?(): Promise<void>;
   addListener(
     eventName: string,
@@ -415,6 +438,17 @@ export async function printJoshTestText(text?: string): Promise<boolean> {
   return mod.printTestText(text ?? 'test print sent by sez print');
 }
 
+/** Refresh and read PrinterParam. Null when the method is missing (older APK) or the call fails. */
+export async function readJoshPrinterStatus(timeoutMs = 3000): Promise<JoshPrinterStatusRaw | null> {
+  const mod = getNative();
+  if (!mod || typeof mod.readPrinterStatus !== 'function') return null;
+  try {
+    return await mod.readPrinterStatus(timeoutMs);
+  } catch {
+    return null;
+  }
+}
+
 export function addJoshConnectionListener(
   listener: (event: { state: string; isConnected: boolean; printerName?: string; macAddress?: string }) => void,
 ): { remove: () => void } {
@@ -424,7 +458,19 @@ export function addJoshConnectionListener(
 }
 
 export function addJoshPrintProgressListener(
-  listener: (event: { jobId: string; progress: string; [key: string]: any }) => void,
+  listener: (event: {
+    jobId: string;
+    /** CONNECTED, START_COPY, DATA_ENDED, SUCCESS, FAILED, TIMEOUT. */
+    progress: string;
+    /** Native-counted copy number and job total (SDK `sdkCopy` is its own per-job index). */
+    copy?: number | null;
+    copies?: number | null;
+    /** FAILED: PrintFailReason name, ordinal and the cached PrinterParam.printerStatus. */
+    reason?: string;
+    reasonCode?: number | null;
+    printerStatus?: number | null;
+    [key: string]: any;
+  }) => void,
 ): { remove: () => void } {
   const mod = getNative();
   if (!mod) return { remove: () => {} };
