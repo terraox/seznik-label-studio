@@ -145,7 +145,7 @@ export function OverviewDesk() {
         </div>
       </section>
 
-      <PlatformCard platforms={summary?.platforms} />
+      <PlatformCard platforms={summary?.platforms} hideInternal={hideInternal} />
 
       <AnalyticsFooter footer={summary?.footer} />
     </>
