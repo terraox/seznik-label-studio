@@ -54,8 +54,9 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 const mm = (n: number) => String(round1(n));
 
 /** Grouping key for "most printed label": design size, never the rotated paper size. */
-export function labelKey(source: string, widthMm: number, heightMm: number, templateId?: string | null) {
-  const size = `${mm(widthMm)}x${mm(heightMm)}`;
+export function labelKey(source: string, widthMm: number, heightMm: number, templateId?: string | null, ups = 1) {
+  // A label made with "labels across" (2 ups, 3 ups…) is a different label from the single one.
+  const size = `${mm(widthMm)}x${mm(heightMm)}${ups > 1 ? `:ups${ups}` : ''}`;
   return source === 'template' && templateId ? `template:${templateId}:${size}` : `manual:${size}`;
 }
 
@@ -129,7 +130,7 @@ async function applyOne(user: User, raw: Raw, eventId: string, occurredAt: Date,
             eventId, jobId, userId: user.id, printerId: printer.id, source,
             labelWidthMm: round1(width), labelHeightMm: round1(height),
             templateId, templateNameSnapshot: str(raw.templateName, 120) || null,
-            labelKey: labelKey(source, width, height, templateId),
+            labelKey: labelKey(source, width, height, templateId, ups),
             jobs, labelsCount: labels, ups, appVersion, occurredAt,
           }],
         });

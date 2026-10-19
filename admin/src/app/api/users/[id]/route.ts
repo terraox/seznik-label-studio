@@ -55,7 +55,7 @@ export async function GET(_request: Request, ctx: Ctx) {
       recentPrints: recent.map((e) => ({
         at: e.occurredAt.toISOString(),
         printer: e.printer.nameRaw,
-        label: e.templateId ? `${size(e)} · ${e.templateNameSnapshot ?? e.templateId}` : size(e),
+        label: `${e.templateId ? `${size(e)} · ${e.templateNameSnapshot ?? e.templateId}` : size(e)}${e.ups > 1 ? ` (Label across · ${e.ups} ups)` : ''}`,
         source: e.source,
         labels: e.labelsCount,
         jobs: e.jobs,

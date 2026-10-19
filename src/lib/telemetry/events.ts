@@ -123,6 +123,8 @@ export type PrintMeta = {
   templateId?: string | null;
   templateName?: string | null;
   jobId?: string;
+  /** Labels across the row; 1 for a normal label. */
+  ups?: number;
 };
 
 /** One confirmed hand-off of `labels` labels to the printer. Called when the print button's job succeeds. */
@@ -134,7 +136,7 @@ export function trackPrint(labels: number, meta: PrintMeta) {
     type: 'print',
     labels: count,
     jobs: 1,
-    ups: 1,
+    ups: Math.min(20, Math.max(1, Math.floor(meta.ups ?? 1) || 1)),
     source: meta.source,
     widthMm: Math.min(300, Math.max(5, Math.round(meta.widthMm * 10) / 10)),
     heightMm: Math.min(300, Math.max(5, Math.round(meta.heightMm * 10) / 10)),

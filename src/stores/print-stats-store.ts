@@ -12,6 +12,8 @@ export type PrintRecordMeta = {
   source: PrintSource;
   templateId?: string | null;
   templateName?: string | null;
+  /** Labels across the row (2 ups, 3 ups…); left out for a normal single label. */
+  ups?: number;
 };
 
 /** Local calendar day `YYYY-MM-DD`. */

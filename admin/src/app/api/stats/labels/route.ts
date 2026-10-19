@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 type Row = {
   labelKey: string; w: number; h: number; templateId: string | null; templateName: string | null;
-  labels: bigint; jobs: bigint; users: bigint;
+  ups: number; labels: bigint; jobs: bigint; users: bigint;
 };
 
 const fmt = (n: number) => String(Math.round(n * 10) / 10);
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       SELECT "labelKey", min("labelWidthMm") AS w, min("labelHeightMm") AS h,
         min("templateId") AS "templateId",
         (array_agg("templateNameSnapshot" ORDER BY "occurredAt" DESC) FILTER (WHERE "templateNameSnapshot" IS NOT NULL))[1] AS "templateName",
-        sum("labelsCount") AS labels, sum(jobs) AS jobs, count(DISTINCT "userId") AS users
+        max(ups) AS ups, sum("labelsCount") AS labels, sum(jobs) AS jobs, count(DISTINCT "userId") AS users
       FROM ev WHERE "occurredAt" >= ${since}
       GROUP BY "labelKey"
       ORDER BY sum("labelsCount") DESC, "labelKey"
@@ -49,7 +49,8 @@ export async function GET(request: Request) {
       labels: rows.map((r, i) => ({
         rank: i + 1,
         labelKey: r.labelKey,
-        display: `${fmt(r.w)} x ${fmt(r.h)} mm${r.templateId ? ` · ${r.templateName ?? r.templateId}` : ''}`,
+        display: `${fmt(r.w)} x ${fmt(r.h)} mm${r.templateId ? ` · ${r.templateName ?? r.templateId}` : ''}${r.ups > 1 ? ` (Label across · ${r.ups} ups)` : ''}`,
+        ups: r.ups,
         kind: r.templateId ? 'template' : 'manual',
         templateId: r.templateId,
         labelsPrinted: Number(r.labels),

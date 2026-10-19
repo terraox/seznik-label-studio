@@ -21,7 +21,7 @@ export function printEventsCte(hideInternal: boolean, family: string | null) {
   return Prisma.sql`
     ev AS (
       SELECT pe."occurredAt", pe."labelsCount", pe.jobs, pe."labelKey", pe."labelWidthMm", pe."labelHeightMm",
-             pe."templateId", pe."templateNameSnapshot", pe."userId"
+             pe."templateId", pe."templateNameSnapshot", pe."userId", pe.ups
       FROM "PrintEvent" pe
       JOIN "Printer" p ON p.id = pe."printerId"
       LEFT JOIN "AppUser" u ON u.id = pe."userId"

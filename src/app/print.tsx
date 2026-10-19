@@ -2175,6 +2175,7 @@ export default function PrintScreen() {
           setPrintProgress(`Label ${page + 1} of ${pageCount}`);
         }
         if (bulkPlan) {
+          ups: baseDocument?.ups?.columns ?? 1,
           setPrintProgress(`Printing ${labelsCompleted} of ${bulkPlan.totalPhysical}`);
           if (collateJob && manager.isJosh && jobIndex < printJobs.length - 1) {
             const pitchMs = joshLabelPitchMs(
