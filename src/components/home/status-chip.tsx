@@ -7,6 +7,7 @@ import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label
 import { CONSUMER_PRINTERS } from '@/constants/printer-models';
 import { androidRipple, HomeLayout, HomeStatusColors } from '@/constants/ui'; // theme-fixed: status fills keep white text readable in both themes
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
+import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
@@ -24,6 +25,7 @@ export function StatusChip() {
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
+  const batteryBars = usePrinterStore((s) => s.batteryBars);
   const sdkId = usePrinterStore((s) => s.sdkId);
   const transport = usePrinterStore((s) => s.transport);
   const showBattery = printerReportsBattery({ sdkId, transport });
@@ -48,8 +50,11 @@ export function StatusChip() {
 
   const live = status === 'connected' || status === 'printing';
   const text = live ? deviceName || modelName : 'Not connected';
+  const josh = isJoshPrinter({ sdkId, transport });
   const batteryLabel =
-    showBattery && batteryPercent != null
+    showBattery && josh && batteryBars != null
+      ? `${batteryBars} of 4 bars`
+      : showBattery && !josh && batteryPercent != null
       ? `${batteryPercent}%`
       : showBattery && live
         ? 'battery not reported'
@@ -75,6 +80,7 @@ export function StatusChip() {
       {live && showBattery ? (
         <PrinterBatteryLabel
           percent={batteryPercent}
+          bars={josh ? batteryBars : undefined}
           size={15}
           onDark
           showWhenUnknown

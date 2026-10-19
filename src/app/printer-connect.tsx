@@ -34,6 +34,7 @@ import {
   type DiscoveredPrinter,
 } from '@/lib/printer/printer-manager';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
+import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { useAuthStore } from '@/stores/auth-store';
 import { normalizePrinterMac, usePrinterStore } from '@/stores/printer-store';
 import { themedStyles, useThemeRefresh } from '@/theme';
@@ -124,6 +125,7 @@ export default function PrinterConnectScreen() {
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
+  const batteryBars = usePrinterStore((s) => s.batteryBars);
   const sdkId = usePrinterStore((s) => s.sdkId);
   const transport = usePrinterStore((s) => s.transport);
   const purchasedPrinterId = useAuthStore((s) => s.user?.printerId);
@@ -314,10 +316,12 @@ export default function PrinterConnectScreen() {
           }
           void startScanRef.current(usePrinterStore.getState().selectedPrinterModel).catch(() => {});
         };
-        // On open, pre-select the printer they registered (bridge follows automatically).
+        // On open, pre-select the printer last connected, else the one they registered
+        // (bridge follows automatically).
         const purchased = purchasedPrinterIdRef.current;
-        if (isConsumerPrinterId(purchased) && purchased !== store.selectedPrinterModel) {
-          store.setSelectedPrinterModel(purchased);
+        const opening = store.preferredPrinterModel ?? purchased;
+        if (isConsumerPrinterId(opening) && opening !== store.selectedPrinterModel) {
+          store.setSelectedPrinterModel(opening);
           // Let the re-render hand the scan callbacks the new model before scanning.
           setTimeout(begin, 60);
           return;
@@ -379,6 +383,11 @@ export default function PrinterConnectScreen() {
     await getPrinterManager().connectModel(toDriverModel(target), device.id, device.name);
     const live = usePrinterStore.getState().deviceId;
     if (live && normalizePrinterMac(live) === normalizePrinterMac(device.id)) {
+      // Connected: open this printer next time. Back on the purchased one clears the override.
+      const purchased = purchasedPrinterIdRef.current;
+      usePrinterStore
+        .getState()
+        .setPreferredPrinterModel(isConsumerPrinterId(purchased) && purchased === target ? null : target);
       userTargetRef.current = null;
       getPrinterManager().allowAutoReconnectAgain();
       setAutoConnectPaused(false);
@@ -558,6 +567,7 @@ export default function PrinterConnectScreen() {
               modelName={printer.shortName}
               deviceName={deviceName}
               batteryPercent={batteryPercent}
+              batteryBars={isJoshPrinter({ sdkId, transport }) ? batteryBars : undefined}
               showBattery={showBattery}
               testing={testing}
               onTest={() => void handleTestPrint()}

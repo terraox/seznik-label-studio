@@ -6,6 +6,14 @@ import { usePrinterStore } from '@/stores/printer-store';
 
 export const DIAGNOSTIC_COMPACT_LABEL_WIDTH_MM = 50;
 export const DIAGNOSTIC_COMPACT_LABEL_HEIGHT_MM = 15;
+/**
+ * Josh test label: 25x15 mm, ink 2 mm in from the die-cut. The Josh pipeline bakes a +2 mm
+ * right and -1 mm up shift into every job, so the document margins cancel it: left 0, top 3.
+ */
+export const JOSH_TEST_LABEL_WIDTH_MM = 25;
+export const JOSH_TEST_LABEL_HEIGHT_MM = 15;
+export const JOSH_TEST_LABEL_MARGIN_MM = 0;
+export const JOSH_TEST_LABEL_TOP_MM = 3;
 export const DIAGNOSTIC_STANDARD_LABEL_WIDTH_MM = 50;
 export const DIAGNOSTIC_STANDARD_LABEL_HEIGHT_MM = 30;
 
@@ -14,15 +22,17 @@ export function buildDiagnosticCompactLabelDocument(
   lines: readonly string[],
   widthMm = DIAGNOSTIC_COMPACT_LABEL_WIDTH_MM,
   heightMm = DIAGNOSTIC_COMPACT_LABEL_HEIGHT_MM,
+  layout: { marginMm?: number; marginTopMm?: number; lineHeightMm?: number; fontPt?: number; maxLines?: number } = {},
 ): LabelDocument {
-  const marginLeftMm = 1;
-  const marginTopMm = 1;
-  const lineHeightMm = heightMm <= 16 ? 4.2 : 5.5;
+  const marginLeftMm = layout.marginMm ?? 1;
+  const marginTopMm = layout.marginTopMm ?? layout.marginMm ?? 1;
+  const lineHeightMm = layout.lineHeightMm ?? (heightMm <= 16 ? 4.2 : 5.5);
   const textWidthMm = Math.max(8, widthMm - marginLeftMm * 2);
+  const fontPt = layout.fontPt ?? DEFAULT_TEXT_FONT_PT;
   const elements: LabelElement[] = lines
     .map((line) => String(line).trim())
     .filter((line) => line.length > 0)
-    .slice(0, 4)
+    .slice(0, layout.maxLines ?? 4)
     .map((text, index) => ({
       id: generateId('diag'),
       type: 'text' as const,
@@ -32,7 +42,7 @@ export function buildDiagnosticCompactLabelDocument(
       top: marginTopMm + index * lineHeightMm,
       width: textWidthMm,
       height: lineHeightMm,
-      fontSize: DEFAULT_TEXT_FONT_PT,
+      fontSize: fontPt,
       align: 'left' as const,
       autoWrapping: 'Close' as const,
       autoTextHeight: false,

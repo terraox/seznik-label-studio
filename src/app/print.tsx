@@ -79,6 +79,8 @@ import {
 } from '@/lib/serial/resolve-document';
 import { serialPrintGate } from '@/lib/serial/symbology-validate';
 import { SERIAL_CONFIRM_ABOVE } from '@/lib/serial/types';
+import { joshProgressText } from '@/lib/printer/josh-status';
+import { useJoshProgressStore } from '@/stores/josh-progress-store';
 import { useSerialContinueStore } from '@/stores/serial-continue-store';
 import { useSerialJobStore } from '@/stores/serial-job-store';
 import { projectBulkDocument, resolveBulkSheet } from '@/lib/bulk-labels';
@@ -597,6 +599,13 @@ export default function PrintScreen() {
   const [copies, setCopies] = useState(1);
   const [collate, setCollate] = useState(false);
   const [printProgress, setPrintProgress] = useState<string | null>(null);
+  const joshProgressLine = useJoshProgressStore((s) => joshProgressText(s));
+  const joshLateFailure = useJoshProgressStore((s) => s.lateFailure);
+  useEffect(() => {
+    if (!joshLateFailure) return;
+    useJoshProgressStore.getState().setLateFailure(null);
+    Alert.alert('Printer problem', joshLateFailure);
+  }, [joshLateFailure]);
   const [darkness, setDarkness] = useState<number | null>(null);
   const [speed, setSpeed] = useState<number | null>(null);
   const [orientation, setOrientation] = useState<(typeof ORIENTATIONS)[number]>('0°');
@@ -1374,6 +1383,10 @@ export default function PrintScreen() {
           console.info(
             `[print] label ${page} copy ${copyNumber} round ${round} total ${labelsCompleted}/${bulkPlan.totalPhysical} copies ${sendCopies}`,
           );
+          // Josh progress line: the app's own send count; the SDK events fill in the state of each send.
+          useJoshProgressStore.getState().setBulk(labelsCompleted + 1, bulkPlan.totalPhysical);
+        } else {
+          useJoshProgressStore.getState().setBulk(null, null);
         }
         const pageStart = Date.now();
         const cachedRow = bulkPlan ? rowRasters.get(page) : undefined;
@@ -2162,6 +2175,7 @@ export default function PrintScreen() {
           source: serialRun ? 'serial' : bulkPlan ? 'excel_bulk' : isPdfJob ? 'pdf' : params.scanData ? 'scan' : params.imageUri ? 'photo' : baseDocument?.templatePreviewType ? 'template' : 'manual_size',
           templateId: baseDocument?.templatePreviewType ?? null,
           templateName: baseDocument?.templatePreviewType ? baseDocument.name : null,
+          ups: baseDocument?.ups?.columns ?? 1,
         });
         if (serialRun && serialLogBase) {
           for (let c = 1; c <= sendCopies; c += 1) {
@@ -2175,7 +2189,6 @@ export default function PrintScreen() {
           setPrintProgress(`Label ${page + 1} of ${pageCount}`);
         }
         if (bulkPlan) {
-          ups: baseDocument?.ups?.columns ?? 1,
           setPrintProgress(`Printing ${labelsCompleted} of ${bulkPlan.totalPhysical}`);
           if (collateJob && manager.isJosh && jobIndex < printJobs.length - 1) {
             const pitchMs = joshLabelPitchMs(
@@ -2792,7 +2805,9 @@ export default function PrintScreen() {
         </View>
       </FormScrollView>
 
-      {printProgress ? <Text style={styles.printProgress}>{printProgress}</Text> : null}
+      {joshProgressLine ?? printProgress ? (
+        <Text style={styles.printProgress}>{joshProgressLine ?? printProgress}</Text>
+      ) : null}
       {printing && serialInfo ? (
         <Pressable
           onPress={() => {

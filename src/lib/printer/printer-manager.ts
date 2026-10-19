@@ -20,6 +20,9 @@ import {
 } from '@/lib/printer/bluetooth-guard';
 import { assertJoshMonoBuffer, joshPackedPageDots } from '@/lib/printer/josh-mono-validate';
 import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
+import { joshFailMessage, joshPrintError, parseJoshFailure, type JoshPrinterStatus } from '@/lib/printer/josh-status';
+import { joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
+import { useJoshProgressStore } from '@/stores/josh-progress-store';
 import {
   JOSH_TEST_LABEL_EXTRA_H_MM,
   JOSH_BORDER_PAD_DOTS,
@@ -41,6 +44,10 @@ import {
   DIAGNOSTIC_COMPACT_LABEL_HEIGHT_MM,
   DIAGNOSTIC_COMPACT_LABEL_WIDTH_MM,
   DIAGNOSTIC_STANDARD_LABEL_HEIGHT_MM,
+  JOSH_TEST_LABEL_HEIGHT_MM,
+  JOSH_TEST_LABEL_TOP_MM,
+  JOSH_TEST_LABEL_MARGIN_MM,
+  JOSH_TEST_LABEL_WIDTH_MM,
   DIAGNOSTIC_STANDARD_LABEL_WIDTH_MM,
 } from '@/lib/printer/diagnostic-test-label';
 import {
@@ -618,6 +625,41 @@ class PrinterManager {
     } catch {
       return null;
     }
+  }
+
+  private joshPrintsInFlight = 0;
+  private joshProgressSub: { remove: () => void } | null = null;
+
+  /** One app-lifetime subscription: the printer can report a failure after the print call returned. */
+  private beginJoshProgress(josh: NonNullable<ReturnType<PrinterManager['getJosh']>>): void {
+    this.joshPrintsInFlight += 1;
+    const progress = useJoshProgressStore.getState();
+    progress.begin();
+    if (this.joshProgressSub || typeof josh.addJoshPrintProgressListener !== 'function') return;
+    this.joshProgressSub = josh.addJoshPrintProgressListener((event) => {
+      const store = useJoshProgressStore.getState();
+      if (event.progress === 'FAILED' && this.joshPrintsInFlight === 0) {
+        store.setLateFailure(joshFailMessage(event.reason, event.reasonCode));
+      }
+      store.apply(event);
+    });
+  }
+
+  private endJoshProgress(error?: unknown): void {
+    this.joshPrintsInFlight = Math.max(0, this.joshPrintsInFlight - 1);
+    const store = useJoshProgressStore.getState();
+    if (error === undefined) {
+      store.finish();
+      return;
+    }
+    const parsed = parseJoshFailure(error);
+    store.fail(
+      parsed
+        ? joshFailMessage(parsed.reason)
+        : error instanceof Error
+          ? error.message
+          : String(error),
+    );
   }
 
   // Tez / Shakti and Label X SDKs were removed from the app.
@@ -3272,12 +3314,14 @@ class PrinterManager {
     if (!live) {
       this.stopBatteryPolling();
       if (store.batteryPercent != null) store.setBatteryPercent(null);
+      if (store.batteryBars != null) store.setBatteryBars(null);
       return;
     }
     const { printerReportsBattery } = await import('@/lib/printer/printer-battery');
     if (!printerReportsBattery({ sdkId: store.sdkId, transport: this.activeTransport ?? store.transport })) {
       this.stopBatteryPolling();
       if (store.batteryPercent != null) store.setBatteryPercent(null);
+      if (store.batteryBars != null) store.setBatteryBars(null);
       return;
     }
     this.ensureBatteryPolling();
@@ -3287,6 +3331,19 @@ class PrinterManager {
     this.batteryRefreshInFlight = true;
     this.lastBatteryRefreshAt = now;
     try {
+      const { isJoshPrinter } = await import('@/lib/printer/battery-percent');
+      if (isJoshPrinter({ sdkId: store.sdkId, transport: this.activeTransport ?? store.transport })) {
+        // Josh: bars out of 4 from the printer voltage. Never a percentage, never a fake level.
+        const status = await this.readJoshPrinterStatus();
+        const latest = usePrinterStore.getState();
+        if (latest.batteryPercent != null) latest.setBatteryPercent(null);
+        if (status?.available && (latest.status === 'connected' || latest.status === 'printing')) {
+          latest.setBatteryBars(joshBatteryLevel(status.batteryVoltage));
+        } else if (!status && latest.status !== 'printing') {
+          latest.setBatteryBars(null);
+        }
+        return;
+      }
       const { fetchPrinterBatteryPercent } = await import('@/lib/printer/printer-battery');
       const percent = await fetchPrinterBatteryPercent({
         transport: this.activeTransport ?? store.transport,
@@ -3322,6 +3379,31 @@ class PrinterManager {
       return null;
     }
   }
+
+  /**
+   * Josh PrinterParam refresh + read for diagnostics. Null when not Josh, the build has no reader,
+   * or a print is running (the printer is never queried mid-print).
+   */
+  async readJoshPrinterStatus(timeoutMs = 3000): Promise<JoshPrinterStatus | null> {
+    if (!this.isJosh || this.joshPrintsInFlight > 0 || usePrinterStore.getState().status === 'printing') return null;
+    const josh = this.getJosh();
+    if (!josh || typeof josh.readJoshPrinterStatus !== 'function') return null;
+    // One refresh at a time: the battery poll and the diagnostics screen share the same read.
+    if (this.joshStatusInFlight) return this.joshStatusInFlight;
+    const read = josh
+      .readJoshPrinterStatus(timeoutMs)
+      .catch((error: unknown) => {
+        console.warn('[printer] Josh status read failed', error);
+        return null;
+      })
+      .finally(() => {
+        this.joshStatusInFlight = null;
+      });
+    this.joshStatusInFlight = read;
+    return read;
+  }
+
+  private joshStatusInFlight: Promise<JoshPrinterStatus | null> | null = null;
 
   /** Snapshot of internal state for the diagnostics screen. */
   getDiagnostics(): DiagnosticInfo {
@@ -3581,6 +3663,22 @@ class PrinterManager {
 
   async printDiagnosticTestLabel(): Promise<void> {
     const lines = buildDiagnosticTestLabelLines(this.activeTransport);
+    if (this.isJosh) {
+      // Same job as the Print button: a small 25x15 label through the main pipeline.
+      const doc = buildDiagnosticCompactLabelDocument(
+        lines,
+        JOSH_TEST_LABEL_WIDTH_MM,
+        JOSH_TEST_LABEL_HEIGHT_MM,
+        {
+          marginMm: JOSH_TEST_LABEL_MARGIN_MM,
+          marginTopMm: JOSH_TEST_LABEL_TOP_MM,
+          lineHeightMm: 2.9,
+          fontPt: 4.5,
+        },
+      );
+      await printLabelDocumentMainPipeline(doc, { gapMm: 3 });
+      return;
+    }
     await this.printTestLabel(lines.join('\n'), { compact: true, lines });
   }
 
@@ -4149,6 +4247,7 @@ class PrinterManager {
     }
     this.activeTransport = 'josh-lpapi';
     this.printQueueDepth++;
+    this.beginJoshProgress(josh);
     const run = this.printChain.then(async () => {
       const store = usePrinterStore.getState();
       store.setStatus('printing');
@@ -4231,14 +4330,18 @@ class PrinterManager {
     );
     try {
       await run;
+      this.endJoshProgress();
       return true;
     } catch (error) {
       const code = error instanceof Error ? (error as Error & { code?: string }).code : null;
       const msg = error instanceof Error ? error.message : String(error);
       if (code === 'NATIVE_MONO_UNAVAILABLE' || msg.includes('NATIVE_MONO_UNAVAILABLE')) {
+        this.joshPrintsInFlight = Math.max(0, this.joshPrintsInFlight - 1);
+        useJoshProgressStore.getState().reset();
         return false;
       }
-      throw error;
+      this.endJoshProgress(error);
+      throw joshPrintError(error);
     }
   }
 
@@ -4271,6 +4374,7 @@ class PrinterManager {
     }
 
     this.printQueueDepth++;
+    this.beginJoshProgress(josh);
     const run = this.printChain.then(async () => {
       const store = usePrinterStore.getState();
       store.setStatus('printing');
@@ -4329,10 +4433,12 @@ class PrinterManager {
     );
     try {
       await run;
+      this.endJoshProgress();
       return true;
     } catch (error) {
       console.error('[JOSH-PRINT-P5:FAILED] JOSH print failed:', error);
-      throw error;
+      this.endJoshProgress(error);
+      throw joshPrintError(error);
     }
   }
 

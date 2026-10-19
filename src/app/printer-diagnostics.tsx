@@ -2,7 +2,7 @@
  * Printer diagnostics: connection snapshot and debug actions.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { TextInput } from '@/components/ui/text-input';
+import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,6 +23,7 @@ import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import type { PaperType } from '@/lib/label-document';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
+import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import {
   PAPER_TYPE_TEST_PHOTO,
   activePaperTypeTestPrinter,
@@ -43,6 +45,15 @@ import {
   printDiagnosticRulerTest,
   suggestedDiagnosticGridSpacingMm,
 } from '@/lib/printer/diagnostic-grid-print';
+import {
+  changedStatusBits,
+  formatJoshStatusLog,
+  joshLidOpen,
+  toBinary,
+  joshReadingText,
+  type JoshPrinterStatus,
+} from '@/lib/printer/josh-status';
+import { JOSH_BATTERY_CALIBRATED, joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
 import { usePrinterStore } from '@/stores/printer-store';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
@@ -93,9 +104,11 @@ export default function PrinterDiagnosticsScreen() {
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
+  const batteryBars = usePrinterStore((s) => s.batteryBars);
   const sdkId = usePrinterStore((s) => s.sdkId);
   const transport = usePrinterStore((s) => s.transport);
   const showBattery = printerReportsBattery({ sdkId, transport });
+  const isJoshBattery = isJoshPrinter({ sdkId, transport });
   const [diag, setDiag] = useState<DiagnosticInfo | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -108,6 +121,8 @@ export default function PrinterDiagnosticsScreen() {
   const [gapMmText, setGapMmText] = useState(() => String(defaultDiagnosticGapMm()));
   const [gridTestOpen, setGridTestOpen] = useState(false);
   const [gapReportLine, setGapReportLine] = useState<string | null>(null);
+  const [joshStatus, setJoshStatus] = useState<JoshPrinterStatus | null>(null);
+  const [joshStatusNote, setJoshStatusNote] = useState<string | null>(null);
 
   const gridPreset = useMemo(
     () => DIAGNOSTIC_GRID_SIZE_PRESETS.find((p) => p.id === gridPresetId) ?? DIAGNOSTIC_GRID_SIZE_PRESETS[0],
@@ -129,6 +144,69 @@ export default function PrinterDiagnosticsScreen() {
     const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
     setLogs((prev) => [`${ts}  ${msg}`, ...prev].slice(0, 200));
   }, []);
+
+  const refreshJoshStatusRef = useRef<() => Promise<void>>(async () => {});
+  const refreshJoshStatus = useCallback(async () => {
+    setBusy('josh-status');
+    setJoshStatusNote(null);
+    try {
+      const result = await getPrinterManager().readJoshPrinterStatus();
+      if (!result || !result.available) {
+        setJoshStatusNote(
+          result?.busy
+            ? 'Printer is printing. Try again when it finishes.'
+            : 'Status not available. Connect the printer, or update the app if this build has no status reader.',
+        );
+        return;
+      }
+      setJoshStatus(result);
+    } finally {
+      setBusy(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshJoshStatusRef.current = refreshJoshStatus;
+  }, [refreshJoshStatus]);
+
+  // Live status: a PrinterParam refresh about once a second. No print job is sent, so no paper moves.
+  const [liveStatus, setLiveStatus] = useState(false);
+  const [liveBits, setLiveBits] = useState<{ value: number | null; changed: string; changes: number } | null>(null);
+  useEffect(() => {
+    if (!liveStatus) return;
+    let stopped = false;
+    let lastValue: number | null = null;
+    let changes = 0;
+    const tick = async () => {
+      while (!stopped) {
+        const s = getPrinterManager().isJosh && usePrinterStore.getState().status === 'connected'
+          ? await getPrinterManager().readJoshPrinterStatus(700)
+          : null;
+        if (stopped) return;
+        if (s?.available) {
+          setJoshStatus(s);
+          const v = typeof s.printerStatus === 'number' ? s.printerStatus : null;
+          if (v !== lastValue && lastValue != null) changes += 1;
+          setLiveBits({
+            value: v,
+            changed: changedStatusBits(lastValue ?? undefined, v ?? undefined),
+            changes: changes,
+          });
+          lastValue = v;
+        }
+        await new Promise<void>((r) => setTimeout(r, 300));
+      }
+    };
+    void tick();
+    return () => {
+      stopped = true;
+    };
+  }, [liveStatus]);
+
+  const copyJoshStatusLog = useCallback(async () => {
+    await Clipboard.setStringAsync(formatJoshStatusLog(joshStatus));
+    Alert.alert('Copied', 'Status log copied to the clipboard.');
+  }, [joshStatus]);
 
   const refresh = useCallback(() => {
     setDiag(getPrinterManager().getDiagnostics());
@@ -155,6 +233,10 @@ export default function PrinterDiagnosticsScreen() {
             })
             .catch(() => {
               setGapReportLine('printer gapType=unknown supportedGapTypes=unknown');
+            })
+            // Read the status after the gap report so two PrinterParam refreshes never overlap.
+            .finally(() => {
+              void refreshJoshStatusRef.current();
             });
         }
       }
@@ -350,6 +432,7 @@ export default function PrinterDiagnosticsScreen() {
                 <Text style={styles.heroBatteryLabel}>Battery</Text>
                 <PrinterBatteryLabel
                   percent={batteryPercent}
+                  bars={isJoshBattery ? batteryBars : undefined}
                   size={20}
                   showWhenUnknown
                   unknownText="Not reported"
@@ -368,7 +451,19 @@ export default function PrinterDiagnosticsScreen() {
             {showBattery ? (
               <DiagRow
                 label="Battery"
-                value={batteryPercent != null ? `${batteryPercent}%` : linked ? 'Not reported' : 'N/A'}
+                value={
+                  isJoshBattery
+                    ? batteryBars != null
+                      ? `${batteryBars} of 4 bars${JOSH_BATTERY_CALIBRATED ? '' : ' (uncalibrated)'}`
+                      : linked
+                        ? 'Not reported'
+                        : 'N/A'
+                    : batteryPercent != null
+                      ? `${batteryPercent}%`
+                      : linked
+                        ? 'Not reported'
+                        : 'N/A'
+                }
               />
             ) : null}
           </View>
@@ -389,6 +484,74 @@ export default function PrinterDiagnosticsScreen() {
                       ? 'With response'
                       : 'Without response'
                 }
+              />
+            </View>
+          ) : null}
+
+          {sdkId === 'josh' ? (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Printer status</Text>
+              <DiagRow label="Head temperature" value={joshReadingText(joshStatus?.printerHeadTem)} />
+              <DiagRow label="Voltage" value={joshReadingText(joshStatus?.batteryVoltage)} />
+              <DiagRow
+                label="Battery level"
+                value={(() => {
+                  const level = joshBatteryLevel(joshStatus?.batteryVoltage);
+                  if (level == null) return 'battery not reported';
+                  const bars = '■'.repeat(level) + '□'.repeat(4 - level);
+                  return `${bars} ${level}/4${JOSH_BATTERY_CALIBRATED ? '' : ' (uncalibrated)'}`;
+                })()}
+              />
+              <DiagRow label="batteryCount" value={String(joshStatus?.batteryCount ?? 'n/a')} />
+              <DiagRow label="chargeStatus" value={String(joshStatus?.chargeStatus ?? 'n/a')} />
+              <DiagRow label="batteryVoltageCount" value={joshStatus?.batteryVoltageCount?.trim() || 'n/a'} />
+              {joshStatus ? (
+                <DiagRow
+                  label="Last read"
+                  value={`refresh ${joshStatus.refreshAccepted ? 'accepted' : 'refused'}, ${
+                    joshStatus.changedAfterRefresh ? 'values updated' : 'values unchanged'
+                  }, ${joshStatus.waitedMs ?? 0} ms`}
+                />
+              ) : (
+                <Text style={styles.sizeHint}>
+                  {busy === 'josh-status' ? 'Reading printer status...' : 'Not read yet. Tap Refresh status.'}
+                </Text>
+              )}
+              {joshStatusNote ? <Text style={styles.sizeHint}>{joshStatusNote}</Text> : null}
+              <ActionButton
+                label={liveStatus ? 'Stop live status' : 'Live status (about 1 per second)'}
+                icon="arrow.clockwise"
+                busy={false}
+                disabled={!linked || status === 'printing'}
+                onPress={() => setLiveStatus((v) => !v)}
+              />
+              {liveStatus ? (
+                <>
+                  <DiagRow
+                    label="Lid"
+                    value={(() => {
+                      const open = joshLidOpen(joshStatus?.printerStatus);
+                      return open == null ? 'unknown (lid bit not verified)' : open ? 'OPEN' : 'closed';
+                    })()}
+                  />
+                  <DiagRow label="printerStatus" value={`${joshStatus?.printerStatus ?? 'n/a'}  ${toBinary(joshStatus?.printerStatus)}`} mono />
+                  <DiagRow label="Bits that changed" value={liveBits ? `${liveBits.changed}  (${liveBits.changes} changes)` : 'waiting'} mono />
+                  <Text style={styles.sizeHint}>Open and close the lid and watch which bit changes.</Text>
+                </>
+              ) : null}
+              <ActionButton
+                label="Refresh status"
+                icon="arrow.clockwise"
+                busy={busy === 'josh-status'}
+                disabled={busy !== null || !linked || status === 'printing'}
+                onPress={() => void refreshJoshStatus()}
+              />
+              <ActionButton
+                label="Copy status log"
+                icon="doc.text"
+                busy={false}
+                disabled={busy !== null}
+                onPress={() => void copyJoshStatusLog()}
               />
             </View>
           ) : null}
