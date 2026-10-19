@@ -265,10 +265,10 @@ export async function printPdfToThermal(
 
       await sendIsolatedPrintCopies(bytes, copies);
       pagesPrinted++;
-      usePrintStatsStore.getState().record(copies);
+      usePrintStatsStore.getState().record(copies, undefined, { widthMm: page.widthMm, heightMm: page.heightMm, source: 'pdf' });
     } else {
       pagesPrinted++;
-      usePrintStatsStore.getState().record(copies);
+      usePrintStatsStore.getState().record(copies, undefined, { widthMm: page.widthMm, heightMm: page.heightMm, source: 'pdf' });
     }
   }
 

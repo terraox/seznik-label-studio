@@ -2,6 +2,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { trackPrint, type PrintSource } from '@/lib/telemetry/events';
+import { usePrinterStore } from '@/stores/printer-store';
+
+/** What was printed, so the admin desk can rank label sizes and templates. */
+export type PrintRecordMeta = {
+  widthMm: number;
+  heightMm: number;
+  source: PrintSource;
+  templateId?: string | null;
+  templateName?: string | null;
+};
+
 /** Local calendar day `YYYY-MM-DD`. */
 export function statsDayKey(timestamp: number): string {
   const d = new Date(timestamp);
@@ -17,7 +29,7 @@ type PrintStatsState = {
   byDay: Record<string, number>;
   /** True once counts were seeded from the existing print history. */
   seeded: boolean;
-  record: (copies: number, at?: number) => void;
+  record: (copies: number, at?: number, meta?: PrintRecordMeta) => void;
   seed: (entries: { copies: number; printedAt: number }[]) => void;
 };
 
@@ -36,7 +48,11 @@ export const usePrintStatsStore = create<PrintStatsState>()(
       lifetime: 0,
       byDay: {},
       seeded: false,
-      record: (copies, at = Date.now()) =>
+      record: (copies, at = Date.now(), meta) => {
+        if (meta) {
+          const printer = usePrinterStore.getState();
+          trackPrint(copies, { ...meta, printerName: printer.deviceName, sdkFamily: printer.sdkId });
+        }
         set((s) => {
           const n = Math.max(1, Math.floor(copies) || 1);
           const key = statsDayKey(at);
@@ -44,7 +60,8 @@ export const usePrintStatsStore = create<PrintStatsState>()(
             lifetime: s.lifetime + n,
             byDay: trim({ ...s.byDay, [key]: (s.byDay[key] ?? 0) + n }, Date.now()),
           };
-        }),
+        });
+      },
       seed: (entries) =>
         set((s) => {
           if (s.seeded) return s;

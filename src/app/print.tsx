@@ -2156,7 +2156,13 @@ export default function PrintScreen() {
           );
         }
         labelsCompleted += sendCopies;
-        usePrintStatsStore.getState().record(sendCopies);
+        usePrintStatsStore.getState().record(sendCopies, undefined, {
+          widthMm,
+          heightMm,
+          source: serialRun ? 'serial' : bulkPlan ? 'excel_bulk' : isPdfJob ? 'pdf' : params.scanData ? 'scan' : params.imageUri ? 'photo' : baseDocument?.templatePreviewType ? 'template' : 'manual_size',
+          templateId: baseDocument?.templatePreviewType ?? null,
+          templateName: baseDocument?.templatePreviewType ? baseDocument.name : null,
+        });
         if (serialRun && serialLogBase) {
           for (let c = 1; c <= sendCopies; c += 1) {
             console.info(serialPrintLogLine({ ...serialLogBase, copy: c, state: 'confirmed' }));

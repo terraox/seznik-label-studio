@@ -7,6 +7,7 @@ import { openProductUrl } from '@/lib/shop/amazon-url';
 import { productDisplayTitle } from '@/lib/shop/filter-catalog';
 import { typeTokens } from '@/lib/shop/parse-product';
 import type { ShopProduct } from '@/lib/shop/types';
+import { trackProductClick } from '@/lib/telemetry/events';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type Props = {
@@ -43,6 +44,7 @@ export function ProductCard({ product, width }: Props) {
   async function onBuy() {
     if (opening) return;
     setOpening(true);
+    trackProductClick(product.id, product.name, product.category);
     try {
       const result = await openProductUrl(product);
       if (!result.ok) {

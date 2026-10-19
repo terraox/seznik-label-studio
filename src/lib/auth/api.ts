@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 
 import type { ConsumerPrinterId } from '@/constants/printer-models';
+import { appHeaders, appPlatform } from '@/lib/telemetry/app-headers';
 
 export type AuthUserDto = {
   id: string;
@@ -38,7 +39,7 @@ export async function sendOtpRequest(
 ): Promise<{ resendAfter: number }> {
   const res = await fetch(`${apiBase()}/api/app/otp/send`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...appHeaders() },
     body: JSON.stringify({ mobile, purpose }),
   });
   if (!res.ok) throw new Error(await parseError(res, 'Could not send OTP.'));
@@ -52,7 +53,7 @@ export async function verifyOtpRequest(
 ): Promise<{ otpProof: string }> {
   const res = await fetch(`${apiBase()}/api/app/otp/verify`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...appHeaders() },
     body: JSON.stringify({ mobile, otp, purpose }),
   });
   if (!res.ok) throw new Error(await parseError(res, 'Could not verify OTP.'));
@@ -67,8 +68,8 @@ export async function registerUser(input: {
 }): Promise<AuthResponse> {
   const res = await fetch(`${apiBase()}/api/app/register`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    headers: { 'Content-Type': 'application/json', ...appHeaders() },
+    body: JSON.stringify({ ...input, platform: appPlatform() }),
   });
   if (!res.ok) throw new Error(await parseError(res, 'Registration failed.'));
   return (await res.json()) as AuthResponse;
@@ -81,8 +82,8 @@ export async function loginUser(input: {
 }): Promise<AuthResponse> {
   const res = await fetch(`${apiBase()}/api/app/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    headers: { 'Content-Type': 'application/json', ...appHeaders() },
+    body: JSON.stringify({ ...input, platform: appPlatform() }),
   });
   if (!res.ok) throw new Error(await parseError(res, 'Login failed.'));
   return (await res.json()) as AuthResponse;
@@ -90,7 +91,7 @@ export async function loginUser(input: {
 
 export async function fetchMe(token: string): Promise<{ user: AuthUserDto; needsPrinter: boolean }> {
   const res = await fetch(`${apiBase()}/api/app/me`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...appHeaders() },
   });
   if (!res.ok) throw new Error(await parseError(res, 'Session expired.'));
   return (await res.json()) as { user: AuthUserDto; needsPrinter: boolean };
@@ -105,6 +106,7 @@ export async function setPurchasedPrinter(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
+      ...appHeaders(),
     },
     body: JSON.stringify({ printerId }),
   });

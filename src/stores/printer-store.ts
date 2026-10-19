@@ -1,3 +1,4 @@
+import { trackPrinterConnected } from '@/lib/telemetry/events';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -138,7 +139,8 @@ export const usePrinterStore = create<PrinterStoreState>()(
           printCalibration: { ...state.printCalibration, [key]: entry },
         })),
 
-      setConnectedDevice: (deviceId, deviceName, meta) =>
+      setConnectedDevice: (deviceId, deviceName, meta) => {
+        trackPrinterConnected(deviceName, meta?.transport ?? null, meta?.sdkId ?? null);
         set((state) => {
           const driver = resolvePinnedDriver(meta?.model, meta?.sdkId, state.selectedPrinterModel);
           const consumer =
@@ -180,7 +182,8 @@ export const usePrinterStore = create<PrinterStoreState>()(
               [macKey]: driver,
             },
           };
-        }),
+        });
+      },
 
       pinDriverForMac: (mac, model, userPinned = true) =>
         set((state) => ({

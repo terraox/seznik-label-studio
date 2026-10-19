@@ -11,9 +11,12 @@ import {
   setPurchasedPrinter,
   type AuthUserDto,
 } from '@/lib/auth/api';
+import { flushEvents } from '@/lib/telemetry/events';
 import { usePrinterStore } from '@/stores/printer-store';
 
 function applyPurchasedPrinter(printerId: string | null | undefined) {
+  // Every sign-in / session refresh also sends any usage events waiting on the phone.
+  void flushEvents();
   if (!isConsumerPrinterId(printerId)) return;
   usePrinterStore.getState().setSelectedPrinterModel(printerId);
 }

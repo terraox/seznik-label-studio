@@ -245,7 +245,7 @@ export async function printEditedPdf(
             offsetMm: { x: hOffsetMm - (cal?.hOffsetMm ?? 0), y: vOffsetMm - (cal?.vOffsetMm ?? 0) },
           });
           pagesPrinted++;
-          usePrintStatsStore.getState().record(copies);
+          usePrintStatsStore.getState().record(copies, undefined, { widthMm, heightMm, source: 'pdf' });
           continue;
         }
         await sendArtworkJob({
@@ -290,7 +290,7 @@ export async function printEditedPdf(
         await sendIsolatedPrintCopies(bytes, copies);
       }
       pagesPrinted++;
-      usePrintStatsStore.getState().record(copies);
+      usePrintStatsStore.getState().record(copies, undefined, { widthMm, heightMm, source: 'pdf' });
     }
   }
 

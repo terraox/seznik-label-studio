@@ -489,7 +489,7 @@ export default function PrintPhotoScreen() {
       });
       timer.end('encode+send');
 
-      usePrintStatsStore.getState().record(copies);
+      usePrintStatsStore.getState().record(copies, undefined, { widthMm, heightMm, source: 'photo' });
       timer.dump('PHOTO PRINT');
       manager.setLastPrintTiming(timer.getEntries());
 

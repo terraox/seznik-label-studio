@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { trackFeedback } from '@/lib/telemetry/events';
+
 /** Lifetime label count at which the feedback popup first appears. */
 export const FEEDBACK_FIRST_AT = 100;
 /** After "Not now", ask again once this many more labels have printed. */
@@ -28,11 +30,13 @@ export const useFeedbackStore = create<FeedbackState>()(
     (set) => ({
       nextAt: FEEDBACK_FIRST_AT,
       entry: null,
-      submit: (rating, text, labels) =>
+      submit: (rating, text, labels) => {
+        trackFeedback(rating, text);
         set({
           nextAt: null,
           entry: { rating: Math.min(5, Math.max(1, Math.round(rating))), text: text.trim(), at: Date.now(), labels },
-        }),
+        });
+      },
       snooze: (labels) => set({ nextAt: labels + FEEDBACK_SNOOZE_STEP }),
     }),
     { name: 'sez-print/feedback', storage: createJSONStorage(() => AsyncStorage) },
