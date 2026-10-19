@@ -1,0 +1,64 @@
+/* The EvilCharts components are written with Tailwind classes; this panel has none, so the
+   handful they use are defined here, scoped to chart containers only. */
+[data-chart] { --ec-border: var(--border-color); --ec-fg: var(--text-main); --ec-muted: var(--text-muted); --ec-bg: var(--bg-card); }
+[data-chart] .relative { position: relative; }
+[data-chart] .absolute { position: absolute; }
+[data-chart] .inset-0 { inset: 0; }
+[data-chart] .z-20 { z-index: 20; }
+[data-chart] .flex { display: flex; }
+[data-chart] .grid { display: grid; }
+[data-chart] .flex-col { flex-direction: column; }
+[data-chart] .flex-wrap { flex-wrap: wrap; }
+[data-chart] .flex-1 { flex: 1 1 0%; }
+[data-chart] .shrink-0 { flex-shrink: 0; }
+[data-chart] .items-center { align-items: center; }
+[data-chart] .items-start { align-items: flex-start; }
+[data-chart] .justify-between { justify-content: space-between; }
+[data-chart] .justify-center { justify-content: center; }
+[data-chart] .justify-start { justify-content: flex-start; }
+[data-chart] .justify-end { justify-content: flex-end; }
+[data-chart] .gap-2 { gap: 8px; }
+[data-chart] .gap-4 { gap: 16px; }
+[data-chart] .gap-1\.5 { gap: 6px; }
+[data-chart] .h-full { height: 100%; }
+[data-chart] .w-full { width: 100%; }
+[data-chart] .min-h-0 { min-height: 0; }
+[data-chart] .min-w-32 { min-width: 8rem; }
+[data-chart] .h-1 { height: 4px; } [data-chart] .w-1 { width: 4px; }
+[data-chart] .h-2 { height: 8px; } [data-chart] .w-2 { width: 8px; }
+[data-chart] .h-2\.5 { height: 10px; } [data-chart] .w-2\.5 { width: 10px; }
+[data-chart] .h-3 { height: 12px; } [data-chart] .w-3 { width: 12px; }
+[data-chart] .p-\[1\.5px\] { padding: 1.5px; }
+[data-chart] .rounded-full { border-radius: 9999px; }
+[data-chart] .rounded-\[2px\] { border-radius: 2px; }
+[data-chart] .rounded-\[3px\] { border-radius: 3px; }
+[data-chart] .rounded-sm { border-radius: 4px; }
+[data-chart] .rounded-md { border-radius: 6px; }
+[data-chart] .rounded-lg { border-radius: 10px; }
+[data-chart] .rounded-xl { border-radius: 14px; }
+[data-chart] .border { border: 1px solid var(--ec-border); }
+[data-chart] .border-border\/50 { border-color: color-mix(in srgb, var(--ec-border) 70%, transparent); }
+[data-chart] .border-t-primary { border-top-color: var(--accent-blue); }
+[data-chart] .px-2 { padding-left: 8px; padding-right: 8px; }
+[data-chart] .px-2\.5 { padding-left: 10px; padding-right: 10px; }
+[data-chart] .py-0\.5 { padding-top: 2px; padding-bottom: 2px; }
+[data-chart] .py-1\.5 { padding-top: 6px; padding-bottom: 6px; }
+[data-chart] .text-xs { font-size: 12px; }
+[data-chart] .text-sm { font-size: 13px; }
+[data-chart] .leading-none { line-height: 1; }
+[data-chart] .font-medium { font-weight: 600; }
+[data-chart] .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+[data-chart] .tabular-nums { font-variant-numeric: tabular-nums; }
+[data-chart] .select-none { user-select: none; }
+[data-chart] .pointer-events-none { pointer-events: none; }
+[data-chart] .cursor-pointer { cursor: pointer; }
+[data-chart] .transition-opacity { transition: opacity 0.15s; }
+[data-chart] .opacity-30 { opacity: 0.3; }
+[data-chart] .text-muted-foreground { color: var(--ec-muted); }
+[data-chart] .text-foreground { color: var(--ec-fg); }
+[data-chart] .text-primary { color: var(--ec-fg); }
+[data-chart] .bg-background { background: var(--ec-bg); }
+[data-chart] .bg-background\/50 { background: color-mix(in srgb, var(--ec-bg) 55%, transparent); }
+[data-chart] .backdrop-blur-md { backdrop-filter: blur(12px); }
+[data-chart] .shadow-xl { box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.25); }
+[data-chart] .animate-spin { animation: spin 0.8s linear infinite; }

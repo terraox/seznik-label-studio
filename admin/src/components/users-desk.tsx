@@ -1,27 +1,49 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Ban, ShieldCheck, UserCheck, Users, UserPlus } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, Search, ShieldCheck, X } from 'lucide-react';
 
 import { useDesk, useToast } from '@/components/desk';
-import { Drawer, Field, PageHeader } from '@/components/ui';
+import { PlatformTag } from '@/components/platform';
+import { Field, PageHeader } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 import { can } from '@/lib/permissions';
 import type { AdminUserDto } from '@/lib/user-dto';
 
 type Stats = { users: number; active: number; blocked: number; newLast7Days: number; internal: number; blockedNumbers: number };
-type ListResponse = { users: AdminUserDto[]; total: number; page: number; pageSize: number; stats: Stats };
+type LastPrinter = { model: string; transport: string | null; at: string };
+type ListResponse = {
+  users: (AdminUserDto & { lastPrinter: LastPrinter | null })[]; total: number; page: number; pageSize: number; stats: Stats;
+};
 type HistoryRow = { id: string; action: string; message: string | null; internalNote: string | null; adminEmail: string; createdAt: string };
+type PrinterSummary = { id: string; model: string; family: string; firstConnectedAt: string; lastConnectedAt: string; connections: number; labels: number; transport: string | null };
+type ConnectionRow = { id: string; at: string; printer: string; family: string; transport: string };
 type Extras = {
-  printers: { model: string; family: string; connections: number; labels: number; lastConnected: string | null }[];
+  printers: PrinterSummary[];
+  connections: ConnectionRow[];
+  moreConnections: boolean;
+  shopClicks: { id: string; product: string; category: string; at: string }[];
   recentPrints: { at: string; printer: string; label: string; source: string; labels: number; jobs: number }[];
   feedback: { id: string; rating: number; category: string; message: string | null; status: string; createdAt: string }[];
   labelsLast7Days: number;
 };
-type BlockedPhone = { mobile: string; hasAccount: boolean; reason: string | null; blockedAt: string | null };
 
-const PAGE_SIZE = 25;
+const FIELDS = [
+  { id: 'all', label: 'All fields' },
+  { id: 'name', label: 'Name' },
+  { id: 'mobile', label: 'Mobile' },
+  { id: 'printer', label: 'Printer' },
+  { id: 'platform', label: 'Platform' },
+  { id: 'version', label: 'App version' },
+  { id: 'device', label: 'Device' },
+];
+const PAGE_SIZES = [10, 25, 50, 100];
+const SOURCE: Record<string, string> = { manual_size: 'Manual size', template: 'Template', excel_bulk: 'Excel', pdf: 'PDF', photo: 'Photo', scan: 'Scan', serial: 'Serial', other: 'Other' };
+const TRANSPORT: Record<string, string> = { bt_spp: 'Bluetooth', ble: 'Bluetooth LE', wifi: 'Wi-Fi' };
+
+const fullDate = (iso: string, withTime = false) =>
+  new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', ...(withTime ? { hour: 'numeric', minute: '2-digit', hour12: true } : {}), timeZone: 'Asia/Kolkata' });
 
 export function UsersDesk() {
   const desk = useDesk();
@@ -34,6 +56,8 @@ export function UsersDesk() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
   const [internal, setInternal] = useState('all');
+  const [field, setField] = useState('all');
+  const [pageSize, setPageSize] = useState(25);
   const [sort, setSort] = useState('createdAt');
   const [dir, setDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
@@ -46,14 +70,16 @@ export function UsersDesk() {
   const [message, setMessage] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [moreBusy, setMoreBusy] = useState(false);
 
-  const [phones, setPhones] = useState<BlockedPhone[]>([]);
-  const [newPhone, setNewPhone] = useState('');
-  const [newReason, setNewReason] = useState('');
+  const [action, setAction] = useState<{ user: AdminUserDto; mode: 'block' | 'unblock' } | null>(null);
 
   const load = useCallback(() => {
-    const params = new URLSearchParams({ sort, dir, page: String(page), pageSize: String(PAGE_SIZE) });
-    if (q.trim()) params.set('q', q.trim());
+    const params = new URLSearchParams({ sort, dir, page: String(page), pageSize: String(pageSize) });
+    if (q.trim()) {
+      params.set('q', q.trim());
+      params.set('field', field);
+    }
     if (status !== 'all') params.set('status', status);
     if (internal !== 'all') params.set('internal', internal);
     api<ListResponse>(`/api/users?${params}`)
@@ -62,8 +88,7 @@ export function UsersDesk() {
         setError('');
       })
       .catch((reason: Error) => setError(reason.message));
-    api<{ phones: BlockedPhone[] }>('/api/phones').then((r) => setPhones(r.phones)).catch(() => {});
-  }, [q, status, internal, sort, dir, page]);
+  }, [q, field, status, internal, sort, dir, page, pageSize]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, q ? 250 : 0);
@@ -101,30 +126,61 @@ export function UsersDesk() {
     }
   }
 
-  async function toggleInternal(user: AdminUserDto) {
+  async function toggleInternal(user: { id: string; name: string; isInternal: boolean }) {
     try {
       await api(`/api/users/${user.id}`, { method: 'PATCH', body: JSON.stringify({ isInternal: !user.isInternal }) });
+      toast(user.isInternal ? `${user.name} counts in the analytics again` : `${user.name} is a test account and is left out of the analytics`);
       load();
-      openUser(user.id);
+      if (openId === user.id) openUser(user.id);
     } catch (reason) {
       toast(reason instanceof Error ? reason.message : 'Could not save', 'bad');
     }
   }
 
-  async function blockNumber() {
+  async function loadMoreConnections() {
+    if (!extras || extras.connections.length === 0) return;
+    setMoreBusy(true);
     try {
-      await api('/api/phones', { method: 'POST', body: JSON.stringify({ mobile: newPhone, reason: newReason, blocked: true }) });
-      setNewPhone('');
-      setNewReason('');
-      toast('Number blocked');
-      load();
+      const last = extras.connections[extras.connections.length - 1];
+      const more = await api<{ connections: ConnectionRow[]; more: boolean }>(`/api/users/${openId}/connections?before=${encodeURIComponent(last.at)}`);
+      setExtras({ ...extras, connections: [...extras.connections, ...more.connections], moreConnections: more.more });
     } catch (reason) {
-      toast(reason instanceof Error ? reason.message : 'Could not block', 'bad');
+      toast(reason instanceof Error ? reason.message : 'Could not load more', 'bad');
+    } finally {
+      setMoreBusy(false);
     }
   }
 
-  const stats = data?.stats;
+  async function submitAction() {
+    if (!action) return;
+    const { user, mode } = action;
+    setBusy(true);
+    try {
+      await api(`/api/users/${user.id}/${mode}`, {
+        method: 'POST',
+        body: JSON.stringify(mode === 'block' ? { message, internalNote: note } : { note }),
+      });
+      toast(mode === 'block' ? `${user.name} blocked and signed out` : `${user.name} unblocked`);
+      setAction(null);
+      load();
+      if (openId === user.id) openUser(user.id);
+    } catch (reason) {
+      toast(reason instanceof Error ? reason.message : 'Could not do that', 'bad');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startAction(user: AdminUserDto, mode: 'block' | 'unblock') {
+    setMessage('');
+    setNote('');
+    setAction({ user, mode });
+  }
+
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const pageList = pageNumbers(page, pages);
+  const from = data && data.total ? (page - 1) * pageSize + 1 : 0;
+  const to = data ? Math.min(page * pageSize, data.total) : 0;
   const sortBy = (key: string) => {
     if (sort === key) setDir(dir === 'asc' ? 'desc' : 'asc');
     else {
@@ -147,246 +203,333 @@ export function UsersDesk() {
       </PageHeader>
       {error ? <p className="err">{error}</p> : null}
 
-      <section className="kpis" aria-label="User summary">
-        {[
-          { title: 'Total users', value: stats?.users, sub: `${stats?.internal ?? 0} marked internal`, Icon: Users, color: '#3B82F6' },
-          { title: 'Active', value: stats?.active, sub: 'can sign in', Icon: UserCheck, color: '#10B981' },
-          { title: 'Blocked', value: stats?.blocked, sub: `${stats?.blockedNumbers ?? 0} blocked numbers in all`, Icon: Ban, color: '#EF4444' },
-          { title: 'New in 7 days', value: stats?.newLast7Days, sub: 'registered recently', Icon: UserPlus, color: '#8B5CF6' },
-        ].map(({ title, value, sub, Icon, color }) => (
-          <article className="kpi" key={title}>
-            <div className="kpi-top">
-              <span className="kpi-title">{title}</span>
-              <span className="kpi-icon" style={{ background: `${color}20`, border: `1px solid ${color}40` }}>
-                <Icon size={16} color={color} />
-              </span>
-            </div>
-            <div className="kpi-value">{value === undefined ? '…' : value.toLocaleString()}</div>
-            <div className="kpi-sub">{sub}</div>
-          </article>
-        ))}
-      </section>
-
-      <section className="panel">
-        <div className="toolbar">
-          <input
-            type="search"
-            placeholder={seePhones ? 'Search name or mobile' : 'Search name'}
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-            aria-label="Search users"
-          />
-          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} aria-label="Status">
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="blocked">Blocked</option>
-          </select>
-          <select value={internal} onChange={(e) => { setInternal(e.target.value); setPage(1); }} aria-label="Internal accounts">
-            <option value="all">Include internal</option>
-            <option value="hide">Hide internal</option>
-            <option value="only">Internal only</option>
+      <section className="panel users-panel">
+        <div className="u-toolbar">
+          <div className="u-search">
+            <Search size={15} aria-hidden />
+            <input
+              type="search"
+              placeholder={field === 'all' ? 'Search users…' : `Search by ${FIELDS.find((f) => f.id === field)?.label.toLowerCase()}…`}
+              value={q}
+              onChange={(e) => { setQ(e.target.value); setPage(1); }}
+              aria-label="Search users"
+            />
+            {q ? <button type="button" className="u-clear" onClick={() => { setQ(''); setPage(1); }} aria-label="Clear search"><X size={14} /></button> : null}
+            <select value={field} onChange={(e) => { setField(e.target.value); setPage(1); }} aria-label="Search in">
+              {FIELDS.filter((f) => seePhones || f.id !== 'mobile').map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          </div>
+          <div className="seg" role="group" aria-label="Status">
+            {['all', 'active', 'blocked'].map((v) => (
+              <button key={v} type="button" className={status === v ? 'on' : ''} onClick={() => { setStatus(v); setPage(1); }}>{v === 'all' ? 'All' : v[0].toUpperCase() + v.slice(1)}</button>
+            ))}
+          </div>
+          <select className="u-select" value={internal} onChange={(e) => { setInternal(e.target.value); setPage(1); }} aria-label="Internal accounts">
+            <option value="all">Include test accounts</option>
+            <option value="hide">Hide test accounts</option>
+            <option value="only">Test accounts only</option>
           </select>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table className="table">
+        <div className="u-scroll">
+          <table className="table u-table">
             <thead>
               <tr>
-                <th><button className="btn small ghost" onClick={() => sortBy('name')}>Name{arrow('name')}</button></th>
+                <th><button className="th-sort" onClick={() => sortBy('name')}>User{arrow('name')}</button></th>
                 <th>Mobile</th>
                 <th>Printer bought</th>
+                <th>Last connected printer</th>
+                <th>Platform</th>
                 <th>Status</th>
-                <th><button className="btn small ghost" onClick={() => sortBy('printCountTotal')}>Labels{arrow('printCountTotal')}</button></th>
-                <th>7 days</th>
-                <th><button className="btn small ghost" onClick={() => sortBy('createdAt')}>Joined{arrow('createdAt')}</button></th>
-                <th><button className="btn small ghost" onClick={() => sortBy('lastSeenAt')}>Last seen{arrow('lastSeenAt')}</button></th>
-                <th>App</th>
+                {canEdit ? <th>Test account</th> : null}
+                <th className="num"><button className="th-sort" onClick={() => sortBy('printCountTotal')}>Labels printed{arrow('printCountTotal')}</button></th>
+                {canEdit ? <th className="num">Action</th> : null}
               </tr>
             </thead>
             <tbody>
               {data?.users.map((user) => (
-                <tr key={user.id} onClick={() => openUser(user.id)} style={{ cursor: 'pointer' }}>
+                <tr key={user.id} onClick={() => openUser(user.id)} className="u-row">
                   <td>
-                    {user.name}
-                    {user.isInternal ? <span className="badge draft" style={{ marginLeft: 8 }}>internal</span> : null}
+                    <div className="u-name">
+                      <div>
+                        <b>{user.name}</b>
+                        {user.isInternal ? <span className="badge draft" style={{ marginLeft: 8 }}>test</span> : null}
+                        <small className="u-id" title="User ID">{user.id}</small>
+                      </div>
+                    </div>
                   </td>
-                  <td>{user.mobile}</td>
-                  <td>{user.printerName ?? '—'}</td>
+                  <td className="u-mono">{user.mobile}</td>
+                  <td>{user.printerName ?? <span className="u-muted">—</span>}</td>
+                  <td>
+                    {user.lastPrinter ? (
+                      <div className="u-printer">
+                        <b>{user.lastPrinter.model}</b>
+                        <small>{user.lastPrinter.transport ? `${TRANSPORT[user.lastPrinter.transport] ?? user.lastPrinter.transport} · ` : ''}{ago(user.lastPrinter.at)}</small>
+                      </div>
+                    ) : <span className="u-muted">Never connected</span>}
+                  </td>
+                  <td><PlatformTag value={user.platform} />{user.appVersion ? <small className="u-ver">v{user.appVersion}</small> : null}</td>
                   <td><span className={user.status === 'blocked' ? 'badge rejected' : 'badge shipped'}>{user.status}</span></td>
-                  <td>{user.printCountTotal.toLocaleString()}</td>
-                  <td>{(user as { labelsLast7Days?: number }).labelsLast7Days ?? 0}</td>
-                  <td>{ago(user.createdAt)}</td>
-                  <td>{user.lastSeenAt ? ago(user.lastSeenAt) : '—'}</td>
-                  <td>{user.appVersion ?? '—'}{user.platform ? ` · ${user.platform}` : ''}</td>
+                  {canEdit ? (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={user.isInternal}
+                        aria-label={`Mark ${user.name} as test account`}
+                        className={`switch${user.isInternal ? ' on' : ''}`}
+                        onClick={() => toggleInternal(user)}
+                      ><i /></button>
+                    </td>
+                  ) : null}
+                  <td className="num u-labels">{user.printCountTotal.toLocaleString()}</td>
+                  {canEdit ? (
+                    <td className="num" onClick={(e) => e.stopPropagation()}>
+                      {user.status === 'active' ? (
+                        <button className="btn small danger" onClick={() => startAction(user, 'block')}><Ban size={12} /> Block</button>
+                      ) : (
+                        <button className="btn small" onClick={() => startAction(user, 'unblock')}><ShieldCheck size={12} /> Unblock</button>
+                      )}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
-              {data && data.users.length === 0 ? (
-                <tr><td colSpan={9}>No users match.</td></tr>
-              ) : null}
+              {!data ? <tr><td colSpan={canEdit ? 9 : 7} className="empty">Loading users…</td></tr> : null}
+              {data && data.users.length === 0 ? <tr><td colSpan={canEdit ? 9 : 7} className="empty">No users match this search.</td></tr> : null}
             </tbody>
           </table>
         </div>
 
-        <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
-          <button className="btn small" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
-          <span>Page {page} of {pages} · {data?.total ?? 0} users</span>
-          <button className="btn small" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button>
+        <div className="u-pager">
+          <nav className="pager" aria-label="Pages">
+            <button className="pager-step" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="Previous page"><ChevronLeft size={15} /></button>
+            {pageList.map((n, i) => n === null ? <span key={`gap${i}`} className="pager-gap">…</span> : (
+              <button key={n} className={`pager-n${n === page ? ' on' : ''}`} onClick={() => setPage(n)} aria-current={n === page ? 'page' : undefined}>{n}</button>
+            ))}
+            <button className="pager-step" disabled={page >= pages} onClick={() => setPage(page + 1)} aria-label="Next page"><ChevronRight size={15} /></button>
+          </nav>
+          <label className="u-size">Rows per page
+            <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
+              {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+          <span className="u-count">Showing {from.toLocaleString()}–{to.toLocaleString()} of {(data?.total ?? 0).toLocaleString()}</span>
         </div>
       </section>
 
-      {seePhones ? (
-      <section className="panel" style={{ marginTop: 14 }}>
-        <h2>Blocked numbers</h2>
-        <p className="lede">A blocked number cannot register or sign in. Block a number before it ever signs up, or review who is blocked.</p>
-        {canEdit ? (
-          <div className="toolbar">
-            <input placeholder="10-digit mobile" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} inputMode="numeric" />
-            <input placeholder="Reason (shown to the person)" value={newReason} onChange={(e) => setNewReason(e.target.value)} />
-            <button className="btn primary" disabled={!newPhone} onClick={blockNumber}>Block number</button>
+      {action ? (
+        <>
+          <button className="drawer-back" aria-label="Close" onClick={() => setAction(null)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-label={action.mode === 'block' ? 'Block user' : 'Unblock user'}>
+            <div className="modal-head">
+              <div>
+                <h2>{action.mode === 'block' ? 'Block' : 'Unblock'} {action.user.name}</h2>
+                <p>{action.mode === 'block' ? 'They are signed out of every device and cannot sign in again until unblocked.' : 'They can sign in again; they will need to log in once more.'}</p>
+              </div>
+              <button type="button" className="icon-btn" onClick={() => setAction(null)} aria-label="Close"><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              {action.mode === 'block' ? (
+                <>
+                  <Field label="Message shown to the user (optional)">
+                    <textarea rows={2} maxLength={300} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="e.g. Your account was suspended for misuse." />
+                  </Field>
+                  <Field label="Internal note (admins only)">
+                    <textarea rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why this account is being blocked" />
+                  </Field>
+                </>
+              ) : (
+                <Field label="Note (optional)">
+                  <textarea rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why this account is being unblocked" />
+                </Field>
+              )}
+            </div>
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setAction(null)}>Cancel</button>
+              <button className={action.mode === 'block' ? 'btn primary danger-solid' : 'btn primary'} disabled={busy} onClick={submitAction}>
+                {action.mode === 'block' ? <><Ban size={14} /> Block user</> : <><ShieldCheck size={14} /> Unblock user</>}
+              </button>
+            </div>
           </div>
-        ) : null}
-        <table className="table">
-          <thead><tr><th>Mobile</th><th>Account</th><th>Reason</th><th>Since</th><th /></tr></thead>
-          <tbody>
-            {phones.map((phone) => (
-              <tr key={phone.mobile}>
-                <td>{phone.mobile}</td>
-                <td>{phone.hasAccount ? 'Has account' : 'No account'}</td>
-                <td>{phone.reason ?? '—'}</td>
-                <td>{phone.blockedAt ? ago(phone.blockedAt) : '—'}</td>
-                <td>
-                  {canEdit && !phone.hasAccount ? (
-                    <button className="btn small" onClick={() => act('/api/phones', { mobile: phone.mobile, blocked: false }, 'Number unblocked')}>Unblock</button>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
-            {phones.length === 0 ? <tr><td colSpan={5}>No blocked numbers.</td></tr> : null}
-          </tbody>
-        </table>
-      </section>
+        </>
       ) : null}
 
       {openId && detail ? (
-        <Drawer
-          title={detail.name}
-          lede={`${detail.mobile} · joined ${new Date(detail.createdAt).toLocaleDateString('en-IN')}`}
-          onClose={() => { setOpenId(''); setDetail(null); }}
-        >
-          <p>
-            <span className={detail.status === 'blocked' ? 'badge rejected' : 'badge shipped'}>{detail.status}</span>{' '}
-            {detail.isInternal ? <span className="badge draft">internal</span> : null}
-          </p>
-          <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 14px', fontSize: '0.85rem' }}>
-            <dt>Printer bought</dt><dd>{detail.printerName ?? '—'}</dd>
-            <dt>Labels printed</dt><dd>{detail.printCountTotal.toLocaleString()}</dd>
-            <dt>Labels, last 7 days</dt><dd>{extras?.labelsLast7Days ?? 0}</dd>
-            <dt>Last print</dt><dd>{detail.lastPrintAt ? ago(detail.lastPrintAt) : '—'}</dd>
-            <dt>Last seen</dt><dd>{detail.lastSeenAt ? ago(detail.lastSeenAt) : '—'}</dd>
-            <dt>Last login</dt><dd>{detail.lastLoginAt ? ago(detail.lastLoginAt) : '—'}</dd>
-            <dt>App</dt><dd>{detail.appVersion ?? '—'} {detail.platform ?? ''} {detail.deviceModel ?? ''}</dd>
-            <dt>Password</dt><dd>Set{detail.passwordUpdatedAt ? ` · changed ${ago(detail.passwordUpdatedAt)}` : ''}</dd>
-          </dl>
+        <>
+          <button className="drawer-back" aria-label="Close" onClick={() => { setOpenId(''); setDetail(null); }} />
+          <div className="ucard" role="dialog" aria-modal="true" aria-labelledby="ucard-title">
+            <header className="ucard-head">
+              <div className="ucard-title">
+                <h2 id="ucard-title">{detail.name}</h2>
+                <div className="ucard-tags">
+                  <span className={detail.status === 'blocked' ? 'badge rejected' : 'badge shipped'}>{detail.status}</span>
+                  <PlatformTag value={detail.platform} />
+                  {detail.isInternal ? <span className="badge draft">test account</span> : null}
+                </div>
+                <button type="button" className="ucard-id" title="Copy user ID" onClick={() => { void navigator.clipboard?.writeText(detail.id); toast('User ID copied'); }}>
+                  {detail.id}
+                </button>
+              </div>
+              <button type="button" className="icon-btn" onClick={() => { setOpenId(''); setDetail(null); }} aria-label="Close"><X size={16} /></button>
+            </header>
 
-          {detail.status === 'blocked' ? (
-            <div className="note" style={{ marginTop: 12 }}>
-              <strong>Blocked by {detail.blockedBy}</strong> {detail.blockedAt ? ago(detail.blockedAt) : ''}
-              <div>Shown to the user: {detail.blockMessage ?? '(default text only)'}</div>
-              <div>Internal note: {detail.blockInternalNote ?? '—'}</div>
+            <div className="ucard-body">
+              <section className="ucard-stats">
+                <div><b>{detail.printCountTotal.toLocaleString()}</b><span>Labels printed</span></div>
+                <div><b>{extras ? (extras.labelsLast7Days ?? 0).toLocaleString() : '…'}</b><span>Last 7 days</span></div>
+                <div><b>{extras ? extras.printers.length : '…'}</b><span>Printers used</span></div>
+                <div><b>{extras ? extras.printers.reduce((n, p) => n + p.connections, 0).toLocaleString() : '…'}</b><span>Connections</span></div>
+              </section>
+
+              <section className="ucard-sec">
+                <h3>Details</h3>
+                <dl className="ucard-grid">
+                  <div><dt>Mobile</dt><dd className="u-mono">{detail.mobile}</dd></div>
+                  <div><dt>Printer bought</dt><dd>{detail.printerName ?? '—'}</dd></div>
+                  <div><dt>Registered</dt><dd>{fullDate(detail.createdAt)}</dd></div>
+                  <div><dt>Last seen</dt><dd>{detail.lastSeenAt ? ago(detail.lastSeenAt) : '—'}</dd></div>
+                  <div><dt>Last login</dt><dd>{detail.lastLoginAt ? ago(detail.lastLoginAt) : '—'}</dd></div>
+                  <div><dt>Last print</dt><dd>{detail.lastPrintAt ? ago(detail.lastPrintAt) : '—'}</dd></div>
+                  <div><dt>App version</dt><dd>{detail.appVersion ? `v${detail.appVersion}` : '—'}</dd></div>
+                  <div><dt>Device</dt><dd>{detail.deviceModel ?? '—'}</dd></div>
+                  <div><dt>Password</dt><dd>{detail.passwordUpdatedAt ? `Changed ${ago(detail.passwordUpdatedAt)}` : 'Set at registration'}</dd></div>
+                </dl>
+              </section>
+
+              {detail.status === 'blocked' ? (
+                <section className="ucard-blocked">
+                  <b>Blocked by {detail.blockedBy}</b> {detail.blockedAt ? ago(detail.blockedAt) : ''}
+                  <div>Shown to the user: {detail.blockMessage ?? '(default text only)'}</div>
+                  <div>Internal note: {detail.blockInternalNote ?? '—'}</div>
+                </section>
+              ) : null}
+
+              <section className="ucard-sec">
+                <h3>Printers connected <small>{extras ? extras.printers.length : ''}</small></h3>
+                {!extras ? <p className="u-muted">Loading…</p> : extras.printers.length === 0 ? <p className="u-muted">No printer has connected yet.</p> : (
+                  <div className="ucard-scroll">
+                    <table className="table ucard-table">
+                      <thead><tr><th>Printer</th><th>First connected</th><th>Last connected</th><th className="num">Connections</th><th className="num">Labels</th></tr></thead>
+                      <tbody>
+                        {extras.printers.map((p) => (
+                          <tr key={p.id}>
+                            <td><b>{p.model}</b><small className="u-ver">{p.transport ? TRANSPORT[p.transport] ?? p.transport : ''}</small></td>
+                            <td>{fullDate(p.firstConnectedAt)}</td>
+                            <td>{ago(p.lastConnectedAt)}</td>
+                            <td className="num">{p.connections.toLocaleString()}</td>
+                            <td className="num">{p.labels.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+
+              <section className="ucard-sec">
+                <h3>Connection history <small>{extras ? `${extras.connections.length}${extras.moreConnections ? '+' : ''}` : ''}</small></h3>
+                {!extras ? <p className="u-muted">Loading…</p> : extras.connections.length === 0 ? <p className="u-muted">Nothing yet. Connections appear once the user connects a printer in the app.</p> : (
+                  <ol className="timeline">
+                    {extras.connections.map((c) => (
+                      <li key={c.id}>
+                        <b>{c.printer}</b>
+                        <span>{TRANSPORT[c.transport] ?? c.transport}</span>
+                        <time title={new Date(c.at).toLocaleString('en-IN')}>{fullDate(c.at, true)}</time>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {extras?.moreConnections ? (
+                  <button type="button" className="btn small" disabled={moreBusy} onClick={loadMoreConnections}>{moreBusy ? 'Loading…' : 'Show older connections'}</button>
+                ) : null}
+              </section>
+
+              <section className="ucard-sec">
+                <h3>Recent prints</h3>
+                {extras && extras.recentPrints.length > 0 ? (
+                  <div className="ucard-scroll">
+                    <table className="table ucard-table">
+                      <thead><tr><th>When</th><th>Label</th><th>Source</th><th>Printer</th><th className="num">Labels</th></tr></thead>
+                      <tbody>
+                        {extras.recentPrints.map((p, i) => (
+                          <tr key={i}><td>{ago(p.at)}</td><td>{p.label}</td><td>{SOURCE[p.source] ?? p.source}</td><td>{p.printer}</td><td className="num">{p.labels}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <p className="u-muted">{extras ? 'Nothing printed yet.' : 'Loading…'}</p>}
+              </section>
+
+              <section className="ucard-sec">
+                <h3>Shop clicks <small>{extras ? extras.shopClicks.length : ''}</small></h3>
+                {extras && extras.shopClicks.length > 0 ? (
+                  <ul className="ucard-list">
+                    {extras.shopClicks.map((c) => (
+                      <li key={c.id}><b>{c.product}</b> <span className="u-muted">· {c.category} · {ago(c.at)}</span></li>
+                    ))}
+                  </ul>
+                ) : <p className="u-muted">{extras ? 'Has not pressed Buy on any product yet.' : 'Loading…'}</p>}
+              </section>
+
+              <section className="ucard-sec">
+                <h3>Feedback</h3>
+                {extras && extras.feedback.length > 0 ? (
+                  <ul className="ucard-list">
+                    {extras.feedback.map((f) => (
+                      <li key={f.id}>{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)} · {f.category} · {ago(f.createdAt)}{f.message ? <div>“{f.message}”</div> : null}</li>
+                    ))}
+                  </ul>
+                ) : <p className="u-muted">{extras ? 'No feedback yet.' : 'Loading…'}</p>}
+              </section>
+
+              <section className="ucard-sec">
+                <h3>Admin history</h3>
+                {history.length === 0 ? <p className="u-muted">No blocks or sign-outs yet.</p> : (
+                  <ul className="ucard-list">
+                    {history.map((row) => (
+                      <li key={row.id}>
+                        <b>{row.action.replace('_', ' ')}</b> by {row.adminEmail} · {ago(row.createdAt)}
+                        {row.message ? <div>“{row.message}”</div> : null}
+                        {row.internalNote ? <div>Note: {row.internalNote}</div> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
             </div>
-          ) : null}
 
-          {canEdit ? (
-            detail.status === 'active' ? (
-              <>
-                <Field label="Message shown to the user (optional)">
-                  <textarea rows={2} maxLength={300} value={message} onChange={(e) => setMessage(e.target.value)} />
-                </Field>
-                <Field label="Internal note (admins only)">
-                  <textarea rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
-                </Field>
-                <div className="toolbar" style={{ marginTop: 12 }}>
-                  <button
-                    className="btn danger"
-                    disabled={busy}
-                    onClick={() => act(`/api/users/${detail.id}/block`, { message, internalNote: note }, 'User blocked and signed out')}
-                  >
-                    <Ban size={14} /> Block user
-                  </button>
-                  <button className="btn" disabled={busy} onClick={() => act(`/api/users/${detail.id}/logout`, {}, 'Signed out everywhere')}>
-                    Sign out everywhere
-                  </button>
+            {canEdit ? (
+              <footer className="ucard-foot">
+                <label className="ucard-test">
+                  <button type="button" role="switch" aria-checked={detail.isInternal} className={`switch${detail.isInternal ? ' on' : ''}`} onClick={() => toggleInternal(detail)} aria-label="Test account"><i /></button>
+                  <span>Test account<small>Left out of the analytics</small></span>
+                </label>
+                <div className="ucard-actions">
+                  <button className="btn" disabled={busy} onClick={() => act(`/api/users/${detail.id}/logout`, {}, 'Signed out everywhere')}>Sign out everywhere</button>
+                  {detail.status === 'active' ? (
+                    <button className="btn danger" onClick={() => startAction(detail, 'block')}><Ban size={14} /> Block user</button>
+                  ) : (
+                    <button className="btn primary" onClick={() => startAction(detail, 'unblock')}><ShieldCheck size={14} /> Unblock user</button>
+                  )}
                 </div>
-              </>
-            ) : (
-              <>
-                <Field label="Note (optional)">
-                  <textarea rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
-                </Field>
-                <div className="toolbar" style={{ marginTop: 12 }}>
-                  <button className="btn primary" disabled={busy} onClick={() => act(`/api/users/${detail.id}/unblock`, { note }, 'User unblocked')}>
-                    <ShieldCheck size={14} /> Unblock user
-                  </button>
-                </div>
-              </>
-            )
-          ) : null}
-
-          {canEdit ? (
-            <p>
-              <button className="btn small ghost" onClick={() => toggleInternal(detail)}>
-                {detail.isInternal ? 'Remove internal flag' : 'Mark as internal / test account'}
-              </button>
-            </p>
-          ) : null}
-
-          <h2 style={{ fontSize: '1rem' }}>Printers used</h2>
-          {extras && extras.printers.length > 0 ? (
-            <ul style={{ paddingLeft: 18, fontSize: '0.85rem' }}>
-              {extras.printers.map((p) => (
-                <li key={p.model}>{p.model} <span className="badge draft">{p.family}</span> · {p.connections} connection(s) · {p.labels.toLocaleString()} labels{p.lastConnected ? ` · last ${ago(p.lastConnected)}` : ''}</li>
-              ))}
-            </ul>
-          ) : <p>No printer has connected yet.</p>}
-
-          <h2 style={{ fontSize: '1rem' }}>Recent prints</h2>
-          {extras && extras.recentPrints.length > 0 ? (
-            <table className="table">
-              <thead><tr><th>When</th><th>Label</th><th>Printer</th><th>Labels</th></tr></thead>
-              <tbody>
-                {extras.recentPrints.map((p, i) => (
-                  <tr key={i}><td>{ago(p.at)}</td><td>{p.label}</td><td>{p.printer}</td><td>{p.labels}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          ) : <p>Nothing printed yet.</p>}
-
-          <h2 style={{ fontSize: '1rem' }}>Feedback</h2>
-          {extras && extras.feedback.length > 0 ? (
-            <ul style={{ paddingLeft: 18, fontSize: '0.85rem' }}>
-              {extras.feedback.map((f) => (
-                <li key={f.id}>{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)} · {f.category} · {ago(f.createdAt)}{f.message ? <div>“{f.message}”</div> : null}</li>
-              ))}
-            </ul>
-          ) : <p>No feedback yet.</p>}
-
-          <h2 style={{ fontSize: '1rem' }}>History</h2>
-          {history.length === 0 ? <p>No blocks or sign-outs yet.</p> : (
-            <ul style={{ paddingLeft: 18, fontSize: '0.85rem' }}>
-              {history.map((row) => (
-                <li key={row.id}>
-                  <strong>{row.action.replace('_', ' ')}</strong> by {row.adminEmail} · {ago(row.createdAt)}
-                  {row.message ? <div>“{row.message}”</div> : null}
-                  {row.internalNote ? <div>Note: {row.internalNote}</div> : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Drawer>
+              </footer>
+            ) : null}
+          </div>
+        </>
       ) : null}
     </>
   );
+}
+
+/** Page numbers with gaps: 1 … 4 5 6 … 20. */
+function pageNumbers(page: number, pages: number): (number | null)[] {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+  const set = new Set([1, 2, pages - 1, pages, page - 1, page, page + 1].filter((n) => n >= 1 && n <= pages));
+  const sorted = [...set].sort((a, b) => a - b);
+  const out: (number | null)[] = [];
+  sorted.forEach((n, i) => {
+    if (i > 0 && n - sorted[i - 1] > 1) out.push(null);
+    out.push(n);
+  });
+  return out;
 }

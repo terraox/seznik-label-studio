@@ -11,8 +11,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    // Browser extensions (e.g. ColorZilla's cz-shortcut-listen) and the theme toggle change these
+    // two tags before React loads; that is expected, so the mismatch warning is switched off here only.
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

@@ -8,12 +8,10 @@ import {
   Library,
   MessageSquare,
   Users,
-  ScrollText,
   Printer,
   ShoppingBag,
   Shapes,
   Settings,
-  LogOut,
   Menu,
   X,
   Calendar,
@@ -33,7 +31,6 @@ const NAV = [
   { href: '/catalog', label: 'Clipart & templates', shortLabel: 'Catalogue', icon: Shapes },
   { href: '/content', label: 'Library', shortLabel: 'Library', icon: Library },
   { href: '/feedback', label: 'Feedback', shortLabel: 'Feedback', icon: MessageSquare },
-  { href: '/audit', label: 'Audit', shortLabel: 'Audit', icon: ScrollText },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings },
 ];
 
@@ -138,11 +135,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
               {admin ? (
                 <button type="button" className="admin-logout-btn" onClick={signOut}>
-                  <LogOut size={14} />
-                  <span>
-                    {admin.name}
-                    <small style={{ display: 'block', fontWeight: 500, opacity: 0.7 }}>{admin.role}</small>
-                  </span>
+                  Logout
                 </button>
               ) : null}
             </div>
