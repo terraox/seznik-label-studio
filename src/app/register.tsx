@@ -10,6 +10,7 @@ import {
   OtpBoxes,
   PrimaryButton,
 } from '@/components/auth/auth-ui';
+import { usePhoneHint } from '@/lib/auth/use-phone-hint';
 import {
   OTP_LENGTH,
   digitsOnly,
@@ -56,6 +57,8 @@ function RegisterScreenContent() {
     otpFlow.reset();
     setError(null);
   };
+
+  const onPhoneFocus = usePhoneHint(phone, changePhone);
 
   const sendOtp = async () => {
     setError(null);
@@ -108,6 +111,7 @@ function RegisterScreenContent() {
         maxLength={10}
         value={phone}
         onChangeText={changePhone}
+        onFocus={onPhoneFocus}
         error={phone.length === 10 && !phoneValid ? 'Enter a valid mobile number' : null}
         right={
           verified ? (

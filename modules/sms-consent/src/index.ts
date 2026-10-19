@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 type NativeSmsConsent = {
   startListening(): Promise<void>;
   stopListening(): void;
+  requestPhoneNumberHint(): Promise<string | null>;
   addListener(event: 'onMessage', cb: (e: { message: string }) => void): { remove(): void };
   addListener(event: 'onTimeout', cb: () => void): { remove(): void };
 };
@@ -44,4 +45,20 @@ export function listenForOtp(length: number, onCode: (code: string) => void): ()
       // already stopped
     }
   };
+}
+
+/**
+ * Shows Android's "choose a phone number" sheet (numbers saved on the phone) and resolves the
+ * chosen number as 10 digits, or null if dismissed, unavailable, or not Android.
+ */
+export async function requestPhoneNumberHint(): Promise<string | null> {
+  const mod = getNative();
+  if (!mod || typeof mod.requestPhoneNumberHint !== 'function') return null;
+  try {
+    const raw = await mod.requestPhoneNumberHint();
+    const digits = (raw ?? '').replace(/\D/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : null;
+  } catch {
+    return null;
+  }
 }

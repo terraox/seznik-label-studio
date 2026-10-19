@@ -12,6 +12,7 @@ import {
   Segmented,
 } from '@/components/auth/auth-ui';
 import { useOtp } from '@/lib/auth/use-otp';
+import { usePhoneHint } from '@/lib/auth/use-phone-hint';
 import { OTP_LENGTH, digitsOnly, isValidPhone } from '@/lib/auth/validation';
 import { useAuthStore } from '@/stores/auth-store';
 import { LightScope } from '@/theme';
@@ -45,6 +46,13 @@ function LoginScreenContent() {
     }
     router.replace(result.needsPrinter ? '/select-printer' : '/');
   };
+
+  const onPhoneFocus = usePhoneHint(phone, (picked) => {
+    setPhone(picked);
+    setError(null);
+    setOtp('');
+    otpFlow.reset();
+  });
 
   const submit = async () => {
     setSubmitting(true);
@@ -95,6 +103,7 @@ function LoginScreenContent() {
         keyboardType="number-pad"
         maxLength={10}
         value={phone}
+        onFocus={onPhoneFocus}
         onChangeText={(v) => {
           setPhone(digitsOnly(v));
           setError(null);

@@ -7,14 +7,18 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
+import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest
+import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.auth.api.phone.SmsRetriever
 import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Status
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 private const val CONSENT_REQUEST_CODE = 5193
+private const val PHONE_HINT_REQUEST_CODE = 5194
 private const val TAG = "SmsConsent"
 
 /**
@@ -27,6 +31,7 @@ class SmsConsentModule : Module() {
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
   private var receiver: BroadcastReceiver? = null
+  private var hintPromise: Promise? = null
 
   override fun definition() = ModuleDefinition {
     Name("SmsConsent")
@@ -74,7 +79,50 @@ class SmsConsentModule : Module() {
 
     Function("stopListening") { stop() }
 
+    // Google's Phone Number Hint: a system sheet listing the numbers on this phone. No permission
+    // is needed and the app only receives the number the person taps. Resolves null if dismissed.
+    AsyncFunction("requestPhoneNumberHint") { promise: Promise ->
+      val activity = appContext.currentActivity
+      if (activity == null) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      hintPromise?.resolve(null)
+      hintPromise = promise
+      Identity.getSignInClient(activity)
+        .getPhoneNumberHintIntent(GetPhoneNumberHintIntentRequest.builder().build())
+        .addOnSuccessListener { pending ->
+          try {
+            activity.startIntentSenderForResult(pending.intentSender, PHONE_HINT_REQUEST_CODE, null, 0, 0, 0)
+          } catch (e: Exception) {
+            Log.w(TAG, "could not show the phone number sheet", e)
+            hintPromise?.resolve(null)
+            hintPromise = null
+          }
+        }
+        .addOnFailureListener { e ->
+          Log.w(TAG, "phone number hint unavailable", e)
+          hintPromise?.resolve(null)
+          hintPromise = null
+        }
+    }
+
     OnActivityResult { _, (requestCode, resultCode, intent) ->
+      if (requestCode == PHONE_HINT_REQUEST_CODE) {
+        val pending = hintPromise
+        hintPromise = null
+        val activity = appContext.currentActivity
+        var number: String? = null
+        if (resultCode == Activity.RESULT_OK && intent != null && activity != null) {
+          try {
+            number = Identity.getSignInClient(activity).getPhoneNumberFromIntent(intent)
+          } catch (e: Exception) {
+            Log.w(TAG, "could not read the chosen number", e)
+          }
+        }
+        pending?.resolve(number)
+        return@OnActivityResult
+      }
       if (requestCode != CONSENT_REQUEST_CODE) return@OnActivityResult
       if (resultCode == Activity.RESULT_OK) {
         val message = intent?.getStringExtra(SmsRetriever.EXTRA_SMS_MESSAGE)
