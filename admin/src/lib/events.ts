@@ -6,6 +6,31 @@ import { prisma } from './prisma';
 import { hit } from './rate-limit';
 
 export const MAX_BATCH = 50;
+
+type Db = Pick<typeof prisma, '$executeRaw'>;
+
+/**
+ * Keeps the per-user, per-printer summary (UserPrinter) in step with each event, so the user card
+ * never has to group the full history. `at` only ever moves the last-connected time forward.
+ */
+async function touchUserPrinter(
+  db: Db,
+  userId: string,
+  printerId: string,
+  at: Date,
+  add: { connections?: number; labels?: number; transport?: string },
+) {
+  await db.$executeRaw`
+    INSERT INTO "UserPrinter" ("id", "userId", "printerId", "firstConnectedAt", "lastConnectedAt", "connectionCount", "labelsPrinted", "lastTransport")
+    VALUES ('up_' || md5(${userId} || ':' || ${printerId}), ${userId}, ${printerId}, ${at}, ${at}, ${add.connections ?? 0}, ${add.labels ?? 0}, ${add.transport ?? null})
+    ON CONFLICT ("userId", "printerId") DO UPDATE SET
+      "firstConnectedAt" = LEAST("UserPrinter"."firstConnectedAt", EXCLUDED."firstConnectedAt"),
+      "lastTransport" = CASE WHEN ${add.transport ?? null}::text IS NOT NULL AND EXCLUDED."lastConnectedAt" >= "UserPrinter"."lastConnectedAt"
+                             THEN EXCLUDED."lastTransport" ELSE "UserPrinter"."lastTransport" END,
+      "lastConnectedAt" = GREATEST("UserPrinter"."lastConnectedAt", EXCLUDED."lastConnectedAt"),
+      "connectionCount" = "UserPrinter"."connectionCount" + EXCLUDED."connectionCount",
+      "labelsPrinted" = "UserPrinter"."labelsPrinted" + EXCLUDED."labelsPrinted"`;
+}
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const FUTURE_SLACK_MS = 5 * 60 * 1000;
 const CONNECT_DEDUPE_MS = 10 * 60 * 1000;
@@ -117,6 +142,7 @@ async function applyOne(user: User, raw: Raw, eventId: string, occurredAt: Date,
               lastPrintAt: occurredAt,
             },
           });
+          await touchUserPrinter(tx, user.id, printer.id, occurredAt, { labels });
         }
         return made.count === 1;
       });
@@ -135,13 +161,21 @@ async function applyOne(user: User, raw: Raw, eventId: string, occurredAt: Date,
           printerId: printer.id,
           occurredAt: { gt: new Date(occurredAt.getTime() - CONNECT_DEDUPE_MS), lt: new Date(occurredAt.getTime() + CONNECT_DEDUPE_MS) },
         },
-        select: { id: true },
+        select: { id: true, occurredAt: true },
       });
-      if (recent) return { eventId, status: 'duplicate', reason: 'RECENT_CONNECTION' };
+      if (recent) {
+        // Counted once, but "last connected" must still move forward on a reconnect.
+        if (occurredAt > recent.occurredAt) {
+          await prisma.printerConnection.update({ where: { id: recent.id }, data: { occurredAt } });
+        }
+        await touchUserPrinter(prisma, user.id, printer.id, occurredAt, { transport });
+        return { eventId, status: 'duplicate', reason: 'RECENT_CONNECTION' };
+      }
       const made = await prisma.printerConnection.createMany({
         skipDuplicates: true,
         data: [{ eventId, userId: user.id, printerId: printer.id, transport, occurredAt }],
       });
+      if (made.count === 1) await touchUserPrinter(prisma, user.id, printer.id, occurredAt, { connections: 1, transport });
       return ok(made.count === 1);
     }
 

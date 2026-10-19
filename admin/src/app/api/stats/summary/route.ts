@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const { hideInternal, family } = parseFilters(new URL(request.url));
     const week = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const userWhere = { deletedAt: null, ...(hideInternal ? { isInternal: false } : {}) };
-    const [users, blocked, fresh, internal, rating, models, prints] = await Promise.all([
+    const [users, blocked, fresh, internal, rating, models, prints, platforms] = await Promise.all([
       prisma.user.count({ where: userWhere }),
       prisma.user.count({ where: { ...userWhere, status: 'blocked' } }),
       prisma.user.count({ where: { ...userWhere, createdAt: { gte: week } } }),
@@ -37,10 +37,12 @@ export async function GET(request: Request) {
         SELECT count(DISTINCT lower(p."modelNormalised")) AS n FROM "Printer" p WHERE p.id IN (SELECT "printerId" FROM ev)`),
       prisma.$queryRaw<{ labels: bigint }[]>(Prisma.sql`
         WITH ${printEventsCte(hideInternal, family)} SELECT COALESCE(sum("labelsCount"), 0) AS labels FROM ev`),
+      prisma.user.groupBy({ by: ['platform'], where: userWhere, _count: { _all: true } }),
     ]);
     return json({
       users: { total: users, active: users - blocked, blocked, newLast7Days: fresh, internalAccounts: internal },
       prints: { lifetimeLabels: Number(prints[0].labels) },
+      platforms: platforms.map((p) => ({ platform: p.platform, users: p._count._all })),
       printerModels: Number(models[0].n),
       rating: { average: rating._avg.rating === null ? null : Math.round(rating._avg.rating * 100) / 100, count: rating._count._all },
       excludesInternal: hideInternal,

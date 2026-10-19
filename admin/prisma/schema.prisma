@@ -115,6 +115,7 @@ model Printer {
 
   connections PrinterConnection[]
   printEvents PrintEvent[]
+  users       UserPrinter[]
 
   @@index([modelNormalised])
 }
@@ -145,6 +146,29 @@ model PrinterConnection {
 
   @@index([userId, occurredAt])
   @@index([printerId])
+}
+
+/// Per user and printer: one row summarising everything that user did with that printer.
+/// Kept up to date by the event handler in the same transaction as each event, so the user card
+/// reads a handful of rows instead of grouping the full connection and print history.
+model UserPrinter {
+  id               String   @id @default(cuid())
+  userId           String
+  printerId        String
+  firstConnectedAt DateTime
+  lastConnectedAt  DateTime
+  /// Distinct connections (reconnects within 10 minutes count once).
+  connectionCount  Int      @default(0)
+  /// Labels sent to this printer (kept equal to SUM(PrintEvent.labelsCount) for the pair).
+  labelsPrinted    Int      @default(0)
+  /// bt_spp | ble | wifi; the last transport seen on a connection event.
+  lastTransport    String?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  printer Printer @relation(fields: [printerId], references: [id])
+
+  @@unique([userId, printerId])
+  @@index([userId, lastConnectedAt(sort: Desc)])
 }
 
 /// One finished print job. A printer is mandatory: nothing is counted without a connected printer.

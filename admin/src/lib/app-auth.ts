@@ -54,14 +54,16 @@ export async function authenticateApp(request: Request): Promise<AppAuth> {
   // Keep "last seen" and the reported app details fresh without a write on every request.
   const version = request.headers.get('x-app-version');
   const platform = request.headers.get('x-app-platform');
+  const device = request.headers.get('x-app-device');
   const stale = !user.lastSeenAt || Date.now() - user.lastSeenAt.getTime() > SEEN_EVERY_MS;
-  if (stale || (version && version !== user.appVersion)) {
+  if (stale || (version && version !== user.appVersion) || (device && device !== user.deviceModel)) {
     await prisma.user.update({
       where: { id: user.id },
       data: {
         lastSeenAt: new Date(),
         ...(version ? { appVersion: version.slice(0, 40) } : {}),
         ...(platform ? { platform: platform.slice(0, 20) } : {}),
+        ...(device ? { deviceModel: device.slice(0, 60) } : {}),
       },
     });
   }

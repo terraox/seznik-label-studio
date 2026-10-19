@@ -13,7 +13,7 @@ export async function footerInfo() {
     trackingSince: firsts.length ? new Date(Math.min(...firsts.map((d) => d.getTime()))).toISOString() : null,
     countedAs: 'Labels sent to a connected printer (confirmed hand-off to the printer, not paper physically printed).',
     appVersions: versions
-      .map((v) => ({ version: v.appVersion ?? 'no tracking yet', users: v._count._all, percent: total ? Math.round((v._count._all / total) * 100) : 0 }))
+      .map((v) => ({ version: v.appVersion ?? 'Older build', users: v._count._all, percent: total ? Math.round((v._count._all / total) * 100) : 0 }))
       .sort((a, b) => b.users - a.users),
   };
 }

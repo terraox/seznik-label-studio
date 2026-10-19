@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { requirePermission } from '@/lib/guard';
 import { can } from '@/lib/permissions';
@@ -27,11 +27,23 @@ export async function GET(request: Request) {
 
     const where: Prisma.UserWhereInput = { deletedAt: null };
     if (q) {
+      const field = url.searchParams.get('field') ?? 'all';
       const digits = q.replace(/\D/g, '');
-      where.OR = [
-        { name: { contains: q, mode: 'insensitive' } },
-        ...(digits && seePhones ? [{ mobile: { contains: digits.slice(-10) } }] : []),
-      ];
+      const has = (column: 'name' | 'printerName' | 'platform' | 'appVersion' | 'deviceModel') => ({
+        [column]: { contains: q, mode: 'insensitive' as const },
+      });
+      const byMobile = digits && seePhones ? [{ mobile: { contains: digits.slice(-10) } }] : [];
+      const pick: Record<string, Prisma.UserWhereInput[]> = {
+        name: [has('name')],
+        mobile: byMobile,
+        printer: [has('printerName')],
+        platform: [has('platform')],
+        version: [has('appVersion')],
+        device: [has('deviceModel')],
+        all: [has('name'), ...byMobile, has('printerName'), has('platform'), has('appVersion'), has('deviceModel')],
+      };
+      where.OR = pick[field] ?? pick.all;
+      if (where.OR.length === 0) where.OR = [{ id: '' }];
     }
     if (status === 'active' || status === 'blocked') where.status = status;
     if (internal === 'hide') where.isInternal = false;
@@ -53,6 +65,22 @@ export async function GET(request: Request) {
       prisma.registeredPhone.count({ where: { blocked: true } }),
     ]);
 
+    // Most recent printer each listed user connected, taken from connection events (no schema change needed).
+    const lastPrinters = rows.length
+      ? await prisma.$queryRaw<{ userId: string; model: string; transport: string | null; at: Date }[]>(Prisma.sql`
+          SELECT DISTINCT ON (x."userId") x."userId", x.model, x.transport, x.at FROM (
+            SELECT pc."userId" AS "userId", p."nameRaw" AS model, pc.transport AS transport, pc."occurredAt" AS at
+            FROM "PrinterConnection" pc JOIN "Printer" p ON p.id = pc."printerId"
+            WHERE pc."userId" IN (${Prisma.join(rows.map((r) => r.id))})
+            UNION ALL
+            -- A print proves that printer was connected, even when no separate connection event was sent.
+            SELECT pe."userId", p."nameRaw", NULL, pe."occurredAt"
+            FROM "PrintEvent" pe JOIN "Printer" p ON p.id = pe."printerId"
+            WHERE pe."userId" IN (${Prisma.join(rows.map((r) => r.id))})
+          ) x
+          ORDER BY x."userId", x.at DESC`)
+      : [];
+    const lastPrinterByUser = new Map(lastPrinters.map((r) => [r.userId, { model: r.model, transport: r.transport ?? null, at: r.at.toISOString() }]));
     const recent = await prisma.printEvent.groupBy({
       by: ['userId'],
       where: { userId: { in: rows.map((r) => r.id) }, occurredAt: { gte: week } },
@@ -60,7 +88,7 @@ export async function GET(request: Request) {
     });
     const last7 = new Map(recent.map((r) => [r.userId, r._sum.labelsCount ?? 0]));
     return json({
-      users: rows.map((row) => ({ ...toAdminUserDto(row, !seePhones), labelsLast7Days: last7.get(row.id) ?? 0 })),
+      users: rows.map((row) => ({ ...toAdminUserDto(row, !seePhones), labelsLast7Days: last7.get(row.id) ?? 0, lastPrinter: lastPrinterByUser.get(row.id) ?? null })),
       total,
       page,
       pageSize,

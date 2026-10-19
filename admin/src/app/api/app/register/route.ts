@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
 
 import { blockedResponse, upgradeRequired } from '@/lib/app-auth';
@@ -12,6 +13,18 @@ import { toUserDto } from '@/lib/user-dto';
 
 export function OPTIONS() {
   return corsPreflight();
+}
+
+/** Only the two phone types the desk shows are stored. */
+function cleanPlatform(value: string | null | undefined): string | null {
+  const v = (value ?? '').trim().toLowerCase();
+  return v === 'android' || v === 'ios' || v === 'web' ? v : null;
+}
+
+/** First letter of a new user's ID shows where they registered: A Android, I iOS, W web (X unknown). */
+function userId(platform: string | null): string {
+  const letter = platform === 'android' ? 'A' : platform === 'ios' ? 'I' : platform === 'web' ? 'W' : 'X';
+  return letter + randomBytes(9).toString('base64url').replace(/[-_]/g, '').toLowerCase().padEnd(12, '0').slice(0, 12);
 }
 
 const TAKEN = 'This number is already registered. Please log in.';
@@ -28,6 +41,7 @@ export async function POST(request: Request) {
       mobile?: string;
       password?: string;
       otpProof?: string;
+      platform?: string;
     };
 
     const name = (body.name ?? '').trim();
@@ -46,11 +60,22 @@ export async function POST(request: Request) {
     if (claim?.blocked) return blockedResponse(claim.blockReason);
     if (claim) return reply({ error: TAKEN, code: 'PHONE_TAKEN' }, 409);
 
+    const platform = cleanPlatform(body.platform ?? request.headers.get('x-app-platform'));
     const passwordHash = await hashAppPassword(password);
     try {
       const user = await prisma.$transaction(async (tx) => {
         const created = await tx.user.create({
-          data: { name, mobile, passwordHash, passwordUpdatedAt: new Date() },
+          data: {
+            id: userId(platform),
+            name,
+            mobile,
+            passwordHash,
+            passwordUpdatedAt: new Date(),
+            platform,
+            appVersion: request.headers.get('x-app-version')?.slice(0, 40) ?? null,
+            deviceModel: request.headers.get('x-app-device')?.slice(0, 60) ?? null,
+            lastSeenAt: new Date(),
+          },
         });
         await tx.registeredPhone.create({ data: { mobile, userId: created.id } });
         return created;

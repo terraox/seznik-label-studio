@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const old = await upgradeRequired(request);
     if (old) return old;
 
-    const body = (await request.json()) as { mobile?: string; password?: string; otpProof?: string };
+    const body = (await request.json()) as { mobile?: string; password?: string; otpProof?: string; platform?: string };
     const mobile = normalizeMobile(body.mobile);
     if (!mobile) return reply({ error: 'Enter a valid 10-digit mobile number.' }, 400);
     const password = body.password ?? '';
@@ -55,10 +55,18 @@ export async function POST(request: Request) {
     // Only someone who proved who they are is told the account is blocked.
     if (user.status === 'blocked') return blockedResponse(user.blockMessage);
 
+    const rawPlatform = (body.platform ?? request.headers.get('x-app-platform') ?? '').trim().toLowerCase();
+    const platform = rawPlatform === 'android' || rawPlatform === 'ios' || rawPlatform === 'web' ? rawPlatform : null;
     await clear(key);
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date(), lastSeenAt: new Date() },
+      data: {
+        lastLoginAt: new Date(),
+        lastSeenAt: new Date(),
+        ...(platform ? { platform } : {}),
+        ...(request.headers.get('x-app-device') ? { deviceModel: request.headers.get('x-app-device')!.slice(0, 60) } : {}),
+        ...(request.headers.get('x-app-version') ? { appVersion: request.headers.get('x-app-version')!.slice(0, 40) } : {}),
+      },
     });
     return reply(
       {

@@ -20,6 +20,7 @@ async function cleanup() {
   await prisma.printerConnection.deleteMany({ where: { OR: [{ eventId: { startsWith: PREFIX } }, { userId: { in: ids } }] } });
   await prisma.productClick.deleteMany({ where: { eventId: { startsWith: PREFIX } } });
   await prisma.feedback.deleteMany({ where: { eventId: { startsWith: PREFIX } } });
+  await prisma.userPrinter.deleteMany({ where: { userId: { in: ids } } });
   await prisma.printer.deleteMany({ where: { nameRaw: { startsWith: 'FlowTest' } } });
   await prisma.user.deleteMany({ where: { id: { in: ids } } });
   await prisma.registeredPhone.deleteMany({ where: { mobile: { in: NUMBERS } } });

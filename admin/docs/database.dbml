@@ -114,6 +114,23 @@ Table PrinterAlias {
   Note: '[READY] Admin-editable merge / rename rules for printer names.'
 }
 
+Table UserPrinter {
+  id varchar [pk]
+  userId varchar [not null]
+  printerId varchar [not null]
+  firstConnectedAt timestamp [not null]
+  lastConnectedAt timestamp [not null]
+  connectionCount int [not null, note: 'Distinct connections (reconnects within 10 minutes count once)']
+  labelsPrinted int [not null, note: 'Labels sent to this printer']
+  lastTransport varchar [note: 'bt_spp | ble | wifi']
+
+  indexes {
+    (userId, printerId) [unique]
+    (userId, lastConnectedAt)
+  }
+  Note: '[READY] Per user and printer summary, updated with each event; the user card reads this instead of grouping history.'
+}
+
 Table PrinterConnection {
   id varchar [pk]
   eventId varchar [unique, not null, note: 'Client uuid: makes retries safe']
@@ -327,6 +344,8 @@ Table AdminAccount {
 
 Ref: RegisteredPhone.userId - AppUser.id // one number <-> at most one account
 Ref: UserStatusEvent.userId > AppUser.id
+Ref: UserPrinter.userId > AppUser.id
+Ref: UserPrinter.printerId > Printer.id
 Ref: PrinterConnection.userId > AppUser.id
 Ref: PrinterConnection.printerId > Printer.id
 Ref: PrintEvent.userId > AppUser.id

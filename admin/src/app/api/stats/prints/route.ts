@@ -10,6 +10,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Totals = { labels: bigint; jobs: bigint; l7: bigint; j7: bigint; lm: bigint; jm: bigint; sevenFrom: Date; monthFrom: Date };
+type Hour = { hour: number; labels: bigint; jobs: bigint };
 type Day = { day: string; labels: bigint; jobs: bigint };
 
 /**
@@ -35,11 +36,19 @@ export async function GET(request: Request) {
       FROM generate_series((now() AT TIME ZONE 'Asia/Kolkata')::date - 29, (now() AT TIME ZONE 'Asia/Kolkata')::date, interval '1 day') d
       LEFT JOIN ev ON (ev."occurredAt" AT TIME ZONE 'Asia/Kolkata')::date = d::date
       GROUP BY d ORDER BY d`);
+    const hours = await prisma.$queryRaw<Hour[]>(Prisma.sql`
+      WITH ${printEventsCte(hideInternal, family)}
+      SELECT h AS hour, COALESCE(sum(ev."labelsCount"), 0) AS labels, COALESCE(sum(ev.jobs), 0) AS jobs
+      FROM generate_series(0, 23) h
+      LEFT JOIN ev ON (ev."occurredAt" AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
+        AND extract(hour FROM ev."occurredAt" AT TIME ZONE 'Asia/Kolkata')::int = h
+      GROUP BY h ORDER BY h`);
     return json({
       lifetime: { labels: Number(totals.labels), jobs: Number(totals.jobs) },
       last7Days: { labels: Number(totals.l7), jobs: Number(totals.j7), from: totals.sevenFrom.toISOString() },
       thisMonth: { labels: Number(totals.lm), jobs: Number(totals.jm), from: totals.monthFrom.toISOString() },
       daily: days.map((d) => ({ day: d.day, labels: Number(d.labels), jobs: Number(d.jobs) })),
+      hourly: hours.map((h) => ({ hour: Number(h.hour), labels: Number(h.labels), jobs: Number(h.jobs) })),
       timezone: 'Asia/Kolkata',
       footer: await footerInfo(),
     });
