@@ -2625,23 +2625,25 @@ export default function PrintScreen() {
               </View>
             ) : null}
 
-            <View style={styles.cardSection}>
-              <Text style={styles.groupLabel}>Paper Type</Text>
-              <ChipGroup
-                options={PAPER_TYPES}
-                selected={paperType}
-                onSelect={changePaperType}
-                badgeFor={(option) => paperTypeTestBadge(option)}
-              />
-              {paperTypeSelectionNote(paperType) ? (
-                <Text style={styles.helperText}>{paperTypeSelectionNote(paperType)}</Text>
-              ) : null}
-              {jewelryDieCutJob ? (
-                <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
-                  💡 Clear-liner jewelry rolls with black timing lines on the back require Paper Type set to "Black mark". If prints skip or overlap, run "Calibrate Paper Sensor" in Printer Connect.
-                </Text>
-              ) : null}
-            </View>
+            {qualityBridge === 'josh-lpapi' ? (
+              <View style={styles.cardSection}>
+                <Text style={styles.groupLabel}>Paper Type</Text>
+                <ChipGroup
+                  options={PAPER_TYPES}
+                  selected={paperType}
+                  onSelect={changePaperType}
+                  badgeFor={(option) => paperTypeTestBadge(option)}
+                />
+                {paperTypeSelectionNote(paperType) ? (
+                  <Text style={styles.helperText}>{paperTypeSelectionNote(paperType)}</Text>
+                ) : null}
+                {jewelryDieCutJob ? (
+                  <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
+                    💡 Clear-liner jewelry rolls with black timing lines on the back require Paper Type set to "Black mark". If prints skip or overlap, run "Calibrate Paper Sensor" in Printer Connect.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
 
           {/* Collapsible Advanced Settings (Darkness, Speed, Offsets, Orientation) */}

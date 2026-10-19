@@ -7,6 +7,7 @@ import {
   joshMediaForPaperType,
   resolveJoshJobParams,
 } from '@/lib/printer/josh-job-params';
+import { joshGapLength01mm } from '@/lib/printer/paper-type';
 
 test('omitted density and speed stay LPAPI −1 (printer default)', () => {
   const job = resolveJoshJobParams({ paperType: 'Label', gapMm: 3 });
@@ -71,4 +72,25 @@ test('explicit media wins over paper type', () => {
   assert.equal(job.gapMm, 2.5);
   assert.equal(job.density, 8);
   assert.equal(job.speed, 1);
+});
+
+test('five paper chips use LPAPI gap type; only receipt zeros the gap', () => {
+  const receipt = resolveJoshJobParams({ paperType: 'Receipt', gapMm: 3 });
+  assert.equal(receipt.gapType, JOSH_GAP_TYPE.receipt);
+  assert.equal(receipt.gapMm, 0);
+  assert.equal(joshGapLength01mm(receipt.gapMm), 0);
+
+  for (const paperType of ['Label', 'Cardstock', 'Transparent'] as const) {
+    const job = resolveJoshJobParams({ paperType, gapMm: 3 });
+    assert.equal(job.media, 'gap');
+    assert.equal(job.gapType, JOSH_GAP_TYPE.label);
+    assert.equal(job.gapMm, 3);
+    assert.equal(joshGapLength01mm(job.gapMm), 300);
+  }
+
+  const mark = resolveJoshJobParams({ paperType: 'Black mark', gapMm: 3 });
+  assert.equal(mark.media, 'bline');
+  assert.equal(mark.gapType, JOSH_GAP_TYPE.blackMark);
+  assert.equal(mark.gapMm, 3);
+  assert.equal(joshGapLength01mm(mark.gapMm), 300);
 });

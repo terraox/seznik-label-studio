@@ -17,8 +17,9 @@ export const JOSH_HARDWARE_DPI = 203;
 export const JOSH_DOTS_PER_MM = dotsPerMm(JOSH_HARDWARE_DPI);
 
 /**
- * LPAPI PrintParamName.GAP_TYPE (official demo: list index − 1).
- * 50×30 die-cut stickers are gap paper (Label = 2).
+ * IDzPrinter.PrintParamValue in LPAPI-2026-01-08-R.jar.
+ * GAP_NONE 0, GAP_HOLE 1, GAP_GAP 2, GAP_BLACK 3.
+ * Cardstock and Transparent have no SDK value; they use GAP_GAP.
  */
 export const JOSH_GAP_TYPE = {
   printerDefault: -1,

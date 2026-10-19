@@ -100,10 +100,14 @@ class JoshPrinterManager(private val context: Context) {
         /** DothanTech JOSH heads are 203 DPI. 304 is TD-404 and must not size the bitmap. */
         const val HARDWARE_DPI = 203.0
         const val HARDWARE_DPM = 8.0
-        /** Official demo: Label / 间隙纸. Die-cut 50×30 stock. */
-        const val GAP_TYPE_LABEL = 2
-        const val GAP_TYPE_RECEIPT = 0
-        const val GAP_TYPE_BLACK_MARK = 3
+        /**
+         * IDzPrinter.PrintParamValue in LPAPI-2026-01-08-R.jar.
+         * The SDK has no cardstock or transparent value; those chips use GAP_GAP.
+         */
+        const val GAP_TYPE_RECEIPT = PrintParamValue.GAP_NONE
+        const val GAP_TYPE_HOLE = PrintParamValue.GAP_HOLE
+        const val GAP_TYPE_LABEL = PrintParamValue.GAP_GAP
+        const val GAP_TYPE_BLACK_MARK = PrintParamValue.GAP_BLACK
     }
 
     // ─── State Machine ─────────────────────────────────────────────────
@@ -1440,6 +1444,14 @@ class JoshPrinterManager(private val context: Context) {
         val speed: Int,
     )
 
+    private fun gapTypeName(gapType: Int): String = when (gapType) {
+        GAP_TYPE_RECEIPT -> "GAP_NONE"
+        GAP_TYPE_HOLE -> "GAP_HOLE"
+        GAP_TYPE_LABEL -> "GAP_GAP"
+        GAP_TYPE_BLACK_MARK -> "GAP_BLACK"
+        else -> "GAP_TYPE"
+    }
+
     /**
      * Session LPAPI setters run before every job so Strategy 2/4 (commitJob /
      * printBitmap with no Bundle) still keep gap, heat, and speed.
@@ -1470,17 +1482,17 @@ class JoshPrinterManager(private val context: Context) {
         }
         Log.i(
             TAG,
-            "[$jobId] [$phase:GAP] type=$gapTypeValue length=${paramGapLengthMm}mm → $gapLengthValue (0.01 mm) force=$forceGap",
+            "[$jobId] [$phase:GAP] ${gapTypeName(gapTypeValue)} type=$gapTypeValue length=${paramGapLengthMm}mm → $gapLengthValue (0.01 mm) force=$forceGap",
         )
-        if (forceGap || gapTypeValue != lastJobGapType || gapLengthValue != lastJobGapLength) {
-            try {
-                currentApi.setPrintPageGapType(gapTypeValue)
-                currentApi.setPrintPageGapLength(gapLengthValue)
-                lastJobGapType = gapTypeValue
-                lastJobGapLength = gapLengthValue
-            } catch (e: Exception) {
-                Log.w(TAG, "[$jobId] [$phase:GAP] setPrintPageGap* threw (non-fatal)", e)
-            }
+        // Every job. A cached skip left the printer on the previous sensor when the
+        // last command was not accepted. LPAPI setPrintPageGapType is command byte 66.
+        try {
+            currentApi.setPrintPageGapType(gapTypeValue)
+            currentApi.setPrintPageGapLength(gapLengthValue)
+            lastJobGapType = gapTypeValue
+            lastJobGapLength = gapLengthValue
+        } catch (e: Exception) {
+            Log.w(TAG, "[$jobId] [$phase:GAP] setPrintPageGap* threw (non-fatal)", e)
         }
         if (density >= 0 && density != lastJobDensity) {
             try {
