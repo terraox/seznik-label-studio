@@ -28,8 +28,8 @@ const NAV = [
   { href: '/users', label: 'Users', shortLabel: 'Users', icon: Users },
   { href: '/printers', label: 'Printers', shortLabel: 'Printers', icon: Printer },
   { href: '/shop', label: 'Shop clicks', shortLabel: 'Shop', icon: ShoppingBag },
-  { href: '/catalog', label: 'Clipart & templates', shortLabel: 'Catalogue', icon: Shapes },
-  { href: '/content', label: 'Library', shortLabel: 'Library', icon: Library },
+  { href: '/templates', label: 'Templates', shortLabel: 'Templates', icon: Library },
+  { href: '/clipart', label: 'Clipart', shortLabel: 'Clipart', icon: Shapes },
   { href: '/feedback', label: 'Feedback', shortLabel: 'Feedback', icon: MessageSquare },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings },
 ];

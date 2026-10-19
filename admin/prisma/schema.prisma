@@ -248,57 +248,67 @@ model ProductClick {
 
 // ───────────────────────── Clipart and template library ─────────────────────────
 
-model CatalogCategory {
-  id        String    @id @default(cuid())
-  /// clipart | template
-  kind      String
-  name      String
-  sortOrder Int       @default(0)
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
+/// Label templates the admin uploads as SVG. Kept apart from clipart so each can grow its own way.
+model TemplateCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
 
-  items CatalogItem[]
-
-  @@index([kind, sortOrder])
+  templates Template[]
 }
 
-model CatalogItem {
-  id            String    @id @default(cuid())
-  kind          String
-  categoryId    String
-  name          String
-  /// Storage key of the sanitised SVG (local disk in development, S3 key in production).
-  svgKey        String
-  thumbKey      String?
-  widthMm       Float?
-  heightMm      Float?
-  viewBox       String?
-  fileSizeBytes Int
-  /// sha256 of the sanitised file.
-  contentHash   String
-  version       Int       @default(1)
-  /// draft | published
-  status        String    @default("draft")
-  /// Catalogue-wide counter used for delta sync.
-  revision      Int
-  createdBy     String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+model Template {
+  id          String   @id @default(cuid())
+  categoryId  String
+  name        String
+  /// The sanitised SVG code itself.
+  svgCode     String
+  widthMm     Float
+  heightMm    Float
+  viewBox     String?
+  /// sha256 of the sanitised SVG.
+  contentHash String
+  /// draft | published (only published reaches the app)
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  category CatalogCategory @relation(fields: [categoryId], references: [id])
+  category TemplateCategory @relation(fields: [categoryId], references: [id])
 
   @@index([categoryId])
-  @@index([revision])
+  @@index([status, updatedAt])
 }
 
-/// Lets the app learn which items were deleted since its last sync.
-model CatalogTombstone {
-  itemId    String   @id
-  revision  Int
-  deletedAt DateTime @default(now())
+/// Clipart the admin adds on top of the clipart that ships inside the app.
+model ClipartCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
 
-  @@index([revision])
+  clipart Clipart[]
+}
+
+model Clipart {
+  id          String   @id @default(cuid())
+  categoryId  String
+  name        String
+  /// The sanitised SVG code itself.
+  svgCode     String
+  widthMm     Float?
+  heightMm    Float?
+  viewBox     String?
+  contentHash String
+  /// draft | published (only published reaches the app)
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category ClipartCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@index([status, updatedAt])
 }
 
 // ───────────────────────── Platform ─────────────────────────

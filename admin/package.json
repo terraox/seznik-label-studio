@@ -13,7 +13,6 @@
     "check:dbml": "node scripts/check-dbml.mjs",
     "ci": "sh scripts/ci-local.sh",
     "reconcile": "npx --yes tsx scripts/reconcile-counters.mts",
-    "test:catalog": "npx --yes tsx scripts/test-catalog-flow.mts",
     "test:analytics": "npx --yes tsx scripts/test-analytics-flow.mts",
     "test:events": "npx --yes tsx scripts/test-events-flow.mts",
     "test:users": "npx --yes tsx scripts/test-users-flow.mts",
