@@ -59,3 +59,6 @@ dev and veer sdk/
 
 # Smart Crop: redacted source PDFs are never committed, only their grayscale PNGs
 fixtures/smart-crop/*.pdf
+
+# local notes
+features.md
