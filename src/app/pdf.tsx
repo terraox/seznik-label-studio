@@ -36,7 +36,6 @@ import {
   useSmartCrop,
   type SmartCropSelectionInfo,
 } from '@/components/pdf-editor/use-smart-crop';
-import { Spacing } from '@/constants/theme';
 
 import { planLabelRender } from '@/lib/pdf-editor/label-render-plan';
 import { exportEditedPdf } from '@/lib/pdf-editor/export';
@@ -883,7 +882,7 @@ export default function PdfEditorScreen() {
       )}
 
       {(
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 8) + Spacing.two + 6 }]}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 4) + 2 }]}>
         {step === 'print' && session ? (
           <View style={styles.printActions}>
             <WalkthroughTarget id="pdf.export" style={styles.exportSlot}>
@@ -1078,33 +1077,33 @@ const styles = themedStyles((c, scheme) => ({
   bottomBar: {
     flexShrink: 0,
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 6,
     backgroundColor: c.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: c.hairline,
   },
   primaryBtn: {
     backgroundColor: c.accentFill,
-    borderRadius: 26,
-    minHeight: 52,
+    borderRadius: 18,
+    minHeight: 36,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryText: { color: c.onAccent, fontSize: 16, fontWeight: '600' },
+  primaryText: { color: c.onAccent, fontSize: 14, fontWeight: '600' },
   printActions: { flexDirection: 'row', gap: 10 },
   exportBtn: {
     flex: 1,
-    minHeight: 52,
+    minHeight: 36,
     flexShrink: 0,
-    borderRadius: 26,
+    borderRadius: 18,
     borderWidth: 1.5,
     borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: c.surface,
   },
-  exportBtnText: { color: c.accent, fontSize: 16, fontWeight: '600' },
+  exportBtnText: { color: c.accent, fontSize: 14, fontWeight: '600' },
   printBtn: { flex: 1.4 },
   connectFirstBtn: { backgroundColor: c.dangerFill },
   btnOff: { opacity: 0.5 },

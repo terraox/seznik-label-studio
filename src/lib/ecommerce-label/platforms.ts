@@ -9,10 +9,10 @@ import { unionRects, type NormRect, type Section } from '@/lib/pdf-editor/smart-
 
 export type PlatformId = 'amazon' | 'flipkart' | 'meesho';
 
-export const PLATFORMS: { id: PlatformId; name: string; layout: string }[] = [
-  { id: 'amazon', name: 'Amazon', layout: 'Label on the left, invoice on the right' },
-  { id: 'flipkart', name: 'Flipkart', layout: 'Label on top, invoice below' },
-  { id: 'meesho', name: 'Meesho', layout: 'Label on top, invoice below' },
+export const PLATFORMS: { id: PlatformId; name: string }[] = [
+  { id: 'amazon', name: 'Amazon' },
+  { id: 'flipkart', name: 'Flipkart' },
+  { id: 'meesho', name: 'Meesho' },
 ];
 
 export function platformName(id: PlatformId): string {

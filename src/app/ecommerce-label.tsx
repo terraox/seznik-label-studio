@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } f
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
+import { PlatformTile } from '@/components/ecommerce-label/platform-tile';
 import { LabelPreview } from '@/components/ecommerce-label/label-preview';
 import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor/pdf-print-sheet';
 import { PrintPagesStrip, type PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
@@ -140,7 +141,7 @@ export default function EcommerceLabelScreen() {
       setStep('preview');
     } catch (err) {
       if (err instanceof WrongPlatformError) {
-        Alert.alert('Wrong PDF', `${err.message}\nChoose the ${platformName(platform)} label PDF downloaded from the seller panel.`);
+        Alert.alert('Wrong PDF', `${err.message}\nUpload the ${platformName(platform)} label PDF exactly as downloaded from your seller panel. System Print, Save as PDF, screenshots and photos do not work.`);
       } else {
         Alert.alert('PDF', err instanceof Error ? err.message : 'Could not open this PDF.');
       }
@@ -202,8 +203,8 @@ export default function EcommerceLabelScreen() {
           : 'Print';
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={styles.screen}>
+      <View style={[styles.header, { paddingTop: insets.top, height: 48 + insets.top }]}>
         <Pressable onPress={goBack} hitSlop={8} style={styles.headerBtn}>
           <AppIcon name="chevron.left" size={22} tintColor={C.onAccent} />
         </Pressable>
@@ -215,30 +216,57 @@ export default function EcommerceLabelScreen() {
 
       {step === 'platform' ? (
         <FormScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={styles.heading}>Select the platform</Text>
-          <Text style={styles.sub}>Pick where the label PDF came from.</Text>
-          {PLATFORMS.map((p) => (
-            <View key={p.id} style={styles.cardFrame}>
-              <Pressable
+          <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View style={styles.heroBadge}>
+                <Ionicons name="print-outline" size={24} color={C.onAccent} />
+              </View>
+              <View style={styles.cardText}>
+                <Text style={styles.heroTitle}>Print marketplace labels</Text>
+                <Text style={styles.heroSub}>
+                  Crop the shipping label from your PDF and print it on your label roll.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.flow}>
+              {['Choose platform', 'Upload PDF', 'Preview & print'].map((label, i) => (
+                <View key={label} style={styles.flowItem}>
+                  <View style={styles.flowDot}>
+                    <Text style={styles.flowNum}>{i + 1}</Text>
+                  </View>
+                  <Text style={styles.flowText} numberOfLines={1}>
+                    {label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.note}>
+            <View style={styles.noteBar} />
+            <View style={styles.cardText}>
+              <Text style={styles.noteTitle}>Upload the PDF you downloaded</Text>
+              <Text style={styles.noteBody}>
+                Use the label PDF exactly as downloaded from your seller panel. A PDF made with System
+                Print or Save as PDF, a screenshot or a photo will not work.
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.heading}>Choose your platform</Text>
+          <View style={styles.tiles}>
+            {PLATFORMS.map((p) => (
+              <PlatformTile
+                key={p.id}
+                id={p.id}
+                name={p.name}
                 onPress={() => {
                   setPlatform(p.id);
                   setStep('setup');
                 }}
-                android_ripple={androidRipple}
-                accessibilityRole="button"
-                accessibilityLabel={p.name}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-                <View style={styles.cardIcon}>
-                  <Ionicons name="cube-outline" size={22} color={C.accent} />
-                </View>
-                <View style={styles.cardText}>
-                  <Text style={styles.cardTitle}>{p.name}</Text>
-                  <Text style={styles.cardSub}>{p.layout}</Text>
-                </View>
-                <AppIcon name="chevron.right" size={16} tintColor={C.textMuted} />
-              </Pressable>
-            </View>
-          ))}
+              />
+            ))}
+          </View>
         </FormScrollView>
       ) : null}
 
@@ -395,7 +423,7 @@ function BottomBar({
   onNext: () => void;
 }) {
   return (
-    <View style={[styles.bottomBar, { paddingBottom: Math.max(insetBottom, 8) + 8 }]}>
+    <View style={[styles.bottomBar, { paddingBottom: Math.max(insetBottom, 4) + 2 }]}>
       <Pressable
         onPress={onBack}
         disabled={backDisabled}
@@ -432,28 +460,57 @@ const styles = themedStyles((c, scheme) => ({
   printContent: { paddingVertical: 16, gap: 16 },
   printPanel: { paddingHorizontal: 16 },
   heading: { fontSize: 15, fontWeight: '700', color: c.text, marginTop: 4 },
-  sub: { fontSize: 13, color: c.textMuted, marginTop: -6 },
-  cardFrame: {
-    borderRadius: 14,
+  hero: {
     backgroundColor: c.surface,
+    padding: 16,
+    gap: 14,
+    borderRadius: 20,
     ...cardElevation(c, scheme),
   },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  heroBadge: {
+    width: 48,
+    height: 48,
     borderRadius: 14,
-    overflow: 'hidden',
-  },
-  cardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: c.accentSoft,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  heroTitle: { fontSize: 18, fontWeight: '800', color: c.text },
+  heroSub: { fontSize: 13, lineHeight: 18, color: c.textMuted },
+  flow: { flexDirection: 'row', gap: 8 },
+  flowItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: c.accentSoft,
+  },
+  flowDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: c.accentFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flowNum: { fontSize: 11, fontWeight: '800', color: c.onAccent },
+  flowText: { flex: 1, fontSize: 11, fontWeight: '600', color: c.accentInk },
+  note: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: c.warningSoft,
+    overflow: 'hidden',
+  },
+  noteBar: { width: 4, borderRadius: 2, backgroundColor: c.warning },
+  noteTitle: { fontSize: 14, fontWeight: '700', color: c.text },
+  noteBody: { fontSize: 13, lineHeight: 19, color: c.textSecondary },
+  tiles: { flexDirection: 'row', gap: 12 },
   cardText: { flex: 1, minWidth: 0, gap: 2 },
   cardTitle: { fontSize: 15, fontWeight: '600', color: c.text },
   cardSub: { fontSize: 12, color: c.textMuted },
@@ -494,17 +551,16 @@ const styles = themedStyles((c, scheme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20,
-    paddingVertical: 12,
-    paddingBottom: 12 + 8,
+    gap: 16,
+    paddingVertical: 4,
     backgroundColor: c.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: c.hairline,
   },
   navBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: c.accentSoft,
@@ -516,32 +572,32 @@ const styles = themedStyles((c, scheme) => ({
     flexDirection: 'row',
     gap: 10,
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 6,
     backgroundColor: c.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: c.hairline,
   },
   backBtn: {
     flex: 1,
-    minHeight: 52,
-    borderRadius: 26,
+    minHeight: 36,
+    borderRadius: 18,
     borderWidth: 1.5,
     borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: c.surface,
   },
-  backText: { color: c.accent, fontSize: 16, fontWeight: '600' },
+  backText: { color: c.accent, fontSize: 14, fontWeight: '600' },
   nextBtn: {
     flex: 1.4,
-    minHeight: 52,
-    borderRadius: 26,
+    minHeight: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: c.accentFill,
   },
   nextDanger: { backgroundColor: c.dangerFill },
-  nextText: { color: c.onAccent, fontSize: 16, fontWeight: '600' },
+  nextText: { color: c.onAccent, fontSize: 14, fontWeight: '600' },
   btnOff: { opacity: 0.5 },
   pressed: { opacity: 0.85 },
 }));
