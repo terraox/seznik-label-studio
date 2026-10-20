@@ -150,17 +150,27 @@ export function td404ContentShiftMm(offsetMm: { x: number; y: number } = { x: 0,
 export function td404ContentShiftDots(
   dpi: number,
   offsetMm: { x: number; y: number } = { x: 0, y: 0 },
+  /** Print-page "Elements offset". Added on top of the baked shift; 0 changes nothing. */
+  elementsExtraMm: { x: number; y: number } = { x: 0, y: 0 },
 ): { x: number; y: number } {
   const shift = td404ContentShiftMm(offsetMm);
-  return { x: mmToDots(shift.x, dpi), y: mmToDots(shift.y, dpi) };
+  return {
+    x: mmToDots(shift.x, dpi) + mmToDots(elementsExtraMm.x, dpi),
+    y: mmToDots(shift.y, dpi) + mmToDots(elementsExtraMm.y, dpi),
+  };
 }
 
 /** User H/V offset alone, in dots, for a rotated TD-404 job (label frame, before the turn). */
 export function td404UserShiftDots(
   dpi: number,
   offsetMm: { x: number; y: number } = { x: 0, y: 0 },
+  /** Print-page "Elements offset", label frame. */
+  elementsExtraMm: { x: number; y: number } = { x: 0, y: 0 },
 ): { x: number; y: number } {
-  return { x: mmToDots(offsetMm.x, dpi), y: mmToDots(offsetMm.y, dpi) };
+  return {
+    x: mmToDots(offsetMm.x, dpi) + mmToDots(elementsExtraMm.x, dpi),
+    y: mmToDots(offsetMm.y, dpi) + mmToDots(elementsExtraMm.y, dpi),
+  };
 }
 
 /**
@@ -679,8 +689,14 @@ export function computeDevTsplPrintLayout(
   };
 }
 
-/** Rasterizer edge-border option for TD-404: own layer, own shift, no content offset. */
-export function td404EdgeBorderOptions(dpi: number): {
+/**
+ * Rasterizer edge-border option for TD-404: own layer, own shift, no content offset.
+ * `borderExtraMm` is the Print-page "Border offset", added to the layer's own shift.
+ */
+export function td404EdgeBorderOptions(
+  dpi: number,
+  borderExtraMm: { x: number; y: number } = { x: 0, y: 0 },
+): {
   padRightDots: number;
   centerGapMm: number;
   shiftDots: { x: number; y: number };
@@ -689,8 +705,8 @@ export function td404EdgeBorderOptions(dpi: number): {
     padRightDots: 0,
     centerGapMm: TD404_BORDER_GAP_MM,
     shiftDots: {
-      x: mmToDots(TD404_BORDER_SHIFT_MM.x, dpi),
-      y: mmToDots(TD404_BORDER_SHIFT_MM.y, dpi),
+      x: mmToDots(TD404_BORDER_SHIFT_MM.x, dpi) + mmToDots(borderExtraMm.x, dpi),
+      y: mmToDots(TD404_BORDER_SHIFT_MM.y, dpi) + mmToDots(borderExtraMm.y, dpi),
     },
   };
 }

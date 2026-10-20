@@ -29,6 +29,12 @@ export type LabelSettings = {
   printSpeed: number | null;
   hOffsetMm: number;
   vOffsetMm: number;
+  /** Print-page "Elements offset" (mm, +x right, +y down). Moves everything except the border. */
+  elementsOffsetXMm: number;
+  elementsOffsetYMm: number;
+  /** Print-page "Border offset" (mm). Moves only the border. Ignored when the label has none. */
+  borderOffsetXMm: number;
+  borderOffsetYMm: number;
   flipHorizontally: boolean;
   antiColor: boolean;
   defaultDrawingColorIndex: number;
@@ -64,6 +70,10 @@ export function defaultLabelSettings(): LabelSettings {
     printSpeed: null,
     hOffsetMm: 0,
     vOffsetMm: 0,
+    elementsOffsetXMm: 0,
+    elementsOffsetYMm: 0,
+    borderOffsetXMm: 0,
+    borderOffsetYMm: 0,
     flipHorizontally: false,
     antiColor: false,
     defaultDrawingColorIndex: 1,

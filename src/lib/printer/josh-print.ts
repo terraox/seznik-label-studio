@@ -136,6 +136,11 @@ export function joshHeadlessRasterOptions(
   horizontalOffsetMm: number,
   verticalOffsetMm: number,
   extra: Omit<RasterizeOptions, 'pageWidthPack' | 'shiftDots' | 'edgeBorders'> = {},
+  /** Print-page "Elements offset" and "Border offset" (mm), on top of the baked shifts. */
+  layerOffsetsMm: { elements: { x: number; y: number }; border: { x: number; y: number } } = {
+    elements: { x: 0, y: 0 },
+    border: { x: 0, y: 0 },
+  },
 ): RasterizeOptions {
   const ink = joshInkShiftDots(horizontalOffsetMm, verticalOffsetMm, dpi);
   const elementX = mmToDots(JOSH_ELEMENT_X_OFFSET_MM, dpi);
@@ -146,13 +151,17 @@ export function joshHeadlessRasterOptions(
       padRightDots: JOSH_BORDER_PAD_DOTS,
       centerGapMm: JOSH_BORDER_CENTER_GAP_MM,
       shiftDots: {
-        x: mmToDots(JOSH_BORDER_SHIFT_MM.x, dpi),
-        y: mmToDots(JOSH_BORDER_SHIFT_MM.y, dpi),
+        x: mmToDots(JOSH_BORDER_SHIFT_MM.x, dpi) + mmToDots(layerOffsetsMm.border.x, dpi),
+        y: mmToDots(JOSH_BORDER_SHIFT_MM.y, dpi) + mmToDots(layerOffsetsMm.border.y, dpi),
       },
     },
     shiftDots: {
-      x: ink.x + elementX + (JOSH_BORDER_PAD_DOTS > 0 ? JOSH_PAD_CENTER_COMP_DOTS : 0),
-      y: ink.y,
+      x:
+        ink.x +
+        elementX +
+        (JOSH_BORDER_PAD_DOTS > 0 ? JOSH_PAD_CENTER_COMP_DOTS : 0) +
+        mmToDots(layerOffsetsMm.elements.x, dpi),
+      y: ink.y + mmToDots(layerOffsetsMm.elements.y, dpi),
     },
   };
 }

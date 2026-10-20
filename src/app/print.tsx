@@ -137,6 +137,7 @@ import {
 import {
   joshEffectiveDpi,
   joshHeadlessRasterOptions,
+  JOSH_ELEMENT_X_OFFSET_MM,
   joshInkOffsetMm,
   joshLabelPitchMs,
 } from '@/lib/printer/josh-print';
@@ -161,6 +162,21 @@ import { usePrinterStore, type PrintHistoryEntry } from '@/stores/printer-store'
 import { usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { applyPaperType, defaultLabelSettings, resolveLabelSettings } from '@/lib/label-settings';
+import {
+  clampLayerOffsetMm,
+  effectiveLayerOffsets,
+  labelHasOffsetBorder,
+  layerOffsetsOf,
+  layerOffsetWarning,
+  LAYER_OFFSET_MAX_MM,
+  LAYER_OFFSET_MIN_MM,
+  LAYER_OFFSET_STEP_MM,
+  offsetToPaperFrame,
+  previewWithLayerOffsets,
+  ZERO_LAYER_OFFSETS,
+  type LayerBridge,
+  type LayerOffsetsMm,
+} from '@/lib/layer-offsets';
 import { loadAndRenderPdf, printPdfToThermal, type RenderedPdfPage } from '@/lib/pdf-printer';
 import { refitFitLabelDocument } from '@/lib/img-to-label-document';
 import { downscaleImageUriToMaxEdge } from '@/lib/editor/image-ingest-native';
@@ -613,6 +629,13 @@ export default function PrintScreen() {
   const [gapLength, setGapLength] = useState(() => defaultLabelSettings().gapLengthMm);
   const [hOffset, setHOffset] = useState(() => savedCalibration?.hOffsetMm ?? 0);
   const [vOffset, setVOffset] = useState(() => savedCalibration?.vOffsetMm ?? 0);
+  // Elements / Border offsets live on the label (settings), so they print the same every time.
+  const [layerOffsets, setLayerOffsets] = useState<LayerOffsetsMm>(() => layerOffsetsOf(sourceDocument));
+  useEffect(() => {
+    setLayerOffsets(layerOffsetsOf(sourceDocument));
+    // Only when another label is opened; edits below write straight to state and the store.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.labelId]);
 
   // Re-sync when the connected printer changes (or persisted calibration
   // finishes loading from AsyncStorage after this screen already mounted).
@@ -991,6 +1014,69 @@ export default function PrintScreen() {
   const maxPreviewHeight = Math.round(height * 0.42);
   const baseCardWidth = Math.min(width - 48, MaxContentWidth - 48);
   const activeDoc = displayDocument ?? previewDocument;
+
+  // Elements / Border offsets: TD-404 (any turn) and Josh (0°) whose label the headless raster draws.
+  const layerBridge: LayerBridge | null = (() => {
+    const mgr = getPrinterManager();
+    if (mgr.usesTd404CommandSet) return 'td404';
+    if (mgr.isJosh && orientation === '0°') return 'josh';
+    return null;
+  })();
+  const layerOffsetsUsable = useMemo(
+    () => layerBridge != null && !ratTail143Job && activeDoc != null && canHeadlessRasterPrint(activeDoc),
+    [layerBridge, ratTail143Job, activeDoc],
+  );
+  const layerHasBorder = layerOffsetsUsable && labelHasOffsetBorder(activeDoc, layerBridge!);
+  /** What is applied: zero when unsupported, and no border offset when the label has no border. */
+  const effLayerOffsets: LayerOffsetsMm = layerOffsetsUsable
+    ? effectiveLayerOffsets(activeDoc, layerOffsets, layerBridge!)
+    : ZERO_LAYER_OFFSETS;
+  const layerPreviewDocument = useMemo(
+    () => (activeDoc && layerOffsetsUsable ? previewWithLayerOffsets(activeDoc, layerOffsets, layerBridge!) : activeDoc),
+    [activeDoc, layerOffsetsUsable, layerOffsets, layerBridge],
+  );
+  const layerWarning = useMemo(() => {
+    if (!layerOffsetsUsable) return null;
+    const baked =
+      layerBridge === 'josh'
+        ? (() => {
+            const ink = joshInkOffsetMm(printOffsetMm.x, printOffsetMm.y);
+            return { x: ink.x + JOSH_ELEMENT_X_OFFSET_MM, y: ink.y };
+          })()
+        : td404ContentShiftMm(printOffsetMm);
+    return layerOffsetWarning({
+      doc: activeDoc,
+      bridge: layerBridge!,
+      offsets: layerOffsets,
+      elementsBakedMm: baked,
+      dpi: jobDpi,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layerOffsetsUsable, layerBridge, activeDoc, layerOffsets, printOffsetMm.x, printOffsetMm.y]);
+  const changeLayerOffset = useCallback(
+    (layer: 'elements' | 'border', axis: 'x' | 'y', mm: number) => {
+      const next: LayerOffsetsMm = {
+        ...layerOffsets,
+        [layer]: { ...layerOffsets[layer], [axis]: clampLayerOffsetMm(mm) },
+      };
+      setLayerOffsets(next);
+      if (!params.labelId) return;
+      const store = useLabelStore.getState();
+      const stored = store.documents.find((d) => d.id === params.labelId);
+      if (!stored) return;
+      store.upsertDocument({
+        ...stored,
+        settings: {
+          ...resolveLabelSettings(stored),
+          elementsOffsetXMm: next.elements.x,
+          elementsOffsetYMm: next.elements.y,
+          borderOffsetXMm: next.border.x,
+          borderOffsetYMm: next.border.y,
+        },
+      });
+    },
+    [layerOffsets, params.labelId],
+  );
   const { widthPx: cardWidth, heightPx: cardHeight } = fitLabelSize(
     activeDoc?.widthMm ?? 80,
     activeDoc?.heightMm ?? 44,
@@ -1302,10 +1388,13 @@ export default function PrintScreen() {
             doc,
             jobDpi,
             orientationDeg === 0
-              ? joshHeadlessRasterOptions(jobDpi, printOffsetMm.x, printOffsetMm.y, {
-                  threshold,
-                  darknessSteps: inkSteps,
-                })
+              ? joshHeadlessRasterOptions(
+                  jobDpi,
+                  printOffsetMm.x,
+                  printOffsetMm.y,
+                  { threshold, darknessSteps: inkSteps },
+                  effLayerOffsets,
+                )
               : { threshold, darknessSteps: inkSteps },
           );
           console.info(`[JOSH-MONO] raster ${Date.now() - t0} ms`);
@@ -1902,14 +1991,16 @@ export default function PrintScreen() {
                   threshold,
                   darknessSteps: inkSteps,
                   bakeTd404Feed: true,
-                  edgeBorders: td404EdgeBorderOptions(jobDpi),
+                  // The border has its own layer and its own offset (paper frame, so a turned job
+                  // maps the label-frame offset first). Elements offset joins the element shift.
+                  edgeBorders: td404EdgeBorderOptions(jobDpi, offsetToPaperFrame(effLayerOffsets.border, orientationDeg)),
                   // 0°: offset and registration shift the elements together. Rotated: the offset
                   // moves the label before the turn, registration is applied to the paper after it.
                   ...(orientationDeg === 0
-                    ? { shiftDots: td404ContentShiftDots(jobDpi, printOffsetMm) }
+                    ? { shiftDots: td404ContentShiftDots(jobDpi, printOffsetMm, effLayerOffsets.elements) }
                     : {
                         rotationDeg: orientationDeg,
-                        shiftDots: td404UserShiftDots(jobDpi, printOffsetMm),
+                        shiftDots: td404UserShiftDots(jobDpi, printOffsetMm, effLayerOffsets.elements),
                         paperShiftDots: td404ContentShiftDots(jobDpi),
                       }),
                 });
@@ -2295,6 +2386,7 @@ export default function PrintScreen() {
     defaults.colorMode,
     defaults.grayThreshold,
     orientation,
+    effLayerOffsets,
     darkness,
     speed,
     pageCount,
@@ -2374,7 +2466,7 @@ export default function PrintScreen() {
                 }}>
                 <View style={{ transform: [{ rotate: `${previewTurn}deg` }] }}>
                   <LabelPreview
-                    document={(displayDocument ?? previewDocument)!}
+                    document={(layerPreviewDocument ?? displayDocument ?? previewDocument)!}
                     width={previewDrawW}
                     maxHeight={previewDrawH}
                     showArtboardBorder={false}
@@ -2799,6 +2891,52 @@ export default function PrintScreen() {
                   onMinus={() => setVOffset((v) => Math.max(-10, Math.round((v - 0.5) * 100) / 100))}
                   onPlus={() => setVOffset((v) => Math.min(20, Math.round((v + 0.5) * 100) / 100))}
                 />
+                <Text style={[styles.groupLabel, { marginTop: 12 }]}>Elements offset (mm, saved with this label)</Text>
+                <StepperRow
+                  label="Elements X"
+                  value={`${layerOffsets.elements.x.toFixed(2)} mm`}
+                  minusDisabled={!layerOffsetsUsable || layerOffsets.elements.x <= LAYER_OFFSET_MIN_MM}
+                  plusDisabled={!layerOffsetsUsable || layerOffsets.elements.x >= LAYER_OFFSET_MAX_MM}
+                  onMinus={() => changeLayerOffset('elements', 'x', layerOffsets.elements.x - LAYER_OFFSET_STEP_MM)}
+                  onPlus={() => changeLayerOffset('elements', 'x', layerOffsets.elements.x + LAYER_OFFSET_STEP_MM)}
+                  bordered
+                />
+                <StepperRow
+                  label="Elements Y"
+                  value={`${layerOffsets.elements.y.toFixed(2)} mm`}
+                  minusDisabled={!layerOffsetsUsable || layerOffsets.elements.y <= LAYER_OFFSET_MIN_MM}
+                  plusDisabled={!layerOffsetsUsable || layerOffsets.elements.y >= LAYER_OFFSET_MAX_MM}
+                  onMinus={() => changeLayerOffset('elements', 'y', layerOffsets.elements.y - LAYER_OFFSET_STEP_MM)}
+                  onPlus={() => changeLayerOffset('elements', 'y', layerOffsets.elements.y + LAYER_OFFSET_STEP_MM)}
+                />
+                <Text style={[styles.groupLabel, { marginTop: 12 }]}>Border offset (mm, saved with this label)</Text>
+                <StepperRow
+                  label="Border X"
+                  value={`${layerOffsets.border.x.toFixed(2)} mm`}
+                  minusDisabled={!layerHasBorder || layerOffsets.border.x <= LAYER_OFFSET_MIN_MM}
+                  plusDisabled={!layerHasBorder || layerOffsets.border.x >= LAYER_OFFSET_MAX_MM}
+                  onMinus={() => changeLayerOffset('border', 'x', layerOffsets.border.x - LAYER_OFFSET_STEP_MM)}
+                  onPlus={() => changeLayerOffset('border', 'x', layerOffsets.border.x + LAYER_OFFSET_STEP_MM)}
+                  bordered
+                />
+                <StepperRow
+                  label="Border Y"
+                  value={`${layerOffsets.border.y.toFixed(2)} mm`}
+                  minusDisabled={!layerHasBorder || layerOffsets.border.y <= LAYER_OFFSET_MIN_MM}
+                  plusDisabled={!layerHasBorder || layerOffsets.border.y >= LAYER_OFFSET_MAX_MM}
+                  onMinus={() => changeLayerOffset('border', 'y', layerOffsets.border.y - LAYER_OFFSET_STEP_MM)}
+                  onPlus={() => changeLayerOffset('border', 'y', layerOffsets.border.y + LAYER_OFFSET_STEP_MM)}
+                />
+                <Text style={{ color: C.textMuted, fontSize: 12, paddingTop: 8 }}>
+                  {!layerOffsetsUsable
+                    ? 'Elements and Border offsets work for TD-404 and Josh labels the app draws directly (not photos, tables or signatures; Josh at 0° only).'
+                    : !layerHasBorder
+                      ? 'This label has no border, so only the Elements offset applies. Positive X moves right, positive Y moves down. Added to the offsets above.'
+                      : 'Positive X moves right, positive Y moves down. Added to the offsets above; 0 and 0 leaves the print unchanged.'}
+                </Text>
+                {layerWarning ? (
+                  <Text style={{ color: C.warning, fontSize: 12, paddingTop: 6 }}>{layerWarning}</Text>
+                ) : null}
               </View>
             ) : null}
           </View>
