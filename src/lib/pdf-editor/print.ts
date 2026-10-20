@@ -145,6 +145,8 @@ export type PdfPrintOptions = {
    * dithers only the photos on a page, so text and barcodes stay crisp.
    */
   imageMode?: ImageMode;
+  /** false = the caller writes one history entry for a job made of many calls. */
+  recordHistory?: boolean;
 };
 
 export async function printEditedPdf(
@@ -294,7 +296,7 @@ export async function printEditedPdf(
     }
   }
 
-  if (settings.printing.recordHistory) {
+  if (settings.printing.recordHistory && options?.recordHistory !== false) {
     usePrinterStore.getState().addHistoryEntry({
       labelName: session.sourceName || `PDF Document (${pagesPrinted}p)`,
       copies,

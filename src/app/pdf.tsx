@@ -20,6 +20,7 @@ import { PdfOutputSizeRow } from '@/components/pdf-editor/pdf-output-size-row';
 import { PdfPageNav } from '@/components/pdf-editor/pdf-page-nav';
 import { PdfPageViewer } from '@/components/pdf-editor/pdf-page-viewer';
 import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor/pdf-print-sheet';
+import { PrintPagesStrip, type PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
 import { PdfRotateTool } from '@/components/pdf-editor/pdf-rotate-tool';
 import { PdfSharpnessTool } from '@/components/pdf-editor/pdf-sharpness-tool';
 import { PdfToolPanel, type PdfToolId } from '@/components/pdf-editor/pdf-tool-panel';
@@ -126,6 +127,7 @@ export default function PdfEditorScreen() {
   const [printing, setPrinting] = useState(false);
   const [printProgress, setPrintProgress] = useState<string | null>(null);
   const printPanelRef = useRef<PdfPrintPanelHandle>(null);
+  const [printIndices, setPrintIndices] = useState<number[]>([]);
   // Crop is edited as a draft and only saved to the session when Apply is pressed.
   const [draftCrop, setDraftCrop] = useState<{
     originNorm: { x: number; y: number };
@@ -338,6 +340,10 @@ export default function PdfEditorScreen() {
     }
     if (step === 'edit') {
       setStep('size');
+      return;
+    }
+    if (step === 'size') {
+      setStep('pick');
       return;
     }
     router.back();
@@ -567,6 +573,20 @@ export default function PdfEditorScreen() {
     return () => clearTimeout(timer);
   }, [probeUri, probePage]);
 
+  const stripItems = useMemo<PrintStripItem[]>(() => {
+    if (!session) return [];
+    const crop = session.crop?.sizeNorm ? session.crop : null;
+    const cropped = crop ? new Set(resolveScopeIndices(crop.scope, session.pageCount, session.currentPageIndex)) : null;
+    return printIndices.map((pageIndex) => ({
+      pageIndex,
+      rect:
+        crop && cropped?.has(pageIndex)
+          ? { x: crop.originNorm.x, y: crop.originNorm.y, w: crop.sizeNorm!.w, h: crop.sizeNorm!.h }
+          : null,
+      rotation: session.rotationByPage[pageIndex] ?? 0,
+    }));
+  }, [printIndices, session]);
+
   const renderViewer = (mode: { crop: boolean; watermark: boolean; expand?: boolean; hideHint?: boolean }) => {
     if (!session) return null;
     return (
@@ -633,16 +653,6 @@ export default function PdfEditorScreen() {
           style={({ pressed }) => [styles.headerHelp, pressed && styles.pressed]}>
           <AppIcon name="info.circle" tintColor={C.onAccent} size={22} />
         </Pressable>
-        {step === 'edit' && session ? (
-          <WalkthroughTarget id="pdf.headerNext">
-            <Pressable
-              onPress={() => setStep('print')}
-              hitSlop={8}
-              style={({ pressed }) => [styles.headerNext, pressed && styles.pressed]}>
-              <Text style={styles.headerNextText}>Next</Text>
-            </Pressable>
-          </WalkthroughTarget>
-        ) : null}
         <PrinterConnectionPill />
       </View>
 
@@ -854,9 +864,11 @@ export default function PdfEditorScreen() {
             ) : null}
             {loading ? <ActivityIndicator color={C.onAccent} style={{ marginTop: 8 }} /> : null}
           </WalkthroughTarget>
+          <PrintPagesStrip uri={session.sourceUri} items={stripItems} labelAspect={session.outputSize.widthMm / session.outputSize.heightMm} />
           <View style={styles.printSettings}>
             <PdfPrintPanel
               ref={printPanelRef}
+              onSelectedPagesChange={setPrintIndices}
               pageCount={session.pageCount}
               currentPage={session.currentPageIndex + 1}
               printing={printing}
@@ -870,7 +882,7 @@ export default function PdfEditorScreen() {
         </FormScrollView>
       )}
 
-      {step === 'edit' ? null : (
+      {(
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 8) + Spacing.two + 6 }]}>
         {step === 'print' && session ? (
           <View style={styles.printActions}>
@@ -911,26 +923,33 @@ export default function PdfEditorScreen() {
             </Pressable>
             </WalkthroughTarget>
           </View>
+        ) : (step === 'size' || step === 'edit') && session ? (
+          <View style={styles.printActions}>
+            <Pressable
+              onPress={goBack}
+              style={({ pressed }) => [styles.exportBtn, pressed && styles.pressed]}>
+              <Text style={styles.exportBtnText}>Back</Text>
+            </Pressable>
+            <WalkthroughTarget id={step === 'edit' ? 'pdf.headerNext' : 'pdf.next'} style={styles.printSlot}>
+              <Pressable
+                onPress={() => setStep(step === 'size' ? 'edit' : 'print')}
+                style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}>
+                <Text style={styles.primaryText}>Next</Text>
+              </Pressable>
+            </WalkthroughTarget>
+          </View>
         ) : (
-          <WalkthroughTarget id={step === 'pick' || !session ? 'pdf.import' : 'pdf.next'}>
+          <WalkthroughTarget id="pdf.import">
           <Pressable
             onPress={() => {
-              if (step === 'pick' || !session) {
-                void importPdf();
-                return;
-              }
-              if (step === 'size') setStep('edit');
+              void importPdf();
             }}
-            disabled={loading && (step === 'pick' || !session)}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              loading && (step === 'pick' || !session) && styles.btnOff,
-              pressed && styles.pressed,
-            ]}>
-            {loading && (step === 'pick' || !session) ? (
+            disabled={loading}
+            style={({ pressed }) => [styles.primaryBtn, loading && styles.btnOff, pressed && styles.pressed]}>
+            {loading ? (
               <ActivityIndicator color={C.onAccent} size="small" />
             ) : (
-              <Text style={styles.primaryText}>{step === 'pick' || !session ? 'Import PDF' : 'Next'}</Text>
+              <Text style={styles.primaryText}>Import PDF</Text>
             )}
           </Pressable>
           </WalkthroughTarget>
@@ -970,8 +989,6 @@ const styles = themedStyles((c, scheme) => ({
   headerHelp: { paddingHorizontal: 6, paddingVertical: 6 },
   exportSlot: { flex: 1 },
   printSlot: { flex: 1.4 },
-  headerNext: { paddingHorizontal: 8, paddingVertical: 6, marginRight: 4 },
-  headerNextText: { color: c.onAccent, fontSize: 16, fontWeight: '700' },
   pageLoading: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

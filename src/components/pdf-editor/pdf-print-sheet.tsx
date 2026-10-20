@@ -11,7 +11,12 @@ import { QualityControl, type QualityStepperProps } from '@/components/quality-c
 import { Type } from '@/constants/ui';
 import { defaultLabelSettings } from '@/lib/label-settings';
 import type { PdfPrintOptions } from '@/lib/pdf-editor/print';
-import { parseCustomPageList, parsePageRange, type PdfPrintSelection } from '@/lib/pdf-editor/session';
+import {
+  parseCustomPageList,
+  parsePageRange,
+  resolvePrintPageIndices,
+  type PdfPrintSelection,
+} from '@/lib/pdf-editor/session';
 import { clampToCap, qualityCapsFor, resolveQualityBridge } from '@/lib/printer/bridge-quality-caps';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore } from '@/stores/printer-store';
@@ -94,8 +99,13 @@ export const PdfPrintPanel = forwardRef<
     progress: string | null;
     outputLabel: string;
     onPrint: (selection: PdfPrintSelection, options: PdfPrintOptions) => void;
+    /** 0-based pages the current choice would print, so the screen can show them. */
+    onSelectedPagesChange?: (indices: number[]) => void;
   }
->(function PdfPrintPanel({ pageCount, currentPage, printing, progress, outputLabel, onPrint }, ref) {
+>(function PdfPrintPanel(
+  { pageCount, currentPage, printing, progress, outputLabel, onPrint, onSelectedPagesChange },
+  ref,
+) {
   useThemeRefresh();
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
@@ -213,6 +223,26 @@ export const PdfPrintPanel = forwardRef<
   }, [buildOptions, copies, custom, mode, onPrint, pageCount, printing, rangeEnd, rangeStart]);
 
   useImperativeHandle(ref, () => ({ submit }), [submit]);
+
+  const selectedKey = useMemo(() => {
+    let selection: PdfPrintSelection | null;
+    if (mode === 'range') {
+      const parsed = parsePageRange(rangeStart, rangeEnd, pageCount);
+      selection = { mode: 'range', start: parsed.start, end: parsed.end };
+    } else if (mode === 'custom') {
+      const parsed = parseCustomPageList(custom, pageCount);
+      selection = parsed.error ? null : { mode: 'custom', pages: parsed.pages };
+    } else {
+      selection = { mode };
+    }
+    return (selection ? resolvePrintPageIndices(selection, pageCount, currentPage - 1) : []).join(',');
+  }, [currentPage, custom, mode, pageCount, rangeEnd, rangeStart]);
+
+  useEffect(() => {
+    onSelectedPagesChange?.(selectedKey ? selectedKey.split(',').map(Number) : []);
+    // The key already captures every input; the callback is expected to be a state setter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey]);
 
   const modeLabel = MODES.find((m) => m.id === mode)?.label ?? '';
   const pagesSummary =
