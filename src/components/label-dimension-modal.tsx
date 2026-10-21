@@ -97,11 +97,18 @@ export function LabelDimensionModal({
     if (visible) {
       setText(formatField(valueMm, unit));
     } else {
-      setKeyboardHeight(0);
-      setInputReady(false);
+      // Leave the layout alone while the modal fades out: resetting the keyboard padding or
+      // swapping the input for a blank box here made the card jump (flicker) as it closed.
       clearFocusTimers();
     }
   }, [visible, valueMm, unit, clearFocusTimers]);
+
+  // Start each opening from a clean layout instead.
+  useEffect(() => {
+    if (!visible) return;
+    setKeyboardHeight(0);
+    setInputReady(false);
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
