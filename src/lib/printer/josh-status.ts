@@ -161,7 +161,7 @@ export function joshProgressFraction(state: JoshProgressState): number | null {
 
 /** The SDK gives no percentage, so the text never shows one. */
 export function joshProgressText(state: JoshProgressState): string | null {
-  const { phase, copy, copies, failure, bulkIndex, bulkTotal } = state;
+  const { phase, copies, failure, bulkIndex, bulkTotal } = state;
   if (phase === 'idle') return null;
   const bulk = bulkIndex != null && bulkTotal != null ? `Label ${bulkIndex} of ${bulkTotal}: ` : '';
   switch (phase) {
@@ -194,6 +194,8 @@ export function applyJoshProgressEvent(
     case 'DATA_ENDED':
       return { ...state, phase: 'printing', copy, copies, copiesDone: copy != null ? Math.max(0, copy - 1) : state.copiesDone };
     case 'SUCCESS':
+      // The native "submit accepted" success carries no label count; only a counted one is real.
+      if (copy == null || copy < 1) return state;
       return copies != null && copy != null && copy < copies
         ? { ...state, phase: 'printing', copy, copies, copiesDone: copy }
         : { ...state, phase: 'done', copy, copies, copiesDone: copy ?? copies ?? state.copiesDone, failure: null };

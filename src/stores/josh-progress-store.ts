@@ -14,7 +14,8 @@ type JoshProgressStore = JoshProgressState & {
   setDeviceStatus: (code: number | null) => void;
   apply: (event: Parameters<typeof applyJoshProgressEvent>[1]) => void;
   begin: () => void;
-  finish: () => void;
+  /** The print call returned; the printer may still be printing. Marks done after `ms` unless it finishes first. */
+  settle: (ms: number) => void;
   fail: (message: string) => void;
   setBulk: (index: number | null, total: number | null) => void;
   setLateFailure: (message: string | null) => void;
@@ -22,30 +23,63 @@ type JoshProgressStore = JoshProgressState & {
 };
 
 let clearTimer: ReturnType<typeof setTimeout> | null = null;
-const DONE_VISIBLE_MS = 2500;
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+const DONE_VISIBLE_MS = 4000;
+
+function stopTimers() {
+  if (clearTimer) clearTimeout(clearTimer);
+  if (settleTimer) clearTimeout(settleTimer);
+  clearTimer = null;
+  settleTimer = null;
+}
+
+/** Done is shown for a few seconds, then cleared so nothing lingers while the printer sits idle. */
+function armClear(
+  get: () => JoshProgressStore,
+  set: (partial: Partial<JoshProgressStore>) => void,
+) {
+  if (settleTimer) clearTimeout(settleTimer);
+  settleTimer = null;
+  if (clearTimer) clearTimeout(clearTimer);
+  clearTimer = setTimeout(() => {
+    clearTimer = null;
+    if (get().phase === 'done') set({ ...JOSH_PROGRESS_IDLE });
+  }, DONE_VISIBLE_MS);
+}
 
 export const useJoshProgressStore = create<JoshProgressStore>((set, get) => ({
   ...JOSH_PROGRESS_IDLE,
   lateFailure: null,
   deviceStatus: null,
   setDeviceStatus: (deviceStatus) => set({ deviceStatus }),
-  apply: (event) => set((s) => applyJoshProgressEvent(s, event)),
+  apply: (event) => {
+    set((s) => applyJoshProgressEvent(s, event));
+    if (get().phase === 'done') armClear(get, set);
+    else if (get().phase === 'failed') stopTimers();
+  },
   begin: () => {
-    if (clearTimer) clearTimeout(clearTimer);
-    clearTimer = null;
+    stopTimers();
     set((s) => ({ ...s, phase: 'sending', copy: null, copies: null, copiesDone: 0, failure: null }));
   },
-  finish: () => {
-    set((s) => (s.phase === 'failed' ? s : { ...s, phase: 'done' }));
-    // Show "Done" briefly, then clear so the bar never lingers while the printer sits idle.
-    if (clearTimer) clearTimeout(clearTimer);
-    clearTimer = setTimeout(() => {
-      clearTimer = null;
-      if (get().phase === 'done') set({ ...JOSH_PROGRESS_IDLE });
-    }, DONE_VISIBLE_MS);
+  settle: (ms) => {
+    if (settleTimer) clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      settleTimer = null;
+      const { phase } = get();
+      if (phase === 'sending' || phase === 'printing') {
+        set((s) => ({ ...s, phase: 'done', copiesDone: s.copies ?? s.copiesDone }));
+        armClear(get, set);
+      }
+    }, ms);
   },
-  fail: (message) => set((s) => ({ ...s, phase: 'failed', failure: message })),
+  fail: (message) => {
+    stopTimers();
+    set((s) => ({ ...s, phase: 'failed', failure: message }));
+  },
   setBulk: (bulkIndex, bulkTotal) => set((s) => ({ ...s, bulkIndex, bulkTotal })),
   setLateFailure: (lateFailure) => set({ lateFailure }),
-  reset: () => set({ ...JOSH_PROGRESS_IDLE }),
+  reset: () => {
+    stopTimers();
+    set({ ...JOSH_PROGRESS_IDLE });
+  },
 }));

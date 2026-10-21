@@ -655,9 +655,9 @@ class PrinterManager {
       if (event.progress === 'FAILED' && this.joshPrintsInFlight === 0) {
         store.setLateFailure(joshFailMessage(event.reason, event.reasonCode));
       }
-      // Events with no print in flight are not ours: the SDK also sends CONNECTED when the
-      // printer connects, which used to leave the bar stuck on "Sending".
-      if (this.joshPrintsInFlight === 0 && event.progress !== 'FAILED') return;
+      // The SDK also sends CONNECTED when the printer connects, which is not a print. Other
+      // events are kept after the call returns: the printer is still printing then.
+      if (event.progress === 'CONNECTED' && this.joshPrintsInFlight === 0) return;
       store.apply(event);
     });
   }
@@ -666,7 +666,9 @@ class PrinterManager {
     this.joshPrintsInFlight = Math.max(0, this.joshPrintsInFlight - 1);
     const store = useJoshProgressStore.getState();
     if (error === undefined) {
-      store.finish();
+      // The call returns once the job is handed to the printer, before the label is printed.
+      // Done comes from the printer's own success event; this only guards against it never coming.
+      store.settle(4000 + 2000 * Math.max(1, store.copies ?? 1));
       return;
     }
     const parsed = parseJoshFailure(error);

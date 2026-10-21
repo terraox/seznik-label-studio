@@ -1,4 +1,4 @@
-import { JoshProgressBar } from '@/components/printers/josh-progress-bar';
+import { JoshProgressCard } from '@/components/printers/josh-progress-card';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
@@ -1166,10 +1166,13 @@ export default function PrintScreen() {
           docName: jobName,
         });
 
-        Alert.alert(
-          'Print Sent',
-          `${jobName} was sent to ${deviceName ?? 'the printer'}.`,
-        );
+        // Josh shows its own "Print completed" card.
+        if (!manager.isJosh) {
+          Alert.alert(
+            'Print Sent',
+            `${jobName} was sent to ${deviceName ?? 'the printer'}.`,
+          );
+        }
         if (printingSettings.returnPrevious) router.back();
       } catch (error) {
         const message = formatPrintFailure(error);
@@ -2330,7 +2333,10 @@ export default function PrintScreen() {
         });
       }
 
-      Alert.alert('Print Sent', `${jobName} was sent to ${deviceName ?? 'the printer'}.`);
+      // Josh shows its own "Print completed" card.
+      if (!getPrinterManager().isJosh) {
+        Alert.alert('Print Sent', `${jobName} was sent to ${deviceName ?? 'the printer'}.`);
+      }
       if (printingSettings.returnPrevious) router.back();
     } catch (error) {
       if (serialRun) {
@@ -2950,9 +2956,8 @@ export default function PrintScreen() {
       </FormScrollView>
 
       {joshStatusWarning ? <Text style={styles.printerWarning}>{joshStatusWarning}</Text> : null}
-      {joshProgressLine ? (
-        <JoshProgressBar />
-      ) : printProgress ? (
+      <JoshProgressCard />
+      {!joshProgressLine && printProgress ? (
         <Text style={styles.printProgress}>{printProgress}</Text>
       ) : null}
       {printing && serialInfo ? (
