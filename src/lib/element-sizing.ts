@@ -563,12 +563,10 @@ export function fitTableDefaults(
   heightMm: number,
   rows: number,
   columns: number,
-  existing: LabelElement[] = [],
+  _existing: LabelElement[] = [],
 ) {
-  const pad = padMm(widthMm, heightMm);
-  const w = Math.max(12, Math.min(widthMm - pad * 2, widthMm * 0.9));
-  const h = Math.max(8, Math.min(heightMm - pad * 2, heightMm * 0.55));
-  const placed = placeInLabel(widthMm, heightMm, w, h, existing);
+  // New tables fill the whole label; the user shrinks from there.
+  const placed = { left: 0, top: 0, width: widthMm, height: heightMm };
   return {
     left: placed.left,
     top: placed.top,

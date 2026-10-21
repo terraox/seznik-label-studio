@@ -22,6 +22,9 @@ type DeviceListProps = {
   accent: string;
   onConnect: (device: DiscoveredPrinter) => void;
   onRescan: () => void;
+  showAll: boolean;
+  onToggleShowAll: () => void;
+  namePrefix: string;
   badgeFor: (device: DiscoveredPrinter) => DeviceBadge | null;
 };
 
@@ -34,6 +37,9 @@ export function DeviceList({
   accent,
   onConnect,
   onRescan,
+  showAll,
+  onToggleShowAll,
+  namePrefix,
   badgeFor,
 }: DeviceListProps) {
   useThemeRefresh();
@@ -56,13 +62,18 @@ export function DeviceList({
         </View>
       </View>
       <Section
-        empty={emptyCopy(list.length, canScan, bluetoothOn, scanning)}
+        empty={emptyCopy(list.length, canScan, bluetoothOn, scanning, showAll ? null : namePrefix)}
         devices={list}
         connectingId={connectingId}
         accent={accent}
         onConnect={onConnect}
         badgeFor={badgeFor}
       />
+      <Pressable onPress={onToggleShowAll} hitSlop={8} style={({ pressed }) => [styles.showAll, pressed && styles.pressed]}>
+        <Text style={[styles.rescan, { color: accent }]}>
+          {showAll ? `Show only ${namePrefix}… printers` : "Can't find yours? Show all devices"}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -146,11 +157,13 @@ function emptyCopy(
   canScan: boolean,
   bluetoothOn: boolean,
   scanning: boolean,
+  filterPrefix: string | null,
 ): string | null {
   if (count > 0) return null;
   if (!canScan) return 'Build the Android app to list printers from phone Bluetooth.';
   if (!bluetoothOn) return 'Turn Bluetooth on to see printers.';
   if (scanning) return 'Looking for printers…';
+  if (filterPrefix) return `No printers starting with ${filterPrefix} found. Turn the printer on, then scan again, or show all devices.`;
   return 'No printers yet. Turn the printer on, then scan again.';
 }
 
@@ -176,6 +189,7 @@ const styles = themedStyles((c) => ({
     borderWidth: 1.5,
     backgroundColor: c.accentSoft,
   },
+  showAll: { alignSelf: 'center', paddingVertical: 6 },
   rescan: { fontSize: 13, fontWeight: '700' },
   card: {
     backgroundColor: c.surface,

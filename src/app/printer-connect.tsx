@@ -119,6 +119,13 @@ function badgeFor(device: DiscoveredPrinter): DeviceBadge | null {
   };
 }
 
+/** Bluetooth name prefix each printer family advertises (matched case-insensitively). */
+const PRINTER_NAME_PREFIX: Record<string, string> = {
+  tejas: 'B15',
+  rudra: 'B17',
+  josh: 'LD0801',
+};
+
 export default function PrinterConnectScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
@@ -355,7 +362,13 @@ export default function PrinterConnectScreen() {
 
   const showConnected = status === 'connected' || status === 'printing';
 
-  const listedDevices = useMemo(
+  const [showAllDevices, setShowAllDevices] = useState(false);
+  useEffect(() => {
+    setShowAllDevices(false);
+  }, [selectedModel]);
+
+  const namePrefix = PRINTER_NAME_PREFIX[selectedModel];
+  const sortedDevices = useMemo(
     () =>
       [...devices].sort((a, b) => {
         if (Boolean(a.bonded) !== Boolean(b.bonded)) return a.bonded ? -1 : 1;
@@ -363,6 +376,11 @@ export default function PrinterConnectScreen() {
       }),
     [devices],
   );
+  const matchingDevices = useMemo(
+    () => sortedDevices.filter((d) => (d.name ?? '').toUpperCase().startsWith(namePrefix)),
+    [sortedDevices, namePrefix],
+  );
+  const listedDevices = showAllDevices ? sortedDevices : matchingDevices;
 
   const lastConsumer = lastForBridge?.consumer ?? selectedModel;
   const lastPrinterMeta = CONSUMER_PRINTERS[lastConsumer] ?? printer;
@@ -620,6 +638,9 @@ export default function PrinterConnectScreen() {
               accent={printer.accent}
               onConnect={(device) => void handleConnect(device)}
               onRescan={() => void startScan(printer.id).catch(() => {})}
+              showAll={showAllDevices}
+              onToggleShowAll={() => setShowAllDevices((v) => !v)}
+              namePrefix={namePrefix}
               badgeFor={badgeFor}
             />
           ) : null}

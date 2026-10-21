@@ -4094,8 +4094,6 @@ export default function EditScreen() {
     addElement('table', {
       rowCount: tableState.rowCount,
       columnCount: tableState.columnCount,
-      rowHeights: tableState.rowHeights,
-      columnWidths: tableState.columnWidths,
     });
     setTableTab('Regular');
     setShowTablePicker(false);
