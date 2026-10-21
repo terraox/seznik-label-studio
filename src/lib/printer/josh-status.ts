@@ -113,6 +113,8 @@ export type JoshProgressState = {
   phase: JoshProgressPhase;
   copy: number | null;
   copies: number | null;
+  /** Labels the printer has finished (SDK Success events). */
+  copiesDone: number;
   failure: string | null;
   /** Excel bulk jobs: the app's own send count. */
   bulkIndex: number | null;
@@ -123,10 +125,39 @@ export const JOSH_PROGRESS_IDLE: JoshProgressState = {
   phase: 'idle',
   copy: null,
   copies: null,
+  copiesDone: 0,
   failure: null,
   bulkIndex: null,
   bulkTotal: null,
 };
+
+/** The label being printed now (1-based): the one after the labels already finished. */
+export function joshCurrentLabel(state: JoshProgressState): number {
+  const done = state.copiesDone ?? Math.max(0, (state.copy ?? 1) - 1);
+  return Math.min(done + 1, state.copies ?? done + 1);
+}
+
+/**
+ * Progress bar fill, 0 to 1, or null when idle. The SDK gives no percentage inside a label, so
+ * the bar moves in steps: finished labels count fully, the one in flight counts partly
+ * (sending 35%, printing 85%). With an Excel bulk it spans every label.
+ */
+export function joshProgressFraction(state: JoshProgressState): number | null {
+  if (state.phase === 'idle') return null;
+  const copies = Math.max(1, state.copies ?? 1);
+  const done = state.copiesDone ?? 0;
+  let within: number;
+  if (state.phase === 'done') within = 1;
+  else {
+    const inFlight =
+      state.phase === 'sending' ? 0.35 : (state.copy ?? 0) > done ? 0.85 : 0.1;
+    within = Math.min(1, (done + inFlight) / copies);
+  }
+  if (state.bulkIndex != null && state.bulkTotal != null && state.bulkTotal > 0) {
+    return Math.min(1, (Math.max(0, state.bulkIndex - 1) + within) / state.bulkTotal);
+  }
+  return within;
+}
 
 /** The SDK gives no percentage, so the text never shows one. */
 export function joshProgressText(state: JoshProgressState): string | null {
@@ -137,8 +168,8 @@ export function joshProgressText(state: JoshProgressState): string | null {
     case 'sending':
       return `${bulk}Sending`;
     case 'printing':
-      return copies != null && copies > 1 && copy != null
-        ? `${bulk}Printing ${Math.min(copy, copies)} of ${copies}`
+      return copies != null && copies > 1
+        ? `${bulk}Printing ${joshCurrentLabel(state)} of ${copies}`
         : `${bulk}Printing`;
     case 'done':
       return `${bulk}Done`;
@@ -157,14 +188,15 @@ export function applyJoshProgressEvent(
   const copy = num(event.copy) ?? state.copy;
   switch (event.progress) {
     case 'CONNECTED':
+      return { ...state, phase: 'sending', copy, copies, copiesDone: 0 };
     case 'START_COPY':
-      return { ...state, phase: 'sending', copy, copies };
+      return { ...state, phase: 'sending', copy, copies, copiesDone: copy != null ? Math.max(0, copy - 1) : state.copiesDone };
     case 'DATA_ENDED':
-      return { ...state, phase: 'printing', copy, copies };
+      return { ...state, phase: 'printing', copy, copies, copiesDone: copy != null ? Math.max(0, copy - 1) : state.copiesDone };
     case 'SUCCESS':
       return copies != null && copy != null && copy < copies
-        ? { ...state, phase: 'printing', copy, copies }
-        : { ...state, phase: 'done', copy, copies, failure: null };
+        ? { ...state, phase: 'printing', copy, copies, copiesDone: copy }
+        : { ...state, phase: 'done', copy, copies, copiesDone: copy ?? copies ?? state.copiesDone, failure: null };
     case 'FAILED':
       return {
         ...state,
@@ -176,6 +208,16 @@ export function applyJoshProgressEvent(
     default:
       return state;
   }
+}
+
+/**
+ * True while the charger is plugged in. SDK: isConnectedAdapter is the adapter flag and
+ * chargeStatus is the printer's charge byte (falls back to the adapter flag on older firmware).
+ * From reading the SDK, not confirmed on a device.
+ */
+export function joshCharging(status: { chargeStatus?: number; isConnectedAdapter?: boolean } | null | undefined): boolean {
+  if (!status) return false;
+  return status.isConnectedAdapter === true || (status.chargeStatus ?? 0) > 0;
 }
 
 export type JoshPrinterStatus = {
@@ -204,9 +246,10 @@ export function reportedNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value !== 0 ? value : null;
 }
 
-export function joshReadingText(value: unknown): string {
+export function joshReadingText(value: unknown, decimals?: number): string {
   const n = reportedNumber(value);
-  return n == null ? 'not reported' : `${n} (as reported by printer)`;
+  if (n == null) return 'not reported';
+  return decimals == null ? `${n}` : n.toFixed(decimals);
 }
 
 export function toBinary(value: unknown): string {
@@ -290,6 +333,16 @@ export function joshLidOpen(code: unknown): boolean | null {
   if (typeof code !== 'number' || !Number.isFinite(code)) return null;
   const reason = joshStatusReason(code);
   return reason === 'CoverOpened' || reason === 'TphOpened' || reason === 'LabelCanOpend';
+}
+
+/** "Printer says" line: lid, paper, or another fault in short words. */
+export function joshPrinterSays(code: unknown): string {
+  if (typeof code !== 'number' || !Number.isFinite(code)) return 'n/a';
+  const reason = joshStatusReason(code);
+  if (reason == null) return 'Paper detected';
+  if (joshLidOpen(code)) return 'Lid opened';
+  if (reason === 'No_Paper' || reason === 'No_Label') return 'No paper';
+  return reason.replace(/_/g, ' ');
 }
 
 /** Bits that differ between two printerStatus readings, as a binary mask string. */

@@ -36,9 +36,10 @@ import {
   suggestedDiagnosticGridSpacingMm,
 } from '@/lib/printer/diagnostic-grid-print';
 import {
+  joshCharging,
   joshLidOpen,
+  joshPrinterSays,
   joshReadingText,
-  joshStatusReason,
   type JoshPrinterStatus,
 } from '@/lib/printer/josh-status';
 import { JOSH_BATTERY_CALIBRATED, joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
@@ -93,6 +94,7 @@ export default function PrinterDiagnosticsScreen() {
   const status = usePrinterStore((s) => s.status);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
   const batteryBars = usePrinterStore((s) => s.batteryBars);
+  const charging = usePrinterStore((s) => s.charging);
   const sdkId = usePrinterStore((s) => s.sdkId);
   const transport = usePrinterStore((s) => s.transport);
   const showBattery = printerReportsBattery({ sdkId, transport });
@@ -144,7 +146,7 @@ export default function PrinterDiagnosticsScreen() {
           : null;
         if (stopped) return;
         if (s?.available) setJoshStatus(s);
-        await new Promise<void>((r) => setTimeout(r, 400));
+        await new Promise<void>((r) => setTimeout(r, 4000));
       }
     };
     void loop();
@@ -211,7 +213,7 @@ export default function PrinterDiagnosticsScreen() {
     try {
       log('Sending a test label…');
       const t0 = Date.now();
-      await getPrinterManager().printDiagnosticTestLabel();
+      await getPrinterManager().printTestLabel();
       log(`Test label sent in ${Date.now() - t0} ms.`);
     } catch (error) {
       fail('Test print failed', error);
@@ -336,6 +338,7 @@ export default function PrinterDiagnosticsScreen() {
                 <PrinterBatteryLabel
                   percent={batteryPercent}
                   bars={isJoshBattery ? batteryBars : undefined}
+                  charging={isJoshBattery && charging}
                   size={24}
                   showWhenUnknown
                   unknownText="Not reported"
@@ -394,28 +397,40 @@ export default function PrinterDiagnosticsScreen() {
           {sdkId === 'josh' ? (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Printer health</Text>
-              <DiagRow label="Head temperature" value={joshReadingText(joshStatus?.printerHeadTem)} />
-              <DiagRow label="Voltage" value={joshReadingText(joshStatus?.batteryVoltage)} />
+              <DiagRow label="Head temperature" value={
+                  joshReadingText(joshStatus?.printerHeadTem, 2) === 'not reported'
+                    ? 'not reported'
+                    : `${joshReadingText(joshStatus?.printerHeadTem, 2)} °C`
+                } />
+              <DiagRow label="Voltage" value={
+                  joshReadingText(joshStatus?.batteryVoltage, 2) === 'not reported'
+                    ? 'not reported'
+                    : `${joshReadingText(joshStatus?.batteryVoltage, 2)} V`
+                } />
               <View style={styles.diagRow}>
                 <Text style={styles.diagLabel}>Battery</Text>
                 <PrinterBatteryLabel
                   percent={null}
                   bars={joshBatteryLevel(joshStatus?.batteryVoltage)}
+                  charging={joshCharging(joshStatus)}
                   size={24}
                   showWhenUnknown
                   unknownText="Not reported"
                 />
               </View>
               {JOSH_BATTERY_CALIBRATED ? null : <Text style={styles.sizeHint}>Battery bars are uncalibrated.</Text>}
-              <DiagRow label="Charge status" value={String(joshStatus?.chargeStatus ?? 'n/a')} />
+              <DiagRow
+                label="Charging"
+                value={joshStatus ? (joshCharging(joshStatus) ? 'Yes (charger connected)' : 'No') : 'n/a'}
+              />
               <DiagRow
                 label="Lid"
                 value={(() => {
                   const open = joshLidOpen(joshStatus?.printerStatus);
-                  return open == null ? 'unknown' : open ? 'OPEN' : 'closed';
+                  return open == null ? 'n/a' : open ? 'Open' : 'Closed';
                 })()}
               />
-              <DiagRow label="Printer says" value={joshStatusReason(joshStatus?.printerStatus) ?? 'OK'} />
+              <DiagRow label="Paper" value={joshPrinterSays(joshStatus?.printerStatus)} />
             </View>
           ) : null}
 

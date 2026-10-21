@@ -121,7 +121,6 @@ type NativeJoshPrinter = {
     gapType?: number;
     gapLength?: number;
   }): Promise<void>;
-  printTestText(text: string): Promise<boolean>;
   printPngLabel(options: Record<string, unknown>): Promise<JoshPrintResult>;
   printMonoLabel?(monoBytes: Uint8Array, options: Record<string, unknown>): Promise<JoshPrintResult>;
   getBondedDevices?(): Promise<JoshDevice[]>;
@@ -228,7 +227,9 @@ export async function getJoshBondedDevices(): Promise<JoshDevice[]> {
 /** Opens the system pairing dialog for an unpaired printer. True once it is bonded. */
 export async function pairJoshDevice(mac: string, timeoutMs = 30000): Promise<boolean> {
   const mod = getNative();
-  if (!mod || typeof mod.pairDevice !== 'function') return false;
+  if (!mod || typeof mod.pairDevice !== 'function') {
+    throw new Error('This app build cannot pair printers yet. Install the latest build.');
+  }
   try {
     return Boolean(await mod.pairDevice(mac, timeoutMs));
   } catch {
@@ -437,17 +438,6 @@ export async function readJoshGapReport(): Promise<JoshGapReport | null> {
     supportedGapTypes: types,
     line,
   };
-}
-
-export async function printJoshTestText(text?: string): Promise<boolean> {
-  const mod = getNative();
-  if (!mod || typeof mod.printTestText !== 'function') {
-    throw new Error('JOSH printTestText is not available on this platform.');
-  }
-  if (!mod.isConnected()) {
-    throw new Error('No JOSH printer connected.');
-  }
-  return mod.printTestText(text ?? 'test print sent by sez print');
 }
 
 /** Refresh and read PrinterParam. Null when the method is missing (older APK) or the call fails. */

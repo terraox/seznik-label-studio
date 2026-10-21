@@ -17,6 +17,9 @@ type ConnectedActionsProps = {
   onEditNickname?: () => void;
   batteryPercent?: number | null;
   batteryBars?: number | null;
+  charging?: boolean;
+  /** Live problem to flag on the card, e.g. the printer lid is open. */
+  warning?: string | null;
   showBattery?: boolean;
   testing: boolean;
   onTest: () => void;
@@ -32,6 +35,8 @@ export function ConnectedActions({
   onEditNickname,
   batteryPercent = null,
   batteryBars,
+  charging = false,
+  warning = null,
   showBattery = true,
   testing,
   onTest,
@@ -61,11 +66,18 @@ export function ConnectedActions({
       {onEditNickname && !nickname ? (
         <Text style={styles.realName}>Tap the name to add a nickname</Text>
       ) : null}
-      <Text style={styles.detail}>{modelName} is ready to print.</Text>
+      {warning ? (
+        <View style={styles.warning} accessibilityRole="alert">
+          <AppIcon name="exclamationmark.triangle.fill" tintColor={C.danger} size={16} />
+          <Text style={styles.warningText}>{warning}</Text>
+        </View>
+      ) : (
+        <Text style={styles.detail}>{modelName} is ready to print.</Text>
+      )}
       {showBattery ? (
         <View style={styles.batteryRow}>
           <Text style={styles.batteryPrefix}>Battery</Text>
-          <PrinterBatteryLabel percent={batteryPercent} bars={batteryBars} size={25} showWhenUnknown unknownText="Not reported" />
+          <PrinterBatteryLabel percent={batteryPercent} bars={batteryBars} charging={charging} size={25} showWhenUnknown unknownText="Not reported" />
         </View>
       ) : null}
       <Pressable
@@ -119,6 +131,18 @@ const styles = themedStyles((c, scheme) => ({
   nameFlex: { flexShrink: 1 },
   realName: { fontSize: 12, color: c.textMuted, textAlign: 'center' },
   name: { fontSize: 20, fontWeight: '700', color: c.text, textAlign: 'center' },
+  warning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: c.dangerSoft,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  warningText: { flexShrink: 1, fontSize: 14, lineHeight: 20, fontWeight: '700', color: c.danger },
   detail: { fontSize: 14, lineHeight: 20, color: c.textMuted, textAlign: 'center', marginBottom: 4 },
   batteryRow: {
     flexDirection: 'row',

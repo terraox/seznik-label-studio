@@ -13,12 +13,15 @@ import {
   joshFailMessage,
   JOSH_STATUS_CODES,
   isJoshFailReason,
+  joshCharging,
   joshLidOpen,
   joshStatusAlert,
   joshStatusReason,
   joshPrintError,
   joshProgressText,
+  joshProgressFraction,
   joshReadingText,
+  joshPrinterSays,
 } from '@/lib/printer/josh-status';
 
 // Every PrintFailReason has a one-line message.
@@ -59,7 +62,12 @@ assert.deepEqual(mins, [...mins].sort((a, b) => a - b));
 assert.equal(joshReadingText(0), 'not reported');
 assert.equal(joshReadingText(undefined), 'not reported');
 assert.equal(joshReadingText(NaN), 'not reported');
-assert.equal(joshReadingText(7.4), '7.4 (as reported by printer)');
+assert.equal(joshReadingText(7.4), '7.4');
+assert.equal(joshReadingText(8.3349, 2), '8.33');
+assert.equal(joshPrinterSays(34), 'Lid opened');
+assert.equal(joshPrinterSays(35), 'No paper');
+assert.equal(joshPrinterSays(0), 'Paper detected');
+assert.equal(joshPrinterSays(undefined), 'n/a');
 
 // Progress text.
 let s = JOSH_PROGRESS_IDLE;
@@ -109,5 +117,25 @@ assert.equal(joshStatusAlert(NaN), null);
 for (const code of Object.keys(JOSH_STATUS_CODES)) assert.ok(isJoshFailReason(JOSH_STATUS_CODES[Number(code)]));
 assert.equal(changedStatusBits(1, 5), '0000000000000100');
 assert.equal(changedStatusBits(undefined, 5), '0000000000000000');
+
+// Charging: adapter plugged in, or a non-zero charge byte.
+assert.equal(joshCharging({ isConnectedAdapter: true, chargeStatus: 0 }), true);
+assert.equal(joshCharging({ isConnectedAdapter: false, chargeStatus: 1 }), true);
+assert.equal(joshCharging({ isConnectedAdapter: false, chargeStatus: 0 }), false);
+assert.equal(joshCharging(null), false);
+
+// Progress bar: finished labels count fully, the one in flight counts partly.
+let p = applyJoshProgressEvent({ ...JOSH_PROGRESS_IDLE }, { progress: 'START_COPY', copy: 1, copies: 3 });
+assert.ok(Math.abs((joshProgressFraction(p) ?? 0) - 0.35 / 3) < 1e-9);
+p = applyJoshProgressEvent(p, { progress: 'DATA_ENDED', copy: 1, copies: 3 });
+assert.ok(Math.abs((joshProgressFraction(p) ?? 0) - 0.85 / 3) < 1e-9);
+p = applyJoshProgressEvent(p, { progress: 'SUCCESS', copy: 1, copies: 3 });
+assert.equal(p.copiesDone, 1);
+assert.equal(joshProgressText(p), 'Printing 2 of 3');
+p = applyJoshProgressEvent(p, { progress: 'DATA_ENDED', copy: 2, copies: 3 });
+assert.ok(Math.abs((joshProgressFraction(p) ?? 0) - 1.85 / 3) < 1e-9);
+p = applyJoshProgressEvent(p, { progress: 'SUCCESS', copy: 3, copies: 3 });
+assert.equal(joshProgressFraction(p), 1);
+assert.equal(joshProgressFraction(JOSH_PROGRESS_IDLE), null);
 
 console.log('ok josh-status');

@@ -37,6 +37,8 @@ import {
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { useAuthStore } from '@/stores/auth-store';
+import { JOSH_LID_MESSAGE, joshLidOpen } from '@/lib/printer/josh-status';
+import { useJoshProgressStore } from '@/stores/josh-progress-store';
 import { normalizePrinterMac, usePrinterNickname, usePrinterStore } from '@/stores/printer-store';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
@@ -137,6 +139,7 @@ export default function PrinterConnectScreen() {
   const [nicknameOpen, setNicknameOpen] = useState(false);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
   const batteryBars = usePrinterStore((s) => s.batteryBars);
+  const charging = usePrinterStore((s) => s.charging);
   const sdkId = usePrinterStore((s) => s.sdkId);
   const transport = usePrinterStore((s) => s.transport);
   const purchasedPrinterId = useAuthStore((s) => s.user?.printerId);
@@ -373,6 +376,14 @@ export default function PrinterConnectScreen() {
 
   const showConnected = status === 'connected' || status === 'printing';
 
+  // Josh: watch the printer while the card is up so an open lid is flagged right away.
+  const joshLidOpenNow = useJoshProgressStore((s) => joshLidOpen(s.deviceStatus) === true);
+  const watchingJosh = showConnected && sdkId === 'josh';
+  useEffect(() => {
+    if (!watchingJosh) return;
+    return getPrinterManager().watchJoshStatus();
+  }, [watchingJosh]);
+
   const [showAllDevices, setShowAllDevices] = useState(false);
   useEffect(() => {
     setShowAllDevices(false);
@@ -399,7 +410,12 @@ export default function PrinterConnectScreen() {
       }),
     [sortedDevices, namePrefix, selectedModel],
   );
-  const listedDevices = showAllDevices ? sortedDevices : matchingDevices;
+  // Show all: printers matching this family's name first, everything else below them.
+  const allDevicesMatchFirst = useMemo(() => {
+    const matching = new Set(matchingDevices.map((d) => d.id));
+    return [...matchingDevices, ...sortedDevices.filter((d) => !matching.has(d.id))];
+  }, [matchingDevices, sortedDevices]);
+  const listedDevices = showAllDevices ? allDevicesMatchFirst : matchingDevices;
 
   const lastConsumer = lastForBridge?.consumer ?? selectedModel;
   const lastPrinterMeta = CONSUMER_PRINTERS[lastConsumer] ?? printer;
@@ -586,7 +602,7 @@ export default function PrinterConnectScreen() {
   const handleTestPrint = async () => {
     setTesting(true);
     try {
-      await getPrinterManager().printDiagnosticTestLabel();
+      await getPrinterManager().printTestLabel();
       Alert.alert('Test print sent', `Check ${printer.shortName} for the diagnostic test label.`);
     } catch (error) {
       Alert.alert('Test print failed', error instanceof Error ? error.message : 'Could not send the test print.');
@@ -618,6 +634,8 @@ export default function PrinterConnectScreen() {
               onEditNickname={connectedDeviceId ? () => setNicknameOpen(true) : undefined}
               batteryPercent={batteryPercent}
               batteryBars={isJoshPrinter({ sdkId, transport }) ? batteryBars : undefined}
+              charging={charging}
+              warning={watchingJosh && joshLidOpenNow ? JOSH_LID_MESSAGE : null}
               showBattery={showBattery}
               testing={testing}
               onTest={() => void handleTestPrint()}

@@ -26,6 +26,7 @@ export function StatusChip() {
   const status = usePrinterStore((s) => s.status);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
   const batteryBars = usePrinterStore((s) => s.batteryBars);
+  const charging = usePrinterStore((s) => s.charging);
   const sdkId = usePrinterStore((s) => s.sdkId);
   const transport = usePrinterStore((s) => s.transport);
   const showBattery = printerReportsBattery({ sdkId, transport });
@@ -82,7 +83,8 @@ export function StatusChip() {
         <PrinterBatteryLabel
           percent={batteryPercent}
           bars={josh ? batteryBars : undefined}
-          size={15}
+          charging={josh && charging}
+          size={16}
           onDark
           showWhenUnknown
           unknownText="—"

@@ -74,16 +74,10 @@ class JoshPrinterManager(private val context: Context) {
         private const val PRINT_BUSY_POLL_MS = 25L
         /** Extra settle after each copy so the gap sensor can find the next notch. */
         private const val COPY_GAP_SLACK_MS = 250L
-        /** Narrow strip — fits 50×15 mm and top band of 25×25 mm. */
-        const val TEST_LABEL_WIDTH_MM = 50.0
-        const val TEST_LABEL_HEIGHT_MM = 15.0
-        const val TEST_LABEL_DEFAULT_TEXT = "test print sent by sez print"
         /** Match JS `JOSH_MEDIA_ORIGIN_H_MM` + `JOSH_LPAPI_DRAW_BIAS_H_MM` (print-spec / josh-print). */
         private const val JOSH_MEDIA_ORIGIN_H_MM = 0.0
         private const val JOSH_LPAPI_DRAW_BIAS_H_MM = -1.0
         private const val JOSH_LPAPI_DRAW_BIAS_V_MM = -1.0
-        /** Match JS `JOSH_TEST_LABEL_EXTRA_H_MM` — test strip only. */
-        private const val TEST_LABEL_EXTRA_H_MM = 2.0
         private const val MAX_RECONNECT_ATTEMPTS = 3
         private val RECONNECT_DELAYS_MS = longArrayOf(1000, 2000, 4000)
 
@@ -403,6 +397,7 @@ class JoshPrinterManager(private val context: Context) {
         Log.i(TAG, "[DISCOVERY_START] Starting printer discovery")
 
         currentApi.discovery()
+        startClassicInquiry(btAdapter)
 
         // Immediate query for bonded/paired LPAPI printers
         try {
@@ -437,12 +432,85 @@ class JoshPrinterManager(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "[DISCOVERY_STOP] stopDiscovery() threw", e)
         }
+        stopClassicInquiry()
         discoveryTimer?.let { mainHandler.removeCallbacks(it) }
         discoveryTimer = null
 
         if (state.get() == State.SCANNING) {
             setState(if (connectedPrinterAddress != null) State.CONNECTED else State.DISCONNECTED)
         }
+    }
+
+    private var classicReceiver: android.content.BroadcastReceiver? = null
+    /** MAC (upper case) -> whether the last emitted sighting carried a real name. */
+    private val classicSeen = ConcurrentHashMap<String, Boolean>()
+
+    /**
+     * LPAPI discovery can miss printers that are not paired yet. Run a plain Bluetooth inquiry
+     * beside it so unpaired printers in range are listed too (and can then be paired from the app).
+     */
+    private fun startClassicInquiry(btAdapter: BluetoothAdapter) {
+        stopClassicInquiry()
+        classicSeen.clear()
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: android.content.Intent?) {
+                val dev = intent?.getParcelableExtra<android.bluetooth.BluetoothDevice>(
+                    android.bluetooth.BluetoothDevice.EXTRA_DEVICE,
+                ) ?: return
+                val mac = dev.address ?: return
+                val name = (intent.getStringExtra(android.bluetooth.BluetoothDevice.EXTRA_NAME)
+                    ?: try { dev.name } catch (_: SecurityException) { null } ?: "").trim()
+                mainHandler.post { handleClassicFound(mac, name, dev.bondState == android.bluetooth.BluetoothDevice.BOND_BONDED) }
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.bluetooth.BluetoothDevice.ACTION_FOUND)
+            addAction(android.bluetooth.BluetoothDevice.ACTION_NAME_CHANGED)
+        }
+        try {
+            context.registerReceiver(receiver, filter)
+            classicReceiver = receiver
+            if (btAdapter.isDiscovering) btAdapter.cancelDiscovery()
+            val started = btAdapter.startDiscovery()
+            Log.i(TAG, "[DISCOVERY] classic inquiry started=$started")
+        } catch (e: Exception) {
+            Log.w(TAG, "[DISCOVERY] classic inquiry failed (LPAPI discovery continues)", e)
+            stopClassicInquiry()
+        }
+    }
+
+    private fun stopClassicInquiry() {
+        val receiver = classicReceiver ?: return
+        classicReceiver = null
+        try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+        try { BluetoothAdapter.getDefaultAdapter()?.cancelDiscovery() } catch (_: Exception) {}
+    }
+
+    private fun handleClassicFound(mac: String, name: String, bonded: Boolean) {
+        if (!isDiscovering.get()) return
+        val key = mac.uppercase()
+        val hasName = name.isNotBlank()
+        val seenWithName = classicSeen[key]
+        // Emit once, and again if a real name shows up after a nameless sighting.
+        if (seenWithName != null && (seenWithName || !hasName)) return
+        // LPAPI already reported it with a name.
+        if (discoveredPrinters.containsKey(key) && seenWithName == null) return
+        val lower = name.lowercase()
+        if (lower.contains("tejas") || lower.contains("rudra") || lower.contains("td-404") ||
+            lower.contains("td404") || lower.contains("minix") || lower.contains("caysn")
+        ) return
+        classicSeen[key] = hasName
+        Log.i(TAG, "[PRINTER_FOUND_CLASSIC] name=$name mac=$mac bonded=$bonded")
+        listener?.onPrinterDiscovered(
+            mapOf<String, Any?>(
+                "id" to mac,
+                "name" to (if (hasName) name else mac),
+                "macAddress" to mac,
+                "transport" to "josh-lpapi",
+                "sdkId" to "josh",
+                "bonded" to bonded,
+            ),
+        )
     }
 
     /**
@@ -452,8 +520,25 @@ class JoshPrinterManager(private val context: Context) {
     fun pairDevice(mac: String, timeoutMs: Long): Boolean {
         val btAdapter = BluetoothAdapter.getDefaultAdapter() ?: return false
         if (!btAdapter.isEnabled) return false
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
+            context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "[PAIR] BLUETOOTH_CONNECT not granted")
+            return false
+        }
         val dev = try { btAdapter.getRemoteDevice(mac) } catch (_: Exception) { return false }
         if (dev.bondState == android.bluetooth.BluetoothDevice.BOND_BONDED) return true
+
+        // An active inquiry makes bonding fail or crawl: stop ours and Android's first.
+        try { stopDiscovery() } catch (_: Exception) {}
+        stopClassicInquiry()
+        try { btAdapter.cancelDiscovery() } catch (_: Exception) {}
+        var waited = 0
+        while (btAdapter.isDiscovering && waited < 2000) {
+            Thread.sleep(100)
+            waited += 100
+        }
 
         val latch = CountDownLatch(1)
         val receiver = object : android.content.BroadcastReceiver() {
@@ -466,15 +551,24 @@ class JoshPrinterManager(private val context: Context) {
                     android.bluetooth.BluetoothDevice.EXTRA_BOND_STATE,
                     android.bluetooth.BluetoothDevice.BOND_NONE,
                 )
-                if (bondState != android.bluetooth.BluetoothDevice.BOND_BONDING) latch.countDown()
+                val previous = intent.getIntExtra(
+                    android.bluetooth.BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE,
+                    android.bluetooth.BluetoothDevice.BOND_NONE,
+                )
+                Log.i(TAG, "[PAIR] bond state $previous -> $bondState")
+                // Done when bonded, or when bonding ended back at none (declined / failed).
+                if (bondState == android.bluetooth.BluetoothDevice.BOND_BONDED ||
+                    (bondState == android.bluetooth.BluetoothDevice.BOND_NONE &&
+                        previous == android.bluetooth.BluetoothDevice.BOND_BONDING)
+                ) latch.countDown()
             }
         }
         val filter = android.content.IntentFilter(android.bluetooth.BluetoothDevice.ACTION_BOND_STATE_CHANGED)
         return try {
             context.registerReceiver(receiver, filter)
-            // Discovery slows bonding; the connect screen has already stopped it.
-            if (!dev.createBond()) {
-                Log.w(TAG, "[PAIR] createBond returned false for $mac")
+            val started = dev.createBond()
+            Log.i(TAG, "[PAIR] createBond($mac) returned $started, state=${dev.bondState}")
+            if (!started && dev.bondState != android.bluetooth.BluetoothDevice.BOND_BONDING) {
                 false
             } else {
                 latch.await(timeoutMs, TimeUnit.MILLISECONDS)
@@ -1378,87 +1472,6 @@ class JoshPrinterManager(private val context: Context) {
                 currentApi.setPrintPageGapLength(gap01mm)
                 Log.d(TAG, "[CONFIG] gapLength=${it}mm → $gap01mm (0.01 mm)")
             }
-        }
-    }
-
-    fun printTestText(text: String): Boolean {
-        val currentApi = api ?: return false
-        if (!isConnected()) return false
-
-        if (!printLock.tryLock(5000, TimeUnit.MILLISECONDS)) {
-            Log.w(TAG, "[JOSH-PRINT-P1:PREFLIGHT] Test print lock contention")
-            return false
-        }
-        isPrinting.set(true)
-        setState(State.PRINTING)
-
-        return try {
-            lastPrintSuccess = false
-            val latch = CountDownLatch(1)
-            printLatch = latch
-
-            waitWhilePrinterBusy(currentApi, "JOSH-TEST")
-            abortStaleJobIfIdle(currentApi, "JOSH-TEST")
-            Log.i(
-                TAG,
-                "[JOSH-PRINT-P2:TEST-DRAW] Starting test job (${TEST_LABEL_WIDTH_MM}x${TEST_LABEL_HEIGHT_MM}mm), text=\"$text\"",
-            )
-            val started = currentApi.startJob(TEST_LABEL_WIDTH_MM, TEST_LABEL_HEIGHT_MM, 0)
-            if (!started) {
-                Log.w(TAG, "[JOSH-PRINT-P2:TEST-DRAW] startJob($TEST_LABEL_WIDTH_MM, $TEST_LABEL_HEIGHT_MM, 0) returned false")
-                return false
-            }
-            try {
-                currentApi.setPrintPageGapType(GAP_TYPE_LABEL)
-                currentApi.setPrintPageGapLength(gapMmTo01mm(LABEL_GAP_MM))
-            } catch (e: Exception) {
-                Log.w(TAG, "[JOSH-PRINT-P2:TEST-DRAW] setPrintPageGap* threw (non-fatal)", e)
-            }
-            currentApi.setItemHorizontalAlignment(0) // Left
-            currentApi.setItemVerticalAlignment(0)   // Top
-            val xPadMm = JOSH_MEDIA_ORIGIN_H_MM + JOSH_LPAPI_DRAW_BIAS_H_MM + TEST_LABEL_EXTRA_H_MM
-            val yPadMm = max(0.5, 1.0 + JOSH_LPAPI_DRAW_BIAS_V_MM)
-            val rightPadMm = 1.5
-            val textW = TEST_LABEL_WIDTH_MM - xPadMm - rightPadMm
-            val lines = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.take(4)
-            val drawLines = if (lines.isEmpty()) listOf(TEST_LABEL_DEFAULT_TEXT) else lines
-            val lineStepMm = (TEST_LABEL_HEIGHT_MM - yPadMm - 1.0) / drawLines.size.coerceAtLeast(1)
-            val fontMm = min(1.85, lineStepMm * 0.72)
-            var yMm = yPadMm
-            for (line in drawLines) {
-                val lineH = max(2.0, min(lineStepMm, TEST_LABEL_HEIGHT_MM - yMm - 1.0))
-                if (yMm + lineH > TEST_LABEL_HEIGHT_MM - 0.5) break
-                currentApi.drawTextRegular(line, xPadMm, yMm, textW, lineH, fontMm, 1)
-                yMm += lineStepMm
-            }
-            val committed = currentApi.commitJob()
-            Log.i(TAG, "[JOSH-PRINT-P3:TEST-SUBMIT] commitJob returned: $committed")
-            if (!committed) {
-                return false
-            }
-            finishSubmitWithoutDeviceAck("JOSH-TEST")
-
-            val completed = try {
-                latch.await(15_000L, TimeUnit.MILLISECONDS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                false
-            }
-            Log.i(TAG, "[JOSH-PRINT-P4:TEST-RESULT] Physical print result: completed=$completed, success=$lastPrintSuccess")
-            completed && lastPrintSuccess
-        } catch (e: Exception) {
-            Log.e(TAG, "[JOSH-PRINT-P4:TEST-ERROR] Error during test print", e)
-            false
-        } finally {
-            printLatch = null
-            isPrinting.set(false)
-            printLock.unlock()
-            if (isConnected()) {
-                setState(State.CONNECTED)
-            } else {
-                setState(State.DISCONNECTED)
-            }
-            Log.i(TAG, "[JOSH-PRINT-P5:TEST-FINALIZE] State restored to ${state.get()}")
         }
     }
 

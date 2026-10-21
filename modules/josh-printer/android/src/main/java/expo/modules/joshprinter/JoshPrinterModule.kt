@@ -341,36 +341,6 @@ class JoshPrinterModule : Module() {
       }
     }
 
-    AsyncFunction("printTestText") { text: String?, promise: Promise ->
-      Log.i("JoshPrinter", "[JOSH-NATIVE-BRIDGE] printTestText() called with text=\"$text\"")
-      val mgr = getOrInitManager()
-      if (mgr == null) {
-        Log.e("JoshPrinter", "[JOSH-NATIVE-BRIDGE] JOSH printer manager is not initialized")
-        promise.reject("NOT_INITIALIZED", "JOSH printer manager is not initialized", null)
-        return@AsyncFunction
-      }
-      if (!mgr.isConnected()) {
-        Log.e("JoshPrinter", "[JOSH-NATIVE-BRIDGE] Cannot test print: JOSH printer is not connected")
-        promise.reject("NOT_CONNECTED", "JOSH printer is not connected", null)
-        return@AsyncFunction
-      }
-      ioExecutor.execute {
-        try {
-          val success = mgr.printTestText(text ?: JoshPrinterManager.TEST_LABEL_DEFAULT_TEXT)
-          if (success) {
-            Log.i("JoshPrinter", "[JOSH-NATIVE-BRIDGE] printTestText completed successfully")
-            promise.resolve(true)
-          } else {
-            Log.e("JoshPrinter", "[JOSH-NATIVE-BRIDGE] printTestText failed")
-            promise.reject("PRINT_FAILED", "Test print failed", null)
-          }
-        } catch (e: Exception) {
-          Log.e("JoshPrinter", "[JOSH-NATIVE-BRIDGE] printTestText exception", e)
-          promise.reject("PRINT_FAILED", e.message ?: "Test print error", e)
-        }
-      }
-    }
-
     AsyncFunction("printMonoLabel") { monoBytes: ByteArray, options: Map<String, Any?>, promise: Promise ->
       val mgr = getOrInitManager()
       if (mgr == null) {

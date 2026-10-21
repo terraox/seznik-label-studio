@@ -1,3 +1,4 @@
+import { JoshProgressBar } from '@/components/printers/josh-progress-bar';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
@@ -2949,8 +2950,10 @@ export default function PrintScreen() {
       </FormScrollView>
 
       {joshStatusWarning ? <Text style={styles.printerWarning}>{joshStatusWarning}</Text> : null}
-      {joshProgressLine ?? printProgress ? (
-        <Text style={styles.printProgress}>{joshProgressLine ?? printProgress}</Text>
+      {joshProgressLine ? (
+        <JoshProgressBar />
+      ) : printProgress ? (
+        <Text style={styles.printProgress}>{printProgress}</Text>
       ) : null}
       {printing && serialInfo ? (
         <Pressable

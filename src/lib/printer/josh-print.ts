@@ -61,8 +61,6 @@ export function joshGapTypeFromMedia(
  */
 export const JOSH_LPAPI_DRAW_BIAS_H_MM = -1;
 export const JOSH_LPAPI_DRAW_BIAS_V_MM = -1;
-/** Extra horizontal inset for LPAPI `drawTextRegular` test strips only. */
-export const JOSH_TEST_LABEL_EXTRA_H_MM = 2;
 
 /** User + die-cut media origin + LPAPI draw bias (millimetres). */
 export function joshInkOffsetMm(horizontalOffsetMm: number, verticalOffsetMm: number): {

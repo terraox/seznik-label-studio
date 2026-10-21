@@ -71,9 +71,12 @@ type PrinterStoreState = {
   batteryPercent: number | null;
   /** Josh battery bars 1-4 from the printer voltage. Null when not reported. Not persisted. */
   batteryBars: number | null;
+  /** Josh charger plugged in. Not persisted. */
+  charging: boolean;
   setStatus: (status: PrinterConnectionStatus) => void;
   setBatteryPercent: (batteryPercent: number | null) => void;
   setBatteryBars: (batteryBars: number | null) => void;
+  setCharging: (charging: boolean) => void;
   setSelectedPrinterModel: (model: ConsumerPrinterId) => void;
   setPreferredPrinterModel: (model: ConsumerPrinterId | null) => void;
   setDevCommandSet: (cmd: 'tspl' | 'escpos') => void;
@@ -157,10 +160,12 @@ export const usePrinterStore = create<PrinterStoreState>()(
       printerNicknames: {},
       batteryPercent: null,
       batteryBars: null,
+      charging: false,
 
       setStatus: (status) => set({ status }),
       setBatteryPercent: (batteryPercent) => set({ batteryPercent }),
       setBatteryBars: (batteryBars) => set({ batteryBars }),
+      setCharging: (charging) => set({ charging }),
       setSelectedPrinterModel: (selectedPrinterModel) => set({ selectedPrinterModel }),
       setPreferredPrinterModel: (preferredPrinterModel) => set({ preferredPrinterModel }),
       setDevCommandSet: (devCommandSet) => set({ devCommandSet }),
@@ -242,6 +247,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
           backendPrinterId: null,
           batteryPercent: null,
           batteryBars: null,
+          charging: false,
         }),
 
       addHistoryEntry: (entry) => {

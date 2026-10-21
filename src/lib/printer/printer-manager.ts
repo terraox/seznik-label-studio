@@ -19,12 +19,11 @@ import {
   bluetoothOffScanResult,
 } from '@/lib/printer/bluetooth-guard';
 import { assertJoshMonoBuffer, joshPackedPageDots } from '@/lib/printer/josh-mono-validate';
-import { JOSH_DENSITY_MAX, resolveJoshJobParams } from '@/lib/printer/josh-job-params';
-import { joshFailMessage, joshPrintError, parseJoshFailure, type JoshPrinterStatus } from '@/lib/printer/josh-status';
+import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
+import { joshCharging, joshFailMessage, joshPrintError, parseJoshFailure, type JoshPrinterStatus } from '@/lib/printer/josh-status';
 import { joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
 import {
-  JOSH_TEST_LABEL_EXTRA_H_MM,
   JOSH_BORDER_PAD_DOTS,
   joshEffectiveDpi,
 } from '@/lib/printer/josh-print';
@@ -38,23 +37,10 @@ import {
   shouldUseTsplCommandSet,
   getAmbiguousModelCandidates,
 } from '@/lib/printer/printer-heuristics';
+import { buildTestPrintDocument, maxDarknessForBridge, slowestSpeedForBridge } from '@/lib/printer/test-print';
 import {
-  buildDiagnosticCompactLabelDocument,
-  buildDiagnosticTestLabelLines,
-  DIAGNOSTIC_COMPACT_LABEL_HEIGHT_MM,
-  DIAGNOSTIC_COMPACT_LABEL_WIDTH_MM,
-  DIAGNOSTIC_STANDARD_LABEL_HEIGHT_MM,
-  JOSH_TEST_LABEL_HEIGHT_MM,
-  JOSH_TEST_LABEL_TOP_MM,
-  JOSH_TEST_LABEL_MARGIN_MM,
-  JOSH_TEST_LABEL_WIDTH_MM,
-  DIAGNOSTIC_STANDARD_LABEL_WIDTH_MM,
-} from '@/lib/printer/diagnostic-test-label';
-import {
-  JOSH_HEADLESS_EMPTY,
   printLabelDocumentMainPipeline,
 } from '@/lib/printer/main-pipeline-print';
-import { encodeTscCompactTextSample } from '@/lib/printer/tsc';
 import {
   LABEL_SIZE_CALIBRATE_WAIT_MS,
   buildLabelSizeCalibrateJob,
@@ -669,6 +655,9 @@ class PrinterManager {
       if (event.progress === 'FAILED' && this.joshPrintsInFlight === 0) {
         store.setLateFailure(joshFailMessage(event.reason, event.reasonCode));
       }
+      // Events with no print in flight are not ours: the SDK also sends CONNECTED when the
+      // printer connects, which used to leave the bar stuck on "Sending".
+      if (this.joshPrintsInFlight === 0 && event.progress !== 'FAILED') return;
       store.apply(event);
     });
   }
@@ -3344,6 +3333,7 @@ class PrinterManager {
       this.stopBatteryPolling();
       if (store.batteryPercent != null) store.setBatteryPercent(null);
       if (store.batteryBars != null) store.setBatteryBars(null);
+      if (store.charging) store.setCharging(false);
       return;
     }
     const { printerReportsBattery } = await import('@/lib/printer/printer-battery');
@@ -3351,6 +3341,7 @@ class PrinterManager {
       this.stopBatteryPolling();
       if (store.batteryPercent != null) store.setBatteryPercent(null);
       if (store.batteryBars != null) store.setBatteryBars(null);
+      if (store.charging) store.setCharging(false);
       return;
     }
     this.ensureBatteryPolling();
@@ -3368,6 +3359,7 @@ class PrinterManager {
         if (latest.batteryPercent != null) latest.setBatteryPercent(null);
         if (status?.available && (latest.status === 'connected' || latest.status === 'printing')) {
           latest.setBatteryBars(joshBatteryLevel(status.batteryVoltage));
+          latest.setCharging(joshCharging(status));
         } else if (!status && latest.status !== 'printing') {
           latest.setBatteryBars(null);
         }
@@ -3440,20 +3432,32 @@ class PrinterManager {
    * Live printer status (lid, paper, heat) for the print screen. Reads PrinterParam about once a second,
    * never while a print runs. Returns a stop function; polling stops when the last watcher leaves.
    */
+  // Every read makes the printer's status light flash, so keep the gap long.
+  private static readonly JOSH_WATCH_GAP_MS = 8000;
+
   watchJoshStatus(): () => void {
     this.joshWatchers += 1;
     const tick = async () => {
       this.joshWatchTimer = null;
       if (this.joshWatchers === 0) return;
       const live = usePrinterStore.getState().status === 'connected';
-      const status = live && this.isJosh ? await this.readJoshPrinterStatus(700) : null;
+      const foreground = AppState.currentState === 'active';
+      const status = live && foreground && this.isJosh ? await this.readJoshPrinterStatus(700) : null;
       const progress = useJoshProgressStore.getState();
       if (status?.available) {
         progress.setDeviceStatus(typeof status.printerStatus === 'number' ? status.printerStatus : null);
+        // Battery bars and charging follow the same reading, so they change as it happens.
+        const latest = usePrinterStore.getState();
+        if (latest.status === 'connected') {
+          const bars = joshBatteryLevel(status.batteryVoltage);
+          if (latest.batteryBars !== bars) latest.setBatteryBars(bars);
+          const charging = joshCharging(status);
+          if (latest.charging !== charging) latest.setCharging(charging);
+        }
       } else if (!live) {
         progress.setDeviceStatus(null);
       }
-      if (this.joshWatchers > 0) this.joshWatchTimer = setTimeout(() => void tick(), 400);
+      if (this.joshWatchers > 0) this.joshWatchTimer = setTimeout(() => void tick(), PrinterManager.JOSH_WATCH_GAP_MS);
     };
     if (this.joshWatchers === 1 && !this.joshWatchTimer) void tick();
     let stopped = false;
@@ -3725,103 +3729,17 @@ class PrinterManager {
     await this.print(enc.encode(buildLabelSizeScaleJob()));
   }
 
-  async printDiagnosticTestLabel(): Promise<void> {
-    const lines = buildDiagnosticTestLabelLines(this.activeTransport);
-    if (this.isJosh) {
-      // Same job as the Print button: a small 25x15 label through the main pipeline.
-      const doc = buildDiagnosticCompactLabelDocument(
-        lines,
-        JOSH_TEST_LABEL_WIDTH_MM,
-        JOSH_TEST_LABEL_HEIGHT_MM,
-        {
-          marginMm: JOSH_TEST_LABEL_MARGIN_MM,
-          marginTopMm: JOSH_TEST_LABEL_TOP_MM,
-          lineHeightMm: 2.9,
-          fontPt: 4.5,
-        },
-      );
-      await printLabelDocumentMainPipeline(doc, { gapMm: 3 });
-      return;
-    }
-    await this.printTestLabel(lines.join('\n'), { compact: true, lines });
-  }
-
-  async printTestLabel(
-    text = 'Sez Print OK',
-    options?: { compact?: boolean; lines?: readonly string[] },
-  ): Promise<void> {
+  /**
+   * Test print through the connected printer's own bridge (the main print pipeline), at that
+   * bridge's maximum darkness.
+   */
+  async printTestLabel(): Promise<void> {
     if (!this.isConnected) throw new Error('No printer connected.');
-    const compact = Boolean(options?.compact);
-    const lines = options?.lines ?? (text.includes('\n') ? text.split('\n') : [text]);
-
-    if (compact && this.usesTd404CommandSet) {
-      const widthMm = DIAGNOSTIC_COMPACT_LABEL_WIDTH_MM;
-      const heightMm = DIAGNOSTIC_COMPACT_LABEL_HEIGHT_MM;
-      const contentLines = lines.map((line) => String(line).trim()).filter(Boolean);
-      console.info(
-        `[print] TD-404 compact test label via TSPL TEXT: ${widthMm}x${heightMm}mm, ${contentLines.length} line(s)`,
-      );
-      const bytes = encodeTscCompactTextSample({
-        lines: contentLines,
-        widthMm,
-        heightMm,
-        gapMm: 3,
-      });
-      await this.print(bytes);
-      return;
-    }
-
-    const usesMainPipeline =
-      this.isLabelX || this.isDev || this.isTez || this.isJosh || this.usesTd404CommandSet;
-
-    if (usesMainPipeline) {
-      const widthMm = compact ? DIAGNOSTIC_COMPACT_LABEL_WIDTH_MM : DIAGNOSTIC_STANDARD_LABEL_WIDTH_MM;
-      const heightMm = compact ? DIAGNOSTIC_COMPACT_LABEL_HEIGHT_MM : DIAGNOSTIC_STANDARD_LABEL_HEIGHT_MM;
-      const contentLines = compact
-        ? lines
-        : text === 'Sez Print OK'
-          ? ['test print sent by sez print']
-          : lines;
-      const doc = buildDiagnosticCompactLabelDocument(contentLines, widthMm, heightMm);
-      console.info(
-        `[print] Test label via main pipeline: ${widthMm}x${heightMm}mm, ${contentLines.length} line(s), bridge=${this.transport ?? 'unknown'}`,
-      );
-      try {
-        await printLabelDocumentMainPipeline(doc, {
-          gapMm: 3,
-          assertInk: this.isJosh,
-          offsetExtraMm: this.isJosh ? { x: JOSH_TEST_LABEL_EXTRA_H_MM, y: 0 } : undefined,
-          darkness: this.isJosh ? JOSH_DENSITY_MAX : undefined,
-        });
-      } catch (error) {
-        const code = error instanceof Error ? (error as Error & { code?: string }).code : null;
-        if (!this.isJosh || code !== JOSH_HEADLESS_EMPTY) {
-          throw error;
-        }
-        const body = compact
-          ? contentLines.map((line) => String(line).trim()).filter(Boolean).join('\n')
-          : text === 'Sez Print OK'
-            ? 'test print sent by sez print'
-            : text;
-        const { printJoshTestText } = await import('josh-printer');
-        console.warn('[print] Josh headless test empty — falling back to native drawTextRegular');
-        const ok = await printJoshTestText(body);
-        if (!ok) {
-          throw new Error('Josh test print failed. Check that the printer is on and connected.');
-        }
-      }
-      return;
-    }
-
-    if (this.activeTransport === 'wifi' && this.backendPrinterId) {
-      await wifiPrintSample(this.backendPrinterId, { text });
-      return;
-    }
-
-    const parts: number[] = [0x1b, 0x40];
-    for (let i = 0; i < text.length; i++) parts.push(text.charCodeAt(i) & 0xff);
-    parts.push(0x0a, 0x0a, 0x1d, 0x56, 0x00);
-    await this.print(Uint8Array.from(parts));
+    const { doc, lines } = buildTestPrintDocument();
+    const darkness = maxDarknessForBridge(this.transport);
+    console.info(`[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=${darkness ?? 'auto'}: ${lines.join(' | ')}`);
+    const speed = slowestSpeedForBridge(this.transport);
+    await printLabelDocumentMainPipeline(doc, { gapMm: 3, darkness, speed });
   }
 
   /**
