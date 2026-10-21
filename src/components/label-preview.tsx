@@ -159,6 +159,8 @@ type LabelPreviewProps = {
   bakeTd404Feed?: boolean;
   /** H/V print offset in mm. Moves every element, border included, by the same amount. */
   shiftMm?: ShiftMm;
+  /** Catalog preview of a multi-up row: draws a dashed partition between the labels. */
+  upsDividers?: { columns: number; gapMm: number };
 };
 
 type ShiftMm = { x: number; y: number };
@@ -485,10 +487,12 @@ function CatalogStockPreview({
   document,
   slotHeight,
   style,
+  upsDividers,
 }: {
   document: LabelDocument;
   slotHeight?: number;
   style?: StyleProp<ViewStyle>;
+  upsDividers?: { columns: number; gapMm: number };
 }) {
   const [slotWidth, setSlotWidth] = useState(0);
   const height = slotHeight ?? catalogSlotHeight(document.widthMm, document.heightMm);
@@ -509,6 +513,22 @@ function CatalogStockPreview({
       {slotWidth > 0 && fitted.scale > 0 ? (
         <HiFiCatalogCanvas document={document} fitted={fitted} />
       ) : null}
+      {slotWidth > 0 && fitted.scale > 0 && upsDividers && upsDividers.columns >= 2
+        ? Array.from({ length: upsDividers.columns - 1 }, (_, i) => {
+            const cellW = (document.widthMm - upsDividers.gapMm * (upsDividers.columns - 1)) / upsDividers.columns;
+            const boundaryMm = (i + 1) * cellW + i * upsDividers.gapMm + upsDividers.gapMm / 2;
+            const x = (slotWidth - fitted.widthPx) / 2 + boundaryMm * fitted.scale;
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.upsDivider,
+                  { left: x - 1, top: (height - fitted.heightPx) / 2, height: fitted.heightPx },
+                ]}
+              />
+            );
+          })
+        : null}
     </View>
   );
 }
@@ -527,6 +547,7 @@ export function LabelPreview({
   hideNonPrinting = false,
   bakeTd404Feed = false,
   shiftMm,
+  upsDividers,
 }: LabelPreviewProps) {
   const [stageWidth, setStageWidth] = useState(0);
 
@@ -536,6 +557,7 @@ export function LabelPreview({
         document={document}
         slotHeight={maxHeight}
         style={style}
+        upsDividers={upsDividers}
       />
     );
   }
@@ -622,6 +644,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  upsDivider: {
+    position: 'absolute',
+    width: 0,
+    borderLeftWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#E11D48', // theme-fixed: the cut line must read on any label colour
   },
   catalogSlot: {
     width: '100%',

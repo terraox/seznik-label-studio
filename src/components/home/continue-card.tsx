@@ -77,7 +77,12 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
     [document],
   );
 
-  const sizeLabel = `${document.widthMm.toFixed(0)} x ${document.heightMm.toFixed(0)} (${document.paperType})`;
+  const across = (document.ups?.columns ?? 0) >= 2 ? document.ups!.columns : 0;
+  const cellSize = `${document.widthMm.toFixed(0)} × ${document.heightMm.toFixed(0)} mm`;
+  // Line 1 is the size of ONE label; line 2 says how many sit side by side and the stock.
+  const sizeLabel = across
+    ? `${cellSize} each\n${across} across · ${document.paperType}`
+    : `${cellSize}\n${document.paperType}`;
 
   const handleDelete = () => {
     Alert.alert('Delete Label', `Delete "${document.name}"?`, [
@@ -98,7 +103,7 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
           {document.name}
         </Text>
         <Text
-          numberOfLines={1}
+          numberOfLines={2}
           ellipsizeMode="tail"
           maxFontSizeMultiplier={HomeLayout.labelMaxFontScale}
           style={[
@@ -115,6 +120,7 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
         <LabelPreview
           document={previewDocument}
           catalogStock
+          upsDividers={across ? { columns: across, gapMm: document.ups!.columnSpacingMm } : undefined}
           maxHeight={HomeLayout.continuePreviewMaxHeight}
         />
       </View>
