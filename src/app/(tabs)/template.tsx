@@ -23,6 +23,7 @@ import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { JEWELRY_DIECUT_PREVIEW_SHEET } from '@/constants/jewelry-diecut';
 import { useTemplateCatalogStore, type CatalogTemplate } from '@/stores/template-catalog-store';
+import { sampleToElements } from '@/lib/template-sample-elements';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLabelStore } from '@/stores/label-store';
 import { useTranslation } from '@/lib/i18n';
@@ -271,8 +272,10 @@ export default function TemplateScreen() {
     return catalogTemplates.filter((t) => t.categoryId === activeCategoryId);
   }, [searchQuery, activeCategoryId, catalogTemplates, categoryNames]);
 
-  const handleSelectTemplate = useCallback(
-    (template: CatalogTemplate) => {
+  const [choiceFor, setChoiceFor] = useState<CatalogTemplate | null>(null);
+
+  const openTemplate = useCallback(
+    (template: CatalogTemplate, withSample: boolean) => {
       const category = categoryNames.get(template.categoryId) ?? '';
       const isJewellery = /jewel/i.test(template.name);
       const singleCircle = /circle/i.test(template.name) && !/2up|two up/i.test(template.name);
@@ -294,6 +297,9 @@ export default function TemplateScreen() {
           });
       // Every other shape (rounded, 2-up circles, cable) is drawn from the template's own SVG.
       if (!isJewellery && !singleCircle) doc.templateSvg = { xml: template.svgCode };
+      const layout = Array.isArray(template.sampleLayout) ? template.sampleLayout : [];
+      if (!withSample) doc.elements = [];
+      else if (layout.length) doc.elements = sampleToElements(layout, template.widthMm, template.heightMm);
       upsertDocument(doc);
       router.push({
         pathname: '/edit',
@@ -301,6 +307,16 @@ export default function TemplateScreen() {
       });
     },
     [router, upsertDocument, categoryNames],
+  );
+
+  /** Templates with sample content (and jewellery, which has its own) ask: empty label or with data. */
+  const handleSelectTemplate = useCallback(
+    (template: CatalogTemplate) => {
+      const hasSample = (Array.isArray(template.sampleLayout) && template.sampleLayout.length > 0) || /jewel/i.test(template.name);
+      if (hasSample) setChoiceFor(template);
+      else openTemplate(template, false);
+    },
+    [openTemplate],
   );
 
   const handleCreateGroup = () => {
@@ -664,6 +680,35 @@ export default function TemplateScreen() {
       </View>
       )}
       </View>
+
+      <IosAlertModal
+        visible={choiceFor !== null}
+        onClose={() => setChoiceFor(null)}
+        title={choiceFor?.name ?? ''}
+        message="Start with an empty label, or with sample data you can edit?"
+        buttons={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setChoiceFor(null) },
+          {
+            text: 'Empty label',
+            style: 'default',
+            onPress: () => {
+              const t = choiceFor;
+              setChoiceFor(null);
+              if (t) openTemplate(t, false);
+            },
+          },
+          {
+            text: 'With sample data',
+            style: 'default',
+            bold: true,
+            onPress: () => {
+              const t = choiceFor;
+              setChoiceFor(null);
+              if (t) openTemplate(t, true);
+            },
+          },
+        ]}
+      />
 
       <IosAlertModal
         visible={newGroupVisible}

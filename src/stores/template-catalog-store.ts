@@ -15,6 +15,8 @@ export type CatalogTemplate = {
   heightMm: number;
   svgCode: string;
   contentHash: string;
+  /** Sample content designed in the admin (elements in mm), absent when none. */
+  sampleLayout?: unknown;
 };
 
 type CatalogState = {
