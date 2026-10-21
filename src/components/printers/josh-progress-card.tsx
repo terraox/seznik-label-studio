@@ -1,4 +1,6 @@
-import { Modal, Pressable, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Easing, Modal, Pressable, Text, View } from 'react-native';
+import { useShallow } from 'zustand/react/shallow';
 
 import { AppIcon } from '@/components/app-icon';
 import { joshCurrentLabel, joshProgressFraction, joshProgressText } from '@/lib/printer/josh-status';
@@ -11,7 +13,18 @@ import { C, themedStyles, useThemeRefresh } from '@/theme';
  */
 export function JoshProgressCard() {
   useThemeRefresh();
-  const state = useJoshProgressStore();
+  // Only the fields the card draws, so unrelated store updates (the live status watcher) do not re-render it.
+  const state = useJoshProgressStore(
+    useShallow((s) => ({
+      phase: s.phase,
+      copy: s.copy,
+      copies: s.copies,
+      copiesDone: s.copiesDone,
+      failure: s.failure,
+      bulkIndex: s.bulkIndex,
+      bulkTotal: s.bulkTotal,
+    })),
+  );
   const text = joshProgressText(state);
   const fraction = joshProgressFraction(state);
   if (text == null || fraction == null) return null;
@@ -32,12 +45,7 @@ export function JoshProgressCard() {
         <View style={styles.card} accessibilityRole="alert">
           <Text style={styles.title}>Printer</Text>
           <View style={styles.divider} />
-          {done ? (
-            <View style={styles.result}>
-              <AppIcon name="checkmark" tintColor={C.success} size={28} />
-              <Text style={styles.resultText}>Print completed</Text>
-            </View>
-          ) : failed ? (
+          {failed ? (
             <View style={styles.result}>
               <AppIcon name="exclamationmark.triangle.fill" tintColor={C.danger} size={28} />
               <Text style={[styles.resultText, styles.failedText]}>
@@ -47,11 +55,17 @@ export function JoshProgressCard() {
           ) : (
             <>
               <View style={styles.row}>
-                <Text style={styles.status}>{bulk ? `${bulk} · Printing` : 'Printing'}</Text>
+                <View style={styles.statusRow}>
+                  {done ? <AppIcon name="checkmark" tintColor={C.success} size={16} /> : null}
+                  <Text style={styles.status}>
+                    {done ? 'Print completed' : bulk ? `${bulk} · Printing` : 'Printing'}
+                  </Text>
+                </View>
                 {count ? <Text style={styles.count}>{count}</Text> : null}
               </View>
+              {/* A finished print always shows a full bar, so nothing is left unfilled at the end. */}
               <View style={styles.track} accessibilityRole="progressbar" accessibilityLabel={text}>
-                <View style={[styles.fill, { width: `${Math.round(fraction * 100)}%` }]} />
+                <ProgressFill percent={done ? 100 : fraction * 100} runKey={done ? 'done' : 'run'} />
               </View>
             </>
           )}
@@ -63,6 +77,29 @@ export function JoshProgressCard() {
         </View>
       </View>
     </Modal>
+  );
+}
+
+/** The bar fill: eases to each new value and never moves backwards within one print. */
+function ProgressFill({ percent, runKey }: { percent: number; runKey: string }) {
+  useThemeRefresh();
+  const peak = useRef({ key: runKey, value: percent });
+  if (peak.current.key !== runKey) peak.current = { key: runKey, value: percent };
+  peak.current.value = Math.max(peak.current.value, percent);
+  const target = peak.current.value;
+  const width = useRef(new Animated.Value(target)).current;
+  useEffect(() => {
+    Animated.timing(width, {
+      toValue: target,
+      duration: 350,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [target, width]);
+  return (
+    <Animated.View
+      style={[styles.fill, { width: width.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]}
+    />
   );
 }
 
@@ -81,6 +118,7 @@ const styles = themedStyles((c) => ({
   title: { textAlign: 'center', color: c.text, fontSize: 17, fontWeight: '700' },
   divider: { height: 1, backgroundColor: c.hairline, marginHorizontal: -20 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   status: { color: c.text, fontSize: 14, fontWeight: '600' },
   count: { color: c.textMuted, fontSize: 14, fontWeight: '600' },
   track: { height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: c.fill, borderWidth: 1, borderColor: c.hairline },

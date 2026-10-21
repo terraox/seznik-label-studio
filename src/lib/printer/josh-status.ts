@@ -131,26 +131,28 @@ export const JOSH_PROGRESS_IDLE: JoshProgressState = {
   bulkTotal: null,
 };
 
-/** The label being printed now (1-based): the one after the labels already finished. */
+/** The label being printed now (1-based), as the printer's events report it. */
 export function joshCurrentLabel(state: JoshProgressState): number {
-  const done = state.copiesDone ?? Math.max(0, (state.copy ?? 1) - 1);
-  return Math.min(done + 1, state.copies ?? done + 1);
+  return Math.min(Math.max(1, state.copy ?? 1), state.copies ?? Math.max(1, state.copy ?? 1));
 }
 
 /**
- * Progress bar fill, 0 to 1, or null when idle. The SDK gives no percentage inside a label, so
- * the bar moves in steps: finished labels count fully, the one in flight counts partly
- * (sending 35%, printing 85%). With an Excel bulk it spans every label.
+ * Progress bar fill, 0 to 1, or null when idle. Each label owns 1 / N of the bar (4 labels: 25%
+ * each): the labels the printer has confirmed fill their share fully, and the one being printed
+ * fills part of its own share (20% while sending, 60% once its data is sent). With an Excel bulk
+ * it spans every label.
  */
 export function joshProgressFraction(state: JoshProgressState): number | null {
   if (state.phase === 'idle') return null;
   const copies = Math.max(1, state.copies ?? 1);
-  const done = state.copiesDone ?? 0;
+  const done = Math.min(copies, state.copiesDone ?? 0);
   let within: number;
   if (state.phase === 'done') within = 1;
+  else if (state.copies == null) within = 0; // total not known yet: do not guess a share
   else {
-    const inFlight =
-      state.phase === 'sending' ? 0.35 : (state.copy ?? 0) > done ? 0.85 : 0.1;
+    const stage = state.phase === 'printing' ? 0.6 : 0.2;
+    // The label in flight (an event copy number beyond the confirmed ones) fills part of its share.
+    const inFlight = done < copies && (state.copy ?? 0) > done ? stage : 0;
     within = Math.min(1, (done + inFlight) / copies);
   }
   if (state.bulkIndex != null && state.bulkTotal != null && state.bulkTotal > 0) {
@@ -168,8 +170,8 @@ export function joshProgressText(state: JoshProgressState): string | null {
     case 'sending':
       return `${bulk}Sending`;
     case 'printing':
-      return copies != null && copies > 1
-        ? `${bulk}Printing ${joshCurrentLabel(state)} of ${copies}`
+      return copies != null && copies > 1 && state.copy != null
+        ? `${bulk}Printing ${Math.min(state.copy, copies)} of ${copies}`
         : `${bulk}Printing`;
     case 'done':
       return `${bulk}Done`;
@@ -188,17 +190,17 @@ export function applyJoshProgressEvent(
   const copy = num(event.copy) ?? state.copy;
   switch (event.progress) {
     case 'CONNECTED':
-      return { ...state, phase: 'sending', copy, copies, copiesDone: 0 };
+      return { ...state, phase: 'sending', copy, copies };
     case 'START_COPY':
-      return { ...state, phase: 'sending', copy, copies, copiesDone: copy != null ? Math.max(0, copy - 1) : state.copiesDone };
+      return { ...state, phase: 'sending', copy, copies };
     case 'DATA_ENDED':
-      return { ...state, phase: 'printing', copy, copies, copiesDone: copy != null ? Math.max(0, copy - 1) : state.copiesDone };
+      return { ...state, phase: 'printing', copy, copies };
     case 'SUCCESS':
       // The native "submit accepted" success carries no label count; only a counted one is real.
-      if (copy == null || copy < 1) return state;
+      if (event.copy == null || event.copy < 1) return state;
       return copies != null && copy != null && copy < copies
-        ? { ...state, phase: 'printing', copy, copies, copiesDone: copy }
-        : { ...state, phase: 'done', copy, copies, copiesDone: copy ?? copies ?? state.copiesDone, failure: null };
+        ? { ...state, phase: 'printing', copy, copies, copiesDone: Math.max(state.copiesDone ?? 0, copy) }
+        : { ...state, phase: 'done', copy, copies, copiesDone: copies ?? copy ?? state.copiesDone, failure: null };
     case 'FAILED':
       return {
         ...state,

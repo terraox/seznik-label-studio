@@ -69,7 +69,7 @@ assert.equal(joshPrinterSays(35), 'No paper');
 assert.equal(joshPrinterSays(0), 'Paper detected');
 assert.equal(joshPrinterSays(undefined), 'n/a');
 
-// Progress text.
+// Progress text, from the printer's own events.
 let s = JOSH_PROGRESS_IDLE;
 assert.equal(joshProgressText(s), null);
 s = applyJoshProgressEvent(s, { progress: 'CONNECTED', copies: 5 });
@@ -124,18 +124,26 @@ assert.equal(joshCharging({ isConnectedAdapter: false, chargeStatus: 1 }), true)
 assert.equal(joshCharging({ isConnectedAdapter: false, chargeStatus: 0 }), false);
 assert.equal(joshCharging(null), false);
 
-// Progress bar: finished labels count fully, the one in flight counts partly.
-let p = applyJoshProgressEvent({ ...JOSH_PROGRESS_IDLE }, { progress: 'START_COPY', copy: 1, copies: 3 });
-assert.ok(Math.abs((joshProgressFraction(p) ?? 0) - 0.35 / 3) < 1e-9);
-p = applyJoshProgressEvent(p, { progress: 'DATA_ENDED', copy: 1, copies: 3 });
-assert.ok(Math.abs((joshProgressFraction(p) ?? 0) - 0.85 / 3) < 1e-9);
-p = applyJoshProgressEvent(p, { progress: 'SUCCESS', copy: 1, copies: 3 });
-assert.equal(p.copiesDone, 1);
-assert.equal(joshProgressText(p), 'Printing 2 of 3');
-p = applyJoshProgressEvent(p, { progress: 'DATA_ENDED', copy: 2, copies: 3 });
-assert.ok(Math.abs((joshProgressFraction(p) ?? 0) - 1.85 / 3) < 1e-9);
-p = applyJoshProgressEvent(p, { progress: 'SUCCESS', copy: 3, copies: 3 });
+// Progress bar: each label owns 1 / N (4 labels: 25% each); a confirmed label fills its share.
+const near = (a: number | null, b: number) => assert.ok(a != null && Math.abs(a - b) < 1e-9, `${a} vs ${b}`);
+let p = applyJoshProgressEvent({ ...JOSH_PROGRESS_IDLE }, { progress: 'START_COPY', copy: 1, copies: 4 });
+near(joshProgressFraction(p), 0.05); // 20% of the first 25%
+p = applyJoshProgressEvent(p, { progress: 'DATA_ENDED', copy: 1, copies: 4 });
+near(joshProgressFraction(p), 0.15); // 60% of the first 25%
+p = applyJoshProgressEvent(p, { progress: 'SUCCESS', copy: 1, copies: 4 });
+near(joshProgressFraction(p), 0.25);
+p = applyJoshProgressEvent(p, { progress: 'START_COPY', copy: 2, copies: 4 });
+near(joshProgressFraction(p), 0.3);
+p = applyJoshProgressEvent(p, { progress: 'SUCCESS', copy: 2, copies: 4 });
+near(joshProgressFraction(p), 0.5);
+p = applyJoshProgressEvent(p, { progress: 'SUCCESS', copy: 4, copies: 4 });
+assert.equal(p.phase, 'done');
 assert.equal(joshProgressFraction(p), 1);
 assert.equal(joshProgressFraction(JOSH_PROGRESS_IDLE), null);
+// Several starts reported at once only move the bar by one stage, never to 3 / 3.
+const burst = applyJoshProgressEvent({ ...JOSH_PROGRESS_IDLE }, { progress: 'START_COPY', copy: 3, copies: 3 });
+near(joshProgressFraction(burst), 0.2 / 3);
+// A success with no label count (the "submit accepted" one) changes nothing.
+assert.equal(applyJoshProgressEvent(p, { progress: 'SUCCESS', copy: 0, copies: 4 }), p);
 
 console.log('ok josh-status');

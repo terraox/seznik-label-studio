@@ -80,7 +80,7 @@ import {
 } from '@/lib/serial/resolve-document';
 import { serialPrintGate } from '@/lib/serial/symbology-validate';
 import { SERIAL_CONFIRM_ABOVE } from '@/lib/serial/types';
-import { joshProgressText, joshStatusAlert } from '@/lib/printer/josh-status';
+import { joshStatusAlert } from '@/lib/printer/josh-status';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
 import { useSerialContinueStore } from '@/stores/serial-continue-store';
 import { useSerialJobStore } from '@/stores/serial-job-store';
@@ -616,7 +616,8 @@ export default function PrintScreen() {
   const [copies, setCopies] = useState(1);
   const [collate, setCollate] = useState(false);
   const [printProgress, setPrintProgress] = useState<string | null>(null);
-  const joshProgressLine = useJoshProgressStore((s) => joshProgressText(s));
+  // A boolean, not the text: the text changes with every printer event and would re-render this whole screen.
+  const joshProgressLine = useJoshProgressStore((s) => s.phase !== 'idle');
   const joshLateFailure = useJoshProgressStore((s) => s.lateFailure);
   const joshStatusWarning = useJoshProgressStore((s) => joshStatusAlert(s.deviceStatus));
   useEffect(() => {
