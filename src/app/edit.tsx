@@ -40,6 +40,7 @@ import { useWalkthroughStore } from '@/stores/walkthrough-store';
 import {
   clampElementToLabel,
   fitBarcodeDefaults,
+  scaleElementAboutCenter,
   fitClipartDefaults,
   fitLineDefaults,
   fitQrcodeDefaults,
@@ -3043,6 +3044,49 @@ export default function EditScreen() {
     [selectedIds, setElements],
   );
 
+  const SCALE_STEP = 1.1;
+  const scaleSelectedBy = useCallback(
+    (factor: number) => {
+      if (selectedIds.length === 0) return;
+      setElements(
+        (elements) =>
+          elements.map((el) =>
+            selectedIds.includes(el.id) && !el.lockMovement && el.type !== 'border'
+              ? scaleElementAboutCenter(el, factor, docRef.current.widthMm, docRef.current.heightMm)
+              : el,
+          ),
+        true,
+      );
+    },
+    [selectedIds, setElements],
+  );
+
+  const openPositionPanel = useCallback(() => {
+    if (selectedIds.length !== 1 || !primaryElement) {
+      setPanelOpen(true);
+      return;
+    }
+    topBarSelectionVisibleSv.value = 1;
+    bottomPanelVisibleSv.value = 1;
+    const position = 'Position' as never;
+    switch (primaryElement.type) {
+      case 'barcode': setBarcodeTab(position); break;
+      case 'image': setImageTab(position); break;
+      case 'text': setTextTab(position); break;
+      case 'qrcode': setQrcodeTab(position); break;
+      case 'line': setLineTab(position); break;
+      case 'shape': setShapeTab(position); break;
+      case 'table': setTableTab(position); break;
+      case 'time': setTimeTab(position); break;
+      case 'arctext': setArcTextTab(position); break;
+      case 'degrees': setDegreesTab(position); break;
+      case 'clipart': setClipartTab(position); break;
+      case 'signature': setSignatureTab(position); break;
+      default: break;
+    }
+    setPanelOpen(true);
+  }, [selectedIds.length, primaryElement, topBarSelectionVisibleSv, bottomPanelVisibleSv]);
+
   const alignSelected = useCallback(
     (kind: 'left' | 'right' | 'top' | 'bottom' | 'center') => {
       if (selectedIds.length === 0) return;
@@ -4197,6 +4241,33 @@ export default function EditScreen() {
         accessibilityRole="button"
         accessibilityLabel="Rotate selected element 90 degrees">
         <AppIcon name="arrow.clockwise" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on the dark contextual bar */ />
+      </Pressable>
+      <View style={styles.contextualBarDivider} />
+      <Pressable
+        style={({ pressed }) => [styles.contextualBarBtn, pressed && styles.pressed]}
+        onPress={() => scaleSelectedBy(1 / SCALE_STEP)}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Make selected element smaller">
+        <AppIcon name="minus" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on the dark contextual bar */ />
+      </Pressable>
+      <View style={styles.contextualBarDivider} />
+      <Pressable
+        style={({ pressed }) => [styles.contextualBarBtn, pressed && styles.pressed]}
+        onPress={() => scaleSelectedBy(SCALE_STEP)}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Make selected element bigger">
+        <AppIcon name="plus" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on the dark contextual bar */ />
+      </Pressable>
+      <View style={styles.contextualBarDivider} />
+      <Pressable
+        style={({ pressed }) => [styles.contextualBarBtn, pressed && styles.pressed]}
+        onPress={openPositionPanel}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Move and position">
+        <AppIcon name="arrow.up.and.down.and.arrow.left.and.right" tintColor="#FFFFFF" size={18} /* theme-fixed: white icon on the dark contextual bar */ />
       </Pressable>
       <View style={styles.contextualBarDivider} />
       <Pressable

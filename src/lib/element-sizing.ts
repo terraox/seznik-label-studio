@@ -598,6 +598,18 @@ export function fitClipartDefaults(widthMm: number, heightMm: number, existing: 
 
 
 
+/** Grow or shrink one element by `factor` around its own centre (font, table cells and codes follow). */
+export function scaleElementAboutCenter(el: LabelElement, factor: number, canvasWidthMm: number, canvasHeightMm: number): LabelElement {
+  const before = elementSizeMm(el);
+  const scaled = scaleElementFields(el, factor, factor, factor, canvasWidthMm, canvasHeightMm);
+  const after = elementSizeMm(scaled);
+  return {
+    ...scaled,
+    left: el.left + (before.width - after.width) / 2,
+    top: el.top + (before.height - after.height) / 2,
+  } as LabelElement;
+}
+
 /** Clamp element position/size so it stays inside the label (paddle only on rat-tail). */
 export function clampElementToLabel(
   element: LabelElement,
