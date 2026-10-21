@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { EcommerceLabelCard } from '@/components/home/ecommerce-label-card';
 import { BuyFromUsStrip } from '@/components/home/buy-from-us-strip';
 import { ContinueCard } from '@/components/home/continue-card';
+import { FeatureBanners } from '@/components/home/feature-banners';
 import { HeroCard } from '@/components/home/hero-card';
 import { HomeHeader } from '@/components/home/home-header';
 import {
@@ -109,6 +109,8 @@ export default function HomeScreen() {
         onLayout={(e) => setViewportH(e.nativeEvent.layout.height)}
         onContentSizeChange={(_w, h) => setContentH(h)}>
         <View style={styles.inner}>
+          <FeatureBanners />
+
           <WalkthroughTarget id="home.newLabel">
             <HeroCard compact={hasLabels} />
           </WalkthroughTarget>
@@ -146,11 +148,6 @@ export default function HomeScreen() {
             <WalkthroughTarget id="home.create">
               <ToolGrid ids={CREATE_GRID_TOOLS} columns={3} />
             </WalkthroughTarget>
-          </View>
-
-          <View style={styles.section}>
-            <SectionHeading>Print ecommerce shipping label</SectionHeading>
-            <EcommerceLabelCard />
           </View>
 
           <View style={styles.section}>

@@ -1,22 +1,22 @@
 import { Platform } from 'react-native';
 
 export const Palette = {
-  header: '#214668',
-  screen: '#EFF2F7',
+  header: '#24275A',
+  screen: '#F4F7FB',
   card: '#FFFFFF',
-  cardTop: '#EFF2F6',
-  accent: '#17A6B8',
-  danger: '#E84149',
-  ink: '#2C3E50',
-  muted: '#7E8B98',
-  actionText: '#556473',
+  cardTop: '#EEF2F8',
+  accent: '#2DAFE5',
+  danger: '#C8493F',
+  ink: '#1D2140',
+  muted: '#666C88',
+  actionText: '#4A5070',
   preview: '#FAD5DF',
-  hairline: '#EAECEF',
-  disabled: '#A4B0BC',
+  hairline: '#E4E9F1',
+  disabled: '#A8ADC0',
 } as const;
 
 /** Filled hero surface; white text on it stays above 4.5:1 (Palette.accent is ~2.9:1). */
-export const accentStrong = '#0E7C8A';
+export const accentStrong = '#1878B8';
 
 /**
  * Solid status-chip fills (white text on each). Contrast vs #FFFFFF is ≥4.5:1.
@@ -71,7 +71,7 @@ export const HOME_CONTENT_BUDGET = {
 
 export const cardShadow = Platform.select({
   ios: {
-    shadowColor: '#0B1F33',
+    shadowColor: '#1A1F3D',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -83,7 +83,7 @@ export const cardShadow = Platform.select({
 /** Android-only ripple; omit on iOS so Pressable keeps opacity feedback.
  * Do not set `foreground: true` — it crashes inside overflow-hidden cards on Android. */
 export const androidRipple =
-  Platform.OS === 'android' ? { color: 'rgba(23, 166, 184, 0.18)' as const } : undefined;
+  Platform.OS === 'android' ? { color: 'rgba(45, 175, 229, 0.16)' as const } : undefined;
 
 /**
  * Clamp a base size against the device width so layouts stay readable on

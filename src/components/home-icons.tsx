@@ -477,7 +477,7 @@ export function ShareNodeIcon({ color = C.accent, size = 24 }: { color?: string;
 /**
  * Film strip / photographic frame icon for "Use frame"
  */
-export function UseFrameIcon({ color = '#214668', size = 36 }: { color?: string; size?: number }) { // theme-fixed: icon default colour
+export function UseFrameIcon({ color = '#24275A', size = 36 }: { color?: string; size?: number }) { // theme-fixed: icon default colour
   useThemeRefresh();
   const scale = size / 36;
   const w = 24 * scale;
@@ -542,7 +542,7 @@ export function UseFrameIcon({ color = '#214668', size = 36 }: { color?: string;
 /**
  * Overlapping card with plus icon for "Print directly"
  */
-export function PrintDirectlyIcon({ color = '#17A6B8', size = 36 }: { color?: string; size?: number }) { // theme-fixed: icon default colour
+export function PrintDirectlyIcon({ color = '#2DAFE5', size = 36 }: { color?: string; size?: number }) { // theme-fixed: icon default colour
   useThemeRefresh();
   const scale = size / 36;
   const cardW = 20 * scale;

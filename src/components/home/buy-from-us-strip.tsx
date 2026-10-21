@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -12,6 +12,7 @@ import Animated, {
 import { AppIcon } from '@/components/app-icon';
 import { ProductImage } from '@/components/shop/product-image';
 import { androidRipple, HomeLayout } from '@/constants/ui';
+import { openProductUrl } from '@/lib/shop/amazon-url';
 import { getBundledShopCatalog } from '@/lib/shop/load-catalog';
 import { productDisplayTitle } from '@/lib/shop/filter-catalog';
 import type { ShopProduct } from '@/lib/shop/types';
@@ -39,6 +40,13 @@ function featuredProducts(): ShopProduct[] {
   }
   const machines = printers.filter((product) => product.imageUrl).slice(0, PRINTER_COUNT);
   return [...machines, ...rolls];
+}
+
+async function openProduct(product: ShopProduct) {
+  const result = await openProductUrl(product);
+  if (!result.ok) {
+    Alert.alert('Link unavailable', 'This product link could not be opened.');
+  }
 }
 
 export function BuyFromUsStrip() {
@@ -77,7 +85,7 @@ export function BuyFromUsStrip() {
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.header}>
         <View style={styles.badge}>
-          <AppIcon name="bag.fill" tintColor={C.onAccent} size={18} />
+          <AppIcon name="bag" tintColor={C.accent} size={20} />
         </View>
         <View style={styles.headerText}>
           <Text
@@ -103,7 +111,12 @@ export function BuyFromUsStrip() {
         <View style={styles.track}>
           <Animated.View style={[styles.row, { width: loopWidth * 2 + PAD }, marqueeStyle]}>
             {tiles.map((product, index) => (
-              <View key={`${product.id}-${index}`} style={styles.tile}>
+              <Pressable
+                key={`${product.id}-${index}`}
+                onPress={() => void openProduct(product)}
+                accessibilityRole="link"
+                accessibilityLabel={`Buy ${product.name}`}
+                style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
                 <View style={styles.photo}>
                   <ProductImage uri={product.imageUrl} recyclingKey={product.id} />
                 </View>
@@ -115,7 +128,7 @@ export function BuyFromUsStrip() {
                     {product.category === 'printers' ? 'Printer' : 'Label roll'}
                   </Text>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </Animated.View>
         </View>
@@ -137,12 +150,11 @@ const styles = themedStyles((c, scheme) => ({
       : null),
   },
   card: {
-    minHeight: HomeLayout.buyStripHeight,
     backgroundColor: c.surface,
     borderRadius: 16,
     overflow: 'hidden',
     paddingTop: 14,
-    paddingBottom: 12,
+    paddingBottom: 8,
     gap: 12,
   },
   header: {
@@ -154,8 +166,10 @@ const styles = themedStyles((c, scheme) => ({
   badge: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: c.accentStrong,
+    borderRadius: 20,
+    backgroundColor: c.accentSoft,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -165,8 +179,9 @@ const styles = themedStyles((c, scheme) => ({
     gap: 2,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.2,
     color: c.text,
   },
   subtitle: {
@@ -177,15 +192,19 @@ const styles = themedStyles((c, scheme) => ({
   ctaWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
+    paddingLeft: 14,
+    paddingRight: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: c.accentSoft,
   },
   cta: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: c.accent,
   },
   track: {
-    height: 176,
     overflow: 'hidden',
   },
   row: {
@@ -197,6 +216,7 @@ const styles = themedStyles((c, scheme) => ({
   tile: {
     width: TILE_W,
     gap: 4,
+    alignItems: 'center',
   },
   photo: {
     width: TILE_W,
@@ -211,9 +231,10 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 12,
     fontWeight: '700',
     color: c.text,
+    textAlign: 'center',
   },
   tilePill: {
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 999,

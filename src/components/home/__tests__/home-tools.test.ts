@@ -19,7 +19,7 @@ const LEGACY_HOME_HREFS = [
   '/print-photo-modal',
   '/new-label-setup?isTwoUps=true',
   '/shipping-label',
-  '/customize-template',
+  '/ecommerce-label',
   '/img-to-label',
   '/new-label-setup?serialEditor=1',
 ];

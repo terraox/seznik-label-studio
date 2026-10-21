@@ -15,18 +15,20 @@ export function cardElevation(c: ThemeColors, scheme: ColorScheme): ViewStyle {
   if (scheme === 'dark') {
     return { borderWidth: 1, borderColor: c.cardBorder };
   }
-  return (
-    Platform.select<ViewStyle>({
+  return {
+    borderWidth: 1,
+    borderColor: c.cardBorder,
+    ...(Platform.select<ViewStyle>({
       ios: {
         shadowColor: c.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
       },
-      android: { boxShadow: '0px 2px 6px rgba(11, 31, 51, 0.08)' }, // theme-fixed: light-mode card shadow
+      android: { boxShadow: '0px 4px 10px rgba(11, 15, 20, 0.07)' }, // theme-fixed: light-mode card shadow
       default: {},
-    }) ?? {}
-  );
+    }) ?? {}),
+  };
 }
 
 /** Stronger elevation for popups, menus and bottom sheets. */

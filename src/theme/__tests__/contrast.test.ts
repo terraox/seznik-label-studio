@@ -70,16 +70,16 @@ test('light and dark define the same tokens', () => {
   assert.deepEqual(Object.keys(LightColors).sort(), Object.keys(D).sort());
 });
 
-test('light: brand colours are unchanged', () => {
-  assert.equal(LightColors.header, '#214668');
-  assert.equal(LightColors.bg, '#EFF2F7');
+test('light: SEZNIK logo palette', () => {
+  assert.equal(LightColors.header, '#24275A');
+  assert.equal(LightColors.bg, '#F4F7FB');
   assert.equal(LightColors.surface, '#FFFFFF');
-  assert.equal(LightColors.accent, '#17A6B8');
-  assert.equal(LightColors.accentStrong, '#0E7C8A');
-  assert.equal(LightColors.danger, '#E84149');
-  assert.equal(LightColors.text, '#2C3E50');
-  assert.equal(LightColors.textMuted, '#7E8B98');
-  assert.equal(LightColors.textSecondary, '#556473');
-  assert.equal(LightColors.hairline, '#EAECEF');
-  assert.equal(LightColors.textDisabled, '#A4B0BC');
+  assert.equal(LightColors.accent, '#2DAFE5');
+  assert.equal(LightColors.accentStrong, '#1878B8');
+  assert.equal(LightColors.danger, '#C8493F');
+  assert.equal(LightColors.text, '#1D2140');
+  assert.equal(LightColors.textMuted, '#666C88');
+  assert.equal(LightColors.textSecondary, '#4A5070');
+  assert.equal(LightColors.hairline, '#E4E9F1');
+  assert.equal(LightColors.textDisabled, '#A8ADC0');
 });

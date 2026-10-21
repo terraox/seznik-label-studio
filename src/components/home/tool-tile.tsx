@@ -25,7 +25,9 @@ export function ToolTile({
         accessibilityRole="button"
         accessibilityLabel={tool.label}
         style={({ pressed }) => [styles.inner, { minHeight }, pressed && styles.pressed]}>
-        <ToolIcon id={id} color={C.accent} />
+        <View style={styles.iconWrap}>
+          <ToolIcon id={id} color={C.accent} />
+        </View>
         <Text
           numberOfLines={2}
           maxFontSizeMultiplier={HomeLayout.labelMaxFontScale}
@@ -44,7 +46,7 @@ const styles = themedStyles((c, scheme) => ({
   },
   inner: {
     backgroundColor: c.surface,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
@@ -52,9 +54,17 @@ const styles = themedStyles((c, scheme) => ({
     paddingVertical: 8,
     ...cardElevation(c, scheme),
   },
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: c.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   label: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
     color: c.text,
     textAlign: 'center',
   },

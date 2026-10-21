@@ -137,7 +137,7 @@ const useStyles = makeStyles((c, scheme) => ({
     left: 0,
     right: 0,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: scheme === 'light' ? 'rgba(23, 166, 184, 0.35)' : c.hairline, // theme-fixed: light teal hairline
+    backgroundColor: scheme === 'light' ? 'rgba(45, 175, 229, 0.3)' : c.hairline, // theme-fixed: light sky hairline
   },
   item: {
     paddingTop: 4,

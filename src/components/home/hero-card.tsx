@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, Text, View } from 'react-native';
 
 import { HOME_TOOLS } from '@/components/home/home-tools';
@@ -7,7 +8,7 @@ import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 /**
  * WePrint-style New Label glyph: outline back sheet (navy) + filled front sheet
- * (teal) with a white plus. Sits directly on the white hero card — no colored tile.
+ * (white) with a plus. Sits directly on the white hero card — no colored tile.
  */
 function NewLabelHeroArt({ size = 52 }: { size?: number }) {
   useThemeRefresh();
@@ -53,7 +54,7 @@ function NewLabelHeroArt({ size = 52 }: { size?: number }) {
               width: plus,
               height: plusStroke,
               borderRadius: plusStroke / 2,
-              backgroundColor: '#FFFFFF', // theme-fixed: white plus on the hero
+              backgroundColor: '#FFFFFF', // theme-fixed: white plus on the accent sheet
             }}
           />
           <View
@@ -62,7 +63,7 @@ function NewLabelHeroArt({ size = 52 }: { size?: number }) {
               width: plusStroke,
               height: plus,
               borderRadius: plusStroke / 2,
-              backgroundColor: '#FFFFFF', // theme-fixed: white plus on the hero
+              backgroundColor: '#FFFFFF', // theme-fixed: white plus on the accent sheet
             }}
           />
         </View>
@@ -105,6 +106,9 @@ export function HeroCard({
           Create a new blank label, and freely create label styles and styles.
         </Text>
       </View>
+      <View style={styles.go}>
+        <Ionicons name="arrow-forward" size={18} color="#FFFFFF" /* theme-fixed: arrow on the filled hero */ />
+      </View>
     </Pressable>
   );
 }
@@ -117,9 +121,10 @@ const styles = themedStyles((c, scheme) => ({
     minHeight: HomeLayout.heroHeight,
     paddingVertical: 18,
     paddingHorizontal: 18,
-    borderRadius: 12,
-    backgroundColor: c.surface,
+    borderRadius: 16,
+    backgroundColor: scheme === 'dark' ? c.surface : '#E4F3FB', // theme-fixed: soft sky hero
     ...cardElevation(c, scheme),
+    borderColor: scheme === 'dark' ? c.cardBorder : '#C5E4F4', // theme-fixed: soft sky hero
   },
   art: {
     width: 52,
@@ -136,14 +141,22 @@ const styles = themedStyles((c, scheme) => ({
   },
   title: {
     color: c.text,
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
   },
   detail: {
-    color: c.textMuted,
+    color: c.textSecondary,
     fontSize: 13,
     fontWeight: '400',
     lineHeight: 18,
+  },
+  go: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: c.accentFill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pressed: {
     opacity: 0.85,
