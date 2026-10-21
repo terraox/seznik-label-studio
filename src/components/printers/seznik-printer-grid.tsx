@@ -111,7 +111,7 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
         await onTestPrint(model);
       } else {
         const mgr = getPrinterManager();
-        await mgr.printTestLabel(model.shortName);
+        await mgr.printTestLabel();
         Alert.alert('Test Label Sent!', `Test pattern transmitted to ${model.name}.`);
       }
     } catch (err: any) {
