@@ -495,3 +495,25 @@ html.dark .ptag.web { color: #a5b4fc; }
 .lib-thumb img { max-width: 92%; max-height: 92%; object-fit: contain; }
 .lib-thumb.big { aspect-ratio: 16 / 9; }
 .lib-foot { align-items: center; }
+
+/* The EvilCharts components are written with Tailwind utilities, which this app does not ship. */
+[data-chart] { position: relative; display: flex; flex-direction: column; font-size: 0.75rem; }
+[data-chart] > .relative { position: relative; min-height: 0; width: 100%; flex: 1 1 0%; }
+[data-chart] > .relative > div { height: 100%; min-height: 0; width: 100%; }
+[data-chart] .flex { display: flex; }
+[data-chart] .items-center { align-items: center; }
+[data-chart] .gap-4 { gap: 1rem; }
+[data-chart] .gap-1\.5 { gap: 0.375rem; }
+[data-chart] .gap-2 { gap: 0.5rem; }
+[data-chart] .select-none { user-select: none; }
+[data-chart] .justify-start { justify-content: flex-start; }
+[data-chart] .justify-center { justify-content: center; }
+[data-chart] .justify-end { justify-content: flex-end; }
+[data-chart] .shrink-0 { flex-shrink: 0; }
+[data-chart] .h-2 { height: 0.5rem; } [data-chart] .w-2 { width: 0.5rem; }
+[data-chart] .h-2\.5 { height: 0.625rem; } [data-chart] .w-2\.5 { width: 0.625rem; }
+[data-chart] .h-3 { height: 0.75rem; } [data-chart] .w-3 { width: 0.75rem; }
+[data-chart] .h-1 { height: 0.25rem; } [data-chart] .w-1 { width: 0.25rem; }
+[data-chart] .rounded-full { border-radius: 9999px; }
+[data-chart] .rounded-\[2px\] { border-radius: 2px; }
+[data-chart] .rounded-\[3px\] { border-radius: 3px; }
