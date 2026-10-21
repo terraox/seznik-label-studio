@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Platform,
   Pressable,
@@ -44,7 +44,11 @@ import {
   type ResizeBehavior,
 } from '@/lib/editor/resize-policy';
 import { computeTextElementHeightMm } from '@/lib/text-metrics';
-import { useVisibleTextRevision, visibleTextHeightMm } from '@/lib/visible-text-layout';
+import {
+  buildLiveLayoutBank,
+  useVisibleTextRevision,
+  visibleTextHeightMm,
+} from '@/lib/visible-text-layout';
 import {
   CHROME_HANDLE_FILL,
   CHROME_HANDLE_ICON_COLOR,
@@ -156,8 +160,6 @@ const SAFE_MODE_SPRING = { damping: 12, stiffness: 180, mass: 0.6 };
 
 /** Below this the two reports are one physical tap double-counted. */
 const DOUBLE_TAP_MIN_GAP_MS = 30;
-/** Width step of the wrapped-height table built when a text width drag starts. */
-const LIVE_HEIGHT_STEP_MM = 0.5;
 /** Both taps must land on roughly the same spot, not opposite ends of a wide element. */
 const DOUBLE_TAP_MAX_DIST_PX = 32;
 /** Dedupes the native, UI-thread, and JS-thread detectors firing for one gesture. */
@@ -233,11 +235,15 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const sy = pxPerMMSafe;
   const resizePolicy = resizePolicyFor(element);
   const naturalSize = elementSizeMm(element);
-  const frameRoomW = Math.max(resizePolicy.minMm, canvasWidthMm - Math.max(0, finiteMm(element.left)));
-  const frameRoomH = Math.max(resizePolicy.minMm, canvasHeightMm - Math.max(0, finiteMm(element.top)));
+  const isTextElement = element.type === 'text' || element.type === 'degrees';
+  const isAutoHeight = isTextElement && element.autoTextHeight !== false && element.autoWrapping !== 'Close';
+  // Auto-height text keeps every wrapped line even when that runs past the label edge —
+  // capping to frameRoomH was clipping the last lines after a narrow resize.
+  // Not capped to the room left of the element's origin either: a box pushed toward an edge
+  // keeps its size (the canvas clips it); capping shrank it on every push and the commit saved that.
   const sizeMm = {
-    width: Math.min(naturalSize.width, frameRoomW),
-    height: Math.min(naturalSize.height, frameRoomH),
+    width: naturalSize.width,
+    height: naturalSize.height,
   };
   const hidden = element.visible === false;
   const aspectRatio = Math.max(1e-6, aspectRatioOf(element));
@@ -283,8 +289,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const tapHandledSv = useSharedValue(false);
 
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
-  const isTextElement = element.type === 'text' || element.type === 'degrees';
-  const isAutoHeight = isTextElement && element.autoTextHeight !== false && element.autoWrapping !== 'Close';
   const textContent =
     element.type === 'text'
       ? element.contentType === 'Data Source' && element.columnNameContent
@@ -300,6 +304,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const textLineSpacing = 'lineSpacing' in element ? element.lineSpacing ?? '1.0' : '1.0';
   const textCharSpacing = 'charSpacing' in element && typeof element.charSpacing === 'number' ? element.charSpacing : 0;
   const textBold = 'bold' in element ? element.bold ?? false : false;
+  const textAlign = 'align' in element && typeof element.align === 'string' ? element.align : 'left';
   const textVerticalDisplay = 'verticalDisplay' in element ? element.verticalDisplay ?? false : false;
   const textFontFamily = 'fontFamily' in element && typeof element.fontFamily === 'string' ? element.fontFamily : '';
 
@@ -321,6 +326,14 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   // The content swaps to a natively wrapping Text on the UI thread, so words reflow with
   // the frame instead of being clipped while React catches up.
   const textLiveSv = useSharedValue(false);
+  // Native live-text laid-out height in px. Skia wrap can undershoot RN wrap on narrow boxes;
+  // the frame grows to whichever is taller so the last lines are never clipped mid-drag.
+  const liveNativeHeightSv = useSharedValue(0);
+  // Height lookup built while idle (on select). Drag start only flips textLiveSv — no JS work.
+  const liveHeightStartsSv = useSharedValue<number[]>([]);
+  const liveHeightValuesSv = useSharedValue<number[]>([]);
+  const liveHeightReadySv = useSharedValue(false);
+  const lastLiveLogTickSv = useSharedValue(0);
   const textLiveReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearTextLiveTimer = useCallback(() => {
     if (textLiveReleaseTimer.current != null) {
@@ -343,109 +356,77 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     textLiveSv.value = false;
   }, [sizeMm.width, sizeMm.height, clearTextLiveTimer, textLiveSv]);
 
-  // The frame height during a drag comes from the same function as the resting height
-  // (visibleTextHeightMm), so the box does not change height again when the drag ends.
-  const liveTextRef = useRef({
-    text: textContent,
-    fontSize: textFontSize,
-    autoWrapping: textAutoWrapping,
-    lineSpacing: textLineSpacing,
-    charSpacing: textCharSpacing,
-    bold: textBold,
-    verticalDisplay: textVerticalDisplay,
-    fontFamily: textFontFamily,
-    top: element.top,
-    minMm: resizePolicy.minMm,
-    canvasHeightMm,
-    sx,
-    sy,
-  });
-  liveTextRef.current = {
-    text: textContent,
-    fontSize: textFontSize,
-    autoWrapping: textAutoWrapping,
-    lineSpacing: textLineSpacing,
-    charSpacing: textCharSpacing,
-    bold: textBold,
-    verticalDisplay: textVerticalDisplay,
-    fontFamily: textFontFamily,
-    top: finiteMm(element.top),
-    minMm: resizePolicy.minMm,
-    canvasHeightMm,
-    sx,
-    sy,
-  };
-  // Wrapped height for every width the drag can reach, measured once when the drag starts.
-  // The drag worklet reads it on the UI thread, so the box height changes in the same frame
-  // as the natively wrapping text instead of waiting for a JS measure per frame.
-  const liveHeightTableSv = useSharedValue<number[]>([]);
-  const liveHeightTableMinSv = useSharedValue(0);
-  const buildLiveHeightTableJS = useCallback(() => {
-    const cur = liveTextRef.current;
-    const minW = Math.max(0.5, cur.minMm);
-    const maxW = Math.max(minW, canvasWidthMm - Math.max(0, finiteMm(element.left)));
-    const table: number[] = [];
-    for (let w = minW; w <= maxW + LIVE_HEIGHT_STEP_MM; w += LIVE_HEIGHT_STEP_MM) {
-      table.push(
-        visibleTextHeightMm({
-          text: cur.text,
-          fontSize: cur.fontSize,
-          widthMm: w,
-          autoWrapping: cur.autoWrapping === 'Close' ? 'Word' : cur.autoWrapping,
-          lineSpacing: cur.lineSpacing,
-          charSpacing: cur.charSpacing,
-          bold: cur.bold,
-          verticalDisplay: cur.verticalDisplay,
-          fontFamily: cur.fontFamily || undefined,
-        }),
-      );
-    }
-    liveHeightTableMinSv.value = minW;
-    liveHeightTableSv.value = table;
-  }, [canvasWidthMm, element.left, liveHeightTableMinSv, liveHeightTableSv]);
-  const liveHeightFrame = useRef<number | null>(null);
-  const liveHeightWidthPx = useRef(-1);
-  const correctLiveHeightJS = useCallback(
-    (widthPx: number) => {
-      liveHeightWidthPx.current = widthPx;
-      if (liveHeightFrame.current != null) return;
-      liveHeightFrame.current = requestAnimationFrame(() => {
-        liveHeightFrame.current = null;
-        const w = liveHeightWidthPx.current;
-        const cur = liveTextRef.current;
-        if (w < 0 || !textLiveSv.value) return;
-        const heightMm = visibleTextHeightMm({
-          text: cur.text,
-          fontSize: cur.fontSize,
-          widthMm: Math.max(0.5, w / cur.sx),
-          autoWrapping: cur.autoWrapping === 'Close' ? 'Word' : cur.autoWrapping,
-          lineSpacing: cur.lineSpacing,
-          charSpacing: cur.charSpacing,
-          bold: cur.bold,
-          verticalDisplay: cur.verticalDisplay,
-          fontFamily: cur.fontFamily || undefined,
-        });
-        const maxH = Math.max(cur.minMm, cur.canvasHeightMm - cur.top);
-        animH.value = Math.max(1, Math.min(maxH, heightMm) * cur.sy);
-      });
-    },
-    [animH, textLiveSv],
-  );
-  useEffect(
-    () => () => {
-      if (liveHeightFrame.current != null) cancelAnimationFrame(liveHeightFrame.current);
-    },
-    [],
-  );
+  // When native wrap lays out taller than the Skia estimate, grow the live frame immediately
+  // even if the finger is still — otherwise the last lines stay clipped until the next move.
   useAnimatedReaction(
-    () => (textLiveSv.value && liveHeightTableSv.value.length === 0 ? animW.value : -1),
-    (widthPx, prev) => {
-      if (widthPx < 0) return;
-      if (prev != null && prev >= 0 && Math.abs(widthPx - prev) < 1) return;
-      runOnJS(correctLiveHeightJS)(widthPx);
+    () => (textLiveSv.value ? liveNativeHeightSv.value : 0),
+    (hPx) => {
+      if (hPx <= 1) return;
+      if (hPx > animH.value + 0.5) {
+        animH.value = hPx;
+      }
     },
-    [correctLiveHeightJS, liveHeightTableSv],
   );
+
+  // Prefetch wrapped heights for every reachable width while the element is selected, so a
+  // width drag never blocks the JS thread measuring text mid-gesture.
+  useEffect(() => {
+    if (!isTextElement || !selected) {
+      liveHeightReadySv.value = false;
+      return;
+    }
+    if (textVerticalDisplay || textAlign === 'justify' || textAlign === 'spacing') {
+      liveHeightReadySv.value = false;
+      return;
+    }
+    let cancelled = false;
+    const handle = requestAnimationFrame(() => {
+      if (cancelled) return;
+      const minW = Math.max(0.5, resizePolicy.minMm);
+      const maxW = Math.max(minW, canvasWidthMm - Math.max(0, finiteMm(element.left)));
+      const bank = buildLiveLayoutBank(
+        {
+          text: textContent,
+          fontSize: textFontSize,
+          autoWrapping: textAutoWrapping === 'Close' ? 'Word' : textAutoWrapping,
+          lineSpacing: textLineSpacing,
+          charSpacing: textCharSpacing,
+          bold: textBold,
+          verticalDisplay: textVerticalDisplay,
+          fontFamily: textFontFamily || undefined,
+        },
+        minW,
+        maxW,
+        0.5,
+      );
+      if (cancelled) return;
+      liveHeightStartsSv.value = bank.starts;
+      liveHeightValuesSv.value = bank.heights;
+      liveHeightReadySv.value = bank.starts.length > 0;
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(handle);
+    };
+  }, [
+    isTextElement,
+    selected,
+    textContent,
+    textFontSize,
+    textAutoWrapping,
+    textLineSpacing,
+    textCharSpacing,
+    textBold,
+    textVerticalDisplay,
+    textFontFamily,
+    textAlign,
+    resizePolicy.minMm,
+    canvasWidthMm,
+    element.left,
+    liveHeightStartsSv,
+    liveHeightValuesSv,
+    liveHeightReadySv,
+  ]);
 
   const liftSv = useSharedValue(1);
   const selectedSv = useSharedValue(selected);
@@ -854,7 +835,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         rotation: rot,
       });
       if (isTextElement && handle === 'e') {
-        const wrapH = visibleTextHeightMm({
+        const wrapParams = {
           text: textContent,
           fontSize: textFontSize,
           widthMm: next.width,
@@ -864,9 +845,12 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           bold: textBold,
           verticalDisplay: textVerticalDisplay,
           fontFamily: textFontFamily || undefined,
-        });
-        const maxH = Math.max(resizePolicy.minMm, canvasHeightMm - next.top);
-        next.height = roundMm(Math.min(maxH, wrapH));
+        };
+        // Prefer the taller of Skia wrap and the native live layout so a narrow drag never
+        // commits a frame that clips the last line on screen.
+        const skiaH = visibleTextHeightMm(wrapParams);
+        const nativeH = liveNativeHeightSv.value > 0 ? liveNativeHeightSv.value / pxPerMMSafe : 0;
+        next.height = roundMm(Math.max(skiaH, nativeH));
       }
 
       const rotation = ((Math.round(rot / 90) * 90) % 360 + 360) % 360;
@@ -1505,9 +1489,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             startH.value,
           );
           runOnJS(notifyTransformStartJS)(element.id, 'resize');
+          // Flip live reflow on the UI thread only — height table was prefetched on select.
           if (wrapTextOnWidthSv.value && handle === 'e') {
+            liveNativeHeightSv.value = 0;
             textLiveSv.value = true;
-            runOnJS(buildLiveHeightTableJS)();
           }
           if (
             groupEligibleSv &&
@@ -1601,11 +1586,15 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
           let liveHeightMm = box.height;
           if (wrapTextOnWidthSv.value && handle === 'e') {
-            const table = liveHeightTableSv.value;
             let wrapH: number;
-            if (table.length > 0) {
-              const idx = Math.round((box.width - liveHeightTableMinSv.value) / LIVE_HEIGHT_STEP_MM);
-              wrapH = table[Math.max(0, Math.min(table.length - 1, idx))];
+            if (liveHeightReadySv.value) {
+              const starts = liveHeightStartsSv.value;
+              let idx = 0;
+              for (let i = 0; i < starts.length; i += 1) {
+                if (starts[i] <= box.width + 0.0001) idx = i;
+                else break;
+              }
+              wrapH = liveHeightValuesSv.value[idx] ?? liveHeightValuesSv.value[0];
             } else {
               wrapH = computeTextElementHeightMm({
                 text: textContentSv.value,
@@ -1619,8 +1608,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 fontFamily: fontFamilySv.value || undefined,
               });
             }
-            const maxH = Math.max(minResizeMmSv.value, canvasHMmSv.value - box.top);
-            liveHeightMm = Math.min(maxH, wrapH);
+            const nativeHMm = liveNativeHeightSv.value / Math.max(0.0001, sySv.value);
+            if (nativeHMm > wrapH) wrapH = nativeHMm;
+            // Not capped at the label's bottom edge: the canvas clips, the frame keeps every line.
+            liveHeightMm = wrapH;
           }
           animW.value = Math.max(1, box.width * sxSv.value);
           animH.value = Math.max(1, liveHeightMm * sySv.value);
@@ -1641,13 +1632,16 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             liveBounds.visible.value = true;
           }
 
-          runOnJS(logLiveBoxJS)(box.left, box.top, box.width, box.height);
+          const nowMs = Date.now();
+          if (nowMs - lastLiveLogTickSv.value > 200) {
+            lastLiveLogTickSv.value = nowMs;
+            runOnJS(logLiveBoxJS)(box.left, box.top, box.width, box.height);
+          }
         })
         .onEnd(() => {
           'worklet';
           if (wrapTextOnWidthSv.value && handle === 'e') {
             runOnJS(releaseTextLiveJS)();
-            liveHeightTableSv.value = [];
           }
           runOnJS(dispatchResizeCommit)(handle, animW.value, animH.value, animRot.value);
         })
@@ -1655,14 +1649,15 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           'worklet';
           if (wrapTextOnWidthSv.value && handle === 'e') {
             runOnJS(releaseTextLiveJS)();
-            liveHeightTableSv.value = [];
           }
         });
     },
     [
-      buildLiveHeightTableJS,
-      liveHeightTableSv,
-      liveHeightTableMinSv,
+      liveHeightReadySv,
+      liveHeightStartsSv,
+      liveHeightValuesSv,
+      liveNativeHeightSv,
+      lastLiveLogTickSv,
       deselectGesture,
       originLeftSv,
       originTopSv,
@@ -1943,6 +1938,8 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 selectedTableCell={null}
                 tableSelectionColor={tableSelectionColor}
                 liveReflowSv={isTextElement ? textLiveSv : undefined}
+                liveWidthSv={isTextElement ? animW : undefined}
+                liveHeightSv={isTextElement ? liveNativeHeightSv : undefined}
                 frameWidth={lineEmojiFrame ? animW : undefined}
                 frameHeight={lineEmojiFrame ? animH : undefined}
               />

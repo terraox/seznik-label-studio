@@ -4,6 +4,7 @@ import { needsComplexTextShaping, resolveEditorFontFamily } from '@/lib/fonts/te
 import {
   computeWrappedLines,
   measureTextWidthMm,
+  ptToMm,
   textHorizontalPaddingMm,
   textLineBoxHeightMm,
   textVerticalPaddingMm,
@@ -211,12 +212,21 @@ export function visibleWrappedLines(opts: VisibleTextParams): string[] {
   return wrappedLinesFor(opts, layoutFamily(opts));
 }
 
+/**
+ * The screen text measures a hair differently from Skia. Wrapping a little early means the screen
+ * never has to break a line that was kept whole here, so the frame height, the preview and the
+ * printer all see the same lines.
+ */
+function wrapSlackMm(fontSizePt: number): number {
+  return Math.max(0.2, ptToMm(fontSizePt) * 0.07);
+}
+
 function wrappedLinesFor(opts: VisibleTextParams, family: string): string[] {
   const key = visibleTextKey(opts, family);
   const cached = remembered.get(key);
   if (cached) return cached;
   const inner = textWrapWidthMm(opts.widthMm, opts.fontSize, false);
-  const limit = Math.max(0.5, inner);
+  const limit = Math.max(0.5, inner - wrapSlackMm(opts.fontSize));
   const fontSize = opts.fontSize;
   const charSpacing = opts.charSpacing ?? 0;
   const bold = opts.bold ?? false;
@@ -241,6 +251,59 @@ export function visibleTextHeightMm(opts: VisibleTextParams): number {
   const lineH = textLineBoxHeightMm(opts.fontSize, opts.lineSpacing, family || undefined, opts.text);
   const pad = textVerticalPaddingMm(opts.fontSize);
   return Math.max(2.2, pad * 2 + lineH * Math.max(1, lines.length));
+}
+
+/** Frame height for `lineCount` lines drawn at `opts`. Same line box and padding as visibleTextHeightMm. */
+export function heightForLineCountMm(opts: VisibleTextParams, lineCount: number): number {
+  const family = layoutFamily(opts);
+  const lineH = textLineBoxHeightMm(opts.fontSize, opts.lineSpacing, family || undefined, opts.text);
+  const pad = textVerticalPaddingMm(opts.fontSize);
+  return Math.max(2.2, pad * 2 + lineH * Math.max(1, lineCount));
+}
+
+export type LiveLayoutBank = {
+  /** Smallest box width (mm) each layout is valid from, ascending. */
+  starts: number[];
+  /** Frame height (mm) of each layout. */
+  heights: number[];
+  /** Wrapped lines of each layout. */
+  lines: string[][];
+  /** Widest box width covered (mm). */
+  maxWidthMm: number;
+};
+
+/**
+ * Every distinct wrap the box can take between `minWidthMm` and `maxWidthMm`. Prefetched while
+ * idle so a width drag can look up frame height on the UI thread with no measure per frame.
+ * Widths between two steps use the narrower step's layout, so a line is never wider than its box.
+ */
+export function buildLiveLayoutBank(
+  opts: Omit<VisibleTextParams, 'widthMm'>,
+  minWidthMm: number,
+  maxWidthMm: number,
+  stepMm = 0.5,
+): LiveLayoutBank {
+  const starts: number[] = [];
+  const heights: number[] = [];
+  const lines: string[][] = [];
+  const hi = Math.max(minWidthMm, maxWidthMm);
+  let previous: string[] | null = null;
+  for (let w = minWidthMm; w <= hi + 1e-6; w += stepMm) {
+    const at = { ...opts, widthMm: w };
+    const wrapped = visibleWrappedLines(at);
+    if (
+      previous &&
+      previous.length === wrapped.length &&
+      previous.every((line, index) => line === wrapped[index])
+    ) {
+      continue;
+    }
+    previous = wrapped;
+    starts.push(w);
+    lines.push(wrapped);
+    heights.push(heightForLineCountMm(at, wrapped.length));
+  }
+  return { starts, heights, lines, maxWidthMm: hi };
 }
 
 /**

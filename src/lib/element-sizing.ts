@@ -224,6 +224,14 @@ function mergeTextElementPatchCore(
     const autoHeight = merged.autoTextHeight !== false && wrapping !== 'Close';
     const withWrap = { ...merged, autoWrapping: wrapping } as TextLikeElement;
     if (autoHeight) {
+      // Keep an explicit height from a live resize commit as a floor (RN wrap can be
+      // taller than Skia on very narrow boxes). Content-only edits omit height.
+      if (heightInPatch) {
+        return {
+          ...withWrap,
+          height: updates.height as number,
+        } as LabelElement;
+      }
       const { height: _removed, ...withoutHeight } = withWrap as TextLikeElement & { height?: number };
       return withoutHeight as LabelElement;
     }

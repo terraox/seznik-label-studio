@@ -142,6 +142,10 @@ type ContentProps = {
    * UI thread (no React render), so the words reflow with the frame instead of being clipped.
    */
   liveReflowSv?: SharedValue<boolean>;
+  /** Live box width in px. The reflow Text sizes from this on the UI thread. */
+  liveWidthSv?: SharedValue<number>;
+  /** Written with the native live-text laid-out height in px while reflowing. */
+  liveHeightSv?: SharedValue<number>;
 };
 
 function textStyleFor(
@@ -311,10 +315,20 @@ function formatTextForRender(
 /**
  * Opacity swap between the resting text (explicit, print-accurate lines) and the live text
  * (native wrap) during a width drag. Both stay mounted so the swap is a UI-thread flip.
+ * Live width is applied on the UI thread so words reflow in the same frame as the handle.
  */
-function useReflowSwapStyles(liveReflowSv?: SharedValue<boolean>) {
+function useReflowSwapStyles(
+  liveReflowSv?: SharedValue<boolean>,
+  liveWidthSv?: SharedValue<number>,
+) {
   const resting = useAnimatedStyle(() => ({ opacity: liveReflowSv?.value ? 0 : 1 }));
-  const live = useAnimatedStyle(() => ({ opacity: liveReflowSv?.value ? 1 : 0 }));
+  const live = useAnimatedStyle(() => {
+    const width = liveWidthSv && liveWidthSv.value > 0 ? liveWidthSv.value : undefined;
+    return {
+      opacity: liveReflowSv?.value ? 1 : 0,
+      ...(width != null ? { width } : null),
+    };
+  });
   return { resting, live };
 }
 
@@ -366,6 +380,8 @@ function TextContent({
   layoutWidthMm,
   layoutHeightMm,
   liveReflowSv,
+  liveWidthSv,
+  liveHeightSv,
 }: {
   element: TextLayoutFields & { text: string };
   scale: number;
@@ -374,6 +390,8 @@ function TextContent({
   layoutWidthMm?: number;
   layoutHeightMm?: number;
   liveReflowSv?: SharedValue<boolean>;
+  liveWidthSv?: SharedValue<number>;
+  liveHeightSv?: SharedValue<number>;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -406,7 +424,7 @@ function TextContent({
   const style = textStyleFor(drawElement, scale, resolvedFamily, raw);
   const formatted = formatTextForRender(drawElement, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
-  const swap = useReflowSwapStyles(liveReflowSv);
+  const swap = useReflowSwapStyles(liveReflowSv, liveWidthSv);
   const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
   const rememberWhenSettled = useSettledLineMemory(scale);
   // Native underlines sit on the font descent and overlap between lines, so draw the bars at
@@ -497,6 +515,9 @@ function TextContent({
                     })),
                   );
                 }
+                // Live width drag reflows every frame; caching those lines would thrash the
+                // canvas and freeze a mid-drag wrap after release.
+                if (liveReflowSv?.value) return;
                 if (layoutWidthMm != null || !formatted.layoutKey) return;
                 rememberWhenSettled(
                   formatted.layoutKey,
@@ -530,12 +551,16 @@ function TextContent({
           allowFontScaling={false}
           style={[
             textStyleFor(element, scale, resolvedFamily, raw),
-            styles.textFill,
             styles.liveReflowText,
             { textAlign: align },
             letterSpacingStyle(element, raw, scale),
             swap.live,
           ]}
+          onLayout={(e) => {
+            if (!liveHeightSv) return;
+            const h = e.nativeEvent.layout.height;
+            if (h > 0) liveHeightSv.value = h;
+          }}
         >
           {raw}
         </Animated.Text>
@@ -551,6 +576,8 @@ function DegreesContent({
   layoutWidthMm,
   layoutHeightMm,
   liveReflowSv,
+  liveWidthSv,
+  liveHeightSv,
 }: {
   element: DegreesElementState;
   scale: number;
@@ -559,6 +586,8 @@ function DegreesContent({
   layoutWidthMm?: number;
   layoutHeightMm?: number;
   liveReflowSv?: SharedValue<boolean>;
+  liveWidthSv?: SharedValue<number>;
+  liveHeightSv?: SharedValue<number>;
 }) {
   const rememberWhenSettled = useSettledLineMemory(scale);
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
@@ -592,7 +621,7 @@ function DegreesContent({
   const style = textStyleFor(drawElement, scale, resolvedFamily, raw);
   const formatted = formatTextForRender(drawElement, raw, layoutWidthMm, resolvedFamily);
   const align = element.align === "spacing" ? "justify" : element.align;
-  const swap = useReflowSwapStyles(liveReflowSv);
+  const swap = useReflowSwapStyles(liveReflowSv, liveWidthSv);
   const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
   return (
     <View
@@ -606,7 +635,7 @@ function DegreesContent({
               : align === "right"
                 ? "flex-end"
                 : "stretch",
-          overflow: "hidden",
+          overflow: autoHeight ? "visible" : "hidden",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
@@ -629,6 +658,7 @@ function DegreesContent({
           layoutWidthMm != null
             ? undefined
             : (event) => {
+                if (liveReflowSv?.value) return;
                 if (!formatted.layoutKey) return;
                 rememberWhenSettled(
                   formatted.layoutKey,
@@ -648,12 +678,16 @@ function DegreesContent({
           allowFontScaling={false}
           style={[
             textStyleFor(element, scale, resolvedFamily, raw),
-            styles.textFill,
             styles.liveReflowText,
             { textAlign: align },
             letterSpacingStyle(element, raw, scale),
             swap.live,
           ]}
+          onLayout={(e) => {
+            if (!liveHeightSv) return;
+            const h = e.nativeEvent.layout.height;
+            if (h > 0) liveHeightSv.value = h;
+          }}
         >
           {raw}
         </Animated.Text>
@@ -1626,6 +1660,8 @@ export function ElementContentView({
   frameWidth,
   frameHeight,
   liveReflowSv,
+  liveWidthSv,
+  liveHeightSv,
 }: ContentProps) {
   useInstalledFontStore((state) => state.revision);
   useUserClipartStore((state) => state.revision);
@@ -1638,6 +1674,8 @@ export function ElementContentView({
           widthPx={widthPx}
           heightPx={heightPx}
           liveReflowSv={liveReflowSv}
+          liveWidthSv={liveWidthSv}
+          liveHeightSv={liveHeightSv}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />
@@ -1650,6 +1688,8 @@ export function ElementContentView({
           widthPx={widthPx}
           heightPx={heightPx}
           liveReflowSv={liveReflowSv}
+          liveWidthSv={liveWidthSv}
+          liveHeightSv={liveHeightSv}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />
@@ -1904,6 +1944,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     top: 0,
+    // Width comes from liveWidthSv on the UI thread so wrap tracks the handle.
   },
   invalidBox: {
     flex: 1,

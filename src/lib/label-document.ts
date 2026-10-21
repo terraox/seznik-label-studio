@@ -560,7 +560,9 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
         verticalDisplay: element.verticalDisplay ?? false,
         fontFamily: element.fontFamily,
       });
-      if (autoHeight) return frame;
+      // Stored height is a floor after a width drag: RN may wrap taller than Skia until
+      // native lines are cached. Never shorter than the content frame.
+      if (autoHeight) return { width: frame.width, height: Math.max(frame.height, stored) };
       if (stored > 0) return { width: element.width, height: stored };
       return frame;
     }
@@ -582,7 +584,7 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
         verticalDisplay: element.verticalDisplay ?? false,
         fontFamily: element.fontFamily,
       });
-      if (autoHeight) return frame;
+      if (autoHeight) return { width: frame.width, height: Math.max(frame.height, stored) };
       if (stored > 0) return { width: element.width, height: stored };
       return frame;
     }

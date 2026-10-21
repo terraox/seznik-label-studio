@@ -2820,15 +2820,9 @@ export default function EditScreen() {
         ) {
           (next as { height: number }).height = box.height;
         }
-        // Text that sizes itself from its lines never keeps a dragged-in height; a stale one
-        // is what made reopened boxes jump.
-        if (
-          (el.type === 'text' || el.type === 'degrees') &&
-          el.autoTextHeight !== false &&
-          el.autoWrapping !== 'Close'
-        ) {
-          delete (next as { height?: number }).height;
-        }
+        // Auto-height text still stores the committed height as a floor. Skia wrap can
+        // undershoot RN on a narrow drag; dropping height here clipped the last lines
+        // until native lines were remembered. Content edits clear it via mergeTextElementPatch.
         return next;
       };
 
@@ -2933,7 +2927,12 @@ export default function EditScreen() {
                 if (widthChanged) {
                   next = mergeTextElementPatch(
                     textEl,
-                    { width: textEl.width, autoWrapping: textEl.autoWrapping ?? 'Word' },
+                    {
+                      width: textEl.width,
+                      // Keep the live-measured height so a narrow drag does not clip.
+                      height: clean.heightMm,
+                      autoWrapping: textEl.autoWrapping ?? 'Word',
+                    },
                     canvas,
                   ) as typeof next;
                 }

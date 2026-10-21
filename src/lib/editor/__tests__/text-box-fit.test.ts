@@ -10,6 +10,7 @@ import {
   mergeTextElementPatch,
 } from '@/lib/element-sizing';
 import { computeTextElementHeightMm } from '@/lib/text-metrics';
+import { buildLiveLayoutBank, heightForLineCountMm } from '@/lib/visible-text-layout';
 import { visibleTextHeightMm, visibleWrappedLines } from '@/lib/visible-text-layout';
 import { measureTextWidthMm } from '@/lib/text-metrics';
 import { elementSizeMm, type LabelElement } from '@/lib/label-document';
@@ -184,5 +185,27 @@ test('a fitted new text box keeps the placeholder on one line at every font size
       autoWrapping: 'Word',
     });
     assert.equal(lines.length, 1, `font ${fontSize}: placeholder wrapped to ${lines.length} lines in a ${fitted.width} mm box`);
+  }
+});
+
+test('frame height follows the number of lines it is given', () => {
+  const opts = { text: 'hiii this is print from josh', fontSize: 16, widthMm: 40 };
+  const three = heightForLineCountMm(opts, 3);
+  const four = heightForLineCountMm(opts, 4);
+  assert.ok(four > three);
+  assert.ok(Math.abs(four - three - (heightForLineCountMm(opts, 5) - four)) < 1e-9);
+});
+
+test('live layout bank covers every width with the same lines the resting text uses', () => {
+  const base = { text: 'hiii this is print from josh', fontSize: 16 };
+  const bank = buildLiveLayoutBank(base, 4, 50);
+  assert.ok(bank.starts.length > 1);
+  assert.equal(bank.starts.length, bank.lines.length);
+  assert.equal(bank.starts.length, bank.heights.length);
+  for (let i = 1; i < bank.starts.length; i += 1) assert.ok(bank.starts[i] > bank.starts[i - 1]);
+  // Narrower boxes wrap to at least as many lines, so heights never grow as the box widens.
+  for (let i = 1; i < bank.heights.length; i += 1) assert.ok(bank.heights[i] <= bank.heights[i - 1] + 1e-9);
+  for (let i = 0; i < bank.lines.length; i += 1) {
+    assert.ok(Math.abs(bank.heights[i] - heightForLineCountMm({ ...base, widthMm: bank.starts[i] }, bank.lines[i].length)) < 1e-9);
   }
 });
