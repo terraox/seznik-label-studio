@@ -9,7 +9,7 @@ import { androidRipple, HomeLayout, HomeStatusColors } from '@/constants/ui'; //
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
-import { usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-store';
+import { usePrinterNickname, usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const CHIP_FILL: Record<PrinterConnectionStatus, string> = {
@@ -45,11 +45,12 @@ export function StatusChip() {
     return () => clearInterval(id);
   }, []);
   const deviceName = usePrinterStore((s) => s.deviceName);
+  const nickname = usePrinterNickname(usePrinterStore((s) => s.deviceId));
   const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
   const modelName = (CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas).shortName;
 
   const live = status === 'connected' || status === 'printing';
-  const text = live ? deviceName || modelName : 'Not connected';
+  const text = live ? nickname || deviceName || modelName : 'Not connected';
   const josh = isJoshPrinter({ sdkId, transport });
   const batteryLabel =
     showBattery && josh && batteryBars != null

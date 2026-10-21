@@ -126,7 +126,9 @@ const styles = themedStyles((c, scheme) => ({
   stage: {
     height: 112,
     borderRadius: 14,
-    backgroundColor: '#050505', // theme-fixed: black backdrop for the printer photo
+    backgroundColor: '#FFFFFF', // theme-fixed: white backdrop so the dark printer photo stays visible
+    borderWidth: 1,
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

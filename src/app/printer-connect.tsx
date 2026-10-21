@@ -9,6 +9,7 @@ import {
   BluetoothBlockers,
   BluetoothOffDialog,
   ConnectedActions,
+  NicknameDialog,
   DeviceList,
   LastConnectedPrinter,
   PrinterFamilyCards,
@@ -36,7 +37,7 @@ import {
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { useAuthStore } from '@/stores/auth-store';
-import { normalizePrinterMac, usePrinterStore } from '@/stores/printer-store';
+import { normalizePrinterMac, usePrinterNickname, usePrinterStore } from '@/stores/printer-store';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 const ANDROID_BLUETOOTH_SETTINGS = 'android.settings.BLUETOOTH_SETTINGS';
@@ -131,6 +132,9 @@ export default function PrinterConnectScreen() {
   const insets = useSafeAreaInsets();
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
+  const connectedDeviceId = usePrinterStore((s) => s.deviceId);
+  const nickname = usePrinterNickname(connectedDeviceId);
+  const [nicknameOpen, setNicknameOpen] = useState(false);
   const batteryPercent = usePrinterStore((s) => s.batteryPercent);
   const batteryBars = usePrinterStore((s) => s.batteryBars);
   const sdkId = usePrinterStore((s) => s.sdkId);
@@ -356,6 +360,13 @@ export default function PrinterConnectScreen() {
       getPrinterManager().reconcileConnectionState();
       if (on && nextCaps.canScan) setNativeHint(null);
       else if (!on && nextCaps.canScan) setNativeHint(null);
+      // Coming back from Android Bluetooth settings (pairing a new printer) does not re-focus
+      // the screen, so rescan here or the newly paired printer never shows up.
+      const store = usePrinterStore.getState();
+      const busy = store.status === 'connecting' || store.status === 'printing';
+      if (on && nextCaps.canScan && !busy && !getPrinterManager().isConnectionHealthy()) {
+        void startScanRef.current(store.selectedPrinterModel).catch(() => {});
+      }
     });
     return () => appSub.remove();
   }, [refreshCaps]);
@@ -377,8 +388,16 @@ export default function PrinterConnectScreen() {
     [devices],
   );
   const matchingDevices = useMemo(
-    () => sortedDevices.filter((d) => (d.name ?? '').toUpperCase().startsWith(namePrefix)),
-    [sortedDevices, namePrefix],
+    () =>
+      sortedDevices.filter((d) => {
+        const name = (d.name ?? '').toUpperCase();
+        if (name.startsWith(namePrefix)) return true;
+        // An unpaired printer is often seen before its name resolves (only the MAC shows).
+        // Keep it listed so it can be paired from here.
+        const unnamed = !name || name === d.id.toUpperCase() || name.startsWith('BLUETOOTH ');
+        return selectedModel === 'josh' && !d.bonded && unnamed;
+      }),
+    [sortedDevices, namePrefix, selectedModel],
   );
   const listedDevices = showAllDevices ? sortedDevices : matchingDevices;
 
@@ -438,6 +457,17 @@ export default function PrinterConnectScreen() {
     setConnectingId(device.id);
     usePrinterStore.getState().setStatus('connecting');
     try {
+      // Unpaired Josh printer: open the system pairing dialog first, then connect.
+      if (selectedModel === 'josh' && !device.bonded) {
+        const paired = await mgr.pairJoshDevice(device.id);
+        if (request !== connectRequestRef.current) return;
+        if (!paired) {
+          usePrinterStore.getState().setStatus('disconnected');
+          Alert.alert('Not paired', `Pairing with ${device.name || device.id} was cancelled or failed.`);
+          return;
+        }
+        setDevices((prev) => prev.map((d) => (d.id === device.id ? { ...d, bonded: true } : d)));
+      }
       if (pinned === 'td404' || pinned === 'josh' || pinned === 'dev' || pinned === 'tez' || pinned === 'labelx') {
         const consumer =
           pinned === 'josh' ? 'josh' : selectedModel === 'rudra' || selectedModel === 'tejas' ? selectedModel : 'tejas';
@@ -584,6 +614,8 @@ export default function PrinterConnectScreen() {
               modelId={printer.id}
               modelName={printer.shortName}
               deviceName={deviceName}
+              nickname={nickname}
+              onEditNickname={connectedDeviceId ? () => setNicknameOpen(true) : undefined}
               batteryPercent={batteryPercent}
               batteryBars={isJoshPrinter({ sdkId, transport }) ? batteryBars : undefined}
               showBattery={showBattery}
@@ -646,6 +678,16 @@ export default function PrinterConnectScreen() {
           ) : null}
             </>
           )}
+          <NicknameDialog
+            visible={nicknameOpen && showConnected}
+            nickname={nickname}
+            deviceName={deviceName}
+            onSave={(next) => {
+              if (connectedDeviceId) usePrinterStore.getState().setPrinterNickname(connectedDeviceId, next);
+              setNicknameOpen(false);
+            }}
+            onClose={() => setNicknameOpen(false)}
+          />
           <BluetoothOffDialog
             visible={bluetoothOffDialog}
             settingsLabel={bluetoothSettingsLabel}

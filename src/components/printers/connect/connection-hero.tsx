@@ -57,7 +57,9 @@ const styles = themedStyles((c) => ({
     width: 64,
     height: 64,
     borderRadius: 12,
-    backgroundColor: '#050505', // theme-fixed: black backdrop for the printer photo
+    backgroundColor: '#FFFFFF', // theme-fixed: white backdrop so the dark printer photo stays visible
+    borderWidth: 1,
+    borderColor: c.border,
     overflow: 'hidden',
   },
   photo: { width: '100%', height: '100%' },

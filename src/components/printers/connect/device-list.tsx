@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';
 
+import { selectPrinterNickname, usePrinterStore } from '@/stores/printer-store';
 import type { DiscoveredPrinter } from '@/lib/printer/printer-manager';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
@@ -94,6 +95,7 @@ function Section({
   badgeFor: (device: DiscoveredPrinter) => DeviceBadge | null;
 }) {
   useThemeRefresh();
+  const nicknames = usePrinterStore((s) => s.printerNicknames);
   return (
     <View style={styles.block}>
       <View style={styles.card}>
@@ -102,6 +104,7 @@ function Section({
         ) : (
           devices.map((device, index) => {
             const badge = badgeFor(device);
+            const nickname = selectPrinterNickname(nicknames, device.id);
             return (
               <Pressable
                 key={device.id}
@@ -117,7 +120,7 @@ function Section({
                 <View style={styles.info}>
                   <View style={styles.nameRow}>
                     <Text style={styles.name} numberOfLines={1}>
-                      {device.name ?? 'Unknown printer'}
+                      {nickname ?? device.name ?? 'Unknown printer'}
                     </Text>
                     {badge ? (
                       <View style={[styles.badge, { backgroundColor: badge.background, borderColor: badge.border }]}>
@@ -126,6 +129,7 @@ function Section({
                     ) : null}
                   </View>
                   <Text style={styles.meta}>
+                    {nickname && device.name ? `${device.name} · ` : ''}
                     {device.bonded ? 'Already paired' : 'Nearby'}
                     {device.rssi != null ? ` · signal ${signalLabel(device.rssi)}` : ''}
                   </Text>

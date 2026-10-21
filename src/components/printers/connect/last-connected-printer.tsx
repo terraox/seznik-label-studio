@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';
 import { androidRipple } from '@/constants/ui';
-import { normalizePrinterMac } from '@/stores/printer-store';
+import { normalizePrinterMac, usePrinterNickname } from '@/stores/printer-store';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type LastConnectedPrinterProps = {
@@ -35,9 +35,13 @@ export function LastConnectedPrinter({
   onConnect,
 }: LastConnectedPrinterProps) {
   useThemeRefresh();
+  const nickname = usePrinterNickname(deviceId);
   if (!visible) return null;
 
-  const displayName = deviceName?.trim() || modelName;
+  const btName = deviceName?.trim() || null;
+  const displayName = nickname || btName || modelName;
+  // With a nickname set, the Bluetooth name still shows, paired or not.
+  const showBtName = Boolean(nickname && btName && btName !== nickname);
   const mac = normalizePrinterMac(deviceId);
   const status = statusCopy({ nearby, scanning, autoConnectPaused });
   const last = connectedAt ? formatLastConnected(connectedAt) : null;
@@ -54,6 +58,9 @@ export function LastConnectedPrinter({
             </View>
             <View style={styles.copy}>
               <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+              {showBtName ? (
+                <Text style={styles.btName} numberOfLines={1}>{btName}</Text>
+              ) : null}
               <View style={styles.statusRow}>
                 <View style={[styles.statusDot, { backgroundColor: status.dot }]} />
                 <Text style={[styles.statusText, { color: status.tone }]}>{status.label}</Text>
@@ -193,6 +200,7 @@ const styles = themedStyles((c, scheme) => ({
   },
   copy: { flex: 1, gap: 4, minWidth: 0 },
   name: { fontSize: 19, fontWeight: '800', color: c.text },
+  btName: { fontSize: 12, color: c.textMuted },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 13, fontWeight: '700' },

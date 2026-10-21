@@ -1,5 +1,6 @@
 import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 
+import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import type { ConsumerPrinterId } from '@/constants/printer-models';
 import { Spacing } from '@/constants/theme';
@@ -12,6 +13,8 @@ type ConnectedActionsProps = {
   modelId: ConsumerPrinterId;
   modelName: string;
   deviceName: string | null;
+  nickname?: string | null;
+  onEditNickname?: () => void;
   batteryPercent?: number | null;
   batteryBars?: number | null;
   showBattery?: boolean;
@@ -25,6 +28,8 @@ export function ConnectedActions({
   modelId,
   modelName,
   deviceName,
+  nickname = null,
+  onEditNickname,
   batteryPercent = null,
   batteryBars,
   showBattery = true,
@@ -40,12 +45,27 @@ export function ConnectedActions({
         <Image source={PRINTER_PHOTOS[modelId]} style={styles.photo} resizeMode="contain" />
       </View>
       <Text style={styles.kicker}>Connected</Text>
-      <Text style={styles.name}>{deviceName || modelName}</Text>
+      <Pressable
+        onPress={onEditNickname}
+        disabled={!onEditNickname}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Edit printer nickname"
+        style={({ pressed }) => [styles.nameRow, pressed && styles.pressed]}>
+        <Text style={[styles.name, styles.nameFlex]} numberOfLines={1}>
+          {nickname || deviceName || modelName}
+        </Text>
+        {onEditNickname ? <AppIcon name="square.and.pencil" tintColor={C.accent} size={18} /> : null}
+      </Pressable>
+      {nickname && deviceName ? <Text style={styles.realName}>{deviceName}</Text> : null}
+      {onEditNickname && !nickname ? (
+        <Text style={styles.realName}>Tap the name to add a nickname</Text>
+      ) : null}
       <Text style={styles.detail}>{modelName} is ready to print.</Text>
       {showBattery ? (
         <View style={styles.batteryRow}>
           <Text style={styles.batteryPrefix}>Battery</Text>
-          <PrinterBatteryLabel percent={batteryPercent} bars={batteryBars} size={18} showWhenUnknown unknownText="Not reported" />
+          <PrinterBatteryLabel percent={batteryPercent} bars={batteryBars} size={25} showWhenUnknown unknownText="Not reported" />
         </View>
       ) : null}
       <Pressable
@@ -87,12 +107,17 @@ const styles = themedStyles((c, scheme) => ({
     width: '100%',
     height: 180,
     borderRadius: 16,
-    backgroundColor: '#050505', // theme-fixed: black backdrop for the printer photo
+    backgroundColor: '#FFFFFF', // theme-fixed: white backdrop so the dark printer photo stays visible
+    borderWidth: 1,
+    borderColor: c.border,
     overflow: 'hidden',
     marginBottom: 4,
   },
   photo: { width: '100%', height: '100%' },
   kicker: { fontSize: 13, fontWeight: '700', color: c.success, letterSpacing: 0.3 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
+  nameFlex: { flexShrink: 1 },
+  realName: { fontSize: 12, color: c.textMuted, textAlign: 'center' },
   name: { fontSize: 20, fontWeight: '700', color: c.text, textAlign: 'center' },
   detail: { fontSize: 14, lineHeight: 20, color: c.textMuted, textAlign: 'center', marginBottom: 4 },
   batteryRow: {

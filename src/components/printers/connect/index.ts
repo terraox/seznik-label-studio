@@ -4,5 +4,6 @@ export { ConnectedActions } from './connected-actions';
 export { ConnectionHero } from './connection-hero';
 export { DeviceList, type DeviceBadge } from './device-list';
 export { LastConnectedPrinter } from './last-connected-printer';
+export { NicknameDialog } from './nickname-dialog';
 export { PrinterFamilyCards } from './printer-family-cards';
 export { ScanCta } from './scan-cta';

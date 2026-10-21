@@ -65,6 +65,8 @@ type PrinterStoreState = {
    * looks like a random unfixed shift instead of a one-time calibration.
    */
   printCalibration: Record<string, PrintCalibrationEntry>;
+  /** User-chosen printer names, keyed by normalized MAC. */
+  printerNicknames: Record<string, string>;
   /** Printer battery 0–100 while connected. Null when the printer does not report it. Not persisted. */
   batteryPercent: number | null;
   /** Josh battery bars 1-4 from the printer voltage. Null when not reported. Not persisted. */
@@ -76,6 +78,8 @@ type PrinterStoreState = {
   setPreferredPrinterModel: (model: ConsumerPrinterId | null) => void;
   setDevCommandSet: (cmd: 'tspl' | 'escpos') => void;
   setPrintCalibration: (key: string, entry: PrintCalibrationEntry) => void;
+  /** Blank or null clears the nickname. */
+  setPrinterNickname: (deviceId: string, nickname: string | null) => void;
   setConnectedDevice: (
     deviceId: string,
     deviceName: string,
@@ -116,6 +120,21 @@ export function normalizePrinterMac(mac: string): string {
   return `${hex.slice(0, 2)}:${hex.slice(2, 4)}:${hex.slice(4, 6)}:${hex.slice(6, 8)}:${hex.slice(8, 10)}:${hex.slice(10, 12)}`;
 }
 
+export const PRINTER_NICKNAME_MAX = 20;
+
+/** Nickname for a printer, or null when none is set. */
+export function selectPrinterNickname(
+  nicknames: Record<string, string> | undefined,
+  deviceId: string | null | undefined,
+): string | null {
+  if (!deviceId) return null;
+  return nicknames?.[normalizePrinterMac(deviceId)] ?? null;
+}
+
+export function usePrinterNickname(deviceId: string | null | undefined): string | null {
+  return usePrinterStore((s) => selectPrinterNickname(s.printerNicknames, deviceId));
+}
+
 export const usePrinterStore = create<PrinterStoreState>()(
   persist(
     (set) => ({
@@ -135,6 +154,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
       history: [],
       devCommandSet: 'tspl',
       printCalibration: {},
+      printerNicknames: {},
       batteryPercent: null,
       batteryBars: null,
 
@@ -148,6 +168,15 @@ export const usePrinterStore = create<PrinterStoreState>()(
         set((state) => ({
           printCalibration: { ...state.printCalibration, [key]: entry },
         })),
+      setPrinterNickname: (deviceId, nickname) =>
+        set((state) => {
+          const key = normalizePrinterMac(deviceId);
+          const next = { ...state.printerNicknames };
+          const clean = (nickname ?? '').trim().slice(0, PRINTER_NICKNAME_MAX);
+          if (clean) next[key] = clean;
+          else delete next[key];
+          return { printerNicknames: next };
+        }),
 
       setConnectedDevice: (deviceId, deviceName, meta) => {
         trackPrinterConnected(deviceName, meta?.transport ?? null, meta?.sdkId ?? null);
@@ -235,6 +264,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
         lastDeviceForBridge: state.lastDeviceForBridge,
         pinnedDriverByMac: state.pinnedDriverByMac,
         printCalibration: state.printCalibration,
+        printerNicknames: state.printerNicknames,
       }),
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<PrinterStoreState> & {

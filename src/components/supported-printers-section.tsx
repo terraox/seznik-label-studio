@@ -54,7 +54,9 @@ const useStyles = makeStyles((c, scheme) => ({
     width: '100%',
     height: 96,
     borderRadius: 14,
-    backgroundColor: '#050505', // theme-fixed: black backdrop for the printer photo
+    backgroundColor: '#FFFFFF', // theme-fixed: white backdrop so the dark printer photo stays visible
+    borderWidth: 1,
+    borderColor: c.border,
     overflow: 'hidden',
   },
   photo: { width: '100%', height: '100%' },
