@@ -446,6 +446,49 @@ class JoshPrinterManager(private val context: Context) {
     }
 
     /**
+     * Pair with [mac] through the system pairing dialog. Blocks until the bond settles or
+     * [timeoutMs] passes, so call it off the main thread. Returns true when bonded.
+     */
+    fun pairDevice(mac: String, timeoutMs: Long): Boolean {
+        val btAdapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+        if (!btAdapter.isEnabled) return false
+        val dev = try { btAdapter.getRemoteDevice(mac) } catch (_: Exception) { return false }
+        if (dev.bondState == android.bluetooth.BluetoothDevice.BOND_BONDED) return true
+
+        val latch = CountDownLatch(1)
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: android.content.Intent?) {
+                val d = intent?.getParcelableExtra<android.bluetooth.BluetoothDevice>(
+                    android.bluetooth.BluetoothDevice.EXTRA_DEVICE,
+                )
+                if (d?.address != dev.address) return
+                val bondState = intent.getIntExtra(
+                    android.bluetooth.BluetoothDevice.EXTRA_BOND_STATE,
+                    android.bluetooth.BluetoothDevice.BOND_NONE,
+                )
+                if (bondState != android.bluetooth.BluetoothDevice.BOND_BONDING) latch.countDown()
+            }
+        }
+        val filter = android.content.IntentFilter(android.bluetooth.BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        return try {
+            context.registerReceiver(receiver, filter)
+            // Discovery slows bonding; the connect screen has already stopped it.
+            if (!dev.createBond()) {
+                Log.w(TAG, "[PAIR] createBond returned false for $mac")
+                false
+            } else {
+                latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+                dev.bondState == android.bluetooth.BluetoothDevice.BOND_BONDED
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "[PAIR] pairing $mac threw", e)
+            false
+        } finally {
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+        }
+    }
+
+    /**
      * Return bonded (paired) Bluetooth devices that are potential JOSH printers.
      */
     fun getBondedDevices(): List<Map<String, Any?>> {

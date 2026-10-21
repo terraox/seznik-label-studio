@@ -121,6 +121,21 @@ class JoshPrinterModule : Module() {
       }
     }
 
+    AsyncFunction("pairDevice") { mac: String, timeoutMs: Int, promise: Promise ->
+      val mgr = getOrInitManager()
+      if (mgr == null) {
+        promise.resolve(false)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        try {
+          promise.resolve(mgr.pairDevice(mac, timeoutMs.toLong()))
+        } catch (e: Exception) {
+          promise.resolve(false)
+        }
+      }
+    }
+
     AsyncFunction("startDiscovery") { promise: Promise ->
       val context = getContext()
       if (context == null) {

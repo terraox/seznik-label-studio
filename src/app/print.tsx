@@ -79,7 +79,7 @@ import {
 } from '@/lib/serial/resolve-document';
 import { serialPrintGate } from '@/lib/serial/symbology-validate';
 import { SERIAL_CONFIRM_ABOVE } from '@/lib/serial/types';
-import { joshProgressText } from '@/lib/printer/josh-status';
+import { joshProgressText, joshStatusAlert } from '@/lib/printer/josh-status';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
 import { useSerialContinueStore } from '@/stores/serial-continue-store';
 import { useSerialJobStore } from '@/stores/serial-job-store';
@@ -617,6 +617,11 @@ export default function PrintScreen() {
   const [printProgress, setPrintProgress] = useState<string | null>(null);
   const joshProgressLine = useJoshProgressStore((s) => joshProgressText(s));
   const joshLateFailure = useJoshProgressStore((s) => s.lateFailure);
+  const joshStatusWarning = useJoshProgressStore((s) => joshStatusAlert(s.deviceStatus));
+  useEffect(() => {
+    if (printerSdkId !== 'josh') return;
+    return getPrinterManager().watchJoshStatus();
+  }, [printerSdkId]);
   useEffect(() => {
     if (!joshLateFailure) return;
     useJoshProgressStore.getState().setLateFailure(null);
@@ -2943,6 +2948,7 @@ export default function PrintScreen() {
         </View>
       </FormScrollView>
 
+      {joshStatusWarning ? <Text style={styles.printerWarning}>{joshStatusWarning}</Text> : null}
       {joshProgressLine ?? printProgress ? (
         <Text style={styles.printProgress}>{joshProgressLine ?? printProgress}</Text>
       ) : null}
@@ -3212,6 +3218,14 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 12,
     lineHeight: 16,
     color: c.textSecondary,
+  },
+  printerWarning: {
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '700',
+    color: c.danger,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
   },
   printProgress: {
     position: 'absolute',

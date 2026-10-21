@@ -11,7 +11,11 @@ import {
   formatJoshStatusLog,
   changedStatusBits,
   joshFailMessage,
+  JOSH_STATUS_CODES,
+  isJoshFailReason,
   joshLidOpen,
+  joshStatusAlert,
+  joshStatusReason,
   joshPrintError,
   joshProgressText,
   joshReadingText,
@@ -89,11 +93,20 @@ for (const key of [
 }
 assert.ok(formatJoshStatusLog(null).includes('unavailable'));
 
-// Lid bit: unknown until verified, then a plain mask test. Never throws.
-assert.equal(joshLidOpen(4), null);
-assert.equal(joshLidOpen(4, 4), true);
-assert.equal(joshLidOpen(1, 4), false);
-assert.equal(joshLidOpen(undefined, 4), null);
+// printerStatus is a code table from the SDK; codes seen on the DP27: 34 lid open, 33 too hot.
+assert.equal(joshLidOpen(34), true);
+assert.equal(joshLidOpen(33), false);
+assert.equal(joshLidOpen(0), false);
+assert.equal(joshLidOpen(undefined), null);
+assert.equal(joshStatusReason(34), 'CoverOpened');
+assert.equal(joshStatusReason(35), 'No_Paper');
+assert.equal(joshStatusReason(999), null);
+assert.equal(joshStatusAlert(34), JOSH_LID_MESSAGE);
+assert.equal(joshStatusAlert(33), JOSH_FAIL_MESSAGES.TphTooHot);
+assert.equal(joshStatusAlert(35), JOSH_PAPER_MESSAGE);
+assert.equal(joshStatusAlert(0), null);
+assert.equal(joshStatusAlert(NaN), null);
+for (const code of Object.keys(JOSH_STATUS_CODES)) assert.ok(isJoshFailReason(JOSH_STATUS_CODES[Number(code)]));
 assert.equal(changedStatusBits(1, 5), '0000000000000100');
 assert.equal(changedStatusBits(undefined, 5), '0000000000000000');
 

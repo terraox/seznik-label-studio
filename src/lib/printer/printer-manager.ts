@@ -19,7 +19,7 @@ import {
   bluetoothOffScanResult,
 } from '@/lib/printer/bluetooth-guard';
 import { assertJoshMonoBuffer, joshPackedPageDots } from '@/lib/printer/josh-mono-validate';
-import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
+import { JOSH_DENSITY_MAX, resolveJoshJobParams } from '@/lib/printer/josh-job-params';
 import { joshFailMessage, joshPrintError, parseJoshFailure, type JoshPrinterStatus } from '@/lib/printer/josh-status';
 import { joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
@@ -342,7 +342,28 @@ class PrinterManager {
   private nativeUnhealthyStreak = 0;
   private static readonly NATIVE_UNHEALTHY_CLEAR_STREAK = 3;
 
+  /**
+   * Fetch the battery right after a connection instead of waiting for the next poll. The printer may not
+   * have its parameters ready for a moment, so it retries a few times until a reading arrives.
+   */
+  private primeBattery(): void {
+    const delays = [0, 600, 1500, 3000];
+    const attempt = (i: number) => {
+      if (i >= delays.length) return;
+      setTimeout(() => {
+        const s = usePrinterStore.getState();
+        if (s.status !== 'connected') return;
+        void this.refreshBattery({ force: true }).finally(() => {
+          const latest = usePrinterStore.getState();
+          if (latest.batteryPercent == null && latest.batteryBars == null) attempt(i + 1);
+        });
+      }, delays[i]);
+    };
+    attempt(0);
+  }
+
   private scheduleDebugBatteryLog(model: SeznikPrinterModelId, deviceId: string | null): void {
+    this.primeBattery();
     if (!__DEV__) return;
     // Josh already logs from native connect. A late dynamic import here
     // Fast-Refresh remounts the app and used to kick a disconnect loop.
@@ -625,6 +646,13 @@ class PrinterManager {
     } catch {
       return null;
     }
+  }
+
+  /** Opens the system pairing dialog for an unpaired Josh printer. True once it is paired. */
+  async pairJoshDevice(mac: string): Promise<boolean> {
+    const josh = this.getJosh();
+    if (!josh?.isJoshNativeAvailable()) return false;
+    return josh.pairJoshDevice(mac);
   }
 
   private joshPrintsInFlight = 0;
@@ -1517,6 +1545,7 @@ class PrinterManager {
         ...meta,
         model,
       });
+      this.primeBattery();
       return;
     }
     store.setStatus('connecting');
@@ -3334,7 +3363,7 @@ class PrinterManager {
       const { isJoshPrinter } = await import('@/lib/printer/battery-percent');
       if (isJoshPrinter({ sdkId: store.sdkId, transport: this.activeTransport ?? store.transport })) {
         // Josh: bars out of 4 from the printer voltage. Never a percentage, never a fake level.
-        const status = await this.readJoshPrinterStatus();
+        const status = await this.readJoshPrinterStatus(800);
         const latest = usePrinterStore.getState();
         if (latest.batteryPercent != null) latest.setBatteryPercent(null);
         if (status?.available && (latest.status === 'connected' || latest.status === 'printing')) {
@@ -3404,6 +3433,41 @@ class PrinterManager {
   }
 
   private joshStatusInFlight: Promise<JoshPrinterStatus | null> | null = null;
+  private joshWatchers = 0;
+  private joshWatchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Live printer status (lid, paper, heat) for the print screen. Reads PrinterParam about once a second,
+   * never while a print runs. Returns a stop function; polling stops when the last watcher leaves.
+   */
+  watchJoshStatus(): () => void {
+    this.joshWatchers += 1;
+    const tick = async () => {
+      this.joshWatchTimer = null;
+      if (this.joshWatchers === 0) return;
+      const live = usePrinterStore.getState().status === 'connected';
+      const status = live && this.isJosh ? await this.readJoshPrinterStatus(700) : null;
+      const progress = useJoshProgressStore.getState();
+      if (status?.available) {
+        progress.setDeviceStatus(typeof status.printerStatus === 'number' ? status.printerStatus : null);
+      } else if (!live) {
+        progress.setDeviceStatus(null);
+      }
+      if (this.joshWatchers > 0) this.joshWatchTimer = setTimeout(() => void tick(), 400);
+    };
+    if (this.joshWatchers === 1 && !this.joshWatchTimer) void tick();
+    let stopped = false;
+    return () => {
+      if (stopped) return;
+      stopped = true;
+      this.joshWatchers = Math.max(0, this.joshWatchers - 1);
+      if (this.joshWatchers === 0) {
+        if (this.joshWatchTimer) clearTimeout(this.joshWatchTimer);
+        this.joshWatchTimer = null;
+        useJoshProgressStore.getState().setDeviceStatus(null);
+      }
+    };
+  }
 
   /** Snapshot of internal state for the diagnostics screen. */
   getDiagnostics(): DiagnosticInfo {
@@ -3727,6 +3791,7 @@ class PrinterManager {
           gapMm: 3,
           assertInk: this.isJosh,
           offsetExtraMm: this.isJosh ? { x: JOSH_TEST_LABEL_EXTRA_H_MM, y: 0 } : undefined,
+          darkness: this.isJosh ? JOSH_DENSITY_MAX : undefined,
         });
       } catch (error) {
         const code = error instanceof Error ? (error as Error & { code?: string }).code : null;

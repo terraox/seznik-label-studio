@@ -125,6 +125,7 @@ type NativeJoshPrinter = {
   printPngLabel(options: Record<string, unknown>): Promise<JoshPrintResult>;
   printMonoLabel?(monoBytes: Uint8Array, options: Record<string, unknown>): Promise<JoshPrintResult>;
   getBondedDevices?(): Promise<JoshDevice[]>;
+  pairDevice?(mac: string, timeoutMs: number): Promise<boolean>;
   getBatteryLevel(): Promise<number>;
   readPrinterGapReport(): Promise<{
     available?: boolean;
@@ -221,6 +222,17 @@ export async function getJoshBondedDevices(): Promise<JoshDevice[]> {
     return list ?? [];
   } catch {
     return [];
+  }
+}
+
+/** Opens the system pairing dialog for an unpaired printer. True once it is bonded. */
+export async function pairJoshDevice(mac: string, timeoutMs = 30000): Promise<boolean> {
+  const mod = getNative();
+  if (!mod || typeof mod.pairDevice !== 'function') return false;
+  try {
+    return Boolean(await mod.pairDevice(mac, timeoutMs));
+  } catch {
+    return false;
   }
 }
 

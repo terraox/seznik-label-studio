@@ -244,15 +244,52 @@ export function formatJoshStatusLog(status: JoshPrinterStatus | null, now: Date 
 }
 
 /**
- * Bit of PrinterParam.printerStatus that means "lid open". UNVERIFIED: null until a status log taken with
- * the lid closed and open shows which bit flips on the DP27. Set it here (one place) once verified.
+ * PrinterParam.printerStatus is a status CODE, not a bitfield. The LPAPI jar maps it to a PrintFailReason
+ * (DzPrinter.a(byte), read from the disassembly). 11 or below is OK. 34 = lid open was seen on the DP27
+ * (original app showed "Paper hatch cover is not closed"); 33 = too hot was also seen and the original app
+ * showed "temperature is too high". The other rows are from reading source only.
  */
-export const JOSH_LID_STATUS_MASK: number | null = null;
+export const JOSH_STATUS_CODES: Record<number, JoshFailReason> = {
+  12: 'Cancelled',
+  20: 'EnvNotReady',
+  30: 'VolTooLow',
+  31: 'VolTooHigh',
+  32: 'TphNotFound',
+  33: 'TphTooHot',
+  34: 'CoverOpened',
+  35: 'No_Paper',
+  36: 'TphOpened',
+  37: 'No_Ribbon',
+  38: 'Unmatched_Ribbon',
+  39: 'TphTooCold',
+  40: 'Usedup_Ribbon',
+  41: 'Usedup_Ribbon2',
+  42: 'No_Label',
+  43: 'Unmatched_Label',
+  44: 'Usedup_Label',
+  45: 'No_Ribbon2',
+  46: 'Unmatched_Ribbon2',
+  50: 'LabelCanOpend',
+};
 
-/** true/false when the lid bit is known, null when it is not verified or the status is missing. */
-export function joshLidOpen(printerStatus: unknown, mask: number | null = JOSH_LID_STATUS_MASK): boolean | null {
-  if (mask == null || typeof printerStatus !== 'number' || !Number.isFinite(printerStatus)) return null;
-  return (printerStatus & mask) !== 0;
+/** The reason a status code stands for, or null for OK, missing and unknown codes. Never throws. */
+export function joshStatusReason(code: unknown): JoshFailReason | null {
+  if (typeof code !== 'number' || !Number.isFinite(code)) return null;
+  return JOSH_STATUS_CODES[code] ?? null;
+}
+
+/** Live warning for a status code. Only conditions the user can fix; unknown codes warn nothing. */
+export function joshStatusAlert(code: unknown): string | null {
+  const reason = joshStatusReason(code);
+  if (!reason || reason === 'Cancelled' || reason === 'EnvNotReady') return null;
+  return JOSH_FAIL_MESSAGES[reason];
+}
+
+/** true when the code is a lid-open reason, false when it is anything else, null when missing. */
+export function joshLidOpen(code: unknown): boolean | null {
+  if (typeof code !== 'number' || !Number.isFinite(code)) return null;
+  const reason = joshStatusReason(code);
+  return reason === 'CoverOpened' || reason === 'TphOpened' || reason === 'LabelCanOpend';
 }
 
 /** Bits that differ between two printerStatus readings, as a binary mask string. */

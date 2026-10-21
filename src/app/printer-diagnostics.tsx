@@ -2,7 +2,7 @@
  * Printer diagnostics: connection snapshot and debug actions.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { TextInput } from '@/components/ui/text-input';
-import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,18 +20,9 @@ import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import type { PaperType } from '@/lib/label-document';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { isJoshPrinter } from '@/lib/printer/battery-percent';
-import {
-  PAPER_TYPE_TEST_PHOTO,
-  activePaperTypeTestPrinter,
-  paperTypeTestRows,
-  printPaperTypeTestRow,
-} from '@/lib/printer/paper-type-test-sheet';
 import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
-import { ditherTestAvailable, printDitherTestSheet } from '@/lib/printer/dither-test-sheet';
-import { IMAGE_MODES, IMAGE_MODE_LABEL } from '@/printing/raster/image-modes';
 import { GRID_SPACING_PRESETS_MM } from '@/lib/editor/canvas-grid';
 import {
   DIAGNOSTIC_GAP_PRESETS_MM,
@@ -46,11 +36,9 @@ import {
   suggestedDiagnosticGridSpacingMm,
 } from '@/lib/printer/diagnostic-grid-print';
 import {
-  changedStatusBits,
-  formatJoshStatusLog,
   joshLidOpen,
-  toBinary,
   joshReadingText,
+  joshStatusReason,
   type JoshPrinterStatus,
 } from '@/lib/printer/josh-status';
 import { JOSH_BATTERY_CALIBRATED, joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
@@ -120,9 +108,7 @@ export default function PrinterDiagnosticsScreen() {
   );
   const [gapMmText, setGapMmText] = useState(() => String(defaultDiagnosticGapMm()));
   const [gridTestOpen, setGridTestOpen] = useState(false);
-  const [gapReportLine, setGapReportLine] = useState<string | null>(null);
   const [joshStatus, setJoshStatus] = useState<JoshPrinterStatus | null>(null);
-  const [joshStatusNote, setJoshStatusNote] = useState<string | null>(null);
 
   const gridPreset = useMemo(
     () => DIAGNOSTIC_GRID_SIZE_PRESETS.find((p) => p.id === gridPresetId) ?? DIAGNOSTIC_GRID_SIZE_PRESETS[0],
@@ -145,68 +131,27 @@ export default function PrinterDiagnosticsScreen() {
     setLogs((prev) => [`${ts}  ${msg}`, ...prev].slice(0, 200));
   }, []);
 
-  const refreshJoshStatusRef = useRef<() => Promise<void>>(async () => {});
-  const refreshJoshStatus = useCallback(async () => {
-    setBusy('josh-status');
-    setJoshStatusNote(null);
-    try {
-      const result = await getPrinterManager().readJoshPrinterStatus();
-      if (!result || !result.available) {
-        setJoshStatusNote(
-          result?.busy
-            ? 'Printer is printing. Try again when it finishes.'
-            : 'Status not available. Connect the printer, or update the app if this build has no status reader.',
-        );
-        return;
-      }
-      setJoshStatus(result);
-    } finally {
-      setBusy(null);
-    }
-  }, []);
-
+  // Josh: read the printer about once a second while this page is open (no print job is sent).
+  // Nothing is read while a print runs.
   useEffect(() => {
-    refreshJoshStatusRef.current = refreshJoshStatus;
-  }, [refreshJoshStatus]);
-
-  // Live status: a PrinterParam refresh about once a second. No print job is sent, so no paper moves.
-  const [liveStatus, setLiveStatus] = useState(false);
-  const [liveBits, setLiveBits] = useState<{ value: number | null; changed: string; changes: number } | null>(null);
-  useEffect(() => {
-    if (!liveStatus) return;
+    if (sdkId !== 'josh') return;
     let stopped = false;
-    let lastValue: number | null = null;
-    let changes = 0;
-    const tick = async () => {
+    const loop = async () => {
       while (!stopped) {
-        const s = getPrinterManager().isJosh && usePrinterStore.getState().status === 'connected'
-          ? await getPrinterManager().readJoshPrinterStatus(700)
+        const manager = getPrinterManager();
+        const s = usePrinterStore.getState().status === 'connected' && manager.isJosh
+          ? await manager.readJoshPrinterStatus(700)
           : null;
         if (stopped) return;
-        if (s?.available) {
-          setJoshStatus(s);
-          const v = typeof s.printerStatus === 'number' ? s.printerStatus : null;
-          if (v !== lastValue && lastValue != null) changes += 1;
-          setLiveBits({
-            value: v,
-            changed: changedStatusBits(lastValue ?? undefined, v ?? undefined),
-            changes: changes,
-          });
-          lastValue = v;
-        }
-        await new Promise<void>((r) => setTimeout(r, 300));
+        if (s?.available) setJoshStatus(s);
+        await new Promise<void>((r) => setTimeout(r, 400));
       }
     };
-    void tick();
+    void loop();
     return () => {
       stopped = true;
     };
-  }, [liveStatus]);
-
-  const copyJoshStatusLog = useCallback(async () => {
-    await Clipboard.setStringAsync(formatJoshStatusLog(joshStatus));
-    Alert.alert('Copied', 'Status log copied to the clipboard.');
-  }, [joshStatus]);
+  }, [sdkId]);
 
   const refresh = useCallback(() => {
     setDiag(getPrinterManager().getDiagnostics());
@@ -225,20 +170,6 @@ export default function PrinterDiagnosticsScreen() {
         usePrinterStore.getState().status === 'printing'
       ) {
         void getPrinterManager().refreshBattery({ force: true });
-        if (getPrinterManager().isJosh) {
-          void getPrinterManager()
-            .readJoshGapReport()
-            .then((report) => {
-              setGapReportLine(report?.line ?? 'printer gapType=unknown supportedGapTypes=unknown');
-            })
-            .catch(() => {
-              setGapReportLine('printer gapType=unknown supportedGapTypes=unknown');
-            })
-            // Read the status after the gap report so two PrinterParam refreshes never overlap.
-            .finally(() => {
-              void refreshJoshStatusRef.current();
-            });
-        }
       }
     }, [refresh]),
   );
@@ -269,34 +200,6 @@ export default function PrinterDiagnosticsScreen() {
       log(result.alreadyConnected ? 'Already connected.' : `Reconnected in ${result.reconnectMs} ms.`);
     } catch (error) {
       fail('Connection test failed', error);
-    } finally {
-      setBusy(null);
-      refresh();
-    }
-  };
-
-  const printPaperRow = async (paperType: PaperType) => {
-    setBusy(`paper-${paperType}`);
-    try {
-      log(`Printing paper type ${paperType}…`);
-      const setting = await printPaperTypeTestRow(paperType);
-      log(`Sent ${paperType}: ${setting}`);
-    } catch (error) {
-      fail('Paper type test failed', error);
-    } finally {
-      setBusy(null);
-      refresh();
-    }
-  };
-
-  const printDitherSheet = async () => {
-    setBusy('dither-sheet');
-    try {
-      log('Printing the dither test sheet (4 labels)…');
-      const sent = await printDitherTestSheet();
-      log(`Sent in order: ${sent.map((m) => IMAGE_MODE_LABEL[m]).join(', ')}`);
-    } catch (error) {
-      fail('Dither test failed', error);
     } finally {
       setBusy(null);
       refresh();
@@ -433,7 +336,7 @@ export default function PrinterDiagnosticsScreen() {
                 <PrinterBatteryLabel
                   percent={batteryPercent}
                   bars={isJoshBattery ? batteryBars : undefined}
-                  size={20}
+                  size={24}
                   showWhenUnknown
                   unknownText="Not reported"
                 />
@@ -448,7 +351,7 @@ export default function PrinterDiagnosticsScreen() {
             <DiagRow label="Device" value={diag?.deviceName ?? 'None'} />
             <DiagRow label="Address" value={diag?.deviceId ?? 'None'} mono />
             <DiagRow label="App status" value={status} />
-            {showBattery ? (
+            {showBattery && !isJoshBattery ? (
               <DiagRow
                 label="Battery"
                 value={
@@ -490,78 +393,40 @@ export default function PrinterDiagnosticsScreen() {
 
           {sdkId === 'josh' ? (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Printer status</Text>
+              <Text style={styles.sectionTitle}>Printer health</Text>
               <DiagRow label="Head temperature" value={joshReadingText(joshStatus?.printerHeadTem)} />
               <DiagRow label="Voltage" value={joshReadingText(joshStatus?.batteryVoltage)} />
+              <View style={styles.diagRow}>
+                <Text style={styles.diagLabel}>Battery</Text>
+                <PrinterBatteryLabel
+                  percent={null}
+                  bars={joshBatteryLevel(joshStatus?.batteryVoltage)}
+                  size={24}
+                  showWhenUnknown
+                  unknownText="Not reported"
+                />
+              </View>
+              {JOSH_BATTERY_CALIBRATED ? null : <Text style={styles.sizeHint}>Battery bars are uncalibrated.</Text>}
+              <DiagRow label="Charge status" value={String(joshStatus?.chargeStatus ?? 'n/a')} />
               <DiagRow
-                label="Battery level"
+                label="Lid"
                 value={(() => {
-                  const level = joshBatteryLevel(joshStatus?.batteryVoltage);
-                  if (level == null) return 'battery not reported';
-                  const bars = '■'.repeat(level) + '□'.repeat(4 - level);
-                  return `${bars} ${level}/4${JOSH_BATTERY_CALIBRATED ? '' : ' (uncalibrated)'}`;
+                  const open = joshLidOpen(joshStatus?.printerStatus);
+                  return open == null ? 'unknown' : open ? 'OPEN' : 'closed';
                 })()}
               />
-              <DiagRow label="batteryCount" value={String(joshStatus?.batteryCount ?? 'n/a')} />
-              <DiagRow label="chargeStatus" value={String(joshStatus?.chargeStatus ?? 'n/a')} />
-              <DiagRow label="batteryVoltageCount" value={joshStatus?.batteryVoltageCount?.trim() || 'n/a'} />
-              {joshStatus ? (
-                <DiagRow
-                  label="Last read"
-                  value={`refresh ${joshStatus.refreshAccepted ? 'accepted' : 'refused'}, ${
-                    joshStatus.changedAfterRefresh ? 'values updated' : 'values unchanged'
-                  }, ${joshStatus.waitedMs ?? 0} ms`}
-                />
-              ) : (
-                <Text style={styles.sizeHint}>
-                  {busy === 'josh-status' ? 'Reading printer status...' : 'Not read yet. Tap Refresh status.'}
-                </Text>
-              )}
-              {joshStatusNote ? <Text style={styles.sizeHint}>{joshStatusNote}</Text> : null}
-              <ActionButton
-                label={liveStatus ? 'Stop live status' : 'Live status (about 1 per second)'}
-                icon="arrow.clockwise"
-                busy={false}
-                disabled={!linked || status === 'printing'}
-                onPress={() => setLiveStatus((v) => !v)}
-              />
-              {liveStatus ? (
-                <>
-                  <DiagRow
-                    label="Lid"
-                    value={(() => {
-                      const open = joshLidOpen(joshStatus?.printerStatus);
-                      return open == null ? 'unknown (lid bit not verified)' : open ? 'OPEN' : 'closed';
-                    })()}
-                  />
-                  <DiagRow label="printerStatus" value={`${joshStatus?.printerStatus ?? 'n/a'}  ${toBinary(joshStatus?.printerStatus)}`} mono />
-                  <DiagRow label="Bits that changed" value={liveBits ? `${liveBits.changed}  (${liveBits.changes} changes)` : 'waiting'} mono />
-                  <Text style={styles.sizeHint}>Open and close the lid and watch which bit changes.</Text>
-                </>
-              ) : null}
-              <ActionButton
-                label="Refresh status"
-                icon="arrow.clockwise"
-                busy={busy === 'josh-status'}
-                disabled={busy !== null || !linked || status === 'printing'}
-                onPress={() => void refreshJoshStatus()}
-              />
-              <ActionButton
-                label="Copy status log"
-                icon="doc.text"
-                busy={false}
-                disabled={busy !== null}
-                onPress={() => void copyJoshStatusLog()}
-              />
+              <DiagRow label="Printer says" value={joshStatusReason(joshStatus?.printerStatus) ?? 'OK'} />
             </View>
           ) : null}
 
+          {sdkId !== 'josh' ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Print queue</Text>
             <DiagRow label="Waiting jobs" value={String(diag?.printQueueLength ?? 0)} />
             <DiagRow label="Last retry" value={String(diag?.retryCount ?? 0)} />
             <DiagRow label="Last error" value={diag?.lastError?.trim() ? diag.lastError : 'None'} />
           </View>
+          ) : null}
 
           <View style={styles.card}>
             <Pressable
@@ -714,63 +579,6 @@ export default function PrinterDiagnosticsScreen() {
                 Tap to set label size, grid spacing, and print grid or scale tests.
               </Text>
             )}
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Paper type test</Text>
-            <Text style={styles.sizeHint}>{PAPER_TYPE_TEST_PHOTO}</Text>
-            {activePaperTypeTestPrinter() === 'josh' ? (
-              <Text style={styles.monoNote}>
-                {gapReportLine ?? 'printer gapType=… supportedGapTypes=…'}
-              </Text>
-            ) : null}
-            {activePaperTypeTestPrinter() === 'dev' ? (
-              <Text style={styles.sizeHint}>
-                Dev sends GAP, GAP 0, or BLINE only after a native rebuild. ESC/POS has no black-mark command.
-              </Text>
-            ) : null}
-            {activePaperTypeTestPrinter() == null ? (
-              <Text style={styles.sizeHint}>Connect a Josh, TD-404, or Dev printer. Label X and Tez are not tested.</Text>
-            ) : (
-              paperTypeTestRows(activePaperTypeTestPrinter()!).map((row) => (
-                <View key={row.paperType} style={styles.paperRow}>
-                  <Text style={styles.paperTitle}>{row.paperType}</Text>
-                  <Text style={styles.monoNote}>{row.setting}</Text>
-                  <Text style={styles.sizeHint}>{row.expect}</Text>
-                  <ActionButton
-                    label={`Print ${row.paperType}`}
-                    icon="printer"
-                    busy={busy === `paper-${row.paperType}`}
-                    disabled={busy !== null || !linked}
-                    onPress={() => void printPaperRow(row.paperType)}
-                  />
-                </View>
-              ))
-            )}
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Dither test sheet</Text>
-            <Text style={styles.sizeHint}>
-              Prints {IMAGE_MODES.length} labels (50 x 30 mm), one per image mode, in this order:{' '}
-              {IMAGE_MODES.map((m) => IMAGE_MODE_LABEL[m]).join(', ')}. Each has a photo, a gradient, a logo,
-              text and a QR code. TD-404 and Josh only.
-            </Text>
-            <Text style={styles.sizeHint}>
-              Check on paper: (1) Solid has hard black and white only, no gray, and the gradient is a sharp
-              step. (2) Floyd-Steinberg shows smooth shading from fine random dots. (3) Atkinson is lighter,
-              with more white and crisper edges. (4) Ordered shows a regular pattern, no random dots. (5) In
-              every mode the logo, text and QR code look the same and stay sharp, and the QR code scans.
-              (6) Dots should be clean single dots with no smearing or lines. (7) The photo is not stretched
-              or shifted between modes. Photograph all four labels.
-            </Text>
-            <ActionButton
-              label="Print dither test sheet"
-              icon="printer"
-              busy={busy === 'dither-sheet'}
-              disabled={busy !== null || !linked || !ditherTestAvailable()}
-              onPress={() => void printDitherSheet()}
-            />
           </View>
 
           <View style={styles.card}>
