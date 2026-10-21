@@ -17,17 +17,54 @@ type LabelSizeEditorProps = {
   widthMm: number;
   heightMm: number;
   onChange: (widthMm: number, heightMm: number) => void;
+  /** Round label: one Diameter row (width = height), no rectangular presets. */
+  circle?: boolean;
 };
 
 /**
  * Common sizes in a fixed grid, then Width and Height rows that open the same dimension popup
  * as New label (the unit is chosen inside that popup).
  */
-export function LabelSizeEditor({ widthMm, heightMm, onChange }: LabelSizeEditorProps) {
+export function LabelSizeEditor({ widthMm, heightMm, onChange, circle }: LabelSizeEditorProps) {
   useThemeRefresh();
   const [unit, setUnit] = useState<LabelUnit>('mm');
   const [widthModalVisible, setWidthModalVisible] = useState(false);
   const [heightModalVisible, setHeightModalVisible] = useState(false);
+
+  if (circle) {
+    const d = Math.min(widthMm, heightMm);
+    return (
+      <View style={styles.root}>
+        <View style={styles.groupCard}>
+          <Pressable
+            onPress={() => setWidthModalVisible(true)}
+            style={({ pressed }) => [styles.groupRow, pressed && styles.pressed]}>
+            <Text style={styles.fieldLabel}>Diameter</Text>
+            <View style={styles.valueWrap}>
+              <Text style={styles.valueText}>
+                {formatDimension(d, unit)} {unit}
+              </Text>
+              <Text style={styles.chevron}>›</Text>
+            </View>
+          </Pressable>
+        </View>
+        <Text style={styles.bounds}>
+          Allowed range: {MIN_LABEL_MM}–{MAX_LABEL_MM} mm
+        </Text>
+        <LabelDimensionModal
+          visible={widthModalVisible}
+          title="Set diameter"
+          axis="width"
+          valueMm={d}
+          otherMm={d}
+          unit={unit}
+          onUnitChange={setUnit}
+          onClose={() => setWidthModalVisible(false)}
+          onConfirm={(mm) => onChange(mm, mm)}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>

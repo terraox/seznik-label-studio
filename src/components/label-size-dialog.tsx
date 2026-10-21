@@ -24,6 +24,8 @@ type LabelSizeDialogProps = {
   heightMm: number;
   /** Excel sets share one size, so the choice applies to every label. */
   isBulk: boolean;
+  /** Round label: ask for a diameter instead of width and height. */
+  circle?: boolean;
   onCancel: () => void;
   onApply: (widthMm: number, heightMm: number, mode: StockSizeHandling) => void;
 };
@@ -37,6 +39,7 @@ export function LabelSizeDialog({
   widthMm,
   heightMm,
   isBulk,
+  circle,
   onCancel,
   onApply,
 }: LabelSizeDialogProps) {
@@ -73,9 +76,9 @@ export function LabelSizeDialog({
           showsVerticalScrollIndicator={false}>
           <View style={styles.card}>
             <View style={styles.header}>
-              <Text style={styles.title}>Label size</Text>
+              <Text style={styles.title}>{circle ? 'Label diameter' : 'Label size'}</Text>
               <Text style={styles.current}>
-                Now {widthMm.toFixed(1)} × {heightMm.toFixed(1)} mm
+                {circle ? `Now ⌀ ${Math.min(widthMm, heightMm).toFixed(1)} mm` : `Now ${widthMm.toFixed(1)} × ${heightMm.toFixed(1)} mm`}
               </Text>
             </View>
 
@@ -83,6 +86,7 @@ export function LabelSizeDialog({
               <LabelSizeEditor
                 widthMm={draftW}
                 heightMm={draftH}
+                circle={circle}
                 onChange={(w, h) => {
                   setDraftW(w);
                   setDraftH(h);

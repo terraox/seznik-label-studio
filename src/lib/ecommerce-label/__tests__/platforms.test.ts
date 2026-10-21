@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { bestRotation, locateInvoicePage, locatePage, type LeafLike } from '../platforms';
+import { locateInvoicePage, locatePage, type LeafLike } from '../platforms';
 
 const edges = (top = 'content', bottom = 'content', left = 'content', right = 'content') =>
   ({ top, bottom, left, right }) as LeafLike['boundedBy'];
@@ -104,12 +104,4 @@ test('each platform rejects the other platforms\' pages', () => {
 test('an empty or unreadable page is rejected', () => {
   assert.equal(locatePage('amazon', []), null);
   assert.equal(locatePage('meesho', [leaf(0.1, 0.1, 0.5, 0.5, false)]), null);
-});
-
-test('bestRotation turns a wide crop on a tall label only', () => {
-  const page = { w: 595, h: 842 };
-  const wide = { x: 0, y: 0, w: 0.96, h: 0.44 };
-  assert.equal(bestRotation(wide, page, { widthMm: 101.6, heightMm: 152.4 }), 90);
-  assert.equal(bestRotation(wide, page, { widthMm: 152.4, heightMm: 101.6 }), 0);
-  assert.equal(bestRotation({ x: 0, y: 0, w: 0.44, h: 0.45 }, page, { widthMm: 101.6, heightMm: 152.4 }), 0);
 });

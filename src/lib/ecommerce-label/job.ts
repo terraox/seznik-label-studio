@@ -11,7 +11,6 @@ import { loadAnalysisGray } from '@/lib/pdf-editor/smart-crop/source';
 import { detectSections } from '@/lib/pdf-editor/smart-crop/detector';
 import { leaves, type NormRect } from '@/lib/pdf-editor/smart-crop/types';
 import {
-  bestRotation,
   locateInvoicePage,
   locatePage,
   platformName,
@@ -196,11 +195,6 @@ export async function printLabelPages(args: {
   const { items } = args;
   const sessionFor = (item: PrintItem): PdfEditSession => {
     const rotationByPage = Array.from({ length: args.pageCount }, () => 0);
-    rotationByPage[item.pageIndex] = bestRotation(
-      item.rect,
-      args.pageSizesPt[item.pageIndex] ?? args.pageSizesPt[0],
-      args.outputSize,
-    );
     return {
       sourceUri: args.uri,
       sourceName: args.name,

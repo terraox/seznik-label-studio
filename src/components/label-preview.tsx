@@ -19,8 +19,8 @@ import { canvasFillFromDocument, sortLayers, templateUsesDieCutBackground } from
 import { referenceImageDisplayUri } from '@/lib/reference-image';
 
 /** Workspace chrome around the artboard — not part of template content. */
-export const LABEL_PAD_STAGE_COLOR = '#EFF2F7';
-export const EDITOR_WORKSPACE_COLOR = '#EFF2F7';
+export const LABEL_PAD_STAGE_COLOR = '#E8EDF5';
+export const EDITOR_WORKSPACE_COLOR = '#E8EDF5';
 /** Nested label artboard — pure white where labels are getting edited. */
 export const EDITOR_ARTBOARD_COLOR = '#FFFFFF';
 export const LABEL_PAD_INSET = 14;

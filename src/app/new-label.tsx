@@ -48,7 +48,7 @@ export default function NewLabelModal() {
           <View style={styles.options}>
             <CreationOption
               label="Blank Label"
-              color="#17A6B8" // theme-fixed: category tile colour, white icon
+              color="#1878B8" // theme-fixed: category tile colour, white icon
               onPress={() =>
                 router.replace({ pathname: '/new-label-setup', params: { isSingleCanvas: 'true' } })
               }>

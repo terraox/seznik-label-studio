@@ -21,7 +21,7 @@ import {
   WrongPlatformError,
   type ScanResult,
 } from '@/lib/ecommerce-label/job';
-import { bestRotation, PLATFORMS, platformName, type PlatformId } from '@/lib/ecommerce-label/platforms';
+import { PLATFORMS, platformName, type PlatformId } from '@/lib/ecommerce-label/platforms';
 import { copyPdfToCache, loadPdfMetadata } from '@/lib/pdf-editor/load';
 import { clearPrintRasterCache, type PdfPrintOptions } from '@/lib/pdf-editor/print';
 import { clearRasterCache } from '@/lib/pdf-editor/raster';
@@ -91,10 +91,10 @@ export default function EcommerceLabelScreen() {
             .map((i) => ({
               pageIndex: items[i].pageIndex,
               rect: items[i].rect,
-              rotation: bestRotation(items[i].rect, file.pageSizesPt[items[i].pageIndex] ?? file.pageSizesPt[0], size),
+              rotation: 0,
             }))
         : [],
-    [file, items, printIndices, size],
+    [file, items, printIndices],
   );
 
   const clearFile = useCallback(() => {
@@ -141,7 +141,7 @@ export default function EcommerceLabelScreen() {
       setStep('preview');
     } catch (err) {
       if (err instanceof WrongPlatformError) {
-        Alert.alert('Wrong PDF', `${err.message}\nUpload the ${platformName(platform)} label PDF exactly as downloaded from your seller panel. System Print, Save as PDF, screenshots and photos do not work.`);
+        Alert.alert('Wrong PDF', `${err.message}\nUpload the ${platformName(platform)} label PDF exactly as downloaded from your seller panel. A PDF saved again with Ctrl+P, the Print dialog or Save as PDF, a screenshot or a photo may not work.`);
       } else {
         Alert.alert('PDF', err instanceof Error ? err.message : 'Could not open this PDF.');
       }
@@ -247,8 +247,9 @@ export default function EcommerceLabelScreen() {
             <View style={styles.cardText}>
               <Text style={styles.noteTitle}>Upload the PDF you downloaded</Text>
               <Text style={styles.noteBody}>
-                Use the label PDF exactly as downloaded from your seller panel. A PDF made with System
-                Print or Save as PDF, a screenshot or a photo will not work.
+                Use the label PDF exactly as downloaded from your seller panel. A PDF saved again with
+                Ctrl+P, the browser Print dialog, System Print or Save as PDF, a screenshot or a photo
+                may not work.
               </Text>
             </View>
           </View>
@@ -332,7 +333,6 @@ export default function EcommerceLabelScreen() {
             uri={file.uri}
             pageIndex={current.pageIndex}
             rect={current.rect}
-            pageSizePt={file.pageSizesPt[current.pageIndex] ?? file.pageSizesPt[0]}
             size={size}
           />
           <View style={styles.previewBar}>

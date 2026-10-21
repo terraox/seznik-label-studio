@@ -453,7 +453,7 @@ function PdfScreenContent() {
               <View style={styles.previewContainer}>
                 {rendering ? (
                   <View style={styles.previewLoadingBox}>
-                    <ActivityIndicator size="large" color="#17A6B8" />
+                    <ActivityIndicator size="large" color="#1878B8" />
                     <Text style={styles.previewLoadingText}>
                       Rendering PDF at printer resolution…
                     </Text>
@@ -648,10 +648,10 @@ function PdfScreenContent() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#EFF2F7',
+    backgroundColor: '#F4F7FB',
   },
   header: {
-    backgroundColor: '#214668',
+    backgroundColor: '#24275A',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.three,
@@ -879,7 +879,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   printActionBtn: {
-    backgroundColor: '#17A6B8',
+    backgroundColor: '#1878B8',
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 6,
@@ -915,11 +915,11 @@ const styles = StyleSheet.create({
   importBtn: {
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#17A6B8',
+    backgroundColor: '#1878B8',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    shadowColor: '#17A6B8',
+    shadowColor: '#1878B8',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
@@ -1229,8 +1229,8 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
   },
   densityChipActive: {
-    backgroundColor: '#17A6B8',
-    borderColor: '#17A6B8',
+    backgroundColor: '#1878B8',
+    borderColor: '#1878B8',
   },
   densityChipText: {
     fontSize: 11,
@@ -1248,10 +1248,10 @@ const styles = StyleSheet.create({
   printCtaBtn: {
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#17A6B8',
+    backgroundColor: '#1878B8',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#17A6B8',
+    shadowColor: '#1878B8',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,

@@ -270,7 +270,7 @@ const styles = themedStyles((c) => ({
     height: HANDLE,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#17A6B8', // theme-fixed: crop overlay, same in both themes (handle)
+    borderColor: '#2DAFE5', // theme-fixed: crop overlay, same in both themes (handle)
     backgroundColor: '#FFFFFF', // theme-fixed: crop overlay, same in both themes (handle)
   },
   handleTL: { left: -HANDLE / 2, top: -HANDLE / 2 },

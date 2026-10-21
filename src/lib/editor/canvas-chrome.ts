@@ -9,7 +9,7 @@
 export const CHROME_STROKE_PX = 1;
 
 /** Brand-accent teal, light enough to read as a hairline (not heavy blue). */
-export const CHROME_STROKE_LIGHT = 'rgba(23, 166, 184, 0.85)';
+export const CHROME_STROKE_LIGHT = 'rgba(45, 175, 229, 0.85)';
 
 /** Higher-luminance teal so the same 1px line holds on a dark label fill. */
 export const CHROME_STROKE_DARK = 'rgba(153, 246, 228, 0.92)';
@@ -35,10 +35,10 @@ export const DRAG_LIFT_OPACITY = 0.85;
 export const PALETTE_GHOST_MAX_EDGE_PX = 44;
 export const PALETTE_GHOST_MIN_EDGE_PX = 20;
 export const PALETTE_GHOST_LINE_THICKNESS_PX = 8;
-export const PALETTE_GHOST_FILL = 'rgba(23, 166, 184, 0.12)';
+export const PALETTE_GHOST_FILL = 'rgba(45, 175, 229, 0.12)';
 export const PALETTE_GHOST_OPACITY = 0.72;
 
-export const SNAP_GUIDE_COLOR = 'rgba(23, 166, 184, 0.65)';
+export const SNAP_GUIDE_COLOR = 'rgba(45, 175, 229, 0.65)';
 export const SNAP_GUIDE_STROKE_PX = 1;
 
 export type ChromeBackground = 'light' | 'dark';

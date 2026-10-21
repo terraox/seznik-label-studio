@@ -4732,7 +4732,9 @@ export default function EditScreen() {
               }}
               style={({ pressed }) => [styles.subToolbar, pressed && styles.pressed]}>
               <Text numberOfLines={1} style={styles.dimText}>
-                {doc.widthMm.toFixed(1)} × {doc.heightMm.toFixed(1)} mm{doc.bulk ? '' : ` · ${doc.paperType}`}
+                {doc.mediaShape === 'circle'
+                  ? `⌀ ${Math.min(doc.widthMm, doc.heightMm).toFixed(1)} mm`
+                  : `${doc.widthMm.toFixed(1)} × ${doc.heightMm.toFixed(1)} mm`}{doc.bulk ? '' : ` · ${doc.paperType}`}
                 {doc.orientation ? ` · ${doc.orientation}°` : ''}
                 {doc.ups ? ` · ${doc.ups.columns}ups` : ''}
                 {doc.bulk ? ` · ${doc.bulk.rowCount} labels` : ''}
@@ -5189,6 +5191,7 @@ export default function EditScreen() {
         widthMm={doc.widthMm}
         heightMm={doc.heightMm}
         isBulk={Boolean(doc.bulk)}
+        circle={doc.mediaShape === 'circle'}
         onCancel={() => setSizeModalVisible(false)}
         onApply={(w, h, mode) => {
           setSizeModalVisible(false);

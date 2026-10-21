@@ -110,18 +110,3 @@ export function locatePage(platform: PlatformId, leaves: LeafLike[]): LocatedPag
       return locateMeesho(leaves);
   }
 }
-
-/**
- * Quarter turn that makes a crop fill the label better: a wide crop on a tall label (or the
- * other way round) is turned. Near-square shapes are left alone.
- */
-export function bestRotation(
-  region: NormRect,
-  pageSizePt: { w: number; h: number },
-  label: { widthMm: number; heightMm: number },
-): 0 | 90 {
-  const regionAspect = (region.w * pageSizePt.w) / Math.max(1e-6, region.h * pageSizePt.h);
-  const labelAspect = label.widthMm / Math.max(1e-6, label.heightMm);
-  const wide = (a: number) => (a > 1.15 ? 1 : a < 0.87 ? -1 : 0);
-  return wide(regionAspect) * wide(labelAspect) < 0 ? 90 : 0;
-}
