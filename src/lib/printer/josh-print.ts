@@ -105,7 +105,7 @@ export const JOSH_PAD_CENTER_COMP_DOTS = JOSH_BORDER_PAD_DOTS / 2;
  * below, so moving elements never moves borders. Tuned on printed labels; a shift of 0
  * left the border off the die-cut, so do not zero it.
  */
-export const JOSH_BORDER_SHIFT_MM = { x: 2.6, y: -1 };
+export const JOSH_BORDER_SHIFT_MM = { x: 0.6, y: -1 };
 
 /**
  * Elements only (text, barcodes, shapes, images). Extra rightward move on top of the
