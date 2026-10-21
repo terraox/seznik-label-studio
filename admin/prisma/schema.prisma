@@ -267,6 +267,8 @@ model Template {
   widthMm     Float
   heightMm    Float
   viewBox     String?
+  /// Sample content (list of text / barcode / qrcode / line elements in mm), null when none.
+  sampleLayout Json?
   /// sha256 of the sanitised SVG.
   contentHash String
   /// draft | published (only published reaches the app)

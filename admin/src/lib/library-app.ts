@@ -26,7 +26,7 @@ export async function appLibrary(request: Request, kind: LibraryKind) {
     ids: ids.map((i) => i.id),
     items: items.map((i) => ({
       id: i.id, name: i.name, categoryId: i.categoryId, widthMm: i.widthMm ?? null, heightMm: i.heightMm ?? null,
-      viewBox: i.viewBox ?? null, contentHash: i.contentHash, updatedAt: (i.updatedAt as Date).toISOString(), svgCode: i.svgCode,
+      viewBox: i.viewBox ?? null, sampleLayout: i.sampleLayout ?? null, contentHash: i.contentHash, updatedAt: (i.updatedAt as Date).toISOString(), svgCode: i.svgCode,
     })),
   });
   res.headers.set('Cache-Control', 'private, no-store');

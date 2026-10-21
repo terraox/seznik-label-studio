@@ -40,6 +40,7 @@ export function itemDto(item: any) {
     viewBox: (item.viewBox ?? null) as string | null,
     status: item.status as 'draft' | 'published',
     contentHash: item.contentHash as string,
+    sampleLayout: (item.sampleLayout ?? null) as unknown,
     svgCode: item.svgCode as string,
     createdAt: (item.createdAt as Date).toISOString(),
     updatedAt: (item.updatedAt as Date).toISOString(),

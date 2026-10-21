@@ -147,6 +147,7 @@ Table Template {
   widthMm float [not null]
   heightMm float [not null]
   viewBox varchar
+  sampleLayout jsonb [note: 'Sample elements (text, barcode, qrcode, line) in mm; null when none']
   contentHash varchar [not null]
   status varchar [not null, note: 'draft | published']
   createdAt timestamp [not null]
