@@ -1,6 +1,9 @@
-import { Image } from 'expo-image';
+import { Image, type ImageRef } from 'expo-image';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type LayoutChangeEvent, ScrollView, View } from 'react-native';
+import { type LayoutChangeEvent, ScrollView, useWindowDimensions, View } from 'react-native';
+
+import { MaxContentWidth } from '@/constants/theme';
+import { HomeLayout } from '@/constants/ui';
 
 import { themedStyles, useThemeRefresh } from '@/theme';
 
@@ -9,20 +12,36 @@ const ASPECT = 1881 / 836;
 const AUTO_MS = 4000;
 const RESUME_MS = 6000;
 
+// 1080 px wide WebP copies (about 70 KB each) of the 1881 px source PNGs (about 1.7 MB each): small
+// enough to decode instantly. Display width is about 360 dp, so 1080 px is 3x.
 const BANNERS = [
-  require('../../../assets/images/home-header/shipping-labels.png'),
-  require('../../../assets/images/home-header/design-label-4.png'),
-  require('../../../assets/images/home-header/serial-label.png'),
-  require('../../../assets/images/home-header/Jewellery-Label-4.png'),
-  require('../../../assets/images/home-header/any-format-3.png'),
-  require('../../../assets/images/home-header/easy-pairing-2.png'),
+  require('../../../assets/images/home-header/optimized/shipping-labels.webp'),
+  require('../../../assets/images/home-header/optimized/design-label-4.webp'),
+  require('../../../assets/images/home-header/optimized/serial-label.webp'),
+  require('../../../assets/images/home-header/optimized/jewellery-label-4.webp'),
+  require('../../../assets/images/home-header/optimized/any-format-3.webp'),
+  require('../../../assets/images/home-header/optimized/easy-pairing-2.webp'),
 ] as const;
+
+// Held so the decoded images stay in memory until the home screen shows them.
+const preloaded: ImageRef[] = [];
+
+/** Decode every banner into memory at app start, before the home screen mounts. */
+export async function preloadFeatureBanners(): Promise<void> {
+  if (preloaded.length > 0) return;
+  const refs = await Promise.all(BANNERS.map((source) => Image.loadAsync(source).catch(() => null)));
+  for (const ref of refs) if (ref) preloaded.push(ref);
+}
 
 /** Feature banners above the New Label card: auto-advance, swipe to move, pauses while touched. */
 export function FeatureBanners() {
   useThemeRefresh();
   const scrollRef = useRef<ScrollView>(null);
-  const [width, setWidth] = useState(0);
+  const window = useWindowDimensions();
+  // Estimate the width up front so the images mount on the first render, not after a layout pass.
+  const [width, setWidth] = useState(
+    Math.round(Math.min(window.width - HomeLayout.screenPad * 2, MaxContentWidth)),
+  );
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
   const pausedUntil = useRef(0);
@@ -78,7 +97,10 @@ export function FeatureBanners() {
               source={source}
               style={{ width, height }}
               contentFit="cover"
-              cachePolicy="memory"
+              cachePolicy="memory-disk"
+              priority="high"
+              transition={0}
+              recyclingKey={`banner-${i}`}
               accessibilityIgnoresInvertColors
             />
           ))}

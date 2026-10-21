@@ -8,6 +8,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { preloadFeatureBanners } from '@/components/home/feature-banners';
 import { FeedbackPrompt } from '@/components/feedback-prompt';
 import { IntroScreen } from '@/components/intro-screen';
 import { NavigationBarScrim } from '@/components/navigation-bar-scrim';
@@ -75,6 +76,9 @@ function AppRoot() {
   useFonts(APP_FONT_MAP);
 
   useEffect(() => startInstalledFontHydration(), []);
+  useEffect(() => {
+    void preloadFeatureBanners();
+  }, []);
 
   useEffect(() => {
     getPrinterManager().maybeAutoReconnect({ force: true });
