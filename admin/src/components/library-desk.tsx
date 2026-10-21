@@ -5,6 +5,7 @@ import { Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 
 import { useDesk, useToast } from '@/components/desk';
 import { PageHeader } from '@/components/ui';
+import { SampleDesigner } from '@/components/sample-designer';
 import { api } from '@/lib/client';
 import { can } from '@/lib/permissions';
 
@@ -12,7 +13,7 @@ type Kind = 'template' | 'clipart';
 type Category = { id: string; name: string; items: number };
 type Item = {
   id: string; name: string; categoryId: string; widthMm: number | null; heightMm: number | null;
-  status: 'draft' | 'published'; svgCode: string; updatedAt: string;
+  status: 'draft' | 'published'; svgCode: string; updatedAt: string; sampleLayout?: unknown;
 };
 type SaveResult = { item: Item; removed: { what: string; count: number }[]; warnings?: string[] };
 
@@ -52,6 +53,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   const [filePreview, setFilePreview] = useState('');
 
   const [open, setOpen] = useState<Item | null>(null);
+  const [designing, setDesigning] = useState<Item | null>(null);
   const [edit, setEdit] = useState({ name: '', categoryId: '', widthMm: '', heightMm: '', status: 'published' });
 
   const loadCategories = useCallback(() => {
@@ -281,12 +283,29 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
               <div className="modal-foot lib-foot">
                 <button className="btn danger" onClick={deleteItem}><Trash2 size={13} /> Delete</button>
                 <span style={{ flex: 1 }} />
+                {kind === 'template' ? (
+                  <button className="btn" onClick={() => setDesigning(open)}>
+                    {Array.isArray(open.sampleLayout) && open.sampleLayout.length ? 'Edit sample' : 'Design sample'}
+                  </button>
+                ) : null}
                 <button className="btn" onClick={() => replaceInput.current?.click()}>Replace SVG</button>
                 <button className="btn primary" disabled={busy} onClick={() => saveItem()}>Save</button>
               </div>
             ) : null}
           </div>
         </>
+      ) : null}
+      {designing ? (
+        <SampleDesigner
+          template={designing}
+          onClose={() => setDesigning(null)}
+          onSaved={(layout) => {
+            const next = { ...designing, sampleLayout: layout.length ? layout : null };
+            setDesigning(next);
+            setOpen((cur) => (cur && cur.id === next.id ? next : cur));
+            loadItems();
+          }}
+        />
       ) : null}
     </>
   );
