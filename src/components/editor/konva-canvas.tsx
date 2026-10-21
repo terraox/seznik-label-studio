@@ -17,6 +17,7 @@ import { DEFAULT_GRID_SPACING_MM } from '@/lib/editor/canvas-grid';
 import { type LiveRulerBounds } from '@/components/canvas-rulers';
 import { CableFlagDieCutOverlay } from '@/components/cable-flag-outline';
 import { StockSilhouetteOverlay } from '@/components/stock-silhouette';
+import { TemplateSvgOverlay } from '@/components/template-svg-overlay';
 import { type LabelDocument, type LabelElement, type MediaShape } from '@/lib/label-document';
 import { referenceImageDisplayUri } from '@/lib/reference-image';
 import { JEWELRY_DIECUT, JEWELRY_DIECUT_PREVIEW_SINGLE } from '@/constants/jewelry-diecut';
@@ -360,7 +361,8 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
 
   const isCircle = doc.mediaShape === 'circle' || doc.mediaShape === 'ellipse';
   const cableFlag = isCableFlagDieCutDocument(doc);
-  const stockCut = hasStockSilhouette(doc.templatePreviewType) || isRatTailGeometry(doc.mediaGeometry);
+  const stockCut =
+    hasStockSilhouette(doc.templatePreviewType) || isRatTailGeometry(doc.mediaGeometry) || !!doc.templateSvg;
   const backgroundColor = cableFlag || stockCut || isCircle
     ? 'transparent'
     : surfaceColor
@@ -601,6 +603,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
         overflow: 'hidden',
       }}>
       {stockOutline}
+      <TemplateSvgOverlay document={doc} />
       <View
         pointerEvents="none"
         collapsable={false}

@@ -7,6 +7,7 @@ import { CableFlagDieCutOverlay } from '@/components/cable-flag-outline';
 import { PrintGridLayer } from '@/components/print-grid-layer';
 import { PrintRulerLayer } from '@/components/print-ruler-layer';
 import { StockSilhouetteOverlay } from '@/components/stock-silhouette';
+import { TemplateSvgOverlay } from '@/components/template-svg-overlay';
 import { ElementContentView } from '@/components/editor/element-renderer';
 import { useVisibleTextRevision } from '@/lib/visible-text-layout';
 import { elementSizeMm, upsTileCellDocument, type LabelDocument } from '@/lib/label-document';
@@ -404,6 +405,7 @@ function LabelCanvas({
                 widthPx={fitted.widthPx || 1}
                 heightPx={fitted.heightPx || 1}
               />
+              <TemplateSvgOverlay document={document} />
             </>
           )}
           {gridSpacingMm != null ? (
@@ -452,6 +454,7 @@ function HiFiCatalogCanvas({
   const density = catalogPaintDensity();
   const diecut =
     document.mediaShape === 'diecut' ||
+    !!document.templateSvg ||
     templateUsesDieCutBackground(document.templatePreviewType ?? '');
   if (density <= 1.01) {
     return (

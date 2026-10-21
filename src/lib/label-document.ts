@@ -225,6 +225,8 @@ export type LabelDocument = {
   /** Industry template id used to create this label (for re-open consistency). */
   templatePreviewType?: string;
   templateCategory?: string;
+  /** Outline of a catalogue SVG template, drawn on the canvas as the label shape. */
+  templateSvg?: { xml: string };
   /** Present when this label is an N-up series edited panel-by-panel. */
   ups?: LabelUpsConfig;
   /** Present on a flattened N-up sheet whose cells keep a circle or ellipse outline. */

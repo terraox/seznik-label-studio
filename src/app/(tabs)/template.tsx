@@ -1,7 +1,7 @@
-import { composeUpsDocument } from '@/lib/label-document';
+import { composeUpsDocument, createLabelDocument } from '@/lib/label-document';
 import { useRouter } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
-import { useCallback, useMemo, useRef, useState, memo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Rect as SvgRect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Rect as SvgRect, Stop, SvgXml } from 'react-native-svg';
 
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { ShareNodeIcon } from '@/components/home-icons';
@@ -21,16 +21,12 @@ import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { createIndustryTemplateDocument } from '@/constants/template-documents';
+import { JEWELRY_DIECUT_PREVIEW_SHEET } from '@/constants/jewelry-diecut';
+import { useTemplateCatalogStore, type CatalogTemplate } from '@/stores/template-catalog-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useLabelStore } from '@/stores/label-store';
 import { useTranslation } from '@/lib/i18n';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
-
-interface CategoryGroup {
-  header: string;
-  items: string[];
-}
-
-const CATEGORY_GROUPS: CategoryGroup[] = [];
 
 function formatCatalogMm(n: number): string {
   const rounded = Math.round(n * 10) / 10;
@@ -42,25 +38,9 @@ function catalogDimensions(widthMm: number, heightMm: number): string {
   return `${formatCatalogMm(widthMm)} x ${formatCatalogMm(heightMm)}`;
 }
 
-export interface TemplateItem {
-  id: string;
-  name: string;
-  nameLine2?: string;
-  dimensions: string;
-  category: string;
-  width: number;
-  height: number;
-  /** Which built-in layout to draw; templates coming from the catalogue will not need this. */
-  previewType: string;
-}
-
-/** Built-in Industry templates. Empty for now; the new categories and templates are added next. */
-export const TEMPLATES: TemplateItem[] = [];
-
 const CatalogCardBanner = memo(function CatalogCardBanner({
   id,
   name,
-  nameLine2,
   widthMm,
   heightMm,
   category,
@@ -68,7 +48,6 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
 }: {
   id: string;
   name: string;
-  nameLine2?: string;
   widthMm: number;
   heightMm: number;
   category: string;
@@ -110,45 +89,36 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
         <Text numberOfLines={1} style={styles.bannerTitle}>
           {name}
         </Text>
-        {nameLine2 ? (
-          <Text numberOfLines={1} style={styles.bannerSubtitle}>
-            {nameLine2}
-          </Text>
-        ) : null}
       </View>
       <Text style={styles.bannerDimensions}>{catalogDimensions(widthMm, heightMm)}</Text>
     </View>
   );
 });
 
-/** Physical stock thumbnail — not the editor canvas. Tap the card to open the editor. */
-const TemplatePreview = memo(function TemplatePreview({ item }: { item: TemplateItem }) {
+/** The template's own SVG, drawn at the label's proportions on the card. */
+const TemplatePreview = memo(function TemplatePreview({ item }: { item: CatalogTemplate }) {
   useThemeRefresh();
-  const document = useMemo(
-    () =>
-      createIndustryTemplateDocument({
-        name: item.nameLine2 ? `${item.name} ${item.nameLine2}` : item.name,
-        category: item.category,
-        widthMm: item.width,
-        heightMm: item.height,
-        previewType: item.previewType,
-      }),
-    [item],
+  return (
+    <View style={styles.svgPreviewWrap}>
+      <View style={{ width: '100%', aspectRatio: item.widthMm / item.heightMm, maxHeight: 220 }}>
+        <SvgXml xml={item.svgCode} width="100%" height="100%" />
+      </View>
+    </View>
   );
-
-  return <LabelPreview document={document} catalogStock />;
 });
 
 const IndustryTemplateCard = memo(function IndustryTemplateCard({
   item,
+  category,
   showCategory,
   cardMaxWidth,
   onPress,
 }: {
-  item: TemplateItem;
+  item: CatalogTemplate;
+  category: string;
   showCategory: boolean;
   cardMaxWidth: number;
-  onPress: (item: TemplateItem) => void;
+  onPress: (item: CatalogTemplate) => void;
 }) {
   useThemeRefresh();
   return (
@@ -162,10 +132,9 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
       <CatalogCardBanner
         id={item.id}
         name={item.name}
-        nameLine2={item.nameLine2}
-        widthMm={item.width}
-        heightMm={item.height}
-        category={item.category}
+        widthMm={item.widthMm}
+        heightMm={item.heightMm}
+        category={category}
         showCategory={showCategory}
       />
       <TemplatePreview item={item} />
@@ -200,11 +169,6 @@ function TemplateLocalEmptyIllustration() {
   );
 }
 
-const INDUSTRY_CATEGORY_COUNT = CATEGORY_GROUPS.reduce(
-  (count, group) => count + group.items.length,
-  0
-);
-
 export default function TemplateScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
@@ -217,7 +181,7 @@ export default function TemplateScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'local' | 'industry' | 'cloud'>('industry');
-  const [selectedCategory, setSelectedCategory] = useState('Popular');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [localGroup, setLocalGroup] = useState<string>('All');
   const [sortNewestFirst, setSortNewestFirst] = useState(true);
   const [newGroupVisible, setNewGroupVisible] = useState(false);
@@ -238,6 +202,22 @@ export default function TemplateScreen() {
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const ensureLocalDocument = useLabelStore((s) => s.ensureLocalDocument);
   const { t } = useTranslation();
+  const catalogCategories = useTemplateCatalogStore((s) => s.categories);
+  const catalogTemplates = useTemplateCatalogStore((s) => s.templates);
+  const refreshCatalog = useTemplateCatalogStore((s) => s.refresh);
+  const authToken = useAuthStore((s) => s.token);
+
+  useEffect(() => {
+    void refreshCatalog();
+  }, [refreshCatalog, authToken]);
+
+  const activeCategoryId = catalogCategories.some((c) => c.id === selectedCategory)
+    ? selectedCategory
+    : (catalogCategories[0]?.id ?? '');
+  const categoryNames = useMemo(
+    () => new Map(catalogCategories.map((c) => [c.id, c.name])),
+    [catalogCategories],
+  );
 
   const localDocuments = useMemo(() => {
     const sorted = [...documents].sort((a, b) =>
@@ -280,35 +260,47 @@ export default function TemplateScreen() {
   // Filter templates by selected category or search query
   const filteredTemplates = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    const list = q
-      ? TEMPLATES.filter(
-          (t) =>
-            t.name.toLowerCase().includes(q) ||
-            t.dimensions.toLowerCase().includes(q) ||
-            (t.nameLine2 && t.nameLine2.toLowerCase().includes(q)) ||
-            t.category.toLowerCase().includes(q),
-        )
-      : TEMPLATES.filter((t) => t.category.toLowerCase() === selectedCategory.toLowerCase());
-    return list;
-  }, [searchQuery, selectedCategory]);
+    if (q) {
+      return catalogTemplates.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          `${t.widthMm} x ${t.heightMm}`.includes(q) ||
+          (categoryNames.get(t.categoryId) ?? '').toLowerCase().includes(q),
+      );
+    }
+    return catalogTemplates.filter((t) => t.categoryId === activeCategoryId);
+  }, [searchQuery, activeCategoryId, catalogTemplates, categoryNames]);
 
   const handleSelectTemplate = useCallback(
-    (template: TemplateItem) => {
-      const name = template.nameLine2 ? `${template.name} ${template.nameLine2}` : template.name;
-      const doc = createIndustryTemplateDocument({
-        name,
-        category: template.category,
-        widthMm: template.width,
-        heightMm: template.height,
-        previewType: template.previewType,
-      });
+    (template: CatalogTemplate) => {
+      const category = categoryNames.get(template.categoryId) ?? '';
+      const isJewellery = /jewel/i.test(template.name);
+      const singleCircle = /circle/i.test(template.name) && !/2up|two up/i.test(template.name);
+      const doc = isJewellery
+        ? createIndustryTemplateDocument({
+            name: template.name,
+            category,
+            widthMm: template.widthMm,
+            heightMm: template.heightMm,
+            previewType: JEWELRY_DIECUT_PREVIEW_SHEET,
+          })
+        : createLabelDocument({
+            name: template.name,
+            widthMm: template.widthMm,
+            heightMm: template.heightMm,
+            ...(singleCircle
+              ? { mediaShape: 'circle' as const }
+              : { background: { type: 'none' as const } }),
+          });
+      // Every other shape (rounded, 2-up circles, cable) is drawn from the template's own SVG.
+      if (!isJewellery && !singleCircle) doc.templateSvg = { xml: template.svgCode };
       upsertDocument(doc);
       router.push({
         pathname: '/edit',
         params: { labelId: doc.id },
       });
     },
-    [router, upsertDocument],
+    [router, upsertDocument, categoryNames],
   );
 
   const handleCreateGroup = () => {
@@ -391,7 +383,7 @@ export default function TemplateScreen() {
             onPress={() => setActiveTab('industry')}
             style={[styles.tabItem, activeTab === 'industry' && styles.tabItemActive]}>
             <Text style={[styles.tabText, activeTab === 'industry' && styles.tabTextActive]}>
-              {t('template.industry')} ({INDUSTRY_CATEGORY_COUNT})
+              {t('template.industry')} ({catalogTemplates.length})
             </Text>
             {activeTab === 'industry' && <View style={styles.tabIndicator} />}
           </Pressable>
@@ -487,7 +479,6 @@ export default function TemplateScreen() {
             onPress={() => {
               setSearchQuery('');
               setActiveTab('industry');
-              setSelectedCategory('Popular');
             }}>
             <Text style={styles.cloudPublicText}>Public Access</Text>
           </Pressable>
@@ -562,42 +553,23 @@ export default function TemplateScreen() {
                 ))}
               </>
             ) : (
-            CATEGORY_GROUPS.map((group) => (
-              <View key={group.header} style={styles.categoryGroup}>
-                {/* Section Header: e.g. "- Popular -" */}
-                <View style={styles.groupHeaderWrap}>
+            catalogCategories.map((cat) => {
+              const isSelected = activeCategoryId === cat.id;
+              return (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => handleCategoryPress(cat.id)}
+                  style={[styles.categoryItem, isSelected && styles.categoryItemActive]}>
                   <Text
                     numberOfLines={1}
                     adjustsFontSizeToFit
-                    minimumFontScale={0.8}
-                    style={styles.groupHeaderText}>
-                    - {group.header} -
+                    minimumFontScale={0.75}
+                    style={[styles.categoryItemText, isSelected && styles.categoryItemTextActive]}>
+                    {cat.name}
                   </Text>
-                </View>
-
-                {/* Sub-items */}
-                {group.items.map((item) => {
-                  const isSelected = selectedCategory === item;
-                  return (
-                    <Pressable
-                      key={item}
-                      onPress={() => handleCategoryPress(item)}
-                      style={[styles.categoryItem, isSelected && styles.categoryItemActive]}>
-                      <Text
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.75}
-                        style={[
-                          styles.categoryItemText,
-                          isSelected && styles.categoryItemTextActive,
-                        ]}>
-                        {item}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))
+                </Pressable>
+              );
+            })
             )}
           </ScrollView>
         </View>
@@ -674,6 +646,7 @@ export default function TemplateScreen() {
               <IndustryTemplateCard
                 key={item.id}
                 item={item}
+                category={categoryNames.get(item.categoryId) ?? ''}
                 showCategory={!!searchQuery.trim()}
                 cardMaxWidth={templateCardMaxWidth}
                 onPress={handleSelectTemplate}
@@ -830,6 +803,12 @@ const styles = themedStyles((c, scheme) => ({
   },
   sidebarContent: {
     paddingVertical: 6,
+  },
+  svgPreviewWrap: {
+    backgroundColor: c.canvasArea,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   categoryGroup: {
     marginBottom: 4,

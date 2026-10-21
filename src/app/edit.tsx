@@ -1355,7 +1355,7 @@ export default function EditScreen() {
   );
 
   const dieCutPad =
-    hasStockSilhouette(doc.templatePreviewType) || isRatTailGeometry(doc.mediaGeometry);
+    hasStockSilhouette(doc.templatePreviewType) || isRatTailGeometry(doc.mediaGeometry) || !!doc.templateSvg;
   // Area around the white label: light grey in light mode, black in dark mode.
   const stageBg = C.canvasArea;
   const artboardFill = dieCutPad ? CATALOG_STOCK_LINER : EDITOR_ARTBOARD_COLOR;
@@ -4292,7 +4292,7 @@ export default function EditScreen() {
                   width: rulerSize + (canvasWidthPx || 1),
                   height: rulerSize + (canvasHeightPx || 1),
                 },
-                (doc.mediaShape === 'circle' || doc.mediaShape === 'ellipse') && {
+                (doc.mediaShape === 'circle' || doc.mediaShape === 'ellipse' || dieCutPad) && {
                   backgroundColor: 'transparent',
                   shadowOpacity: 0,
                   elevation: 0,
@@ -4345,7 +4345,7 @@ export default function EditScreen() {
                       width: canvasWidthPx || 1,
                       height: canvasHeightPx || 1,
                     },
-                    (doc.mediaShape === 'circle' || doc.mediaShape === 'ellipse') && {
+                    (doc.mediaShape === 'circle' || doc.mediaShape === 'ellipse' || dieCutPad) && {
                       backgroundColor: 'transparent',
                       borderRightWidth: 0,
                       borderBottomWidth: 0,

@@ -21,7 +21,7 @@ export type AuthResponse = {
   needsPrinter: boolean;
 };
 
-function apiBase(): string {
+export function apiBase(): string {
   const fromExtra = (Constants.expoConfig?.extra as { apiUrl?: string } | undefined)?.apiUrl;
   const fromEnv = process.env.EXPO_PUBLIC_API_URL;
   const base = (fromEnv || fromExtra || 'http://localhost:3000').replace(/\/$/, '');
