@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '@/components/app-icon';
 import { PlatformTile } from '@/components/ecommerce-label/platform-tile';
 import { LabelPreview } from '@/components/ecommerce-label/label-preview';
+import { SamplePdfModal } from '@/components/ecommerce-label/sample-pdf-modal';
 import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor/pdf-print-sheet';
 import { PrintPagesStrip, type PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
 import { PdfOutputSizeRow } from '@/components/pdf-editor/pdf-output-size-row';
@@ -62,6 +63,7 @@ export default function EcommerceLabelScreen() {
 
   const [step, setStep] = useState<Step>('platform');
   const [platform, setPlatform] = useState<PlatformId | null>(null);
+  const [sampleOpen, setSampleOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [size, setSize] = useState<OutputSize>(DEFAULT_SIZE);
   const [keepInvoice, setKeepInvoice] = useState(false);
@@ -290,6 +292,14 @@ export default function EcommerceLabelScreen() {
           </View>
 
           <Text style={styles.heading}>{platformName(platform)} label PDF</Text>
+          <Pressable
+            onPress={() => setSampleOpen(true)}
+            hitSlop={8}
+            style={styles.sampleBtn}
+            accessibilityRole="button">
+            <AppIcon name="doc.text" size={18} tintColor={C.accent} />
+            <Text style={styles.link}>See a sample {platformName(platform)} PDF</Text>
+          </Pressable>
           {file && scan ? (
             <>
               <View style={styles.row}>
@@ -399,6 +409,9 @@ export default function EcommerceLabelScreen() {
             }}
           />
         </>
+      ) : null}
+      {platform ? (
+        <SamplePdfModal platform={platform} visible={sampleOpen} onClose={() => setSampleOpen(false)} />
       ) : null}
       {documentSourceSheet}
     </View>
@@ -524,6 +537,7 @@ const styles = themedStyles((c, scheme) => ({
     ...cardElevation(c, scheme),
   },
   link: { fontSize: 14, fontWeight: '700', color: c.accent },
+  sampleBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
   upload: {
     alignItems: 'center',
     justifyContent: 'center',
