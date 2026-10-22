@@ -297,18 +297,15 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 .modal-list li span { font-size: 0.74rem; color: var(--muted); }
 .modal-empty { justify-content: center !important; color: var(--muted); }
 
-.rank-wrap { overflow-x: auto; }
-.rank-table th.num, .rank-table td.num { text-align: right; width: 1%; white-space: nowrap; }
-.rank-table td.num { font-weight: 800; font-size: 1rem; font-variant-numeric: tabular-nums; }
-.rank-name { display: flex; align-items: center; gap: 12px; }
-.rank-name > div { flex: 1; min-width: 160px; }
-.rank-name .badge { margin-left: 8px; }
-.rank-no { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 0.74rem; font-weight: 700; background: var(--paper-2); color: var(--muted); flex-shrink: 0; }
-.rank-no.top1 { background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #3b2300; }
-.rank-no.top2 { background: linear-gradient(135deg, #94a3b8, #cbd5e1); color: #1e293b; }
-.rank-no.top3 { background: linear-gradient(135deg, #c2410c, #fb923c); color: #fff; }
-.rank-bar { height: 5px; margin-top: 7px; border-radius: 99px; background: var(--paper-2); overflow: hidden; }
-.rank-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #6366f1, #a78bfa); }
+.top-labels { margin-top: 6px; overflow-x: auto; }
+.tl-row { display: grid; grid-template-columns: minmax(180px, 1fr) 110px 110px 170px; align-items: center; gap: 16px; padding: 13px 4px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.tl-row:last-child { border-bottom: 0; }
+.tl-row > span:nth-child(n+2) { text-align: right; }
+.tl-head { padding: 8px 4px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.tl-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.tl-name b { font-size: 0.95rem; font-weight: 700; }
+.tl-count { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+@media (max-width: 640px) { .tl-row { grid-template-columns: minmax(120px, 1fr) 64px 64px 90px; gap: 8px; } }
 
 .foot-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 14px; }
 .foot-card { display: flex; gap: 12px; padding: 16px 18px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }

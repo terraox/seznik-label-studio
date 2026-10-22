@@ -46,7 +46,7 @@ export function OverviewDesk() {
     Promise.all([
       api<Summary>(`/api/stats/summary?${q}`),
       api<Prints>(`/api/stats/prints?${q}`),
-      api<{ labels: LabelRow[] }>(`/api/stats/labels?${q}&window=${windowId}&limit=20`),
+      api<{ labels: LabelRow[] }>(`/api/stats/labels?${q}&window=${windowId}&limit=10`),
     ])
       .then(([s, p, l]) => {
         setSummary(s);
@@ -58,8 +58,6 @@ export function OverviewDesk() {
   }, [hideInternal, windowId]);
 
   useEffect(load, [load]);
-
-  const maxLabels = Math.max(1, ...labels.map((l) => l.labelsPrinted));
 
   const cards = [
     { title: 'Total users', value: summary?.users.total, sub: `${summary?.users.active ?? 0} active · ${summary?.users.blocked ?? 0} blocked`, Icon: Users, color: '#3B82F6' },
@@ -112,7 +110,7 @@ export function OverviewDesk() {
         <div className="chart-head">
           <div>
             <h2>Most printed labels</h2>
-            <p className="chart-sum">Top {labels.length || 20} label sizes and templates</p>
+            <p className="chart-sum">Showing the top 10 label sizes and templates</p>
           </div>
           <div className="seg">
             {WINDOWS.map((w) => (
@@ -120,29 +118,29 @@ export function OverviewDesk() {
             ))}
           </div>
         </div>
-        <div className="rank-wrap">
-          <table className="table rank-table">
-            <thead><tr><th>Label name</th><th className="num">Labels printed</th></tr></thead>
-            <tbody>
-              {labels.map((l) => (
-                <tr key={l.labelKey}>
-                  <td>
-                    <div className="rank-name">
-                      <span className={`rank-no${l.rank <= 3 ? ` top${l.rank}` : ''}`}>{l.rank}</span>
-                      <div>
-                        <b>{l.display}</b>
-                        {l.kind === 'template' ? <span className="badge draft">template</span> : null}
-                        <div className="rank-bar"><i style={{ width: `${Math.max(3, (l.labelsPrinted / maxLabels) * 100)}%` }} /></div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="num">{l.labelsPrinted.toLocaleString()}</td>
-                </tr>
-              ))}
-              {labels.length === 0 ? <tr><td colSpan={2} className="empty">Nothing printed in this window yet.</td></tr> : null}
-            </tbody>
-          </table>
-        </div>
+        {labels.length === 0 ? (
+          <p className="empty">Nothing printed in this window yet.</p>
+        ) : (
+          <div className="top-labels" role="table" aria-label="Most printed labels">
+            <div className="tl-row tl-head" role="row">
+              <span role="columnheader">Label</span>
+              <span role="columnheader">Users</span>
+              <span role="columnheader">Print jobs</span>
+              <span role="columnheader">Frequency (labels)</span>
+            </div>
+            {labels.map((l) => (
+              <div className="tl-row" role="row" key={l.labelKey}>
+                <span className="tl-name" role="cell">
+                  <b>{l.display}</b>
+                  {l.kind === 'template' ? <span className="badge draft">template</span> : null}
+                </span>
+                <span role="cell">{l.users.toLocaleString()}</span>
+                <span role="cell">{l.jobs.toLocaleString()}</span>
+                <span className="tl-count" role="cell">{l.labelsPrinted.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <PlatformCard platforms={summary?.platforms} hideInternal={hideInternal} />
