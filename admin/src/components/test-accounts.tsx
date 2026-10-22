@@ -3,23 +3,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FlaskConical, Search, X } from 'lucide-react';
 
-import { useToast } from '@/components/desk';
+import { useHideInternal, useToast } from '@/components/desk';
 import { api } from '@/lib/client';
 import type { AdminUserDto } from '@/lib/user-dto';
 
 /** Switch that leaves test / internal accounts out of the numbers, plus a window to mark which accounts they are. */
 export function TestAccounts({
-  hide,
   count,
-  onHide,
   onChanged,
 }: {
-  hide: boolean;
   count: number | undefined;
-  onHide: (value: boolean) => void;
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [hide, onHide] = useHideInternal();
   return (
     <>
       <div className={`test-switch${hide ? ' is-on' : ''}`}>

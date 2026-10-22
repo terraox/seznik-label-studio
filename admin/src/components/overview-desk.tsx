@@ -1,5 +1,6 @@
 'use client';
 
+import { useHideInternal } from '@/components/desk';
 import { useCallback, useEffect, useState } from 'react';
 import { Cable, Printer, Star, UserPlus, Users } from 'lucide-react';
 
@@ -38,7 +39,7 @@ export function OverviewDesk() {
   const [prints, setPrints] = useState<Prints | null>(null);
   const [labels, setLabels] = useState<LabelRow[]>([]);
   const [windowId, setWindowId] = useState('all');
-  const [hideInternal, setHideInternal] = useState(true);
+  const [hideInternal] = useHideInternal();
   const [error, setError] = useState('');
 
   const load = useCallback(() => {
@@ -76,7 +77,7 @@ export function OverviewDesk() {
   return (
     <>
       <PageHeader kicker="Overview" title="How the app is being used" lede="People, printers and labels printed. Windows use India time; the last 7 days is a rolling 7 x 24 hours.">
-        <TestAccounts hide={hideInternal} count={summary?.users.internalAccounts} onHide={setHideInternal} onChanged={load} />
+        <TestAccounts count={summary?.users.internalAccounts} onChanged={load} />
         <button type="button" className="btn ghost" onClick={load}>Refresh</button>
       </PageHeader>
       {error ? <p className="err">{error}</p> : null}

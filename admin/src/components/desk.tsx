@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { Admin } from '@/lib/types';
 
 const DeskContext = createContext<Admin | null>(null);
@@ -42,4 +42,24 @@ export function DeskProviders({
       </ToastContext.Provider>
     </DeskContext.Provider>
   );
+}
+
+const HIDE_KEY = 'sez-admin-hide-internal';
+const HideInternalContext = createContext<[boolean, (value: boolean) => void]>([false, () => {}]);
+
+/** One switch for the whole panel: leave test / internal accounts out of every page's numbers. Off by default. */
+export function HideInternalProvider({ children }: { children: React.ReactNode }) {
+  const [hide, setHideState] = useState(false);
+  useEffect(() => {
+    try { setHideState(localStorage.getItem(HIDE_KEY) === '1'); } catch { /* storage blocked: keep default */ }
+  }, []);
+  const setHide = useCallback((value: boolean) => {
+    setHideState(value);
+    try { localStorage.setItem(HIDE_KEY, value ? '1' : '0'); } catch { /* ignore */ }
+  }, []);
+  return <HideInternalContext.Provider value={[hide, setHide]}>{children}</HideInternalContext.Provider>;
+}
+
+export function useHideInternal() {
+  return useContext(HideInternalContext);
 }

@@ -1,21 +1,25 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { AnalyticsFooter, type FooterInfo } from '@/components/analytics-footer';
+import { useHideInternal } from '@/components/desk';
 import { PageHeader } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 
 type Product = { key: string; name: string; category: string; clicks: number; users: number; last7Days: number; thisMonth: number; lastClick: string };
-type Data = { totalClicks: number; products: Product[]; trend: { day: string; clicks: number }[] | null; footer: FooterInfo };
+type Person = { id: string; name: string; mobile: string; clicks: number; lastClick: string; products: { key: string; name: string; category: string; clicks: number; lastClick: string }[] };
+type Data = { people: Person[]; totalClicks: number; products: Product[]; trend: { day: string; clicks: number }[] | null; footer: FooterInfo };
 
 export function ShopDesk() {
   const [data, setData] = useState<Data | null>(null);
   const [product, setProduct] = useState('');
-  const [hideInternal, setHideInternal] = useState(true);
+  const [hideInternal] = useHideInternal();
   const [error, setError] = useState('');
+  const [view, setView] = useState<'products' | 'people'>('products');
+  const [openPerson, setOpenPerson] = useState('');
 
   const load = useCallback(() => {
     const params = new URLSearchParams();
@@ -30,14 +34,15 @@ export function ShopDesk() {
   return (
     <>
       <PageHeader kicker="Shop" title="Product clicks" lede="Taps on the buy button in the app's shop, per product. Click a row to see its daily trend.">
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
-          <input type="checkbox" checked={hideInternal} onChange={(e) => setHideInternal(e.target.checked)} /> Exclude internal accounts
-        </label>
+        <div className="seg" role="group" aria-label="View">
+          <button type="button" className={view === 'products' ? 'on' : ''} onClick={() => setView('products')}>By product</button>
+          <button type="button" className={view === 'people' ? 'on' : ''} onClick={() => setView('people')}>By person</button>
+        </div>
         <button type="button" className="btn ghost" onClick={load}>Refresh</button>
       </PageHeader>
       {error ? <p className="err">{error}</p> : null}
 
-      <section className="panel">
+      {view === 'products' ? <section className="panel">
         <p className="lede">{data ? `${data.totalClicks.toLocaleString()} clicks across ${data.products.length} products` : 'Loading…'}</p>
         <div style={{ overflowX: 'auto' }}>
           <table className="table">
@@ -53,9 +58,47 @@ export function ShopDesk() {
             </tbody>
           </table>
         </div>
-      </section>
+      </section> : (
+        <section className="panel users-panel">
+          <div className="u-sechead">
+            <h2>Who clicked what</h2>
+            <p>{data ? `${data.people.length.toLocaleString()} ${data.people.length === 1 ? 'person has' : 'people have'} tapped a buy button. Click a person to see each product.` : 'Loading…'}</p>
+          </div>
+          <div className="u-scroll">
+            <table className="table u-table" style={{ minWidth: 0 }}>
+              <thead><tr><th>Person</th><th>Mobile</th><th className="u-center">Clicks</th><th className="u-center">Products</th><th>Last click</th></tr></thead>
+              <tbody>
+                {data?.people.map((p) => (
+                  <Fragment key={p.id}>
+                    <tr className="u-row" onClick={() => setOpenPerson(openPerson === p.id ? '' : p.id)}>
+                      <td><b>{p.name}</b></td>
+                      <td className="u-mono">{p.mobile}</td>
+                      <td className="u-center u-labels">{p.clicks.toLocaleString()}</td>
+                      <td className="u-center">{p.products.length}</td>
+                      <td>{ago(p.lastClick)}</td>
+                    </tr>
+                    {openPerson === p.id ? (
+                      <tr>
+                        <td colSpan={5} style={{ background: 'var(--paper-2)' }}>
+                          <ul className="ucard-list">
+                            {p.products.map((x) => (
+                              <li key={x.key}><b>{x.name}</b> <span className="u-muted">· {x.category} · {x.clicks} click{x.clicks === 1 ? '' : 's'} · last {ago(x.lastClick)}</span></li>
+                            ))}
+                          </ul>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                ))}
+                {!data ? <tr><td colSpan={5} className="empty">Loading…</td></tr> : null}
+                {data && data.people.length === 0 ? <tr><td colSpan={5} className="empty">Nobody has tapped a product yet.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
-      {selected && data?.trend ? (
+      {view === 'products' && selected && data?.trend ? (
         <section className="panel" style={{ marginTop: 14 }}>
           <h2>{selected.name}: clicks per day (last 30 days, IST)</h2>
           <div style={{ width: '100%', height: 220 }}>

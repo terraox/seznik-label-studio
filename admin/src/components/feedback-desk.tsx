@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { useDesk, useToast } from '@/components/desk';
+import { useDesk, useHideInternal, useToast } from '@/components/desk';
 import { PageHeader } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
@@ -31,7 +31,7 @@ export function FeedbackDesk() {
   const [q, setQ] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [hideInternal, setHideInternal] = useState(true);
+  const [hideInternal] = useHideInternal();
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState('');
   const [note, setNote] = useState('');
@@ -117,9 +117,6 @@ export function FeedbackDesk() {
           </select>
           <input type="date" value={from} onChange={(e) => reset(setFrom)(e.target.value)} aria-label="From date" />
           <input type="date" value={to} onChange={(e) => reset(setTo)(e.target.value)} aria-label="To date" />
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
-            <input type="checkbox" checked={hideInternal} onChange={(e) => reset(setHideInternal)(e.target.checked)} /> Exclude internal accounts
-          </label>
         </div>
 
         {data?.items.map((item) => (

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Ban, ChevronLeft, ChevronRight, Search, ShieldCheck, X } from 'lucide-react';
 
-import { useDesk, useToast } from '@/components/desk';
+import { useDesk, useHideInternal, useToast } from '@/components/desk';
 import { PlatformTag } from '@/components/platform';
 import { Field, PageHeader } from '@/components/ui';
 import { api } from '@/lib/client';
@@ -74,6 +74,7 @@ export function UsersDesk() {
 
   const [action, setAction] = useState<{ user: AdminUserDto; mode: 'block' | 'unblock' } | null>(null);
 
+  const [globalHide] = useHideInternal();
   const load = useCallback(() => {
     const params = new URLSearchParams({ sort, dir, page: String(page), pageSize: String(pageSize) });
     if (q.trim()) {
@@ -81,14 +82,16 @@ export function UsersDesk() {
       params.set('field', field);
     }
     if (status !== 'all') params.set('status', status);
-    if (internal !== 'all') params.set('internal', internal);
+    // The header switch hides test accounts everywhere; this list can still narrow to "only".
+    const scope = internal === 'all' && globalHide ? 'hide' : internal;
+    if (scope !== 'all') params.set('internal', scope);
     api<ListResponse>(`/api/users?${params}`)
       .then((response) => {
         setData(response);
         setError('');
       })
       .catch((reason: Error) => setError(reason.message));
-  }, [q, field, status, internal, sort, dir, page, pageSize]);
+  }, [q, field, status, internal, globalHide, sort, dir, page, pageSize]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, q ? 250 : 0);
@@ -242,7 +245,7 @@ export function UsersDesk() {
                 <th>Platform</th>
                 <th>Status</th>
                 {canEdit ? <th>Test account</th> : null}
-                <th className="num"><button className="th-sort" onClick={() => sortBy('printCountTotal')}>Labels printed{arrow('printCountTotal')}</button></th>
+                <th className="u-center"><button className="th-sort" onClick={() => sortBy('printCountTotal')}>Labels printed{arrow('printCountTotal')}</button></th>
                 {canEdit ? <th className="num">Action</th> : null}
               </tr>
             </thead>
@@ -282,7 +285,7 @@ export function UsersDesk() {
                       ><i /></button>
                     </td>
                   ) : null}
-                  <td className="num u-labels">{user.printCountTotal.toLocaleString()}</td>
+                  <td className="u-center u-labels">{user.printCountTotal.toLocaleString()}</td>
                   {canEdit ? (
                     <td className="num" onClick={(e) => e.stopPropagation()}>
                       {user.status === 'active' ? (
@@ -404,8 +407,8 @@ export function UsersDesk() {
                 </section>
               ) : null}
 
-              <section className="ucard-sec">
-                <h3>Printers connected <small>{extras ? extras.printers.length : ''}</small></h3>
+              <details className="ucard-sec ucard-fold">
+                <summary><h3>Printers connected <small>{extras ? extras.printers.length : ''}</small></h3></summary>
                 {!extras ? <p className="u-muted">Loading…</p> : extras.printers.length === 0 ? <p className="u-muted">No printer has connected yet.</p> : (
                   <div className="ucard-scroll">
                     <table className="table ucard-table">
@@ -424,10 +427,10 @@ export function UsersDesk() {
                     </table>
                   </div>
                 )}
-              </section>
+              </details>
 
-              <section className="ucard-sec">
-                <h3>Connection history <small>{extras ? `${extras.connections.length}${extras.moreConnections ? '+' : ''}` : ''}</small></h3>
+              <details className="ucard-sec ucard-fold">
+                <summary><h3>Connection history <small>{extras ? `${extras.connections.length}${extras.moreConnections ? '+' : ''}` : ''}</small></h3></summary>
                 {!extras ? <p className="u-muted">Loading…</p> : extras.connections.length === 0 ? <p className="u-muted">Nothing yet. Connections appear once the user connects a printer in the app.</p> : (
                   <ol className="timeline">
                     {extras.connections.map((c) => (
@@ -442,10 +445,10 @@ export function UsersDesk() {
                 {extras?.moreConnections ? (
                   <button type="button" className="btn small" disabled={moreBusy} onClick={loadMoreConnections}>{moreBusy ? 'Loading…' : 'Show older connections'}</button>
                 ) : null}
-              </section>
+              </details>
 
-              <section className="ucard-sec">
-                <h3>Recent prints</h3>
+              <details className="ucard-sec ucard-fold">
+                <summary><h3>Recent prints</h3></summary>
                 {extras && extras.recentPrints.length > 0 ? (
                   <div className="ucard-scroll">
                     <table className="table ucard-table">
@@ -458,10 +461,10 @@ export function UsersDesk() {
                     </table>
                   </div>
                 ) : <p className="u-muted">{extras ? 'Nothing printed yet.' : 'Loading…'}</p>}
-              </section>
+              </details>
 
-              <section className="ucard-sec">
-                <h3>Shop clicks <small>{extras ? extras.shopClicks.length : ''}</small></h3>
+              <details className="ucard-sec ucard-fold">
+                <summary><h3>Shop clicks <small>{extras ? extras.shopClicks.length : ''}</small></h3></summary>
                 {extras && extras.shopClicks.length > 0 ? (
                   <ul className="ucard-list">
                     {extras.shopClicks.map((c) => (
@@ -469,10 +472,15 @@ export function UsersDesk() {
                     ))}
                   </ul>
                 ) : <p className="u-muted">{extras ? 'Has not pressed Buy on any product yet.' : 'Loading…'}</p>}
-              </section>
+              </details>
 
-              <section className="ucard-sec">
-                <h3>Feedback</h3>
+              <details className="ucard-sec ucard-fold">
+                <summary>
+                  <h3>Feedback <small>{extras ? extras.feedback.length : ''}</small></h3>
+                  {extras && extras.feedback[0] ? (
+                    <span className="fold-peek">{'★'.repeat(extras.feedback[0].rating)}{'☆'.repeat(5 - extras.feedback[0].rating)}{extras.feedback[0].message ? ` “${extras.feedback[0].message}”` : ''}</span>
+                  ) : null}
+                </summary>
                 {extras && extras.feedback.length > 0 ? (
                   <ul className="ucard-list">
                     {extras.feedback.map((f) => (
@@ -480,10 +488,10 @@ export function UsersDesk() {
                     ))}
                   </ul>
                 ) : <p className="u-muted">{extras ? 'No feedback yet.' : 'Loading…'}</p>}
-              </section>
+              </details>
 
-              <section className="ucard-sec">
-                <h3>Admin history</h3>
+              <details className="ucard-sec ucard-fold">
+                <summary><h3>Admin history</h3></summary>
                 {history.length === 0 ? <p className="u-muted">No blocks or sign-outs yet.</p> : (
                   <ul className="ucard-list">
                     {history.map((row) => (
@@ -495,7 +503,7 @@ export function UsersDesk() {
                     ))}
                   </ul>
                 )}
-              </section>
+              </details>
             </div>
 
             {canEdit ? (

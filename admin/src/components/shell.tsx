@@ -18,7 +18,7 @@ import {
   Clock,
 } from 'lucide-react';
 
-import { DeskProviders } from '@/components/desk';
+import { DeskProviders, HideInternalProvider, useHideInternal } from '@/components/desk';
 import { AnimatedThemeToggler } from '@/panel/components/AnimatedThemeToggler';
 import { api } from '@/lib/client';
 import type { Admin } from '@/lib/types';
@@ -35,6 +35,25 @@ const NAV = [
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <HideInternalProvider>
+      <ShellInner>{children}</ShellInner>
+    </HideInternalProvider>
+  );
+}
+
+/** Header switch that applies to every page. */
+function HideTestSwitch() {
+  const [hide, setHide] = useHideInternal();
+  return (
+    <button type="button" role="switch" aria-checked={hide} className="hide-test" onClick={() => setHide(!hide)} title="Applies to every page">
+      <span className={`switch${hide ? ' on' : ''}`}><i /></span>
+      <span>{hide ? 'Test accounts hidden' : 'Test accounts included'}</span>
+    </button>
+  );
+}
+
+function ShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -130,6 +149,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{formattedTime}</span>
                 <span style={{ fontSize: '0.65rem', color: 'var(--navbar-text-muted)' }}>IST</span>
               </div>
+
+              <HideTestSwitch />
 
               <AnimatedThemeToggler variant="circle" duration={500} />
 
