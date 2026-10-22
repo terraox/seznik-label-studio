@@ -351,8 +351,11 @@ function StepperRow({
   minusDisabled,
   plusDisabled,
   bordered,
+  hint,
 }: {
   label: string;
+  /** Small muted line under the label. */
+  hint?: string;
   value: string;
   valueColor?: string;
   /** When set, the value is tappable and can be typed with the keyboard. */
@@ -366,7 +369,10 @@ function StepperRow({
   useThemeRefresh();
   return (
     <View style={[styles.stepperRow, bordered && styles.stepperRowBorder]}>
-      <Text style={styles.stepperLabel}>{label}</Text>
+      <View style={styles.stepperLabelWrap}>
+        <Text style={styles.stepperLabel}>{label}</Text>
+        {hint ? <Text style={styles.stepperHint}>{hint}</Text> : null}
+      </View>
       <View style={styles.stepperControls}>
         <Pressable
           disabled={minusDisabled}
@@ -700,6 +706,8 @@ export default function PrintScreen() {
   const [printSize, setPrintSize] = useState<LabelSizeMm>(defaultPrintSize);
   const [printPreset, setPrintPreset] = useState<PrintSizePreset | null>(defaultPreset);
   const [showAdvanced, setShowAdvanced] = useState(true);
+  // Whole-label offset (elements + border together) is rarely needed, so it starts folded.
+  const [showTogetherOffset, setShowTogetherOffset] = useState(false);
   const printingLockRef = useRef(false);
   const labelSettingsInitialized = useRef(false);
 
@@ -2889,8 +2897,30 @@ export default function PrintScreen() {
                     return `Total offset ${total} (this printer plus Label Settings), plus 0 mm across and 2 mm down on text and codes. The border is its own layer and stays ${TD404_BORDER_GAP_MM} mm from the die-cut on every side.`;
                   })()}
                 </Text>
+                <Pressable
+                  onPress={() => setShowTogetherOffset((v) => !v)}
+                  style={({ pressed }) => [styles.offsetFoldHeader, pressed && styles.pressed]}>
+                  <Text style={styles.offsetFoldTitle}>Whole label shift (elements + border)</Text>
+                  <View style={styles.advancedHeaderRight}>
+                    <Text style={styles.advancedStatusText}>{showTogetherOffset ? 'Hide' : 'Show'}</Text>
+                    <View style={styles.advancedChevron}>
+                      <AppIcon
+                        name={showTogetherOffset ? 'chevron.up' : 'chevron.down'}
+                        tintColor={C.textSecondary}
+                        size={16}
+                      />
+                    </View>
+                  </View>
+                </Pressable>
+                {showTogetherOffset ? (
+                  <>
+                    <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
+                      Moves everything on the label together: elements and border. Use it to fix a printer that
+                      prints the whole label off-centre. Saved for this printer.
+                    </Text>
                 <StepperRow
-                  label="Horizontal Offset (saved for this printer)"
+                  label="Horizontal"
+                  hint="−  moves left   ·   +  moves right"
                   value={`${hOffset.toFixed(2)} mm`}
                   minusDisabled={hOffset <= -10}
                   onMinus={() => setHOffset((v) => Math.max(-10, Math.round((v - 0.5) * 100) / 100))}
@@ -2898,15 +2928,22 @@ export default function PrintScreen() {
                   bordered
                 />
                 <StepperRow
-                  label="Vertical Offset (saved for this printer)"
+                  label="Vertical"
+                  hint="−  moves up   ·   +  moves down"
                   value={`${vOffset.toFixed(2)} mm`}
                   minusDisabled={vOffset <= -10}
                   onMinus={() => setVOffset((v) => Math.max(-10, Math.round((v - 0.5) * 100) / 100))}
                   onPlus={() => setVOffset((v) => Math.min(20, Math.round((v + 0.5) * 100) / 100))}
                 />
-                <Text style={[styles.groupLabel, { marginTop: 12 }]}>Elements offset (mm, saved with this label)</Text>
+                  </>
+                ) : null}
+                <Text style={[styles.groupLabel, { marginTop: 12 }]}>Elements only (text, codes, shapes)</Text>
+                <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
+                  Moves only the content; the border stays put. Saved with this label.
+                </Text>
                 <StepperRow
-                  label="Elements X"
+                  label="Horizontal"
+                  hint="−  moves left   ·   +  moves right"
                   value={`${layerOffsets.elements.x.toFixed(2)} mm`}
                   minusDisabled={!layerOffsetsUsable || layerOffsets.elements.x <= LAYER_OFFSET_MIN_MM}
                   plusDisabled={!layerOffsetsUsable || layerOffsets.elements.x >= LAYER_OFFSET_MAX_MM}
@@ -2915,16 +2952,21 @@ export default function PrintScreen() {
                   bordered
                 />
                 <StepperRow
-                  label="Elements Y"
+                  label="Vertical"
+                  hint="−  moves up   ·   +  moves down"
                   value={`${layerOffsets.elements.y.toFixed(2)} mm`}
                   minusDisabled={!layerOffsetsUsable || layerOffsets.elements.y <= LAYER_OFFSET_MIN_MM}
                   plusDisabled={!layerOffsetsUsable || layerOffsets.elements.y >= LAYER_OFFSET_MAX_MM}
                   onMinus={() => changeLayerOffset('elements', 'y', layerOffsets.elements.y - LAYER_OFFSET_STEP_MM)}
                   onPlus={() => changeLayerOffset('elements', 'y', layerOffsets.elements.y + LAYER_OFFSET_STEP_MM)}
                 />
-                <Text style={[styles.groupLabel, { marginTop: 12 }]}>Border offset (mm, saved with this label)</Text>
+                <Text style={[styles.groupLabel, { marginTop: 12 }]}>Border only</Text>
+                <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
+                  Moves only the border frame; the content stays put. Saved with this label.
+                </Text>
                 <StepperRow
-                  label="Border X"
+                  label="Horizontal"
+                  hint="−  moves left   ·   +  moves right"
                   value={`${layerOffsets.border.x.toFixed(2)} mm`}
                   minusDisabled={!layerHasBorder || layerOffsets.border.x <= LAYER_OFFSET_MIN_MM}
                   plusDisabled={!layerHasBorder || layerOffsets.border.x >= LAYER_OFFSET_MAX_MM}
@@ -2933,7 +2975,8 @@ export default function PrintScreen() {
                   bordered
                 />
                 <StepperRow
-                  label="Border Y"
+                  label="Vertical"
+                  hint="−  moves up   ·   +  moves down"
                   value={`${layerOffsets.border.y.toFixed(2)} mm`}
                   minusDisabled={!layerHasBorder || layerOffsets.border.y <= LAYER_OFFSET_MIN_MM}
                   plusDisabled={!layerHasBorder || layerOffsets.border.y >= LAYER_OFFSET_MAX_MM}
@@ -2944,8 +2987,8 @@ export default function PrintScreen() {
                   {!layerOffsetsUsable
                     ? 'Elements and Border offsets work for TD-404 and Josh labels the app draws directly (not photos, tables or signatures; Josh at 0° only).'
                     : !layerHasBorder
-                      ? 'This label has no border, so only the Elements offset applies. Positive X moves right, positive Y moves down. Added to the offsets above.'
-                      : 'Positive X moves right, positive Y moves down. Added to the offsets above; 0 and 0 leaves the print unchanged.'}
+                      ? 'This label has no border, so only the Elements offset applies. Minus moves left or up, plus moves right or down. Added to the offsets above.'
+                      : 'Minus moves left or up, plus moves right or down. Added to the offsets above; 0 and 0 leaves the print unchanged.'}
                 </Text>
                 {layerWarning ? (
                   <Text style={{ color: C.warning, fontSize: 12, paddingTop: 6 }}>{layerWarning}</Text>
@@ -3280,6 +3323,22 @@ const styles = themedStyles((c, scheme) => ({
     alignItems: 'center',
     gap: 8,
   },
+  offsetFoldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: c.fill,
+  },
+  offsetFoldTitle: {
+    ...Type.bodyMedium,
+    flex: 1,
+    color: c.text,
+  },
   advancedChevron: {
     width: 28,
     height: 28,
@@ -3320,10 +3379,17 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 12,
     paddingVertical: 8,
   },
+  stepperLabelWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  stepperHint: {
+    fontSize: 11,
+    color: c.textMuted,
+  },
   stepperLabel: {
     ...Type.body,
     color: c.text,
-    flex: 1,
     paddingRight: 8,
   },
   stepperControls: {
