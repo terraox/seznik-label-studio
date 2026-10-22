@@ -1,4 +1,4 @@
-// Source of truth for the Postgres tables. Keep admin/docs/database.dbml in step:
+// Source of truth for the Postgres tables. Keep database.dbml in step:
 //   npm run check:dbml   fails when a model or column is missing from the diagram.
 // Change flow:  edit this file -> npm run db:migrate -- --name <what_changed> -> update the .dbml.
 

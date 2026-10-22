@@ -33,7 +33,7 @@ Admins created by an owner also get a first-login password change and TOTP enrol
 
 ## Database
 
-Postgres via Prisma. `prisma/schema.prisma` is the source of truth; `docs/database.dbml` is the readable
+Postgres via Prisma. `prisma/schema.prisma` is the source of truth; `../database.dbml` is the readable
 diagram (paste it into https://dbdiagram.io). Change flow: edit the schema, `npm run db:migrate -- --name what_changed`,
 update the .dbml, then `npm run ci` (it fails if the diagram is out of date).
 

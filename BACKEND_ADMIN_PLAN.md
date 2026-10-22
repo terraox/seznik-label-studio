@@ -1,7 +1,7 @@
 # sez-print Backend + Admin Panel: Plan (v2.1)
 
 Status (2026-10-18): **P1.0 secrets, P1.1 backups, and a first slice of P1.2 + P2 + P5 (server and admin desk) are done locally.**
-Done: Prisma migrations (baseline + 16 tables), `docs/database.dbml` kept in step by `npm run check:dbml`, OTP and rate limits in Postgres, one-account-per-number (permanent `RegisteredPhone` claim), per-request status + `tokenVersion` check, block / unblock / sign-out-everywhere / pre-block a number, audit log, users CSV export (owner), `/api/app/config`, `/api/health`, local CI (`npm run ci`), 37-check end-to-end test (`npm run test:users`). TOTP is required for every admin including the fixed `seznikadmin` login.
+Done: Prisma migrations (baseline + 16 tables), `database.dbml` kept in step by `npm run check:dbml`, OTP and rate limits in Postgres, one-account-per-number (permanent `RegisteredPhone` claim), per-request status + `tokenVersion` check, block / unblock / sign-out-everywhere / pre-block a number, audit log, users CSV export (owner), `/api/app/config`, `/api/health`, local CI (`npm run ci`), 37-check end-to-end test (`npm run test:users`). TOTP is required for every admin including the fixed `seznikadmin` login.
 Still open from P1.2/P5: role rename to `superadmin/support/content`, admins into Postgres, mobile blocked screen + `/me` call at startup + `bypassAuth` removal (needs a rebuild), event pipeline (P3 onwards).
 
 ## Scope update (owner, 2026-10-18): AWS comes last

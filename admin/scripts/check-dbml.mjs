@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Fails when docs/database.dbml has drifted from prisma/schema.prisma:
+// Fails when database.dbml has drifted from prisma/schema.prisma:
 //   - a Prisma model (table) or stored column missing from the diagram
 //   - a diagram table that is neither a Prisma model nor marked [FILE]
 import { readFileSync } from 'node:fs';
 
 const prisma = readFileSync(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
-const dbml = readFileSync(new URL('../docs/database.dbml', import.meta.url), 'utf8');
+const dbml = readFileSync(new URL('../../database.dbml', import.meta.url), 'utf8');
 
 const modelNames = [...prisma.matchAll(/^model (\w+) \{/gm)].map((m) => m[1]);
 const enumNames = [...prisma.matchAll(/^enum (\w+) \{/gm)].map((m) => m[1]);
