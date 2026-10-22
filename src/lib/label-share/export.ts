@@ -1,5 +1,5 @@
 /**
- * Build a .sezlabel from a LabelDocument. Pure: file access is injected, so it runs in node tests.
+ * Build a .seznik from a LabelDocument. Pure: file access is injected, so it runs in node tests.
  * The caller passes a document obtained through `getDocument` (already migrated).
  */
 

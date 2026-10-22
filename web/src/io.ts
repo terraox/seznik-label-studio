@@ -56,7 +56,7 @@ const fontOk = (name: string) => {
 
 export type Opened = { doc: any; parsed: ParsedLabel };
 
-/** Read a .sezlabel with the same validator the phone uses and build the document in memory. */
+/** Read a .seznik with the same validator the phone uses and build the document in memory. */
 export function openSezlabel(bytes: Uint8Array): Opened {
   const parsed = parseSezlabel(bytes, {
     appVersion: '999.0.0', // the bench reads any schema this code understands
@@ -117,7 +117,7 @@ async function previewPng(svg: string, widthPx: number, heightPx: number): Promi
   }
 }
 
-/** Build the .sezlabel exactly as the phone does (same code), from the bench's in-memory label. */
+/** Build the .seznik exactly as the phone does (same code), from the bench's in-memory label. */
 export async function exportSezlabel(doc: any, opts: { includeUserClipart: boolean; previewSvg?: { svg: string; w: number; h: number } }): Promise<ExportResult> {
   const preview = opts.previewSvg ? await previewPng(opts.previewSvg.svg, opts.previewSvg.w, opts.previewSvg.h) : null;
   return buildSezlabel(doc, {

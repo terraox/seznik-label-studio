@@ -1,5 +1,5 @@
 /**
- * Turn a parsed .sezlabel into a saved-label document. Pure: the native step writes the files first
+ * Turn a parsed .seznik into a saved-label document. Pure: the native step writes the files first
  * and passes in where each one ended up. The document is written as-is after the app's existing
  * migrations. normalizeDocumentElements and patchLabelDocument are never called.
  */

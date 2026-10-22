@@ -101,7 +101,7 @@ export default function NewLabelModal() {
               <AppIcon name="photo.on.rectangle" tintColor="#FFFFFF" size={30} pointerEvents="none" /* theme-fixed: white icon on category tile */ />
             </CreationOption>
             <CreationOption
-              label="Import label (.sezlabel)"
+              label="Import label (.seznik)"
               color="#14B8A6" // theme-fixed: category tile colour, white icon
               onPress={() => void openLabelFile()}>
               <AppIcon name="tray.and.arrow.down" tintColor="#FFFFFF" size={28} pointerEvents="none" /* theme-fixed: white icon on category tile */ />

@@ -1,5 +1,5 @@
 /**
- * The phone side of .sezlabel: reading and writing files, the stores, and the one-commit import.
+ * The phone side of .seznik: reading and writing files, the stores, and the one-commit import.
  * Everything pure lives in the other files of this folder and is covered by `npm run test:label-share`.
  * This file is NOT run by those tests (it needs the app runtime) and is on the device checklist.
  */
@@ -118,7 +118,7 @@ function exportEnv(opts: { includeUserClipart: boolean; includeFonts: boolean; p
   };
 }
 
-/** Build the .sezlabel for a saved label (read through getDocument, so it is already migrated) and write it to cache. */
+/** Build the .seznik for a saved label (read through getDocument, so it is already migrated) and write it to cache. */
 export async function exportLabelFile(
   labelId: string,
   opts: { includeUserClipart: boolean; includeFonts: boolean; previewBase64?: string | null },

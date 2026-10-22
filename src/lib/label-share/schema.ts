@@ -1,5 +1,5 @@
 /**
- * Hand-written schema for the document inside a .sezlabel (document.json).
+ * Hand-written schema for the document inside a .seznik (document.json).
  *
  * Rules (see docs/sezlabel-schema-plan.md):
  *  - Values are clamped to sane ranges. ELEMENTS ARE NEVER MOVED OR RESIZED to fit the label.

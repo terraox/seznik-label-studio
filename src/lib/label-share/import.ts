@@ -1,5 +1,5 @@
 /**
- * Read and vet a .sezlabel. Pure: nothing is written anywhere. The result is what the import
+ * Read and vet a .seznik label file. Pure: nothing is written anywhere. The result is what the import
  * screen shows; `finalize.ts` + the native commit turn it into a saved label.
  */
 

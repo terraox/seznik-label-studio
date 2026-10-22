@@ -181,7 +181,7 @@ export default function ShareModal() {
             <View style={styles.options}>
               <ShareOption
                 icon="square.grid.2x2"
-                label="As .sezlabel"
+                label="As .seznik"
                 color="#3498DB" // theme-fixed: category tile colour
                 onPress={() => setView('file')}
               />

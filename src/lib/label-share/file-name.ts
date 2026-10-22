@@ -1,2 +1,5 @@
-/** Label files end in .sezlabel (a .sezlabel.zip name, added by some apps when sending, is accepted too). */
-export const isLabelFileName = (name: string): boolean => /\.sezlabel(\.zip)?$/i.test(name.trim());
+/**
+ * Label files end in .seznik (a .seznik.zip name, added by some apps when sending, is accepted too).
+ * Files shared before the rename end in .sezlabel and still open.
+ */
+export const isLabelFileName = (name: string): boolean => /\.(seznik|sezlabel)(\.zip)?$/i.test(name.trim());

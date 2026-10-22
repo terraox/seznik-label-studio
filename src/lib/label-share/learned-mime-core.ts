@@ -2,7 +2,7 @@
  * Which file types the "Open label file" picker lists. Pure.
  *
  * The system picker filters by the type the provider reports for a file. For an extension it does not
- * know (.sezlabel) that is "unknown" (application/octet-stream), or a zip when the file came through
+ * know (.seznik) that is "unknown" (application/octet-stream), or a zip when the file came through
  * a download. Types of real documents are never listed, so PDFs and spreadsheets stay hidden.
  */
 

@@ -1,5 +1,5 @@
 /**
- * .sezlabel format constants and safety limits. Pure TypeScript (no React Native imports) so
+ * .seznik label file constants and safety limits. Pure TypeScript (no React Native imports) so
  * everything under src/lib/label-share runs in node tests.
  */
 
@@ -8,7 +8,9 @@ export const SEZLABEL_FORMAT = 'sezlabel';
 export const SEZLABEL_SCHEMA_VERSION = 1;
 /** Oldest app version that can read a schema-1 file. */
 export const SEZLABEL_MIN_APP_VERSION = '1.0.1';
-export const SEZLABEL_EXTENSION = 'sezlabel';
+/** Label files are named `name.seznik`. Files made before the rename end in `.sezlabel` and still open. */
+export const SEZLABEL_EXTENSION = 'seznik';
+export const SEZLABEL_LEGACY_EXTENSION = 'sezlabel';
 export const SEZLABEL_MIME = 'application/vnd.sezprint.label+zip';
 
 /** Written into every manifest so a reader knows what the format cannot promise. */
@@ -18,7 +20,7 @@ export const SEZLABEL_KNOWN_LIMITS = [
 ] as const;
 
 export const LIMITS = {
-  /** Whole .sezlabel file. */
+  /** Whole .seznik file. */
   fileBytes: 30 * 1024 * 1024,
   entries: 200,
   totalInflatedBytes: 80 * 1024 * 1024,

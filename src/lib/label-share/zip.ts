@@ -1,5 +1,5 @@
 /**
- * Safe zip reading and deterministic zip writing for .sezlabel (fflate 0.8.3).
+ * Safe zip reading and deterministic zip writing for .seznik (fflate 0.8.3).
  *
  * Reading never extracts to disk and never trusts a declared size:
  *  1. The central directory is read WITHOUT inflating (fflate `filter`), every entry is checked.

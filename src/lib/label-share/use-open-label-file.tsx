@@ -21,7 +21,7 @@ const askShowAll = () =>
  * "Open label file": choose This Device or Google Drive, pick a label file, add it as a new label and
  * go straight to the canvas, with a note about anything the phone lacks (fonts, clipart).
  * The first picker lists only unknown-type and zip files, so PDFs and spreadsheets do not show. If the
- * phone reports a different type for .sezlabel, "Show all files" finds it once and the type is learned.
+ * phone reports a different type for .seznik, "Show all files" finds it once and the type is learned.
  */
 export function useOpenLabelFile(navigate: 'push' | 'replace' = 'push'): {
   openLabelFile: () => Promise<void>;
@@ -38,11 +38,11 @@ export function useOpenLabelFile(navigate: 'push' | 'replace' = 'push'): {
         picked = await pickDocumentWithSource({ preset: 'sezlabel', mimeTypes: ['*/*'] });
       }
       if (!picked.ok) {
-        if (picked.reason === 'invalid') Alert.alert('Open label file', 'Please choose a .sezlabel file.');
+        if (picked.reason === 'invalid') Alert.alert('Open label file', 'Please choose a .seznik file.');
         return;
       }
       if (!isLabelFileName(picked.name)) {
-        Alert.alert('Open label file', 'That is not a .sezlabel file. Please choose a file ending in .sezlabel.');
+        Alert.alert('Open label file', 'That is not a label file. Please choose a file ending in .seznik.');
         return;
       }
       const parsed = await readLabelFile(picked.uri);

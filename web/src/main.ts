@@ -175,7 +175,7 @@ async function pickFile(accept: string): Promise<File | null> {
   });
 }
 
-/** Re-encode anything the browser can show (HEIC excluded) as PNG so it can ship in a .sezlabel. */
+/** Re-encode anything the browser can show (HEIC excluded) as PNG so it can ship in a .seznik. */
 async function toPngBytes(file: File): Promise<Uint8Array | null> {
   const raw = new Uint8Array(await file.arrayBuffer());
   if ((raw[0] === 0x89 && raw[1] === 0x50) || (raw[0] === 0xff && raw[1] === 0xd8)) return raw;
@@ -393,7 +393,7 @@ async function loadUrl(url: string) {
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Could not load ${url}`);
-    await openFile(new File([await res.arrayBuffer()], url.split('/').pop() ?? 'label.sezlabel'));
+    await openFile(new File([await res.arrayBuffer()], url.split('/').pop() ?? 'label.seznik'));
   } catch (error) {
     showReport('Could not load', `<p class="warn">${esc(error instanceof Error ? error.message : String(error))}</p>`);
   }
@@ -583,7 +583,7 @@ function init() {
   });
   window.addEventListener('resize', () => drawCanvas());
 
-  $('sampleBtn').onclick = () => void loadUrl('sample.sezlabel');
+  $('sampleBtn').onclick = () => void loadUrl('sample.seznik');
   // ?size=50x30&add=text,barcode,qrcode starts a new label with elements (handy for demos and tests).
   const q = new URLSearchParams(location.search);
   const sz = q.get('size')?.match(/^([\d.]+)x([\d.]+)$/i);
