@@ -59,6 +59,14 @@ import {
   scaleDocumentToSize,
 } from '@/lib/element-sizing';
 import { borderBoxForCenterGap, defaultBorderPlacement } from '@/lib/border-geometry';
+import {
+  acrossLayout,
+  applyAcrossBorder,
+  hasAnyBorder,
+  removeAcrossBorders,
+  type BorderScope,
+  type BorderStyleInput,
+} from '@/lib/across';
 import { visibleTextHeightMm } from '@/lib/visible-text-layout';
 import { labelOverlapRegionsMm, overlapBannerPositionsPx } from '@/lib/editor/safe-mode';
 import { clampToLabelBounds, fitFontSizeToLabel } from '@/lib/editor/label-bounds';
@@ -1661,6 +1669,22 @@ export default function EditScreen() {
     [setElements, scheduleHistoryCommit, commitBulkSlotGeometry],
   );
 
+  // Labels across: a border is one per label (separate) or one around the whole sheet (unified).
+  const borderScopeRef = useRef<BorderScope | null>(null);
+  const currentBorderScope = (d: LabelDocument): BorderScope =>
+    d.ups
+      ? d.ups.sheetBorder ? 'unified' : 'separate'
+      : d.elements.filter((el) => el.type === 'border').length > 1 ? 'separate' : 'unified';
+
+  const applyBorderAcross = useCallback(
+    (scope: BorderScope, style: BorderStyleInput | null) => {
+      pushHistory();
+      setDoc((prev) => (style ? applyAcrossBorder(prev, scope, style) : removeAcrossBorders(prev)));
+      setDirty(true);
+    },
+    [pushHistory],
+  );
+
   const patchSelected = useCallback(
     (updates: Record<string, unknown>) => {
       const id =
@@ -1671,9 +1695,21 @@ export default function EditScreen() {
           ? selectedIds[selectedIds.length - 1]
           : null);
       if (!id) return;
+      const cur = docRef.current;
+      const target = cur.elements.find((el) => el.id === id);
+      // Restyling one border of a labels-across sheet restyles them all, each fitted to its own label.
+      if (target?.type === 'border' && acrossLayout(cur) && ('lineWidth' in updates || 'edgeGapMm' in updates)) {
+        applyBorderAcross(currentBorderScope(cur), {
+          borderStyle: target.borderStyle,
+          lineWidth: typeof updates.lineWidth === 'number' ? updates.lineWidth : target.lineWidth,
+          edgeGapMm: typeof updates.edgeGapMm === 'number' ? updates.edgeGapMm : (target.edgeGapMm ?? 1),
+        });
+        return;
+      }
       patchElement(id, updates);
     },
-    [primaryId, selectedIds, patchElement],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [primaryId, selectedIds, patchElement, applyBorderAcross],
   );
 
   // "Add barcode with the same serial": the barcode becomes the root field and the source follows it,
@@ -3695,7 +3731,23 @@ export default function EditScreen() {
       if (editorBridge.borderResult) {
         const result = editorBridge.borderResult;
         editorBridge.borderResult = null;
-        if (isBorderRemoval(result)) {
+        const acrossNow = acrossLayout(docRef.current);
+        if (acrossNow) {
+          const scope = borderScopeRef.current ?? currentBorderScope(docRef.current);
+          borderScopeRef.current = null;
+          applyBorderAcross(
+            scope,
+            isBorderRemoval(result) ? null : { borderStyle: result.style, lineWidth: result.lineWidth, edgeGapMm: result.edgeGapMm },
+          );
+          selectedIdsRef.current = [];
+          primaryIdRef.current = null;
+          activeSelectedIdSv.value = '';
+          topBarSelectionVisibleSv.value = 0;
+          bottomPanelVisibleSv.value = 0;
+          setSelectedIds([]);
+          setPrimaryId(null);
+          setPanelOpen(false);
+        } else if (isBorderRemoval(result)) {
           setElements((elements) => elements.filter((el) => el.type !== 'border'), true);
         } else {
           const existingBorder = docRef.current.elements.find((el) => el.type === 'border');
@@ -4011,6 +4063,41 @@ export default function EditScreen() {
     }
   };
 
+  /** Labels across: pick one border per label or one around all of them, or change what is there. */
+  const openAcrossBorderChoice = () => {
+    const cur = docRef.current;
+    const toLibrary = (scope: BorderScope, extra: Record<string, string> = {}) => {
+      borderScopeRef.current = scope;
+      router.push({
+        pathname: '/border-library',
+        params: { from: 'edit', ...(cur.mediaShape ? { mediaShape: cur.mediaShape } : {}), ...extra },
+      });
+    };
+    if (!hasAnyBorder(cur)) {
+      Alert.alert('Border', 'One border on each label, or one around all of them?', [
+        { text: 'Each label', onPress: () => toLibrary('separate') },
+        { text: 'Around all', onPress: () => toLibrary('unified') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
+    const scope = currentBorderScope(cur);
+    const own = cur.elements.find((el) => el.type === 'border');
+    const other: BorderScope = scope === 'separate' ? 'unified' : 'separate';
+    const sheet = cur.ups?.sheetBorder;
+    Alert.alert('Border', scope === 'separate' ? 'Each label has its own border.' : 'One border goes around all the labels.', [
+      {
+        text: 'Edit settings',
+        onPress: () => {
+          if (own) handleSelect(own.id);
+          else if (sheet) toLibrary('unified', { style: sheet.borderStyle, edgeGap: String(sheet.edgeGapMm), hasBorder: '1' });
+        },
+      },
+      { text: other === 'unified' ? 'Switch to one around all' : 'Switch to each label', onPress: () => toLibrary(other) },
+      { text: 'Remove border', style: 'destructive', onPress: () => applyBorderAcross(scope, null) },
+    ]);
+  };
+
   const handleToolPress = (label: string) => {
     setShowLabelMenu(false);
     switch (label) {
@@ -4070,6 +4157,11 @@ export default function EditScreen() {
         break;
       }
       case 'Border': {
+        const layout = acrossLayout(docRef.current);
+        if (layout) {
+          openAcrossBorderChoice();
+          break;
+        }
         const border = docRef.current.elements.find((el) => el.type === 'border');
         // An existing border opens its settings (thickness, gap, replace, cancel), not the gallery.
         if (border) {
@@ -4695,7 +4787,8 @@ export default function EditScreen() {
               });
             }}
             onRemove={() => {
-              setElements((elements) => elements.filter((el) => el.type !== 'border'), true);
+              if (acrossLayout(docRef.current)) applyBorderAcross(currentBorderScope(docRef.current), null);
+              else setElements((elements) => elements.filter((el) => el.type !== 'border'), true);
               selectedIdsRef.current = [];
               primaryIdRef.current = null;
               activeSelectedIdSv.value = '';

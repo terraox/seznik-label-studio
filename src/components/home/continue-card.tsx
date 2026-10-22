@@ -13,6 +13,7 @@ import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { ShareNodeIcon } from '@/components/home-icons';
 import { CATALOG_STOCK_LINER, LabelPreview } from '@/components/label-preview';
 import { androidRipple, HomeLayout, scaleFont } from '@/constants/ui';
+import { acrossLayout } from '@/lib/across';
 import { composeUpsDocument, type LabelDocument } from '@/lib/label-document';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
@@ -77,8 +78,10 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
     [document],
   );
 
-  const across = (document.ups?.columns ?? 0) >= 2 ? document.ups!.columns : 0;
-  const cellSize = `${document.widthMm.toFixed(0)} × ${document.heightMm.toFixed(0)} mm`;
+  // Labels across, edited panel by panel or together on one canvas.
+  const layout = acrossLayout(document);
+  const across = layout?.columns ?? 0;
+  const cellSize = `${(layout?.cellWidthMm ?? document.widthMm).toFixed(0)} × ${document.heightMm.toFixed(0)} mm`;
   // Line 1 is the size of ONE label; line 2 says how many sit side by side and the stock.
   const sizeLabel = across
     ? `${cellSize} each\n${across} across · ${document.paperType}`
@@ -120,7 +123,7 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
         <LabelPreview
           document={previewDocument}
           catalogStock
-          upsDividers={across ? { columns: across, gapMm: document.ups!.columnSpacingMm } : undefined}
+          upsDividers={layout ? { columns: layout.columns, gapMm: layout.gapMm } : undefined}
           maxHeight={HomeLayout.continuePreviewMaxHeight}
         />
       </View>
