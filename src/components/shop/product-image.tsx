@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
@@ -43,11 +43,9 @@ const styles = themedStyles((c) => ({
     backgroundColor: c.fill,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: c.hairline,
   },
   image: {
-    width: '100%',
-    height: '100%',
+    width: '88%',
+    height: '88%',
   },
 }));
