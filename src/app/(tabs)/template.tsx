@@ -1,10 +1,11 @@
 import { composeUpsDocument, createLabelDocument, type LabelElement } from '@/lib/label-document';
 import type { AcrossMode } from '@/lib/across';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
-import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
+import { useCallback, useMemo, useRef, useState, memo } from 'react';
 import {
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -248,9 +249,15 @@ export default function TemplateScreen() {
   const refreshCatalog = useTemplateCatalogStore((s) => s.refresh);
   const authToken = useAuthStore((s) => s.token);
 
-  useEffect(() => {
-    void refreshCatalog();
-  }, [refreshCatalog, authToken]);
+  const catalogLoading = useTemplateCatalogStore((s) => s.loading);
+
+  // The tab stays mounted, so fetch again every time it comes into view: templates published
+  // in the admin since the last visit show up without restarting the app.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshCatalog();
+    }, [refreshCatalog, authToken]),
+  );
 
   const activeCategoryId = catalogCategories.some((c) => c.id === selectedCategory)
     ? selectedCategory
@@ -745,6 +752,9 @@ export default function TemplateScreen() {
           ) : (
           <ScrollView
             ref={rightScrollRef}
+            refreshControl={
+              <RefreshControl refreshing={catalogLoading} onRefresh={() => void refreshCatalog()} tintColor={C.accent} />
+            }
             style={styles.templatesScroll}
             contentContainerStyle={[
               styles.templatesContent,
