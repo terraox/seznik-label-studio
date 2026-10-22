@@ -4,6 +4,7 @@ import {
   mmToDots,
   type PrinterAlignment,
 } from '@/lib/printer/print-spec';
+import type { LabelOrientation } from '@/lib/label-document';
 import type { RasterizeOptions } from '@/printing/raster/skia-rasterizer';
 
 /**
@@ -160,6 +161,46 @@ export function joshHeadlessRasterOptions(
         (JOSH_BORDER_PAD_DOTS > 0 ? JOSH_PAD_CENTER_COMP_DOTS : 0) +
         mmToDots(layerOffsetsMm.elements.x, dpi),
       y: ink.y + mmToDots(layerOffsetsMm.elements.y, dpi),
+    },
+  };
+}
+
+/**
+ * Headless Skia mono options for a JOSH job turned 90/180/270. Same layers and fixed shifts as
+ * the 0° options, but the label is turned in dots. The printer offset, the fixed element shift
+ * and the border's fixed shift act in the paper frame (after the turn, where the print head is).
+ * The Elements offset acts on the label before the turn. `layerOffsetsMm.border` must already be
+ * in the paper frame (offsetToPaperFrame).
+ */
+export function joshRotatedRasterOptions(
+  dpi: number,
+  horizontalOffsetMm: number,
+  verticalOffsetMm: number,
+  rotationDeg: LabelOrientation,
+  extra: Omit<RasterizeOptions, 'pageWidthPack' | 'shiftDots' | 'edgeBorders'> = {},
+  layerOffsetsMm: { elements: { x: number; y: number }; border: { x: number; y: number } },
+): RasterizeOptions {
+  const ink = joshInkShiftDots(horizontalOffsetMm, verticalOffsetMm, dpi);
+  const elementX = mmToDots(JOSH_ELEMENT_X_OFFSET_MM, dpi);
+  return {
+    ...extra,
+    pageWidthPack: 'ceil',
+    rotationDeg,
+    edgeBorders: {
+      padRightDots: JOSH_BORDER_PAD_DOTS,
+      centerGapMm: JOSH_BORDER_CENTER_GAP_MM,
+      shiftDots: {
+        x: mmToDots(JOSH_BORDER_SHIFT_MM.x, dpi) + mmToDots(layerOffsetsMm.border.x, dpi),
+        y: mmToDots(JOSH_BORDER_SHIFT_MM.y, dpi) + mmToDots(layerOffsetsMm.border.y, dpi),
+      },
+    },
+    shiftDots: {
+      x: mmToDots(layerOffsetsMm.elements.x, dpi),
+      y: mmToDots(layerOffsetsMm.elements.y, dpi),
+    },
+    paperShiftDots: {
+      x: ink.x + elementX + (JOSH_BORDER_PAD_DOTS > 0 ? JOSH_PAD_CENTER_COMP_DOTS : 0),
+      y: ink.y,
     },
   };
 }

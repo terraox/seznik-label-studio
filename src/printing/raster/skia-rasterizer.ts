@@ -125,8 +125,19 @@ function vectorClipart(el: LabelElement): { ops: ClipartDrawOp[]; viewBox: SvgVi
   return ops.length > 0 ? { ops, viewBox: parseSvgViewBox(svg) } : null;
 }
 
+/**
+ * A clipart id this app does not have (a label from a newer app, or deleted own clipart) prints as
+ * nothing. It must neither crash the job nor force the whole label off the fast path.
+ */
+function isUnknownClipart(el: LabelElement): boolean {
+  if (el.type !== 'clipart') return false;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getClipartById } = require('@/constants/clipart-library') as typeof import('@/constants/clipart-library');
+  return getClipartById(el.clipartId) === undefined;
+}
+
 function isUnsupportedPrintType(el: LabelElement): boolean {
-  if (el.type === 'clipart') return vectorClipart(el) == null;
+  if (el.type === 'clipart') return vectorClipart(el) == null && !isUnknownClipart(el);
   // A moded image whose dots were prepared (prepareImageTiles) is drawn here; every other image
   // still needs the capture path, exactly as before.
   if (el.type === 'image') return !(usesModedPrint(el) && readyImageTile(el) !== null);
@@ -347,6 +358,7 @@ function drawDocumentToSurface(
           break;
         case 'clipart': {
           const art = vectorClipart(el);
+          if (!art && isUnknownClipart(el)) break; // unknown art: draw nothing, print the rest
           if (!art || !surface.drawVectorGlyph) {
             throw new Error(`Unsupported print element type: clipart (${el.id})`);
           }
@@ -466,7 +478,16 @@ export function rasterizeDocumentToBitmapTimed(
   let outWidth = surfW;
   let outHeight = surfH;
   if (activeEdgeBorders && rotationDeg !== 0) {
-    const turned = turnLabelToPaper(gray, surfW, page, rotationDeg, doc, dpi, options.paperShiftDots);
+    const turned = turnLabelToPaper(
+      gray,
+      surfW,
+      page,
+      rotationDeg,
+      doc,
+      dpi,
+      options.paperShiftDots,
+      options.pageWidthPack ?? 'floor',
+    );
     gray = turned.gray;
     outWidth = turned.width;
     outHeight = turned.height;
@@ -558,6 +579,7 @@ function turnLabelToPaper(
   doc: LabelDocument,
   dpi: number,
   paperShiftDots?: { x: number; y: number },
+  paperPack: 'floor' | 'ceil' = 'floor',
 ): { gray: Uint8Array; width: number; height: number; paperDoc: LabelDocument } {
   const labelW = page.sizeDotsW;
   const labelH = page.sizeDotsH;
@@ -583,7 +605,7 @@ function turnLabelToPaper(
     heightMm: quarter ? doc.widthMm : doc.heightMm,
     elements: doc.elements.map((el) => (el.type === 'border' ? turnBox(el) : el)),
   };
-  const paper = packedPageDots(paperDoc.widthMm, paperDoc.heightMm, dpi, 'floor');
+  const paper = packedPageDots(paperDoc.widthMm, paperDoc.heightMm, dpi, paperPack);
   const width = paper.packedW;
   const height = turned.height;
   const fitted = new Uint8Array(width * height);

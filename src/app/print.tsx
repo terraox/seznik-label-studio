@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { JoshProgressCard } from '@/components/printers/josh-progress-card';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -140,6 +141,7 @@ import {
   joshHeadlessRasterOptions,
   JOSH_ELEMENT_X_OFFSET_MM,
   joshInkOffsetMm,
+  joshRotatedRasterOptions,
   joshLabelPitchMs,
 } from '@/lib/printer/josh-print';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -167,6 +169,7 @@ import {
   clampLayerOffsetMm,
   effectiveLayerOffsets,
   labelHasOffsetBorder,
+  isOffsetBorder,
   layerOffsetsOf,
   layerOffsetWarning,
   LAYER_OFFSET_MAX_MM,
@@ -1030,11 +1033,14 @@ export default function PrintScreen() {
   const baseCardWidth = Math.min(width - 48, MaxContentWidth - 48);
   const activeDoc = displayDocument ?? previewDocument;
 
-  // Elements / Border offsets: TD-404 (any turn) and Josh (0°) whose label the headless raster draws.
+  // Elements / Border offsets: TD-404 and Josh (any turn) whose label the headless raster draws.
   const layerBridge: LayerBridge | null = (() => {
     const mgr = getPrinterManager();
     if (mgr.usesTd404CommandSet) return 'td404';
-    if (mgr.isJosh && orientation === '0°') return 'josh';
+    if (mgr.isJosh) return 'josh';
+    // No printer known yet: show the controls as for TD-404. They save with the label and only
+    // apply when a TD-404 prints it.
+    if (printerSdkId == null && status === 'disconnected') return 'td404';
     return null;
   })();
   const layerOffsetsUsable = useMemo(
@@ -1042,6 +1048,8 @@ export default function PrintScreen() {
     [layerBridge, ratTail143Job, activeDoc],
   );
   const layerHasBorder = layerOffsetsUsable && labelHasOffsetBorder(activeDoc, layerBridge!);
+  /** The label has a border at all, even if this printer/label cannot move it separately. */
+  const docHasBorder = activeDoc?.elements.some(isOffsetBorder) ?? false;
   /** What is applied: zero when unsupported, and no border offset when the label has no border. */
   const effLayerOffsets: LayerOffsetsMm = layerOffsetsUsable
     ? effectiveLayerOffsets(activeDoc, layerOffsets, layerBridge!)
@@ -1050,13 +1058,16 @@ export default function PrintScreen() {
     () => (activeDoc && layerOffsetsUsable ? previewWithLayerOffsets(activeDoc, layerOffsets, layerBridge!) : activeDoc),
     [activeDoc, layerOffsetsUsable, layerOffsets, layerBridge],
   );
+  const orientationDegNow = parseInt(orientation.replace('°', ''), 10);
   const layerWarning = useMemo(() => {
     if (!layerOffsetsUsable) return null;
     const baked =
       layerBridge === 'josh'
         ? (() => {
             const ink = joshInkOffsetMm(printOffsetMm.x, printOffsetMm.y);
-            return { x: ink.x + JOSH_ELEMENT_X_OFFSET_MM, y: ink.y };
+            const paperFrame = { x: ink.x + JOSH_ELEMENT_X_OFFSET_MM, y: ink.y };
+            // Baked in the paper frame; the warning checks label boxes, so turn it back.
+            return offsetToPaperFrame(paperFrame, ((360 - orientationDegNow) % 360) as LabelOrientation);
           })()
         : td404ContentShiftMm(printOffsetMm);
     return layerOffsetWarning({
@@ -1067,7 +1078,7 @@ export default function PrintScreen() {
       dpi: jobDpi,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layerOffsetsUsable, layerBridge, activeDoc, layerOffsets, printOffsetMm.x, printOffsetMm.y]);
+  }, [layerOffsetsUsable, layerBridge, activeDoc, layerOffsets, printOffsetMm.x, printOffsetMm.y, orientationDegNow]);
   const changeLayerOffset = useCallback(
     (layer: 'elements' | 'border', axis: 'x' | 'y', mm: number) => {
       const next: LayerOffsetsMm = {
@@ -1182,7 +1193,7 @@ export default function PrintScreen() {
             `${jobName} was sent to ${deviceName ?? 'the printer'}.`,
           );
         }
-        if (printingSettings.returnPrevious) router.back();
+        if (printingSettings.returnPrevious) goBack();
       } catch (error) {
         const message = formatPrintFailure(error);
         if (message) Alert.alert('Print Failed', message);
@@ -1413,7 +1424,14 @@ export default function PrintScreen() {
                   { threshold, darknessSteps: inkSteps },
                   effLayerOffsets,
                 )
-              : { threshold, darknessSteps: inkSteps },
+              : joshRotatedRasterOptions(
+                  jobDpi,
+                  printOffsetMm.x,
+                  printOffsetMm.y,
+                  orientationDeg,
+                  { threshold, darknessSteps: inkSteps },
+                  { elements: effLayerOffsets.elements, border: offsetToPaperFrame(effLayerOffsets.border, orientationDeg) },
+                ),
           );
           console.info(`[JOSH-MONO] raster ${Date.now() - t0} ms`);
           return timed.result;
@@ -1424,11 +1442,10 @@ export default function PrintScreen() {
       };
       const joshHeadlessNow =
         manager.isJosh &&
-        orientationDeg === 0 &&
         firstPageDoc != null &&
         canHeadlessRasterPrint(firstPageDoc) &&
-        Math.abs(firstPageDoc.widthMm - paper.widthMm) <= 0.2 &&
-        Math.abs(firstPageDoc.heightMm - paper.heightMm) <= 0.2;
+        Math.abs(firstPageDoc.widthMm - (orientationDeg === 90 || orientationDeg === 270 ? paper.heightMm : paper.widthMm)) <= 0.2 &&
+        Math.abs(firstPageDoc.heightMm - (orientationDeg === 90 || orientationDeg === 270 ? paper.widthMm : paper.heightMm)) <= 0.2;
       const joshRasterPromise: Promise<RasterBitmap | null> =
         joshHeadlessNow && firstPageDoc ? rasterJoshMono(firstPageDoc) : Promise.resolve(null);
       const joshConnectPromise = manager.isJosh
@@ -1550,11 +1567,10 @@ export default function PrintScreen() {
           Math.abs(pageDoc.heightMm - (quarterTurn ? paper.widthMm : paper.heightMm)) <= 0.2;
         joshHeadlessCandidate =
           manager.isJosh &&
-          orientationDeg === 0 &&
           pageDoc != null &&
           canHeadlessRasterPrint(pageDoc) &&
-          Math.abs(pageDoc.widthMm - paper.widthMm) <= 0.2 &&
-          Math.abs(pageDoc.heightMm - paper.heightMm) <= 0.2;
+          Math.abs(pageDoc.widthMm - (quarterTurn ? paper.heightMm : paper.widthMm)) <= 0.2 &&
+          Math.abs(pageDoc.heightMm - (quarterTurn ? paper.widthMm : paper.heightMm)) <= 0.2;
 
         timer.start('capture+verify');
         const captureTarget = printCaptureLayout(widthMm, heightMm, jobDpi).content;
@@ -1879,14 +1895,15 @@ export default function PrintScreen() {
                 widthDots: bitmap.widthDots,
                 heightDots: bitmap.heightDots,
                 bytesPerRow: bitmap.bytesPerRow,
-                widthMm: pageDoc.widthMm,
-                heightMm: pageDoc.heightMm,
+                // The bitmap is the paper (turned) and already holds every shift: none on LPAPI.
+                widthMm: orientationDeg === 0 ? pageDoc.widthMm : paper.widthMm,
+                heightMm: orientationDeg === 0 ? pageDoc.heightMm : paper.heightMm,
                 gapMm: joshJob?.gapMm ?? gapLength,
                 copies: sendCopies,
                 density: joshJob?.density ?? printDensity,
                 speed: joshJob?.speed ?? printSpeed,
-                hOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.x,
-                vOffsetMm: joshBakeOffset ? 0 : joshInkRotatedMm.y,
+                hOffsetMm: 0,
+                vOffsetMm: 0,
                 media: joshJob?.media ?? media,
                 dpi: jobDpi,
               });
@@ -2346,7 +2363,7 @@ export default function PrintScreen() {
       if (!getPrinterManager().isJosh) {
         Alert.alert('Print Sent', `${jobName} was sent to ${deviceName ?? 'the printer'}.`);
       }
-      if (printingSettings.returnPrevious) router.back();
+      if (printingSettings.returnPrevious) goBack();
     } catch (error) {
       if (serialRun) {
         if (serialRun.cursor && params.labelId) {
@@ -2449,7 +2466,7 @@ export default function PrintScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
@@ -2960,32 +2977,45 @@ export default function PrintScreen() {
                   onMinus={() => changeLayerOffset('elements', 'y', layerOffsets.elements.y - LAYER_OFFSET_STEP_MM)}
                   onPlus={() => changeLayerOffset('elements', 'y', layerOffsets.elements.y + LAYER_OFFSET_STEP_MM)}
                 />
-                <Text style={[styles.groupLabel, { marginTop: 12 }]}>Border only</Text>
-                <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
-                  Moves only the border frame; the content stays put. Saved with this label.
-                </Text>
-                <StepperRow
-                  label="Horizontal"
-                  hint="−  moves left   ·   +  moves right"
-                  value={`${layerOffsets.border.x.toFixed(2)} mm`}
-                  minusDisabled={!layerHasBorder || layerOffsets.border.x <= LAYER_OFFSET_MIN_MM}
-                  plusDisabled={!layerHasBorder || layerOffsets.border.x >= LAYER_OFFSET_MAX_MM}
-                  onMinus={() => changeLayerOffset('border', 'x', layerOffsets.border.x - LAYER_OFFSET_STEP_MM)}
-                  onPlus={() => changeLayerOffset('border', 'x', layerOffsets.border.x + LAYER_OFFSET_STEP_MM)}
-                  bordered
-                />
-                <StepperRow
-                  label="Vertical"
-                  hint="−  moves up   ·   +  moves down"
-                  value={`${layerOffsets.border.y.toFixed(2)} mm`}
-                  minusDisabled={!layerHasBorder || layerOffsets.border.y <= LAYER_OFFSET_MIN_MM}
-                  plusDisabled={!layerHasBorder || layerOffsets.border.y >= LAYER_OFFSET_MAX_MM}
-                  onMinus={() => changeLayerOffset('border', 'y', layerOffsets.border.y - LAYER_OFFSET_STEP_MM)}
-                  onPlus={() => changeLayerOffset('border', 'y', layerOffsets.border.y + LAYER_OFFSET_STEP_MM)}
-                />
+                {docHasBorder ? (
+                  <>
+                  <Text style={[styles.groupLabel, { marginTop: 12 }]}>Border only</Text>
+                  <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
+                    Moves only the border frame; the content stays put. Saved with this label.
+                  </Text>
+                  {!layerHasBorder ? (
+                    <Text style={{ color: C.warning, fontSize: 12, paddingBottom: 6 }}>
+                      {layerBridge == null
+                        ? `Not available for this printer. Works for TD-404 and Josh. (Detected: ${printerSdkId ?? 'no printer'} / ${printerTransport ?? 'no transport'} / ${orientation})`
+                        : !layerOffsetsUsable
+                          ? 'Not available: this label has photos, tables, times, arc text or signatures, which print as one picture.'
+                          : 'Not available: Josh moves only a rectangular die-cut border on its own.'}
+                    </Text>
+                  ) : null}
+                  <StepperRow
+                    label="Horizontal"
+                    hint="−  moves left   ·   +  moves right"
+                    value={`${layerOffsets.border.x.toFixed(2)} mm`}
+                    minusDisabled={!layerHasBorder || layerOffsets.border.x <= LAYER_OFFSET_MIN_MM}
+                    plusDisabled={!layerHasBorder || layerOffsets.border.x >= LAYER_OFFSET_MAX_MM}
+                    onMinus={() => changeLayerOffset('border', 'x', layerOffsets.border.x - LAYER_OFFSET_STEP_MM)}
+                    onPlus={() => changeLayerOffset('border', 'x', layerOffsets.border.x + LAYER_OFFSET_STEP_MM)}
+                    bordered
+                  />
+                  <StepperRow
+                    label="Vertical"
+                    hint="−  moves up   ·   +  moves down"
+                    value={`${layerOffsets.border.y.toFixed(2)} mm`}
+                    minusDisabled={!layerHasBorder || layerOffsets.border.y <= LAYER_OFFSET_MIN_MM}
+                    plusDisabled={!layerHasBorder || layerOffsets.border.y >= LAYER_OFFSET_MAX_MM}
+                    onMinus={() => changeLayerOffset('border', 'y', layerOffsets.border.y - LAYER_OFFSET_STEP_MM)}
+                    onPlus={() => changeLayerOffset('border', 'y', layerOffsets.border.y + LAYER_OFFSET_STEP_MM)}
+                  />
+                  </>
+                ) : null}
                 <Text style={{ color: C.textMuted, fontSize: 12, paddingTop: 8 }}>
                   {!layerOffsetsUsable
-                    ? 'Elements and Border offsets work for TD-404 and Josh labels the app draws directly (not photos, tables or signatures; Josh at 0° only).'
+                    ? 'Elements and Border offsets work for TD-404 and Josh labels the app draws directly (not photos, tables or signatures).'
                     : !layerHasBorder
                       ? 'This label has no border, so only the Elements offset applies. Minus moves left or up, plus moves right or down. Added to the offsets above.'
                       : 'Minus moves left or up, plus moves right or down. Added to the offsets above; 0 and 0 leaves the print unchanged.'}
