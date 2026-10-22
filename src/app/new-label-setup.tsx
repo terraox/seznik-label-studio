@@ -54,6 +54,8 @@ import { createSerialLabelDocument, serialDocumentName } from '@/lib/serial-labe
 import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
 import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { AppIcon } from '@/components/app-icon';
+import { AcrossModePicker } from '@/components/across-mode-picker';
+import { createTogetherDocument } from '@/lib/across';
 import { NEW_LABEL_WALKTHROUGH } from '@/lib/walkthrough/new-label-steps';
 import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
@@ -362,6 +364,23 @@ export default function NewLabelSetupScreen() {
       }
     }
 
+    if (form.columns > 1 && form.acrossMode === 'together') {
+      const doc = createTogetherDocument({
+        name,
+        cellWidthMm: size.widthMm,
+        cellHeightMm: size.heightMm,
+        columns: form.columns,
+        gapMm,
+        orientation: defaults.orientation,
+        paperType: defaults.paperType,
+        circle: Boolean(circle),
+        seedElements,
+      });
+      upsertDocument(doc);
+      router.replace({ pathname: '/edit', params: { labelId: doc.id } });
+      return;
+    }
+
     if (form.columns > 1) {
       const ups = createUpsConfig({
         columns: form.columns,
@@ -503,6 +522,12 @@ export default function NewLabelSetupScreen() {
                 }))}
               />
             ) : null}
+            {multi ? (
+              <>
+                <Text style={styles.sectionHeading}>How do you want to edit them?</Text>
+                <AcrossModePicker value={form.acrossMode} onChange={(acrossMode) => patch({ acrossMode })} />
+              </>
+            ) : null}
           </WalkthroughTarget>
         ) : null}
 
@@ -622,7 +647,7 @@ export default function NewLabelSetupScreen() {
           />
         </View>
 
-        {showLayout && multi ? (
+        {showLayout && multi && form.acrossMode === 'separate' ? (
           <View style={[styles.switchRow]}>
             <Text style={styles.switchLabel}>{t('editor.batchEdit')}</Text>
             <Switch

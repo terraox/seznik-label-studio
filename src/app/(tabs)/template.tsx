@@ -1,4 +1,5 @@
-import { composeUpsDocument, createLabelDocument } from '@/lib/label-document';
+import { composeUpsDocument, createLabelDocument, type LabelElement } from '@/lib/label-document';
+import type { AcrossMode } from '@/lib/across';
 import { useRouter } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
@@ -100,6 +101,11 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
 });
 
 /** The sample content stored for the template, or the built-in starter when none was stored yet. */
+/** Two-up catalogue sheets can be edited together on one canvas or one label at a time (cable and jewellery sheets keep their own layout). */
+function isTwoUpTemplate(t: CatalogTemplate): boolean {
+  return /2up|two up/i.test(t.name) && !/cable|jewel/i.test(t.name);
+}
+
 function templateSampleLayout(t: CatalogTemplate): SampleElement[] {
   if (Array.isArray(t.sampleLayout) && t.sampleLayout.length > 0) return t.sampleLayout as SampleElement[];
   return starterSample(t.name, t.widthMm, t.heightMm) ?? [];
@@ -306,10 +312,43 @@ export default function TemplateScreen() {
     return catalogTemplates.filter((t) => t.categoryId === activeCategoryId);
   }, [searchQuery, activeCategoryId, catalogTemplates, categoryNames]);
 
-  const [choiceFor, setChoiceFor] = useState<CatalogTemplate | null>(null);
+  const [choiceFor, setChoiceFor] = useState<{ template: CatalogTemplate; mode: AcrossMode } | null>(null);
+  const [arrangeFor, setArrangeFor] = useState<CatalogTemplate | null>(null);
+
+  /** The 2-up sheet as labels edited one at a time: one cell-sized label with a panel per column. */
+  const openSeparate = useCallback(
+    (template: CatalogTemplate, withSample: boolean) => {
+      const columns = 2;
+      const cellW = template.widthMm / columns;
+      const round = /circle/i.test(template.name) && Math.abs(cellW - template.heightMm) < 0.01;
+      const doc = createLabelDocument({
+        name: template.name,
+        widthMm: cellW,
+        heightMm: template.heightMm,
+        ...(round ? { mediaShape: 'circle' as const } : {}),
+        background: { type: 'color', color: '#FFFFFF' }, // theme-fixed: label paper colour (document data)
+      });
+      const all = withSample ? sampleToElements(templateSampleLayout(template), template.widthMm, template.heightMm) : [];
+      const panels: LabelElement[][] = Array.from({ length: columns }, (_, i) =>
+        all
+          .filter((el) => Math.min(columns - 1, Math.max(0, Math.floor((el.left + el.width / 2) / cellW))) === i)
+          .map((el) => ({ ...el, left: el.left - i * cellW })),
+      );
+      doc.ups = { columns, columnSpacingMm: 0, batchEdit: false, activeIndex: 0, panels };
+      doc.elements = panels[0];
+      doc.templateCategory = 'Multi-UP';
+      upsertDocument(doc);
+      router.push({ pathname: '/edit', params: { labelId: doc.id } });
+    },
+    [router, upsertDocument],
+  );
 
   const openTemplate = useCallback(
-    (template: CatalogTemplate, withSample: boolean) => {
+    (template: CatalogTemplate, withSample: boolean, mode: AcrossMode = 'together') => {
+      if (mode === 'separate' && isTwoUpTemplate(template)) {
+        openSeparate(template, withSample);
+        return;
+      }
       const category = categoryNames.get(template.categoryId) ?? '';
       const isJewellery = /jewel/i.test(template.name);
       const singleCircle = /circle/i.test(template.name) && !/2up|two up/i.test(template.name);
@@ -334,20 +373,28 @@ export default function TemplateScreen() {
       const layout = templateSampleLayout(template);
       if (!withSample) doc.elements = [];
       else if (!isJewellery && layout.length) doc.elements = sampleToElements(layout, template.widthMm, template.heightMm);
+      // Edited together, the cells are still known so borders can go one per label or around all.
+      if (isTwoUpTemplate(template)) {
+        doc.across = { columns: 2, gapMm: 0, ...(/circle/i.test(template.name) ? { round: true } : {}) };
+      }
       upsertDocument(doc);
       router.push({
         pathname: '/edit',
         params: { labelId: doc.id },
       });
     },
-    [router, upsertDocument, categoryNames],
+    [router, upsertDocument, categoryNames, openSeparate],
   );
 
   /** Templates with sample content (and jewellery, which has its own) ask: empty label or with data. */
   const handleSelectTemplate = useCallback(
     (template: CatalogTemplate) => {
+      if (isTwoUpTemplate(template)) {
+        setArrangeFor(template);
+        return;
+      }
       const hasSample = templateSampleLayout(template).length > 0 || /jewel/i.test(template.name);
-      if (hasSample) setChoiceFor(template);
+      if (hasSample) setChoiceFor({ template, mode: 'together' });
       else openTemplate(template, false);
     },
     [openTemplate],
@@ -731,9 +778,38 @@ export default function TemplateScreen() {
       </View>
 
       <IosAlertModal
+        visible={arrangeFor !== null}
+        onClose={() => setArrangeFor(null)}
+        title={arrangeFor?.name ?? ''}
+        message="Edit the labels across together on one canvas, or each label on its own?"
+        buttons={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setArrangeFor(null) },
+          {
+            text: 'Each separately',
+            style: 'default',
+            onPress: () => {
+              const t = arrangeFor;
+              setArrangeFor(null);
+              if (t) setChoiceFor({ template: t, mode: 'separate' });
+            },
+          },
+          {
+            text: 'All together',
+            style: 'default',
+            bold: true,
+            onPress: () => {
+              const t = arrangeFor;
+              setArrangeFor(null);
+              if (t) setChoiceFor({ template: t, mode: 'together' });
+            },
+          },
+        ]}
+      />
+
+      <IosAlertModal
         visible={choiceFor !== null}
         onClose={() => setChoiceFor(null)}
-        title={choiceFor?.name ?? ''}
+        title={choiceFor?.template.name ?? ''}
         message="Start with an empty label, or with sample data you can edit?"
         buttons={[
           { text: 'Cancel', style: 'cancel', onPress: () => setChoiceFor(null) },
@@ -743,7 +819,7 @@ export default function TemplateScreen() {
             onPress: () => {
               const t = choiceFor;
               setChoiceFor(null);
-              if (t) openTemplate(t, false);
+              if (t) openTemplate(t.template, false, t.mode);
             },
           },
           {
@@ -753,7 +829,7 @@ export default function TemplateScreen() {
             onPress: () => {
               const t = choiceFor;
               setChoiceFor(null);
-              if (t) openTemplate(t, true);
+              if (t) openTemplate(t.template, true, t.mode);
             },
           },
         ]}
