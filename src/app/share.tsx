@@ -1,16 +1,19 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { AppIcon } from '@/components/app-icon';
 import { useMemo, useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, Pressable, Text, View } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Alert, Platform, StyleSheet, Pressable, Switch, Text, View } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LabelPreview } from '@/components/label-preview';
 import { Spacing } from '@/constants/theme';
 import { Type } from '@/constants/ui';
-import { persistLabelFile } from '@/lib/user-files/labels';
-import { ensureSezprintDir } from '@/lib/user-files/root';
+import { countOwnClipart, countOwnFonts, exportLabelFile, SHARE_MIME } from '@/lib/label-share/native';
+import { shareResultLine } from '@/lib/label-share/summary';
+import { ShareFormatError } from '@/lib/label-share/zip';
 import { useLabelStore } from '@/stores/label-store';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
@@ -47,6 +50,10 @@ export default function ShareModal() {
   const documents = useLabelStore((s) => s.documents);
   const shotRef = useRef<ViewShot>(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<'main' | 'file'>('main');
+  const [includeClipart, setIncludeClipart] = useState(true);
+  const [includeFonts, setIncludeFonts] = useState(true);
+  const [resultLine, setResultLine] = useState<string | null>(null);
 
   const doc = useMemo(() => {
     if (params.labelId) return documents.find((d) => d.id === params.labelId) ?? null;
@@ -63,20 +70,33 @@ export default function ShareModal() {
     return true;
   };
 
-  const handleShareTemplate = async () => {
+  const ownClipart = useMemo(() => (doc ? countOwnClipart(doc) : 0), [doc]);
+  const ownFonts = useMemo(() => (doc ? countOwnFonts(doc) : 0), [doc]);
+
+  const handleShareFile = async () => {
     if (!doc || busy) return;
     if (!(await ensureSharingAvailable())) return;
     setBusy(true);
     try {
-      await persistLabelFile(doc);
-      const fileUri = `${await ensureSezprintDir('labels')}${doc.id}.sezlabel.json`;
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'application/json',
-        dialogTitle: `Share template "${doc.name}"`,
+      // The thumbnail is a display hint only; the file works without it.
+      let previewBase64: string | null = null;
+      try {
+        const shot = await shotRef.current?.capture?.();
+        if (shot) previewBase64 = await FileSystem.readAsStringAsync(shot, { encoding: FileSystem.EncodingType.Base64 });
+      } catch {
+        previewBase64 = null;
+      }
+      const result = await exportLabelFile(doc.id, { includeUserClipart: includeClipart, includeFonts, previewBase64 });
+      await Sharing.shareAsync(result.uri, {
+        mimeType: SHARE_MIME,
+        UTI: 'public.zip-archive',
+        dialogTitle: `Share "${result.name}"`,
       });
-      router.back();
+      setResultLine(shareResultLine(result.name, result.summary));
     } catch (error) {
-      Alert.alert('Share Failed', error instanceof Error ? error.message : 'Could not share.');
+      const message =
+        error instanceof ShareFormatError || error instanceof Error ? error.message : 'Could not share.';
+      Alert.alert('Share Failed', message);
     } finally {
       setBusy(false);
     }
@@ -94,7 +114,7 @@ export default function ShareModal() {
         mimeType: 'image/png',
         dialogTitle: `Share "${doc.name}"`,
       });
-      router.back();
+      goBack();
     } catch (error) {
       Alert.alert('Share Failed', error instanceof Error ? error.message : 'Could not share.');
     } finally {
@@ -104,7 +124,7 @@ export default function ShareModal() {
 
   return (
     <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={() => router.back()} />
+      <Pressable style={styles.backdrop} onPress={() => goBack()} />
 
       {/* Off-screen render target for image capture */}
       {doc ? (
@@ -124,17 +144,50 @@ export default function ShareModal() {
           </Text>
           <View style={styles.divider} />
 
-          {doc ? (
+          {doc && view === 'file' ? (
+            <View style={styles.fileOptions}>
+              {ownClipart > 0 ? (
+                <View style={styles.optionRow}>
+                  <View style={styles.optionRowText}>
+                    <Text style={styles.optionRowTitle}>Include my own clipart ({ownClipart})</Text>
+                    <Text style={styles.optionRowHint}>Clipart you added yourself. Built-in clipart is never copied.</Text>
+                  </View>
+                  <Switch value={includeClipart} onValueChange={setIncludeClipart} disabled={busy || resultLine !== null} />
+                </View>
+              ) : null}
+              {ownFonts > 0 ? (
+                <View style={styles.optionRow}>
+                  <View style={styles.optionRowText}>
+                    <Text style={styles.optionRowTitle}>Include my fonts ({ownFonts})</Text>
+                    <Text style={styles.optionRowHint}>
+                      So the text looks the same on the other phone. Only include fonts you have the right to share.
+                    </Text>
+                  </View>
+                  <Switch value={includeFonts} onValueChange={setIncludeFonts} disabled={busy || resultLine !== null} />
+                </View>
+              ) : null}
+              <Text style={styles.optionRowHint}>
+                Not included: printer settings, offsets, darkness, speed, and spreadsheet data.
+              </Text>
+              {resultLine ? <Text style={styles.resultLine}>{resultLine}</Text> : null}
+              <Pressable
+                disabled={busy}
+                onPress={() => (resultLine ? goBack() : void handleShareFile())}
+                style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && styles.pressed]}>
+                <Text style={styles.primaryBtnText}>{resultLine ? 'Done' : busy ? 'Preparing…' : 'Share label file'}</Text>
+              </Pressable>
+            </View>
+          ) : doc ? (
             <View style={styles.options}>
               <ShareOption
                 icon="square.grid.2x2"
-                label="Share Template"
+                label="As .sezlabel"
                 color="#3498DB" // theme-fixed: category tile colour
-                onPress={() => void handleShareTemplate()}
+                onPress={() => setView('file')}
               />
               <ShareOption
                 icon="photo"
-                label="Share Image"
+                label="As image"
                 color="#8BC34A" // theme-fixed: category tile colour
                 onPress={() => void handleShareImage()}
               />
@@ -147,7 +200,7 @@ export default function ShareModal() {
         </View>
 
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}>
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
@@ -219,6 +272,48 @@ const styles = themedStyles((c) => ({
     fontSize: 13,
     color: c.text,
     textAlign: 'center',
+  },
+  fileOptions: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    gap: 12,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  optionRowText: {
+    flex: 1,
+    gap: 2,
+  },
+  optionRowTitle: {
+    ...Type.caption,
+    fontSize: 14,
+    color: c.text,
+  },
+  optionRowHint: {
+    color: c.textMuted,
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+  resultLine: {
+    color: c.text,
+    fontSize: 13.5,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  primaryBtn: {
+    backgroundColor: c.accentFill,
+    borderRadius: 12,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnText: {
+    ...Type.modalAction,
+    color: c.onAccent,
   },
   emptyHint: {
     textAlign: 'center',

@@ -26,6 +26,7 @@ import { useTemplateCatalogStore, type CatalogTemplate } from '@/stores/template
 import { sampleToElements } from '@/lib/template-sample-elements';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLabelStore } from '@/stores/label-store';
+import { useOpenLabelFile } from '@/lib/label-share/use-open-label-file';
 import { useTranslation } from '@/lib/i18n';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
@@ -175,6 +176,7 @@ export default function TemplateScreen() {
   const insets = useSafeAreaInsets();
   const tabPad = useTabBarPadding(Spacing.six);
   const router = useRouter();
+  const { openLabelFile, documentSourceSheet } = useOpenLabelFile('push');
   const { width: windowWidth } = useWindowDimensions();
 
   const layoutWidth = Math.min(windowWidth, MaxContentWidth);
@@ -365,6 +367,13 @@ export default function TemplateScreen() {
 
           {/* Right Action Icons: Scanner, Sort */}
           <View style={styles.headerIcons}>
+            <Pressable
+              hitSlop={8}
+              accessibilityLabel="Open label file"
+              onPress={() => void openLabelFile()}
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.cardPressed]}>
+              <AppIcon name="tray.and.arrow.down" tintColor={C.onHeader} size={21} />
+            </Pressable>
             <Pressable
               hitSlop={8}
               onPress={() => router.push('/scan')}
@@ -638,6 +647,14 @@ export default function TemplateScreen() {
                       </Pressable>
                       <Pressable
                         hitSlop={8}
+                        accessibilityLabel="Export"
+                        onPress={() =>
+                          router.push({ pathname: '/share', params: { labelId: docItem.id } })
+                        }>
+                        <AppIcon name="square.and.arrow.up" tintColor={C.accent} size={18} />
+                      </Pressable>
+                      <Pressable
+                        hitSlop={8}
                         onPress={() => handleDeleteLocal(docItem.id, docItem.name)}>
                         <AppIcon name="trash" tintColor={C.danger} size={18} />
                       </Pressable>
@@ -750,6 +767,7 @@ export default function TemplateScreen() {
           style={{ marginTop: 8 }}
         />
       </IosAlertModal>
+      {documentSourceSheet}
     </View>
   );
 }

@@ -21,9 +21,11 @@ export function buildDocumentPickerRequest(options: {
   source: FileSourceChoice;
   /** Pass `Platform.OS`. Accepted for callers; the MIME list is the preset list on every platform. */
   platform?: string;
+  /** Overrides the preset's list (for example to learn a type, or to show every file). */
+  mimeTypes?: string[];
 }): DocumentPickerRequest {
   const preset = options.preset === 'any' ? null : DOCUMENT_PRESETS[options.preset];
-  const presetTypes = preset?.mimeTypes ?? ['*/*'];
+  const presetTypes = options.mimeTypes ?? preset?.mimeTypes ?? ['*/*'];
   const type = [...presetTypes];
   const request: DocumentPickerRequest = {
     type,

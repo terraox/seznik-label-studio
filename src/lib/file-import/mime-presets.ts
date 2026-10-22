@@ -1,4 +1,6 @@
-export type DocumentPreset = 'image' | 'excel' | 'csv' | 'pdf' | 'font' | 'svg' | 'clipart' | 'any';
+import { SEZLABEL_BASE_MIMES } from '@/lib/label-share/learned-mime-core';
+
+export type DocumentPreset = 'image' | 'excel' | 'csv' | 'pdf' | 'font' | 'svg' | 'clipart' | 'sezlabel' | 'any';
 
 export type DocumentPresetConfig = {
   mimeTypes: string[];
@@ -49,6 +51,15 @@ export const DOCUMENT_PRESETS: Record<Exclude<DocumentPreset, 'any'>, DocumentPr
   svg: {
     mimeTypes: ['image/svg+xml', 'text/xml', 'application/xml', 'public.svg-image', '*/*'],
     extensions: new Set(['svg', 'xml']),
+  },
+  // Pickers filter by the type a provider reports, never by extension. A .sezlabel has no registered
+  // type, so the system reports it as 'unknown' (octet-stream) or as a zip. That is the whole list:
+  // PDFs, spreadsheets, documents, photos and video all have their own types and stay hidden. If a
+  // phone reports something else, the type is learned the first time the file is picked from
+  // "Show all files" (see learned-mime.ts).
+  sezlabel: {
+    mimeTypes: SEZLABEL_BASE_MIMES,
+    extensions: new Set(['sezlabel', 'zip']),
   },
   clipart: {
     mimeTypes: [

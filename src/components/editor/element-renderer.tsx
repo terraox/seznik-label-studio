@@ -1794,7 +1794,8 @@ export function ElementContentView({
             frameWidth={lineEmoji && !element.tile && size === "100%" ? frameWidth : undefined}
             frameHeight={lineEmoji && !element.tile && size === "100%" ? frameHeight : undefined}
           />
-        ) : (
+        ) : forPrint && !sticker ? null : (
+          // Unknown clipart id: the editor shows a placeholder star, print draws nothing.
           <Text style={{ fontSize: (size === "100%" ? unit : size) * 0.7, color: previewColor }}>
             {element.glyph ?? "★"}
           </Text>

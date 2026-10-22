@@ -24,6 +24,16 @@ export function looksLikeImageUri(value: string): boolean {
   );
 }
 
+/**
+ * Where a picture may be read from at bind/print time: this phone only. A spreadsheet cell or an
+ * imported file must never make the app fetch a web address.
+ */
+export function isLocalImageUri(value: string): boolean {
+  const v = value.trim();
+  if (!v || /^(https?:|ftp:|data:)/i.test(v)) return false;
+  return looksLikeImageUri(v);
+}
+
 export const MONO_IMAGE_SKSL = `
 uniform shader image;
 uniform float threshold;

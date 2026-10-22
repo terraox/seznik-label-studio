@@ -1,0 +1,15 @@
+{
+  "name": "sez-print-web-lab",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Browser test bench for .sezlabel files: open, measure, edit, export.",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch --serve",
+    "start": "node build.mjs --serve",
+    "sample": "cd .. && npx --yes tsx --tsconfig tsconfig.json web/make-sample.ts"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}

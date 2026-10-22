@@ -37,5 +37,6 @@ export function mapLocalPickedDocument(
     uri: picked.uri,
     size: picked.size,
     extension,
+    mimeType: picked.mimeType ?? null,
   };
 }

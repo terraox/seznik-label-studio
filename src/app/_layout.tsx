@@ -128,6 +128,7 @@ function AppRoot() {
           </Stack.Protected>
           <Stack.Screen name="edit" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="print" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="import-label" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen
             name="share"
             options={{ presentation: 'transparentModal', animation: 'fade' }}

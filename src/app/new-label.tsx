@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
 import { type ReactNode } from 'react';
@@ -7,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spacing } from '@/constants/theme';
 import { Type } from '@/constants/ui';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { useOpenLabelFile } from '@/lib/label-share/use-open-label-file';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 function CreationOption({
@@ -35,10 +37,11 @@ export default function NewLabelModal() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
+  const { openLabelFile, documentSourceSheet } = useOpenLabelFile('replace');
 
   return (
     <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={() => router.back()} />
+      <Pressable style={styles.backdrop} onPress={() => goBack()} />
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.sheet}>
@@ -97,16 +100,23 @@ export default function NewLabelModal() {
               onPress={() => router.replace('/image-to-label')}>
               <AppIcon name="photo.on.rectangle" tintColor="#FFFFFF" size={30} pointerEvents="none" /* theme-fixed: white icon on category tile */ />
             </CreationOption>
+            <CreationOption
+              label="Import label (.sezlabel)"
+              color="#14B8A6" // theme-fixed: category tile colour, white icon
+              onPress={() => void openLabelFile()}>
+              <AppIcon name="tray.and.arrow.down" tintColor="#FFFFFF" size={28} pointerEvents="none" /* theme-fixed: white icon on category tile */ />
+            </CreationOption>
           </View>
         </View>
 
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}>
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
       </View>
       {imageSourceSheet}
+      {documentSourceSheet}
     </View>
   );
 }

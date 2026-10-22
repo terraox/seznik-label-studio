@@ -26,13 +26,14 @@ export { buildDocumentPickerRequest, LOCAL_INITIAL_FOLDER } from '@/lib/file-imp
 export async function pickDocumentAsset(options: {
   preset: DocumentPreset;
   source: FileSourceChoice;
+  mimeTypes?: string[];
 }): Promise<PickedDocument> {
   const preset = options.preset === 'any' ? null : DOCUMENT_PRESETS[options.preset];
 
   if (shouldUseLocalFilePicker(options.source, Platform.OS)) {
     try {
       const picked = await pickLocalDocumentAsync({
-        mimeTypes: preset?.mimeTypes ?? ['*/*'],
+        mimeTypes: options.mimeTypes ?? preset?.mimeTypes ?? ['*/*'],
       });
       return mapLocalPickedDocument(picked, options.preset);
     } catch (error) {
@@ -74,5 +75,6 @@ export async function pickDocumentAsset(options: {
     uri: file.uri,
     size: file.size,
     extension,
+    mimeType: file.mimeType ?? null,
   };
 }

@@ -11,13 +11,13 @@ import { useFileSourceSheet } from '@/lib/file-import/use-file-source-sheet';
  * Ask This Device vs Google Drive, then open the matching system picker.
  */
 export function useDocumentSourcePicker(): {
-  pickDocumentWithSource: (options: { preset: DocumentPreset }) => Promise<PickedDocument>;
+  pickDocumentWithSource: (options: { preset: DocumentPreset; mimeTypes?: string[] }) => Promise<PickedDocument>;
   documentSourceSheet: ReactNode;
 } {
   const { requestFileSource, fileSourceSheet } = useFileSourceSheet();
 
   const pickDocumentWithSource = useCallback(
-    async (options: { preset: DocumentPreset }): Promise<PickedDocument> => {
+    async (options: { preset: DocumentPreset; mimeTypes?: string[] }): Promise<PickedDocument> => {
       const source = await requestFileSource();
       if (!source) return { ok: false, reason: 'cancelled' };
       return pickDocumentAsset({ ...options, source });

@@ -1,7 +1,7 @@
 import { cloneDocument, type LabelDocument } from '@/lib/label-document';
 import { applySerialOffset, logLegacySerial } from '@/lib/serial-content';
 import type { ExcelSheet } from '@/stores/data-store';
-import { looksLikeImageUri } from '@/lib/editor/image-mono';
+import { isLocalImageUri } from '@/lib/editor/image-mono';
 
 function bindElementContent(
   element: LabelDocument['elements'][number],
@@ -18,7 +18,7 @@ function bindElementContent(
       const value = row[columnIndex] ?? '';
       if (element.type === 'text') {
         element.text = value;
-      } else if (element.type === 'image' && looksLikeImageUri(value)) {
+      } else if (element.type === 'image' && isLocalImageUri(value)) {
         element.uri = value;
         element.printUri = value;
       } else if ('content' in element) {
@@ -61,6 +61,13 @@ function applyDegreesSerial(
   }
 }
 
+/** Print never fetches a web picture: a web address in an image is blanked before drawing. */
+function blockWebImage(element: LabelDocument['elements'][number]) {
+  if (element.type !== 'image') return;
+  if (/^(https?:|ftp:)/i.test(element.uri ?? '')) element.uri = '';
+  if (element.printUri && /^(https?:|ftp:)/i.test(element.printUri)) element.printUri = undefined;
+}
+
 /**
  * Resolve data-bound elements and serial/degrees offsets for one print/preview page.
  */
@@ -83,6 +90,7 @@ export function resolveDocumentForPage(
   }
   for (const element of resolved.elements) {
     applyDegreesSerial(element, pageIndex);
+    blockWebImage(element);
   }
   return resolved;
 }

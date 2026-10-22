@@ -9,6 +9,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { getImagePixelSize } from '@/lib/file-import/resolve-image-size';
 
 import { generateId } from '@/lib/label-document';
+import { protectedImportUris } from '@/lib/label-share/import-guard';
 import {
   EDITOR_IMAGE_MAX_EDGE_PX,
   unreferencedManagedFiles,
@@ -226,6 +227,7 @@ export async function sweepEditorImageFiles(keepUris: string[]): Promise<void> {
   const info = await FileSystem.getInfoAsync(dir);
   if (!info.exists || !info.isDirectory) return;
   const names = await FileSystem.readDirectoryAsync(dir).catch(() => [] as string[]);
-  const stale = unreferencedManagedFiles(names, keepUris);
+  // Pictures a .sezlabel import has written but not yet saved into a label stay.
+  const stale = unreferencedManagedFiles(names, [...keepUris, ...protectedImportUris()]);
   await Promise.all(stale.map((name) => deleteSezprintFile(`${dir}${name}`)));
 }
