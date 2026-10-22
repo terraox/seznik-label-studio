@@ -135,6 +135,7 @@
     "test:pdf-editor": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/pdf-editor/__tests__/session.test.ts",
     "test:serial": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/serial/__tests__/*.test.ts src/lib/__tests__/serial-label-document.test.ts",
     "test:label-share": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/label-share/__tests__/*.test.ts",
+    "test:across": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/__tests__/across.test.ts",
     "test:new-label": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/__tests__/new-label-form.test.ts",
     "print:calibration": "npx --yes tsx --tsconfig tsconfig.json scripts/print-calibration-box.ts",
     "print:phase1": "npx --yes tsx --tsconfig tsconfig.json scripts/print-phase1-demo.ts",

@@ -39,6 +39,8 @@ export type FormState = {
   gap: string;
   name: string;
   batchEdit: boolean;
+  /** Labels across: one panel at a time, or every label on one canvas. */
+  acrossMode: 'separate' | 'together';
   /** Remembered across shape switches, never shown. */
   lastRect: { width: string; height: string };
   lastDiameter: string | null;
@@ -144,6 +146,7 @@ export function initialFormState(params: FormParams): FormState {
     gap: fmtMm(gap),
     name,
     batchEdit: false,
+    acrossMode: 'separate',
     lastRect: { width, height },
     lastDiameter: null,
   };

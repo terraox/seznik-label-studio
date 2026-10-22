@@ -17,6 +17,7 @@ import type { MediaGeometry } from '@/lib/media-geometry';
 import type { BulkLabelSet } from '@/lib/bulk-labels';
 import type { SerialBatch } from '@/lib/serial/types';
 import type { LabelSettings } from '@/lib/label-settings';
+import { borderBoxForCenterGap } from '@/lib/border-geometry';
 import { huggedTextFrameMm } from '@/lib/visible-text-layout';
 
 export type TemplateBackground =
@@ -195,7 +196,12 @@ export type LabelUpsConfig = {
   activeIndex: number;
   /** Per-column element lists. Length === columns. */
   panels: LabelElement[][];
+  /** One border around the whole sheet (drawn at compose time) instead of one per label. */
+  sheetBorder?: { borderStyle: string; lineWidth: number; edgeGapMm: number };
 };
+
+/** Labels across edited together on one wide canvas: where the cells are, so the editor can show them. */
+export type LabelAcross = { columns: number; gapMm: number; /** Cells are circles / ellipses. */ round?: boolean };
 
 /**
  * Canonical label. `widthMm` / `heightMm` and every element's `left` / `top` /
@@ -231,6 +237,8 @@ export type LabelDocument = {
   ups?: LabelUpsConfig;
   /** Present on a flattened N-up sheet whose cells keep a circle or ellipse outline. */
   upsTile?: UpsTile;
+  /** Present when the labels across are edited together on one canvas (not panel by panel). */
+  across?: LabelAcross;
   /** Excel bulk set: one saved label, many rows projected onto the canvas. */
   bulk?: BulkLabelSet;
   /** Serial batch size. The continue-from-last offset is deliberately NOT here (see serial-continue-store). */
@@ -436,6 +444,25 @@ export function composeUpsDocument(doc: LabelDocument): LabelDocument {
 
   const cellShape =
     synced.mediaShape === 'circle' || synced.mediaShape === 'ellipse' ? synced.mediaShape : null;
+
+  const sheetBorder = synced.ups!.sheetBorder;
+  if (sheetBorder) {
+    const sheetW = Math.round(totalW * 100) / 100;
+    const box = borderBoxForCenterGap(sheetW, cellH, sheetBorder.edgeGapMm, sheetBorder.lineWidth);
+    elements.push({
+      id: generateId(),
+      type: 'border',
+      borderStyle: sheetBorder.borderStyle,
+      lineWidth: sheetBorder.lineWidth,
+      edgeGapMm: sheetBorder.edgeGapMm,
+      geometryVersion: 1,
+      lockMovement: true,
+      rotation: 0,
+      needPrinting: true,
+      drawingColorIndex: 0,
+      ...box,
+    } as unknown as LabelElement);
+  }
 
   return {
     ...synced,
