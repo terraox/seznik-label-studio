@@ -1,4 +1,4 @@
-// End-to-end check of the admin analytics side: printer aliases, counter reconciliation, printers screen,
+// End-to-end check of the admin analytics side: counter reconciliation, printers screen,
 // print totals, most-printed labels, dashboard header, user detail, feedback and shop-click screens.
 // Needs the admin server on BASE (default http://localhost:3000). Never sends an SMS.
 // Seeds its own throw-away users, printers and events through the real intake API, compares the screens'
@@ -33,7 +33,6 @@ async function cleanup() {
   await prisma.productClick.deleteMany({ where: { eventId: { startsWith: P } } });
   await prisma.feedback.deleteMany({ where: { eventId: { startsWith: P } } });
   await prisma.printer.deleteMany({ where: { nameRaw: { startsWith: 'FlowA' } } });
-  await prisma.printerAlias.deleteMany({ where: { OR: [{ pattern: { startsWith: 'FlowA' } }, { modelNormalised: { startsWith: 'FlowA' } }] } });
   await prisma.user.deleteMany({ where: { id: { in: ids } } });
   await prisma.registeredPhone.deleteMany({ where: { mobile: { in: NUMBERS } } });
   await prisma.adminAuditLog.deleteMany({ where: { adminId: { startsWith: 'adm_flowtest_a_' } } });
@@ -117,23 +116,6 @@ async function send(items: { user: { id: string; tokenVersion: number }; ev: Rec
 }
 
 console.log(`Checking ${BASE}\n`);
-
-// ───────── C2: printer aliases ─────────
-await send([printEv(alice), printEv(bob, { printerName: 'FlowA Tejas_7777' }), printEv(alice, { printerName: 'FlowA Rudra_AAAA', labels: 1 })]);
-const before = await prisma.printer.findMany({ where: { nameRaw: { startsWith: 'FlowA' } }, orderBy: { nameRaw: 'asc' } });
-check('two Tejas devices share one automatic model name', before.filter((p) => p.modelNormalised === 'FlowA Tejas').length === 2, before.map((p) => p.modelNormalised).join(','));
-const viewerAlias = await call('POST', '/api/printer-aliases', { cookie: view, body: { pattern: 'FlowA Tejas', model: 'FlowA Tejas Pro' } });
-check('viewer cannot create alias rules', viewerAlias.status === 403);
-const alias = await call('POST', '/api/printer-aliases', { cookie: supp, body: { pattern: 'FlowA Tejas', model: 'FlowA Tejas Pro' } });
-const after = await prisma.printer.findMany({ where: { nameRaw: { startsWith: 'FlowA Tejas' } } });
-check('support creates a rule: both existing printers are renamed', alias.status === 201 && alias.body.printersChanged === 2 && after.every((p) => p.modelNormalised === 'FlowA Tejas Pro'));
-await send([printEv(bob, { printerName: 'FlowA Tejas_9999', labels: 1 })]);
-const late = await prisma.printer.findUnique({ where: { nameRaw: 'FlowA Tejas_9999' } });
-check('a printer that connects later gets the rule too', late?.modelNormalised === 'FlowA Tejas Pro');
-check('same pattern twice -> 409', (await call('POST', '/api/printer-aliases', { cookie: sup, body: { pattern: 'flowa tejas', model: 'x' } })).status === 409);
-const del = await call('DELETE', `/api/printer-aliases/${alias.body.alias.id}`, { cookie: sup });
-const reverted = await prisma.printer.findMany({ where: { nameRaw: { startsWith: 'FlowA Tejas' } } });
-check('deleting the rule puts printers back to the automatic name', del.status === 200 && reverted.every((p) => p.modelNormalised === 'FlowA Tejas'), `reverted ${del.body.printersReverted}`);
 
 // ───────── C3: counter integrity ─────────
 const run = (args: string[]) => {

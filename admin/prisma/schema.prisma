@@ -121,15 +121,6 @@ model Printer {
   @@index([modelNormalised])
 }
 
-/// Admin-editable merge / rename rules for printer names.
-model PrinterAlias {
-  id              String   @id @default(cuid())
-  pattern         String   @unique
-  displayName     String
-  modelNormalised String
-  createdAt       DateTime @default(now())
-}
-
 /// One successful connect (not retries or reconnect flaps).
 model PrinterConnection {
   id         String   @id @default(cuid())

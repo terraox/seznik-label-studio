@@ -6,6 +6,7 @@ import { maskMobile } from '@/lib/phone';
 import { can } from '@/lib/permissions';
 import { prisma } from '@/lib/prisma';
 import { printerCtes } from '@/lib/analytics-sql';
+import { printerLineSql } from '@/lib/printer-line';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 
     const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
       WITH ${printerCtes(hideInternal)},
-      pids AS (SELECT id FROM "Printer" WHERE lower("modelNormalised") = ${key}),
+      pids AS (SELECT id FROM "Printer" WHERE ${printerLineSql(Prisma.sql`"nameRaw"`)} = ${key}),
       who AS (
         SELECT "userId" FROM conn WHERE "printerId" IN (SELECT id FROM pids)
         UNION SELECT "userId" FROM prn WHERE "userId" IS NOT NULL AND "printerId" IN (SELECT id FROM pids)

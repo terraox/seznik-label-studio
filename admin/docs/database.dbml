@@ -105,15 +105,6 @@ Table Printer {
   Note: '[READY] Distinct printer names seen.'
 }
 
-Table PrinterAlias {
-  id varchar [pk]
-  pattern varchar [unique, not null]
-  displayName varchar [not null]
-  modelNormalised varchar [not null]
-  createdAt timestamp [not null]
-  Note: '[READY] Admin-editable merge / rename rules for printer names.'
-}
-
 Table UserPrinter {
   id varchar [pk]
   userId varchar [not null]

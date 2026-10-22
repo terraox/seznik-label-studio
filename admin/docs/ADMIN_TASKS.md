@@ -17,12 +17,12 @@ Rules for every task: schema change -> migration + `database.dbml` updated -> `n
 ## C. Data intake (server)
 
 - [x] **C1. Event intake `POST /v1/events`** (batches of up to 50, idempotent by `eventId`, per-event result, clock-skew and age limits, blocked users refused). Handles: print job, printer connection, product click, feedback.
-- [x] **C2. Printer registry:** raw name, normalised model, SDK family, admin-editable aliases.
+- [x] **C2. Printer registry:** raw name, normalised model, SDK family, grouped by Bluetooth-name prefix in code (`lib/printer-line.ts`).
 - [x] **C3. Counter integrity:** `printCountTotal` kept equal to the sum of print events; a reconciliation script reports drift.
 
 ## D. Screens
 
-- [x] **D1. Printers screen:** unique printers, users per printer, connections, first/last seen, alias editor.
+- [x] **D1. Printers screen:** unique printers, users per printer, connections, first/last seen.
 - [x] **D2. Print totals:** lifetime / last 7 days / this month (IST), jobs vs labels, 30-day chart, internal-accounts toggle.
 - [x] **D3. Most printed labels:** `50 x 30 mm` vs `50 x 30 mm · template name`, top 20, windows.
 - [x] **D4. Dashboard header and footers:** total/active/blocked users, unique printers, average rating, new users; "tracking since", "labels sent to printer", app-version mix.

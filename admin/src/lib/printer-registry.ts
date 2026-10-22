@@ -32,10 +32,7 @@ export async function upsertPrinter(rawName: string, familyHint?: string | null)
   const existing = await prisma.printer.findUnique({ where: { nameRaw } });
   if (existing) return existing;
   const model = normalizePrinterName(nameRaw);
-  const alias = await prisma.printerAlias.findFirst({
-    where: { OR: [{ pattern: { equals: nameRaw, mode: 'insensitive' } }, { pattern: { equals: model, mode: 'insensitive' } }] },
-  });
-  const modelNormalised = alias?.modelNormalised ?? model;
+  const modelNormalised = model;
   return prisma.printer.upsert({
     where: { nameRaw },
     update: {},

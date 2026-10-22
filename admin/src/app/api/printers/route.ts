@@ -4,13 +4,14 @@ import { requirePermission } from '@/lib/guard';
 import { fail, json } from '@/lib/http';
 import { printerCtes } from '@/lib/analytics-sql';
 import { prisma } from '@/lib/prisma';
+import { PRINTER_LINES, printerLineLabel, printerLineOf, printerLineSql, type PrinterLineId } from '@/lib/printer-line';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-type Row = {
-  key: string; model: string; family: string; names: bigint; firstSeen: Date;
-  connections: bigint; lastConnected: Date | null; labels: bigint; users: bigint;
+type DeviceRow = {
+  name: string; model: string; family: string; firstSeen: Date; connections: bigint;
+  lastConnected: Date | null; labels: bigint; users: bigint;
 };
 
 /**
@@ -24,56 +25,65 @@ export async function GET(request: Request) {
     const hideInternal = url.searchParams.get('internal') === 'hide';
     const family = url.searchParams.get('family');
 
-    const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
-      WITH ${printerCtes(hideInternal)},
-      per AS (
-        SELECT p.id, p."modelNormalised", p."sdkFamily", p."firstSeenAt",
-          (SELECT count(*) FROM conn c WHERE c."printerId" = p.id) AS connections,
-          (SELECT max(c."occurredAt") FROM conn c WHERE c."printerId" = p.id) AS "lastConnected",
-          (SELECT COALESCE(sum(r."labelsCount"), 0) FROM prn r WHERE r."printerId" = p.id) AS labels
-        FROM "Printer" p
-        WHERE (${family === null} OR p."sdkFamily" = ${family ?? ''})
-      ),
-      users AS (
-        SELECT lower(p."modelNormalised") AS key, count(DISTINCT x."userId") AS users
-        FROM "Printer" p
-        JOIN (SELECT "printerId", "userId" FROM conn
-              UNION SELECT "printerId", "userId" FROM prn WHERE "userId" IS NOT NULL) x ON x."printerId" = p.id
-        GROUP BY 1
-      )
-      SELECT lower(per."modelNormalised") AS key, min(per."modelNormalised") AS model,
-        mode() WITHIN GROUP (ORDER BY per."sdkFamily") AS family,
-        count(*) AS names, min(per."firstSeenAt") AS "firstSeen",
-        sum(per.connections) AS connections, max(per."lastConnected") AS "lastConnected",
-        sum(per.labels) AS labels, COALESCE(max(users.users), 0) AS users
-      FROM per LEFT JOIN users ON users.key = lower(per."modelNormalised")
-      WHERE (${!hideInternal} OR per.connections > 0 OR per.labels > 0)
-      GROUP BY 1
-      ORDER BY sum(per.connections) DESC, sum(per.labels) DESC, min(per."modelNormalised")`);
-
-    const printers = rows.map((r) => ({
-      key: r.key,
-      model: r.model,
-      family: r.family,
-      deviceNames: Number(r.names),
-      users: Number(r.users),
-      connections: Number(r.connections),
-      labels: Number(r.labels),
-      firstSeen: r.firstSeen.toISOString(),
-      lastConnected: r.lastConnected?.toISOString() ?? null,
+    // Every Bluetooth / device name as the printer reports it, before models are merged.
+    const deviceRows = await prisma.$queryRaw<DeviceRow[]>(Prisma.sql`
+      WITH ${printerCtes(hideInternal)}
+      SELECT p."nameRaw" AS name, p."modelNormalised" AS model, p."sdkFamily" AS family, p."firstSeenAt" AS "firstSeen",
+        (SELECT count(*) FROM conn c WHERE c."printerId" = p.id) AS connections,
+        (SELECT max(c."occurredAt") FROM conn c WHERE c."printerId" = p.id) AS "lastConnected",
+        (SELECT COALESCE(sum(r."labelsCount"), 0) FROM prn r WHERE r."printerId" = p.id) AS labels,
+        (SELECT count(DISTINCT x."userId") FROM (SELECT "userId" FROM conn WHERE conn."printerId" = p.id
+           UNION SELECT "userId" FROM prn WHERE prn."printerId" = p.id AND "userId" IS NOT NULL) x) AS users
+      FROM "Printer" p
+      WHERE (${family === null} OR p."sdkFamily" = ${family ?? ''})
+        AND (${!hideInternal} OR EXISTS (SELECT 1 FROM conn c WHERE c."printerId" = p.id) OR EXISTS (SELECT 1 FROM prn r WHERE r."printerId" = p.id))
+      ORDER BY connections DESC, p."nameRaw"`);
+    const devices = deviceRows.map((d) => ({
+      name: d.name,
+      line: printerLineOf(d.name),
+      model: d.model,
+      family: d.family,
+      users: Number(d.users),
+      connections: Number(d.connections),
+      labels: Number(d.labels),
+      firstSeen: d.firstSeen.toISOString(),
+      lastConnected: d.lastConnected?.toISOString() ?? null,
     }));
+    const lineUsers = await prisma.$queryRaw<{ line: string; users: bigint }[]>(Prisma.sql`
+      WITH ${printerCtes(hideInternal)}
+      SELECT ${printerLineSql(Prisma.sql`p."nameRaw"`)} AS line, count(DISTINCT x."userId") AS users
+      FROM "Printer" p
+      JOIN (SELECT "printerId", "userId" FROM conn
+            UNION SELECT "printerId", "userId" FROM prn WHERE "userId" IS NOT NULL) x ON x."printerId" = p.id
+      GROUP BY 1`);
+    const usersByLine = new Map(lineUsers.map((r) => [r.line, Number(r.users)]));
+    const printers = ([...PRINTER_LINES.map((l) => l.id), 'other'] as PrinterLineId[])
+      .map((id) => {
+        const mine = devices.filter((d) => d.line === id);
+        return {
+          key: id,
+          model: printerLineLabel(id),
+          family: mine.length ? [...new Set(mine.map((d) => d.family))].join(', ') : '',
+          deviceNames: mine.length,
+          users: usersByLine.get(id) ?? 0,
+          connections: mine.reduce((n, d) => n + d.connections, 0),
+          labels: mine.reduce((n, d) => n + d.labels, 0),
+          firstSeen: mine.map((d) => d.firstSeen).sort()[0] ?? null,
+          lastConnected: mine.map((d) => d.lastConnected).filter((x): x is string => !!x).sort().pop() ?? null,
+        };
+      })
+      // The three product lines always show; "Other" only when something unmatched exists.
+      .filter((l) => l.key !== 'other' || l.deviceNames > 0);
     const [withPrinter] = await prisma.$queryRaw<{ n: bigint }[]>(Prisma.sql`
       WITH ${printerCtes(hideInternal)}
       SELECT count(*) AS n FROM (SELECT "userId" FROM conn UNION SELECT "userId" FROM prn WHERE "userId" IS NOT NULL) t`);
-    const names = await prisma.printer.count({
-      where: family ? { sdkFamily: family } : undefined,
-    });
     return json({
-      uniqueModels: printers.length,
-      uniqueNames: hideInternal ? printers.reduce((sum, p) => sum + p.deviceNames, 0) : names,
+      uniqueModels: printers.filter((p) => p.deviceNames > 0).length,
+      uniqueNames: devices.length,
       totalConnections: printers.reduce((sum, p) => sum + p.connections, 0),
       usersWithPrinter: Number(withPrinter.n),
       printers,
+      devices,
     });
   } catch (error) {
     return fail(error);
