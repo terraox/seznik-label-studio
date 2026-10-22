@@ -1,0 +1,3 @@
+$kind: collection
+description: Categories + every published item. `?since=<ISO>` returns only items changed after that time; `ids` always lists all published ids.
+order: 3000

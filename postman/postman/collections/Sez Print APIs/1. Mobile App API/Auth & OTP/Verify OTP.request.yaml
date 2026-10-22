@@ -1,0 +1,35 @@
+$kind: http-request
+description: Returns `{ ok, otpProof }`. Change purpose to "login" for the OTP-login flow. Saves otpProof.
+url: "{{adminUrl}}/api/app/otp/verify"
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: x-app-version
+    value: "{{appVersion}}"
+    description: Shown on the desk as the user's app version.
+  - key: x-app-build
+    value: "{{appBuild}}"
+    description: Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED.
+  - key: x-app-platform
+    value: "{{appPlatform}}"
+    description: android | ios | web
+  - key: x-app-device
+    value: "{{appDevice}}"
+    description: e.g. "Samsung SM-A546E" (ASCII, ≤60 chars).
+body:
+  type: json
+  content: |-
+    {
+      "mobile": "{{mobile}}",
+      "otp": "{{otp}}",
+      "purpose": "register"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const body = pm.response.json();
+      const v = body.otpProof;
+      if (v) { pm.collectionVariables.set('otpProof', v); console.log('otpProof =', v); }
+    language: text/javascript
+order: 3000

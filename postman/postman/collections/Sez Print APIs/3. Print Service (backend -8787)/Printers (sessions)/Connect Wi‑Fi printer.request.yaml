@@ -1,0 +1,24 @@
+$kind: http-request
+description: Saves printerSessionId.
+url: "{{printServiceUrl}}/api/printers/connect"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "sdkId": "td404",
+      "transport": "wifi",
+      "ip": "{{printerIp}}",
+      "port": 9100,
+      "name": "Shop TD-404"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const body = pm.response.json();
+      const v = body.printer && body.printer.id;
+      if (v) { pm.collectionVariables.set('printerSessionId', v); console.log('printerSessionId =', v); }
+    language: text/javascript
+order: 2000

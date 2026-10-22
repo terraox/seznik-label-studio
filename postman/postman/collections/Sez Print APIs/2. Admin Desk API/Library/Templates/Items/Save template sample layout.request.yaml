@@ -1,0 +1,15 @@
+$kind: http-request
+description: "Sample content shown when the template opens. `{ layout: [...] }` (see lib/sample-layout.ts); an empty list clears it."
+url: "{{adminUrl}}/api/library/template/items/:itemId/sample"
+method: PUT
+headers:
+  Content-Type: application/json
+pathVariables:
+  itemId: "{{itemId}}"
+body:
+  type: json
+  content: |-
+    {
+      "layout": []
+    }
+order: 5000

@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{adminUrl}}/api/desk/db-latency"
+method: GET
+order: 2000

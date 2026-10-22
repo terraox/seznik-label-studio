@@ -1,0 +1,27 @@
+$kind: http-request
+description: Sends an SMS OTP via MSG91. 409 if the number is already registered, 403 USER_BLOCKED if pre-blocked, 429 with retryAfter during cooldown.
+url: "{{adminUrl}}/api/app/otp/send"
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: x-app-version
+    value: "{{appVersion}}"
+    description: Shown on the desk as the user's app version.
+  - key: x-app-build
+    value: "{{appBuild}}"
+    description: Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED.
+  - key: x-app-platform
+    value: "{{appPlatform}}"
+    description: android | ios | web
+  - key: x-app-device
+    value: "{{appDevice}}"
+    description: e.g. "Samsung SM-A546E" (ASCII, ≤60 chars).
+body:
+  type: json
+  content: |-
+    {
+      "mobile": "{{mobile}}",
+      "purpose": "register"
+    }
+order: 1000

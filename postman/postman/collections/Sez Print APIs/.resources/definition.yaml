@@ -1,0 +1,29 @@
+$kind: collection
+description: |-
+  All HTTP APIs in the sez-print repo, grouped by who calls them:
+
+  1. **Mobile App API** — admin server routes the Expo app uses (bearer token).
+  2. **Admin Desk API** — admin panel routes (session cookie).
+  3. **Print Service** — local Express backend on :8787.
+
+  Set `adminUsername` / `adminPassword` in the environment, start `admin` (`npm run dev`) and/or `backend`. Requests that create something save its id into a collection variable for the next request.
+variables:
+  mobile: "9876543210"
+  password: password123
+  otp: "123456"
+  otpProof: ""
+  appToken: ""
+  appVersion: 1.0.0
+  appBuild: "1"
+  appPlatform: android
+  appDevice: Postman
+  printerName: TD-404
+  printerIp: 192.168.1.50
+  userId: ""
+  feedbackId: ""
+  suggestionId: ""
+  categoryId: ""
+  itemId: ""
+  legacyTemplateId: ""
+  assetId: ""
+  printerSessionId: ""

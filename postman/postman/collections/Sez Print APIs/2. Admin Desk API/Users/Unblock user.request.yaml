@@ -1,0 +1,15 @@
+$kind: http-request
+description: 409 if not blocked.
+url: "{{adminUrl}}/api/users/:userId/unblock"
+method: POST
+headers:
+  Content-Type: application/json
+pathVariables:
+  userId: "{{userId}}"
+body:
+  type: json
+  content: |-
+    {
+      "note": "Resolved with customer"
+    }
+order: 5000

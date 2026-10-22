@@ -1,0 +1,15 @@
+$kind: http-request
+description: Bluetooth must run on the device; returns 501 with a native integration hint.
+url: "{{printServiceUrl}}/api/printers/connect"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "sdkId": "td404",
+      "transport": "bluetooth-spp",
+      "macAddress": "AA:BB:CC:DD:EE:FF"
+    }
+order: 3000

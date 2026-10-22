@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{adminUrl}}/api/reviews"
+method: GET
+order: 3000

@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{printServiceUrl}}/api/printers/:printerSessionId"
+method: GET
+pathVariables:
+  printerSessionId: "{{printerSessionId}}"
+order: 4000

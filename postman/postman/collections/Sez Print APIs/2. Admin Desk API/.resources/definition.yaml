@@ -1,0 +1,7 @@
+$kind: collection
+description: |-
+  Admin panel endpoints on `{{adminUrl}}`.
+
+  Auth: run **Auth → Login** first. It sets the `sez_session` cookie, which Postman keeps in its cookie jar for localhost and sends on every later request. Everything here except Login and Health returns 401 without it.
+  Most routes also check a role permission (e.g. users.view, catalog.edit).
+order: 2000

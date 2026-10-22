@@ -1,0 +1,3 @@
+$kind: collection
+description: Older file-backed catalog used by the sample desk. Kept because the routes still exist.
+order: 8000

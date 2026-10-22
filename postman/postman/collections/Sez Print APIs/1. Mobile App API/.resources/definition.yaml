@@ -1,0 +1,13 @@
+$kind: collection
+description: |-
+  Endpoints the Expo app calls on the admin server (`{{adminUrl}}`). CORS enabled.
+
+  Auth: `Authorization: Bearer {{appToken}}` — the Login / Register requests save the token automatically.
+  Every request carries the x-app-* headers (set in collection variables).
+auth:
+  - id: 53b78039-780b-4d1a-b2e1-c56b3152d56a
+    type: bearer
+    name: bearer auth
+    credentials:
+      token: "{{appToken}}"
+order: 1000

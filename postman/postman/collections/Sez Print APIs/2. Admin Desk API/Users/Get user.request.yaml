@@ -1,0 +1,7 @@
+$kind: http-request
+description: Profile, printers, connections, recent prints, feedback, shop clicks, block history.
+url: "{{adminUrl}}/api/users/:userId"
+method: GET
+pathVariables:
+  userId: "{{userId}}"
+order: 2000

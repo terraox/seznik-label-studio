@@ -1,0 +1,7 @@
+$kind: http-request
+description: No sign-in. DB check; 503 if the database is down.
+url: "{{adminUrl}}/api/health"
+method: GET
+auth:
+  type: noauth
+order: 1000

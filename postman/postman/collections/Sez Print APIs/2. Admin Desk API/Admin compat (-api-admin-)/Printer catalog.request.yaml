@@ -1,0 +1,5 @@
+$kind: http-request
+description: App printer options (id, name, bridge, tagline).
+url: "{{adminUrl}}/api/admin/printers/catalog"
+method: GET
+order: 3000

@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{printServiceUrl}}/api/sdks"
+method: GET
+order: 1000

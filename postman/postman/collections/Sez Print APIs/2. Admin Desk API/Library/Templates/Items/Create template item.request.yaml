@@ -1,0 +1,37 @@
+$kind: http-request
+description: Pick an SVG in the "file" field. Returns item, removed (stripped SVG parts) and warnings. Saves itemId.
+url: "{{adminUrl}}/api/library/template/items"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: text
+      key: name
+      value: My template
+    - type: text
+      key: categoryId
+      value: "{{categoryId}}"
+    - type: file
+      key: file
+      src: []
+      description: SVG file
+    - type: text
+      key: widthMm
+      value: "50"
+      description: mm
+    - type: text
+      key: heightMm
+      value: "30"
+      description: mm
+    - type: text
+      key: status
+      value: draft
+      description: draft | published
+scripts:
+  - type: afterResponse
+    code: |-
+      const body = pm.response.json();
+      const v = body.item && body.item.id;
+      if (v) { pm.collectionVariables.set('itemId', v); console.log('itemId =', v); }
+    language: text/javascript
+order: 2000

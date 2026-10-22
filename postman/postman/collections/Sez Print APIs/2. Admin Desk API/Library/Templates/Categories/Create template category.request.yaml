@@ -1,0 +1,20 @@
+$kind: http-request
+description: ≤60 chars, unique (case-insensitive). Saves categoryId.
+url: "{{adminUrl}}/api/library/template/categories"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "New category"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const body = pm.response.json();
+      const v = body.category && body.category.id;
+      if (v) { pm.collectionVariables.set('categoryId', v); console.log('categoryId =', v); }
+    language: text/javascript
+order: 2000

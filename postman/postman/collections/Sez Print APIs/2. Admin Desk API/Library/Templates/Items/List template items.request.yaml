@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{adminUrl}}/api/library/template/items"
+method: GET
+queryParams:
+  - key: categoryId
+    value: "{{categoryId}}"
+    disabled: true
+  - key: status
+    value: published
+    disabled: true
+    description: draft | published | disabled
+  - key: q
+    value: ""
+    disabled: true
+    description: Name search
+  - key: page
+    value: "1"
+    disabled: true
+  - key: pageSize
+    value: "48"
+    disabled: true
+    description: 1–100
+order: 1000

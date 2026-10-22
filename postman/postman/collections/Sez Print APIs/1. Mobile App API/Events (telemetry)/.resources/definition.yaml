@@ -1,0 +1,3 @@
+$kind: collection
+description: POST /api/v1/events — one example per event type, plus a mixed batch.
+order: 4000

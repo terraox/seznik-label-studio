@@ -1,0 +1,41 @@
+$kind: http-request
+url: "{{adminUrl}}/api/templates"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: text
+      key: name
+      value: Shipping 4x6
+    - type: text
+      key: category
+      value: Shipping
+    - type: text
+      key: widthMm
+      value: "100"
+    - type: text
+      key: heightMm
+      value: "150"
+    - type: text
+      key: status
+      value: published
+      description: draft | published
+    - type: text
+      key: featured
+      value: "false"
+    - type: text
+      key: document
+      value: "{}"
+      description: Template document JSON
+    - type: file
+      key: preview
+      src: []
+      description: PNG / JPG / WebP preview (required)
+scripts:
+  - type: afterResponse
+    code: |-
+      const body = pm.response.json();
+      const v = body.template && body.template.id;
+      if (v) { pm.collectionVariables.set('legacyTemplateId', v); console.log('legacyTemplateId =', v); }
+    language: text/javascript
+order: 2000

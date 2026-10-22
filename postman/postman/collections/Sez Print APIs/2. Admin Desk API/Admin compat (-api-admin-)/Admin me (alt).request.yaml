@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{adminUrl}}/api/admin/me"
+method: GET
+order: 2000

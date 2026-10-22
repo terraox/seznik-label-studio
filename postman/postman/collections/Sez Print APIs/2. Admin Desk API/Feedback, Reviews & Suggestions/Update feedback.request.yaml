@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{adminUrl}}/api/feedback/:feedbackId"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  feedbackId: "{{feedbackId}}"
+body:
+  type: json
+  content: |-
+    {
+      "status": "reviewed",
+      "adminNote": "Looking into it"
+    }
+order: 2000

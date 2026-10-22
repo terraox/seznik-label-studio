@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{adminUrl}}/api/users/:userId"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  userId: "{{userId}}"
+body:
+  type: json
+  content: |-
+    {
+      "isInternal": true
+    }
+order: 3000

@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{adminUrl}}/api/auth/logout"
+method: POST
+order: 3000

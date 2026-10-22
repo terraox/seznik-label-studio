@@ -1,0 +1,9 @@
+$kind: http-request
+description: Returns text/csv.
+url: "{{adminUrl}}/api/export?type=templates"
+method: GET
+queryParams:
+  - key: type
+    value: templates
+    description: devices | prints | template-usage | templates | reviews | suggestions | printers
+order: 11000

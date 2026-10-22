@@ -1,0 +1,11 @@
+$kind: http-request
+url: "{{adminUrl}}/api/printers/users?model=tejas"
+method: GET
+queryParams:
+  - key: model
+    value: tejas
+    description: Printer line key from the list above
+  - key: internal
+    value: hide
+    disabled: true
+order: 2000

@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{adminUrl}}/api/stats/labels?window=all"
+method: GET
+queryParams:
+  - key: window
+    value: all
+    description: all | 7d | month
+  - key: limit
+    value: "20"
+    disabled: true
+    description: 1–100
+  - key: internal
+    value: hide
+    disabled: true
+  - key: family
+    value: td404
+    disabled: true
+order: 3000

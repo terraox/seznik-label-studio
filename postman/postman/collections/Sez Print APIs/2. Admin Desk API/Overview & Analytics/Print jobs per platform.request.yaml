@@ -1,0 +1,11 @@
+$kind: http-request
+url: "{{adminUrl}}/api/stats/platforms"
+method: GET
+queryParams:
+  - key: internal
+    value: hide
+    disabled: true
+  - key: family
+    value: td404
+    disabled: true
+order: 4000

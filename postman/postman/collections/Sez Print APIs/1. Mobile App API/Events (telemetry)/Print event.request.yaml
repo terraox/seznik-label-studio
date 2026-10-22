@@ -1,0 +1,45 @@
+$kind: http-request
+description: |-
+  source: manual_size | template | excel_bulk | pdf | photo | scan | serial | other. labels/jobs 1–10000, ups 1–20, width/height 5–300 mm. For templates add templateId + templateName.
+
+  Batch: `{ sentAt, events: [...] }`, up to 50 events, ≤256 KB. Rate limit 120 batches/min/user.
+  Returns 200 with a result per event (`accepted` / `duplicate` / `rejected` + reason). A batch where every event is rejected for PRINTER_REQUIRED is a 400.
+url: "{{adminUrl}}/api/v1/events"
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: x-app-version
+    value: "{{appVersion}}"
+    description: Shown on the desk as the user's app version.
+  - key: x-app-build
+    value: "{{appBuild}}"
+    description: Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED.
+  - key: x-app-platform
+    value: "{{appPlatform}}"
+    description: android | ios | web
+  - key: x-app-device
+    value: "{{appDevice}}"
+    description: e.g. "Samsung SM-A546E" (ASCII, ≤60 chars).
+body:
+  type: json
+  content: |-
+    {
+      "sentAt": "{{$isoTimestamp}}",
+      "events": [
+        {
+          "eventId": "{{$guid}}",
+          "occurredAt": "{{$isoTimestamp}}",
+          "type": "print",
+          "printerName": "{{printerName}}",
+          "sdkFamily": "td404",
+          "source": "manual_size",
+          "labels": 1,
+          "jobs": 1,
+          "ups": 1,
+          "widthMm": 50,
+          "heightMm": 30
+        }
+      ]
+    }
+order: 1000

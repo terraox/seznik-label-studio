@@ -1,0 +1,3 @@
+$kind: collection
+description: "Common filters: `internal=hide` excludes internal accounts; `family=<sdkFamily>` limits to one printer family."
+order: 2000

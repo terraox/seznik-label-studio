@@ -1,0 +1,7 @@
+$kind: http-request
+description: JSON with endpoints + SDKs (HTML in a browser).
+url: "{{printServiceUrl}}/"
+method: GET
+headers:
+  Accept: application/json
+order: 1000

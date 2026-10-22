@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: 6353c64a-db20-4529-b173-ecc07e4415d6
+
+localResources:
+  collections:
+    - ../sez-print.postman_collection.json
+  environments:
+    - ../sez-print-local.postman_environment.json
+
+cloudResources:
+  collections:
+    ../postman/collections/Sez Print APIs: 509d7339-3006-4ee3-9865-62167e266731

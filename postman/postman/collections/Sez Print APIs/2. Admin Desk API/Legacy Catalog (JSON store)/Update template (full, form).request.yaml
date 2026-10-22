@@ -1,0 +1,34 @@
+$kind: http-request
+url: "{{adminUrl}}/api/templates/:legacyTemplateId"
+method: PATCH
+pathVariables:
+  legacyTemplateId: "{{legacyTemplateId}}"
+body:
+  type: formdata
+  content:
+    - type: text
+      key: name
+      value: Shipping 4x6
+    - type: text
+      key: category
+      value: Shipping
+    - type: text
+      key: widthMm
+      value: "100"
+    - type: text
+      key: heightMm
+      value: "150"
+    - type: text
+      key: status
+      value: published
+    - type: text
+      key: featured
+      value: "true"
+    - type: text
+      key: document
+      value: "{}"
+    - type: file
+      key: preview
+      src: []
+      description: Optional new preview
+order: 4000

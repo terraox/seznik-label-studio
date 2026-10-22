@@ -1,0 +1,21 @@
+$kind: http-request
+description: bitmapBase64 = 1-bit rows, bytesPerRow × height bytes.
+url: "{{printServiceUrl}}/api/print/test-payload"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "format": "tsc-bitmap",
+      "widthMm": 50,
+      "heightMm": 30,
+      "gapMm": 2,
+      "density": 8,
+      "copies": 1,
+      "bytesPerRow": 1,
+      "height": 1,
+      "bitmapBase64": "AA=="
+    }
+order: 2000

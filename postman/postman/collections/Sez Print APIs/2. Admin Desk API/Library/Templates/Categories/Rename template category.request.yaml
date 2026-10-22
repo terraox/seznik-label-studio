@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{adminUrl}}/api/library/template/categories/:categoryId"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  categoryId: "{{categoryId}}"
+body:
+  type: json
+  content: |-
+    {
+      "name": "Renamed category"
+    }
+order: 3000

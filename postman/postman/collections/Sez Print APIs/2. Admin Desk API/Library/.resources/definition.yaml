@@ -1,0 +1,3 @@
+$kind: collection
+description: Database-backed template and clipart library (what the app syncs).
+order: 7000

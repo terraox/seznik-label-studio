@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{printServiceUrl}}/health"
+method: GET
+order: 2000

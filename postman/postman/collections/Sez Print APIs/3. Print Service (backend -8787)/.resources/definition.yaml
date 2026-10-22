@@ -1,0 +1,8 @@
+$kind: collection
+name: 3. Print Service (backend :8787)
+description: Local Express service in `backend/` (`{{printServiceUrl}}`). No auth. Used by the app for Wi‑Fi printing and test payloads.
+auth:
+  - id: ""
+    type: noauth
+    name: No Auth
+order: 3000

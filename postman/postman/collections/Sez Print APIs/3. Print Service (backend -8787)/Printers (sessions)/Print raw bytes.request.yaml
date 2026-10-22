@@ -1,0 +1,17 @@
+$kind: http-request
+description: 'encoding: base64 | raw. The sample data is a tiny TSC "Hello" label.'
+url: "{{printServiceUrl}}/api/printers/:printerSessionId/print"
+method: POST
+headers:
+  Content-Type: application/json
+pathVariables:
+  printerSessionId: "{{printerSessionId}}"
+body:
+  type: json
+  content: |-
+    {
+      "encoding": "base64",
+      "data": "U0laRSA1MCBtbSwzMCBtbQ0KQ0xTDQpURVhUIDIwLDIwLCIzIiwwLDEsMSwiSGVsbG8iDQpQUklOVCAxDQo=",
+      "awaitAck": false
+    }
+order: 5000

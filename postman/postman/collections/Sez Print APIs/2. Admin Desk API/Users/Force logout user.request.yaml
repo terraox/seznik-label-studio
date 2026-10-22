@@ -1,0 +1,7 @@
+$kind: http-request
+description: Signs out everywhere without blocking.
+url: "{{adminUrl}}/api/users/:userId/logout"
+method: POST
+pathVariables:
+  userId: "{{userId}}"
+order: 6000

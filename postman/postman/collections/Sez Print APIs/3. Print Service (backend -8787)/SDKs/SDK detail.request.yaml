@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{printServiceUrl}}/api/sdks/:sdkId"
+method: GET
+pathVariables:
+  sdkId: td404
+order: 2000

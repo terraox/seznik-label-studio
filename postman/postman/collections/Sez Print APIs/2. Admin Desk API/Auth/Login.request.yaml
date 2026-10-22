@@ -1,0 +1,14 @@
+$kind: http-request
+description: Matches ADMIN_FIXED_USERNAME / ADMIN_FIXED_PASSWORD from admin/.env. 8 misses → 429 for 15 min. Sets the sez_session cookie.
+url: "{{adminUrl}}/api/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "username": "{{adminUsername}}",
+      "password": "{{adminPassword}}"
+    }
+order: 1000

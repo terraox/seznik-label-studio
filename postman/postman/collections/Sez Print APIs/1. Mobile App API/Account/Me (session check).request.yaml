@@ -1,0 +1,18 @@
+$kind: http-request
+description: 401 = signed out, 403 USER_BLOCKED = blocked, else `{ user, needsPrinter }`.
+url: "{{adminUrl}}/api/app/me"
+method: GET
+headers:
+  - key: x-app-version
+    value: "{{appVersion}}"
+    description: Shown on the desk as the user's app version.
+  - key: x-app-build
+    value: "{{appBuild}}"
+    description: Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED.
+  - key: x-app-platform
+    value: "{{appPlatform}}"
+    description: android | ios | web
+  - key: x-app-device
+    value: "{{appDevice}}"
+    description: e.g. "Samsung SM-A546E" (ASCII, ≤60 chars).
+order: 1000

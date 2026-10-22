@@ -1,0 +1,16 @@
+$kind: http-request
+description: Blocks, signs out every device and keeps the number blocked. 409 if already blocked.
+url: "{{adminUrl}}/api/users/:userId/block"
+method: POST
+headers:
+  Content-Type: application/json
+pathVariables:
+  userId: "{{userId}}"
+body:
+  type: json
+  content: |-
+    {
+      "message": "Shown to the user on the blocked screen",
+      "internalNote": "Only admins see this"
+    }
+order: 4000

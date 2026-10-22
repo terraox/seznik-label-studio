@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{adminUrl}}/api/templates/:legacyTemplateId"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  legacyTemplateId: "{{legacyTemplateId}}"
+body:
+  type: json
+  content: |-
+    {
+      "featured": true,
+      "status": "published"
+    }
+order: 3000

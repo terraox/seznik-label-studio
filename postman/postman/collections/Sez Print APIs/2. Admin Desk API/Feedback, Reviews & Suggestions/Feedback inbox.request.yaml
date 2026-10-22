@@ -1,0 +1,43 @@
+$kind: http-request
+description: 25 per page, plus average/count/distribution summary. Saves the first id as feedbackId.
+url: "{{adminUrl}}/api/feedback"
+method: GET
+queryParams:
+  - key: rating
+    value: "5"
+    disabled: true
+    description: 1–5
+  - key: category
+    value: bug
+    disabled: true
+    description: suggestion | bug | other
+  - key: status
+    value: new
+    disabled: true
+    description: new | reviewed | resolved
+  - key: q
+    value: ""
+    disabled: true
+    description: Message / name / number search
+  - key: from
+    value: 2026-10-01
+    disabled: true
+    description: YYYY-MM-DD
+  - key: to
+    value: 2026-10-31
+    disabled: true
+    description: YYYY-MM-DD (inclusive)
+  - key: internal
+    value: hide
+    disabled: true
+  - key: page
+    value: "1"
+    disabled: true
+scripts:
+  - type: afterResponse
+    code: |-
+      const body = pm.response.json();
+      const v = body.items && body.items[0] && body.items[0].id;
+      if (v) { pm.collectionVariables.set('feedbackId', v); console.log('feedbackId =', v); }
+    language: text/javascript
+order: 1000

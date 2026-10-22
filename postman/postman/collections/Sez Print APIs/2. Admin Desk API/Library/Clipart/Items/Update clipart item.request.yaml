@@ -1,0 +1,33 @@
+$kind: http-request
+description: Only the fields sent are changed. Untick/remove fields you do not want to change.
+url: "{{adminUrl}}/api/library/clipart/items/:itemId"
+method: PATCH
+pathVariables:
+  itemId: "{{itemId}}"
+body:
+  type: formdata
+  content:
+    - type: text
+      key: name
+      value: Renamed clipart
+    - type: text
+      key: categoryId
+      value: "{{categoryId}}"
+      disabled: true
+    - type: text
+      key: status
+      value: published
+      description: draft | published | disabled
+    - type: text
+      key: widthMm
+      value: "50"
+      disabled: true
+    - type: text
+      key: heightMm
+      value: "30"
+      disabled: true
+    - type: file
+      key: file
+      src: []
+      description: Optional replacement SVG
+order: 3000

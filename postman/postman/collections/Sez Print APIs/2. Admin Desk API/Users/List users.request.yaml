@@ -1,0 +1,44 @@
+$kind: http-request
+description: Saves the first user id as userId.
+url: "{{adminUrl}}/api/users"
+method: GET
+queryParams:
+  - key: q
+    value: ""
+    disabled: true
+    description: Search text
+  - key: field
+    value: all
+    disabled: true
+    description: all | name | mobile | printer | platform | version | device
+  - key: status
+    value: active
+    disabled: true
+    description: active | blocked
+  - key: internal
+    value: all
+    disabled: true
+    description: all | hide | only
+  - key: sort
+    value: createdAt
+    disabled: true
+    description: createdAt | lastSeenAt | printCountTotal | name | lastLoginAt
+  - key: dir
+    value: desc
+    disabled: true
+    description: asc | desc
+  - key: page
+    value: "1"
+    disabled: true
+  - key: pageSize
+    value: "25"
+    disabled: true
+    description: 1–100
+scripts:
+  - type: afterResponse
+    code: |-
+      const body = pm.response.json();
+      const v = body.users && body.users[0] && body.users[0].id;
+      if (v) { pm.collectionVariables.set('userId', v); console.log('userId =', v); }
+    language: text/javascript
+order: 1000

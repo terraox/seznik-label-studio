@@ -1,0 +1,3901 @@
+{
+  "info": {
+    "name": "Sez Print APIs",
+    "description": "All HTTP APIs in the sez-print repo, grouped by who calls them:\n\n1. **Mobile App API** — admin server routes the Expo app uses (bearer token).\n2. **Admin Desk API** — admin panel routes (session cookie).\n3. **Print Service** — local Express backend on :8787.\n\nSet `adminUsername` / `adminPassword` in the environment, start `admin` (`npm run dev`) and/or `backend`. Requests that create something save its id into a collection variable for the next request.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Mobile App API",
+      "description": "Endpoints the Expo app calls on the admin server (`{{adminUrl}}`). CORS enabled.\n\nAuth: `Authorization: Bearer {{appToken}}` — the Login / Register requests save the token automatically.\nEvery request carries the x-app-* headers (set in collection variables).",
+      "item": [
+        {
+          "name": "Auth & OTP",
+          "description": "Register flow: Send OTP (register) → Verify OTP → Register.\nOTP login flow: Send OTP (login) → Verify OTP (purpose login) → Login with OTP.\nFor local testing set `OTP_DEV_BYPASS=9876543210:123456` in admin/.env so no SMS is sent.",
+          "item": [
+            {
+              "name": "Send OTP — register",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/app/otp/send",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "app",
+                    "otp",
+                    "send"
+                  ]
+                },
+                "description": "Sends an SMS OTP via MSG91. 409 if the number is already registered, 403 USER_BLOCKED if pre-blocked, 429 with retryAfter during cooldown.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"{{mobile}}\",\n  \"purpose\": \"register\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Send OTP — login",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/app/otp/send",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "app",
+                    "otp",
+                    "send"
+                  ]
+                },
+                "description": "404 if no account for the number, 403 USER_BLOCKED if blocked.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"{{mobile}}\",\n  \"purpose\": \"login\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Verify OTP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/app/otp/verify",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "app",
+                    "otp",
+                    "verify"
+                  ]
+                },
+                "description": "Returns `{ ok, otpProof }`. Change purpose to \"login\" for the OTP-login flow. Saves otpProof.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"{{mobile}}\",\n  \"otp\": \"{{otp}}\",\n  \"purpose\": \"register\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "const v = body.otpProof;",
+                      "if (v) { pm.collectionVariables.set('otpProof', v); console.log('otpProof =', v); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/app/register",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "app",
+                    "register"
+                  ]
+                },
+                "description": "Needs an otpProof for purpose \"register\". Password ≥ 8 chars. 201 → `{ token, user, needsPrinter: true }`. Saves appToken.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Test User\",\n  \"mobile\": \"{{mobile}}\",\n  \"password\": \"{{password}}\",\n  \"otpProof\": \"{{otpProof}}\",\n  \"platform\": \"{{appPlatform}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "const v = body.token;",
+                      "if (v) { pm.collectionVariables.set('appToken', v); console.log('appToken =', v); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Login — password",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/app/login",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "app",
+                    "login"
+                  ]
+                },
+                "description": "10 tries per 15 min per number. → `{ token, user, needsPrinter }`. Saves appToken.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"{{mobile}}\",\n  \"password\": \"{{password}}\",\n  \"platform\": \"{{appPlatform}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "const v = body.token;",
+                      "if (v) { pm.collectionVariables.set('appToken', v); console.log('appToken =', v); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Login — OTP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/app/login",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "app",
+                    "login"
+                  ]
+                },
+                "description": "Uses an otpProof for purpose \"login\" instead of a password. Saves appToken.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"{{mobile}}\",\n  \"otpProof\": \"{{otpProof}}\",\n  \"platform\": \"{{appPlatform}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "const v = body.token;",
+                      "if (v) { pm.collectionVariables.set('appToken', v); console.log('appToken =', v); }"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Account",
+          "description": "",
+          "item": [
+            {
+              "name": "Me (session check)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/app/me",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "app",
+                    "me"
+                  ]
+                },
+                "description": "401 = signed out, 403 USER_BLOCKED = blocked, else `{ user, needsPrinter }`."
+              }
+            },
+            {
+              "name": "Set printer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/app/printer",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "app",
+                    "printer"
+                  ]
+                },
+                "description": "printerId: one of the app printer ids (Tejas, Rudra, Josh — see lib/printers.ts).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"printerId\": \"tejas\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "App config (public)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/app/config",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "app",
+                    "config"
+                  ]
+                },
+                "description": "No sign-in. Admin contact for the blocked screen, minAppBuild, legacyCutoff. Cached 60 s.",
+                "auth": {
+                  "type": "noauth"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Library sync",
+          "description": "Categories + every published item. `?since=<ISO>` returns only items changed after that time; `ids` always lists all published ids.",
+          "item": [
+            {
+              "name": "Templates",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/v1/templates",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "templates"
+                  ],
+                  "query": [
+                    {
+                      "key": "since",
+                      "value": "2026-01-01T00:00:00.000Z",
+                      "description": "Only items updated after this time",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Clipart",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/v1/clipart",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "clipart"
+                  ],
+                  "query": [
+                    {
+                      "key": "since",
+                      "value": "2026-01-01T00:00:00.000Z",
+                      "description": "Only items updated after this time",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "Events (telemetry)",
+          "description": "POST /api/v1/events — one example per event type, plus a mixed batch.",
+          "item": [
+            {
+              "name": "Print event",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/v1/events",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "events"
+                  ]
+                },
+                "description": "source: manual_size | template | excel_bulk | pdf | photo | scan | serial | other. labels/jobs 1–10000, ups 1–20, width/height 5–300 mm. For templates add templateId + templateName.\n\nBatch: `{ sentAt, events: [...] }`, up to 50 events, ≤256 KB. Rate limit 120 batches/min/user.\nReturns 200 with a result per event (`accepted` / `duplicate` / `rejected` + reason). A batch where every event is rejected for PRINTER_REQUIRED is a 400.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sentAt\": \"{{$isoTimestamp}}\",\n  \"events\": [\n    {\n      \"eventId\": \"{{$guid}}\",\n      \"occurredAt\": \"{{$isoTimestamp}}\",\n      \"type\": \"print\",\n      \"printerName\": \"{{printerName}}\",\n      \"sdkFamily\": \"td404\",\n      \"source\": \"manual_size\",\n      \"labels\": 1,\n      \"jobs\": 1,\n      \"ups\": 1,\n      \"widthMm\": 50,\n      \"heightMm\": 30\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Printer connected event",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/v1/events",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "events"
+                  ]
+                },
+                "description": "transport: bt_spp | ble | wifi. Reconnects within 10 min are reported as duplicate RECENT_CONNECTION.\n\nBatch: `{ sentAt, events: [...] }`, up to 50 events, ≤256 KB. Rate limit 120 batches/min/user.\nReturns 200 with a result per event (`accepted` / `duplicate` / `rejected` + reason). A batch where every event is rejected for PRINTER_REQUIRED is a 400.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sentAt\": \"{{$isoTimestamp}}\",\n  \"events\": [\n    {\n      \"eventId\": \"{{$guid}}\",\n      \"occurredAt\": \"{{$isoTimestamp}}\",\n      \"type\": \"printer_connected\",\n      \"printerName\": \"{{printerName}}\",\n      \"sdkFamily\": \"td404\",\n      \"transport\": \"bt_spp\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Shop product click event",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/v1/events",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "events"
+                  ]
+                },
+                "description": "category: labels | printers.\n\nBatch: `{ sentAt, events: [...] }`, up to 50 events, ≤256 KB. Rate limit 120 batches/min/user.\nReturns 200 with a result per event (`accepted` / `duplicate` / `rejected` + reason). A batch where every event is rejected for PRINTER_REQUIRED is a 400.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sentAt\": \"{{$isoTimestamp}}\",\n  \"events\": [\n    {\n      \"eventId\": \"{{$guid}}\",\n      \"occurredAt\": \"{{$isoTimestamp}}\",\n      \"type\": \"product_click\",\n      \"productKey\": \"tejas-label-printer\",\n      \"productName\": \"Seznik Tejas Label Printer\",\n      \"category\": \"printers\",\n      \"source\": \"shop_buy\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Feedback event",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/v1/events",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "events"
+                  ]
+                },
+                "description": "rating 1–5, category: suggestion | bug | other, message ≤1000 chars. 5 feedbacks/day/user.\n\nBatch: `{ sentAt, events: [...] }`, up to 50 events, ≤256 KB. Rate limit 120 batches/min/user.\nReturns 200 with a result per event (`accepted` / `duplicate` / `rejected` + reason). A batch where every event is rejected for PRINTER_REQUIRED is a 400.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sentAt\": \"{{$isoTimestamp}}\",\n  \"events\": [\n    {\n      \"eventId\": \"{{$guid}}\",\n      \"occurredAt\": \"{{$isoTimestamp}}\",\n      \"type\": \"feedback\",\n      \"rating\": 5,\n      \"category\": \"suggestion\",\n      \"message\": \"Loving the app!\",\n      \"platform\": \"{{appPlatform}}\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Mixed batch",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-app-version",
+                    "value": "{{appVersion}}",
+                    "description": "Shown on the desk as the user's app version."
+                  },
+                  {
+                    "key": "x-app-build",
+                    "value": "{{appBuild}}",
+                    "description": "Native build number. Below minAppBuild (or missing while legacyCutoff is on) → 426 UPGRADE_REQUIRED."
+                  },
+                  {
+                    "key": "x-app-platform",
+                    "value": "{{appPlatform}}",
+                    "description": "android | ios | web"
+                  },
+                  {
+                    "key": "x-app-device",
+                    "value": "{{appDevice}}",
+                    "description": "e.g. \"Samsung SM-A546E\" (ASCII, ≤60 chars)."
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/v1/events",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "events"
+                  ]
+                },
+                "description": "Several types in one batch. Note: {{$guid}} gives each event its own id.\n\nBatch: `{ sentAt, events: [...] }`, up to 50 events, ≤256 KB. Rate limit 120 batches/min/user.\nReturns 200 with a result per event (`accepted` / `duplicate` / `rejected` + reason). A batch where every event is rejected for PRINTER_REQUIRED is a 400.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sentAt\": \"{{$isoTimestamp}}\",\n  \"events\": [\n    {\n      \"eventId\": \"{{$guid}}\",\n      \"occurredAt\": \"{{$isoTimestamp}}\",\n      \"type\": \"printer_connected\",\n      \"printerName\": \"{{printerName}}\",\n      \"sdkFamily\": \"td404\",\n      \"transport\": \"bt_spp\"\n    },\n    {\n      \"eventId\": \"{{$guid}}\",\n      \"occurredAt\": \"{{$isoTimestamp}}\",\n      \"type\": \"print\",\n      \"printerName\": \"{{printerName}}\",\n      \"sdkFamily\": \"td404\",\n      \"source\": \"manual_size\",\n      \"labels\": 1,\n      \"jobs\": 1,\n      \"ups\": 1,\n      \"widthMm\": 50,\n      \"heightMm\": 30\n    },\n    {\n      \"eventId\": \"{{$guid}}\",\n      \"occurredAt\": \"{{$isoTimestamp}}\",\n      \"type\": \"product_click\",\n      \"productKey\": \"tejas-label-printer\",\n      \"productName\": \"Seznik Tejas Label Printer\",\n      \"category\": \"printers\",\n      \"source\": \"shop_buy\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{appToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "2. Admin Desk API",
+      "description": "Admin panel endpoints on `{{adminUrl}}`.\n\nAuth: run **Auth → Login** first. It sets the `sez_session` cookie, which Postman keeps in its cookie jar for localhost and sends on every later request. Everything here except Login and Health returns 401 without it.\nMost routes also check a role permission (e.g. users.view, catalog.edit).",
+      "item": [
+        {
+          "name": "Auth",
+          "description": "",
+          "item": [
+            {
+              "name": "Login",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/auth/login",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "Matches ADMIN_FIXED_USERNAME / ADMIN_FIXED_PASSWORD from admin/.env. 8 misses → 429 for 15 min. Sets the sez_session cookie.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Me",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/auth/me",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "me"
+                  ]
+                },
+                "description": "Current admin + role."
+              }
+            },
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/auth/logout",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "logout"
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "Overview & Analytics",
+          "description": "Common filters: `internal=hide` excludes internal accounts; `family=<sdkFamily>` limits to one printer family.",
+          "item": [
+            {
+              "name": "Summary (dashboard header)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/stats/summary",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stats",
+                    "summary"
+                  ],
+                  "query": [
+                    {
+                      "key": "internal",
+                      "value": "hide",
+                      "description": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "family",
+                      "value": "td404",
+                      "description": "",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Prints (lifetime / 7d / month / daily / hourly)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/stats/prints",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stats",
+                    "prints"
+                  ],
+                  "query": [
+                    {
+                      "key": "internal",
+                      "value": "hide",
+                      "description": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "family",
+                      "value": "td404",
+                      "description": "",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Most printed labels",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/stats/labels?window=all",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stats",
+                    "labels"
+                  ],
+                  "query": [
+                    {
+                      "key": "window",
+                      "value": "all",
+                      "description": "all | 7d | month",
+                      "disabled": false
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "1–100",
+                      "disabled": true
+                    },
+                    {
+                      "key": "internal",
+                      "value": "hide",
+                      "description": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "family",
+                      "value": "td404",
+                      "description": "",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Print jobs per platform",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/stats/platforms",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stats",
+                    "platforms"
+                  ],
+                  "query": [
+                    {
+                      "key": "internal",
+                      "value": "hide",
+                      "description": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "family",
+                      "value": "td404",
+                      "description": "",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Shop buy-button clicks",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/stats/shop",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stats",
+                    "shop"
+                  ],
+                  "query": [
+                    {
+                      "key": "internal",
+                      "value": "hide",
+                      "description": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "product",
+                      "value": "tejas-label-printer",
+                      "description": "Adds a 30-day trend for this productKey",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Telemetry (legacy store)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/telemetry",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "telemetry"
+                  ]
+                },
+                "description": "Built from the old JSON sample store."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Users",
+          "description": "",
+          "item": [
+            {
+              "name": "List users",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/users",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "",
+                      "description": "Search text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "field",
+                      "value": "all",
+                      "description": "all | name | mobile | printer | platform | version | device",
+                      "disabled": true
+                    },
+                    {
+                      "key": "status",
+                      "value": "active",
+                      "description": "active | blocked",
+                      "disabled": true
+                    },
+                    {
+                      "key": "internal",
+                      "value": "all",
+                      "description": "all | hide | only",
+                      "disabled": true
+                    },
+                    {
+                      "key": "sort",
+                      "value": "createdAt",
+                      "description": "createdAt | lastSeenAt | printCountTotal | name | lastLoginAt",
+                      "disabled": true
+                    },
+                    {
+                      "key": "dir",
+                      "value": "desc",
+                      "description": "asc | desc",
+                      "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "25",
+                      "description": "1–100",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Saves the first user id as userId."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "const v = body.users && body.users[0] && body.users[0].id;",
+                      "if (v) { pm.collectionVariables.set('userId', v); console.log('userId =', v); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get user",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/users/:userId",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users",
+                    ":userId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    }
+                  ]
+                },
+                "description": "Profile, printers, connections, recent prints, feedback, shop clicks, block history."
+              }
+            },
+            {
+              "name": "Set internal flag",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/users/:userId",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users",
+                    ":userId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"isInternal\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Block user",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/users/:userId/block",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users",
+                    ":userId",
+                    "block"
+                  ],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    }
+                  ]
+                },
+                "description": "Blocks, signs out every device and keeps the number blocked. 409 if already blocked.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"Shown to the user on the blocked screen\",\n  \"internalNote\": \"Only admins see this\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Unblock user",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/users/:userId/unblock",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users",
+                    ":userId",
+                    "unblock"
+                  ],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    }
+                  ]
+                },
+                "description": "409 if not blocked.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"note\": \"Resolved with customer\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Force logout user",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/users/:userId/logout",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users",
+                    ":userId",
+                    "logout"
+                  ],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    }
+                  ]
+                },
+                "description": "Signs out everywhere without blocking."
+              }
+            },
+            {
+              "name": "User connection timeline (older pages)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/users/:userId/connections",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users",
+                    ":userId",
+                    "connections"
+                  ],
+                  "query": [
+                    {
+                      "key": "before",
+                      "value": "2026-10-01T00:00:00.000Z",
+                      "description": "ISO time of the last row already seen",
+                      "disabled": true
+                    }
+                  ],
+                  "variable": [
+                    {
+                      "key": "userId",
+                      "value": "{{userId}}"
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Export users CSV",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/users/export",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users",
+                    "export"
+                  ]
+                },
+                "description": "Owner only (users.export). Returns text/csv — use \"Send and Download\"."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Blocked Phones",
+          "description": "Numbers that cannot register or sign in.",
+          "item": [
+            {
+              "name": "List blocked numbers",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/phones",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "phones"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Pre-block a number",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/phones",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "phones"
+                  ]
+                },
+                "description": "409 if the number already has an account (block the user instead).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"9999999999\",\n  \"blocked\": true,\n  \"reason\": \"Spam\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Lift block on a number",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/phones",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "phones"
+                  ]
+                },
+                "description": "Only for numbers without an account.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"9999999999\",\n  \"blocked\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Printers",
+          "description": "",
+          "item": [
+            {
+              "name": "Printer models & devices",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/printers",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "printers"
+                  ],
+                  "query": [
+                    {
+                      "key": "internal",
+                      "value": "hide",
+                      "description": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "family",
+                      "value": "td404",
+                      "description": "",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Users of one printer model",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/printers/users?model=tejas",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "printers",
+                    "users"
+                  ],
+                  "query": [
+                    {
+                      "key": "model",
+                      "value": "tejas",
+                      "description": "Printer line key from the list above",
+                      "disabled": false
+                    },
+                    {
+                      "key": "internal",
+                      "value": "hide",
+                      "description": "",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "Feedback, Reviews & Suggestions",
+          "description": "",
+          "item": [
+            {
+              "name": "Feedback inbox",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/feedback",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "feedback"
+                  ],
+                  "query": [
+                    {
+                      "key": "rating",
+                      "value": "5",
+                      "description": "1–5",
+                      "disabled": true
+                    },
+                    {
+                      "key": "category",
+                      "value": "bug",
+                      "description": "suggestion | bug | other",
+                      "disabled": true
+                    },
+                    {
+                      "key": "status",
+                      "value": "new",
+                      "description": "new | reviewed | resolved",
+                      "disabled": true
+                    },
+                    {
+                      "key": "q",
+                      "value": "",
+                      "description": "Message / name / number search",
+                      "disabled": true
+                    },
+                    {
+                      "key": "from",
+                      "value": "2026-10-01",
+                      "description": "YYYY-MM-DD",
+                      "disabled": true
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-10-31",
+                      "description": "YYYY-MM-DD (inclusive)",
+                      "disabled": true
+                    },
+                    {
+                      "key": "internal",
+                      "value": "hide",
+                      "description": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "25 per page, plus average/count/distribution summary. Saves the first id as feedbackId."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "const v = body.items && body.items[0] && body.items[0].id;",
+                      "if (v) { pm.collectionVariables.set('feedbackId', v); console.log('feedbackId =', v); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update feedback",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/feedback/:feedbackId",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "feedback",
+                    ":feedbackId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "feedbackId",
+                      "value": "{{feedbackId}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"reviewed\",\n  \"adminNote\": \"Looking into it\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Reviews (legacy store)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/reviews",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "reviews"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Suggestions (legacy store)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/suggestions",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "suggestions"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Update suggestion (legacy store)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/suggestions/:suggestionId",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "suggestions",
+                    ":suggestionId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "suggestionId",
+                      "value": "{{suggestionId}}"
+                    }
+                  ]
+                },
+                "description": "status: new | reviewing | planned | rejected | shipped.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"planned\",\n  \"note\": \"Next release\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Library",
+          "description": "Database-backed template and clipart library (what the app syncs).",
+          "item": [
+            {
+              "name": "Templates",
+              "description": "Library tables for **template** (`/api/library/template/...`). Items are SVG uploads sent as multipart form.",
+              "item": [
+                {
+                  "name": "Categories",
+                  "description": "",
+                  "item": [
+                    {
+                      "name": "List template categories",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/template/categories",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "template",
+                            "categories"
+                          ]
+                        },
+                        "description": "Permission catalog.view."
+                      }
+                    },
+                    {
+                      "name": "Create template category",
+                      "request": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/template/categories",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "template",
+                            "categories"
+                          ]
+                        },
+                        "description": "≤60 chars, unique (case-insensitive). Saves categoryId.",
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"name\": \"New category\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        }
+                      },
+                      "event": [
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "const body = pm.response.json();",
+                              "const v = body.category && body.category.id;",
+                              "if (v) { pm.collectionVariables.set('categoryId', v); console.log('categoryId =', v); }"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Rename template category",
+                      "request": {
+                        "method": "PATCH",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/template/categories/:categoryId",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "template",
+                            "categories",
+                            ":categoryId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}"
+                            }
+                          ]
+                        },
+                        "description": "",
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"name\": \"Renamed category\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "Delete template category",
+                      "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/template/categories/:categoryId",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "template",
+                            "categories",
+                            ":categoryId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}"
+                            }
+                          ]
+                        },
+                        "description": "409 if the category still has items."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Items",
+                  "description": "",
+                  "item": [
+                    {
+                      "name": "List template items",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/template/items",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "template",
+                            "items"
+                          ],
+                          "query": [
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}",
+                              "description": "",
+                              "disabled": true
+                            },
+                            {
+                              "key": "status",
+                              "value": "published",
+                              "description": "draft | published | disabled",
+                              "disabled": true
+                            },
+                            {
+                              "key": "q",
+                              "value": "",
+                              "description": "Name search",
+                              "disabled": true
+                            },
+                            {
+                              "key": "page",
+                              "value": "1",
+                              "description": "",
+                              "disabled": true
+                            },
+                            {
+                              "key": "pageSize",
+                              "value": "48",
+                              "description": "1–100",
+                              "disabled": true
+                            }
+                          ]
+                        },
+                        "description": ""
+                      }
+                    },
+                    {
+                      "name": "Create template item",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/template/items",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "template",
+                            "items"
+                          ]
+                        },
+                        "description": "Pick an SVG in the \"file\" field. Returns item, removed (stripped SVG parts) and warnings. Saves itemId.",
+                        "body": {
+                          "mode": "formdata",
+                          "formdata": [
+                            {
+                              "key": "name",
+                              "value": "My template",
+                              "type": "text",
+                              "disabled": false,
+                              "description": ""
+                            },
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}",
+                              "type": "text",
+                              "disabled": false,
+                              "description": ""
+                            },
+                            {
+                              "key": "file",
+                              "type": "file",
+                              "src": [],
+                              "description": "SVG file"
+                            },
+                            {
+                              "key": "widthMm",
+                              "value": "50",
+                              "type": "text",
+                              "disabled": false,
+                              "description": "mm"
+                            },
+                            {
+                              "key": "heightMm",
+                              "value": "30",
+                              "type": "text",
+                              "disabled": false,
+                              "description": "mm"
+                            },
+                            {
+                              "key": "status",
+                              "value": "draft",
+                              "type": "text",
+                              "disabled": false,
+                              "description": "draft | published"
+                            }
+                          ]
+                        }
+                      },
+                      "event": [
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "const body = pm.response.json();",
+                              "const v = body.item && body.item.id;",
+                              "if (v) { pm.collectionVariables.set('itemId', v); console.log('itemId =', v); }"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Update template item",
+                      "request": {
+                        "method": "PATCH",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/template/items/:itemId",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "template",
+                            "items",
+                            ":itemId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "itemId",
+                              "value": "{{itemId}}"
+                            }
+                          ]
+                        },
+                        "description": "Only the fields sent are changed. Untick/remove fields you do not want to change.",
+                        "body": {
+                          "mode": "formdata",
+                          "formdata": [
+                            {
+                              "key": "name",
+                              "value": "Renamed template",
+                              "type": "text",
+                              "disabled": false,
+                              "description": ""
+                            },
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}",
+                              "type": "text",
+                              "disabled": true,
+                              "description": ""
+                            },
+                            {
+                              "key": "status",
+                              "value": "published",
+                              "type": "text",
+                              "disabled": false,
+                              "description": "draft | published | disabled"
+                            },
+                            {
+                              "key": "widthMm",
+                              "value": "50",
+                              "type": "text",
+                              "disabled": true,
+                              "description": ""
+                            },
+                            {
+                              "key": "heightMm",
+                              "value": "30",
+                              "type": "text",
+                              "disabled": true,
+                              "description": ""
+                            },
+                            {
+                              "key": "file",
+                              "type": "file",
+                              "src": [],
+                              "description": "Optional replacement SVG"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "name": "Delete template item",
+                      "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/template/items/:itemId",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "template",
+                            "items",
+                            ":itemId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "itemId",
+                              "value": "{{itemId}}"
+                            }
+                          ]
+                        },
+                        "description": ""
+                      }
+                    },
+                    {
+                      "name": "Save template sample layout",
+                      "request": {
+                        "method": "PUT",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/template/items/:itemId/sample",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "template",
+                            "items",
+                            ":itemId",
+                            "sample"
+                          ],
+                          "variable": [
+                            {
+                              "key": "itemId",
+                              "value": "{{itemId}}"
+                            }
+                          ]
+                        },
+                        "description": "Sample content shown when the template opens. `{ layout: [...] }` (see lib/sample-layout.ts); an empty list clears it.",
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"layout\": []\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Clipart",
+              "description": "Library tables for **clipart** (`/api/library/clipart/...`). Items are SVG uploads sent as multipart form.",
+              "item": [
+                {
+                  "name": "Categories",
+                  "description": "",
+                  "item": [
+                    {
+                      "name": "List clipart categories",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/clipart/categories",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "clipart",
+                            "categories"
+                          ]
+                        },
+                        "description": "Permission catalog.view."
+                      }
+                    },
+                    {
+                      "name": "Create clipart category",
+                      "request": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/clipart/categories",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "clipart",
+                            "categories"
+                          ]
+                        },
+                        "description": "≤60 chars, unique (case-insensitive). Saves categoryId.",
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"name\": \"New category\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        }
+                      },
+                      "event": [
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "const body = pm.response.json();",
+                              "const v = body.category && body.category.id;",
+                              "if (v) { pm.collectionVariables.set('categoryId', v); console.log('categoryId =', v); }"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Rename clipart category",
+                      "request": {
+                        "method": "PATCH",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/clipart/categories/:categoryId",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "clipart",
+                            "categories",
+                            ":categoryId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}"
+                            }
+                          ]
+                        },
+                        "description": "",
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"name\": \"Renamed category\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "Delete clipart category",
+                      "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/clipart/categories/:categoryId",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "clipart",
+                            "categories",
+                            ":categoryId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}"
+                            }
+                          ]
+                        },
+                        "description": "409 if the category still has items."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Items",
+                  "description": "",
+                  "item": [
+                    {
+                      "name": "List clipart items",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/clipart/items",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "clipart",
+                            "items"
+                          ],
+                          "query": [
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}",
+                              "description": "",
+                              "disabled": true
+                            },
+                            {
+                              "key": "status",
+                              "value": "published",
+                              "description": "draft | published | disabled",
+                              "disabled": true
+                            },
+                            {
+                              "key": "q",
+                              "value": "",
+                              "description": "Name search",
+                              "disabled": true
+                            },
+                            {
+                              "key": "page",
+                              "value": "1",
+                              "description": "",
+                              "disabled": true
+                            },
+                            {
+                              "key": "pageSize",
+                              "value": "48",
+                              "description": "1–100",
+                              "disabled": true
+                            }
+                          ]
+                        },
+                        "description": ""
+                      }
+                    },
+                    {
+                      "name": "Create clipart item",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/clipart/items",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "clipart",
+                            "items"
+                          ]
+                        },
+                        "description": "Pick an SVG in the \"file\" field. Returns item, removed (stripped SVG parts) and warnings. Saves itemId.",
+                        "body": {
+                          "mode": "formdata",
+                          "formdata": [
+                            {
+                              "key": "name",
+                              "value": "My clipart",
+                              "type": "text",
+                              "disabled": false,
+                              "description": ""
+                            },
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}",
+                              "type": "text",
+                              "disabled": false,
+                              "description": ""
+                            },
+                            {
+                              "key": "file",
+                              "type": "file",
+                              "src": [],
+                              "description": "SVG file"
+                            },
+                            {
+                              "key": "widthMm",
+                              "value": "50",
+                              "type": "text",
+                              "disabled": true,
+                              "description": "mm"
+                            },
+                            {
+                              "key": "heightMm",
+                              "value": "30",
+                              "type": "text",
+                              "disabled": true,
+                              "description": "mm"
+                            },
+                            {
+                              "key": "status",
+                              "value": "draft",
+                              "type": "text",
+                              "disabled": false,
+                              "description": "draft | published"
+                            }
+                          ]
+                        }
+                      },
+                      "event": [
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "const body = pm.response.json();",
+                              "const v = body.item && body.item.id;",
+                              "if (v) { pm.collectionVariables.set('itemId', v); console.log('itemId =', v); }"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Update clipart item",
+                      "request": {
+                        "method": "PATCH",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/clipart/items/:itemId",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "clipart",
+                            "items",
+                            ":itemId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "itemId",
+                              "value": "{{itemId}}"
+                            }
+                          ]
+                        },
+                        "description": "Only the fields sent are changed. Untick/remove fields you do not want to change.",
+                        "body": {
+                          "mode": "formdata",
+                          "formdata": [
+                            {
+                              "key": "name",
+                              "value": "Renamed clipart",
+                              "type": "text",
+                              "disabled": false,
+                              "description": ""
+                            },
+                            {
+                              "key": "categoryId",
+                              "value": "{{categoryId}}",
+                              "type": "text",
+                              "disabled": true,
+                              "description": ""
+                            },
+                            {
+                              "key": "status",
+                              "value": "published",
+                              "type": "text",
+                              "disabled": false,
+                              "description": "draft | published | disabled"
+                            },
+                            {
+                              "key": "widthMm",
+                              "value": "50",
+                              "type": "text",
+                              "disabled": true,
+                              "description": ""
+                            },
+                            {
+                              "key": "heightMm",
+                              "value": "30",
+                              "type": "text",
+                              "disabled": true,
+                              "description": ""
+                            },
+                            {
+                              "key": "file",
+                              "type": "file",
+                              "src": [],
+                              "description": "Optional replacement SVG"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "name": "Delete clipart item",
+                      "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                          "raw": "{{adminUrl}}/api/library/clipart/items/:itemId",
+                          "host": [
+                            "{{adminUrl}}"
+                          ],
+                          "path": [
+                            "api",
+                            "library",
+                            "clipart",
+                            "items",
+                            ":itemId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "itemId",
+                              "value": "{{itemId}}"
+                            }
+                          ]
+                        },
+                        "description": ""
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Legacy Catalog (JSON store)",
+          "description": "Older file-backed catalog used by the sample desk. Kept because the routes still exist.",
+          "item": [
+            {
+              "name": "List templates",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/templates",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "templates"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Create template",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/templates",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "templates"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "Shipping 4x6",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "category",
+                      "value": "Shipping",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "widthMm",
+                      "value": "100",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "heightMm",
+                      "value": "150",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "status",
+                      "value": "published",
+                      "type": "text",
+                      "disabled": false,
+                      "description": "draft | published"
+                    },
+                    {
+                      "key": "featured",
+                      "value": "false",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "document",
+                      "value": "{}",
+                      "type": "text",
+                      "disabled": false,
+                      "description": "Template document JSON"
+                    },
+                    {
+                      "key": "preview",
+                      "type": "file",
+                      "src": [],
+                      "description": "PNG / JPG / WebP preview (required)"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "const v = body.template && body.template.id;",
+                      "if (v) { pm.collectionVariables.set('legacyTemplateId', v); console.log('legacyTemplateId =', v); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update template (flags, JSON)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/templates/:legacyTemplateId",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "templates",
+                    ":legacyTemplateId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "legacyTemplateId",
+                      "value": "{{legacyTemplateId}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"featured\": true,\n  \"status\": \"published\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Update template (full, form)",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/templates/:legacyTemplateId",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "templates",
+                    ":legacyTemplateId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "legacyTemplateId",
+                      "value": "{{legacyTemplateId}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "Shipping 4x6",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "category",
+                      "value": "Shipping",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "widthMm",
+                      "value": "100",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "heightMm",
+                      "value": "150",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "status",
+                      "value": "published",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "featured",
+                      "value": "true",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "document",
+                      "value": "{}",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "preview",
+                      "type": "file",
+                      "src": [],
+                      "description": "Optional new preview"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Delete template",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/templates/:legacyTemplateId",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "templates",
+                    ":legacyTemplateId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "legacyTemplateId",
+                      "value": "{{legacyTemplateId}}"
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "List assets (clipart + stickers)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/assets",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "assets"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Upload asset",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/assets",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "assets"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "Star",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "kind",
+                      "value": "clipart",
+                      "type": "text",
+                      "disabled": false,
+                      "description": "clipart (.svg/.png) | sticker (.png/.webp)"
+                    },
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": [],
+                      "description": ""
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "const v = body.asset && body.asset.id;",
+                      "if (v) { pm.collectionVariables.set('assetId', v); console.log('assetId =', v); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update asset",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/assets/:assetId",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "assets",
+                    ":assetId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "assetId",
+                      "value": "{{assetId}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "Star (renamed)",
+                      "type": "text",
+                      "disabled": false,
+                      "description": ""
+                    },
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": [],
+                      "description": "Optional replacement"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Delete asset",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/assets/:assetId",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "assets",
+                    ":assetId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "assetId",
+                      "value": "{{assetId}}"
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Get uploaded media file",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/media/:mediaName",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "media",
+                    ":mediaName"
+                  ],
+                  "variable": [
+                    {
+                      "key": "mediaName",
+                      "value": "example.png"
+                    }
+                  ]
+                },
+                "description": "Serves a file from the uploads folder."
+              }
+            },
+            {
+              "name": "Export legacy table CSV",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/export?type=templates",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "export"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": "templates",
+                      "description": "devices | prints | template-usage | templates | reviews | suggestions | printers",
+                      "disabled": false
+                    }
+                  ]
+                },
+                "description": "Returns text/csv."
+              }
+            }
+          ]
+        },
+        {
+          "name": "App Config",
+          "description": "What the app reads from /api/app/config.",
+          "item": [
+            {
+              "name": "Get config",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/config",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "config"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Update config",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/config",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "config"
+                  ]
+                },
+                "description": "Owner only. Send only the keys you want to change.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"adminContact\": {\n    \"email\": \"support@seznik.in\",\n    \"phone\": \"9999999999\",\n    \"whatsapp\": \"9999999999\"\n  },\n  \"minAppBuild\": 1,\n  \"legacyCutoff\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Desk Tools & System",
+          "description": "",
+          "item": [
+            {
+              "name": "Health (public)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/health",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "health"
+                  ]
+                },
+                "description": "No sign-in. DB check; 503 if the database is down.",
+                "auth": {
+                  "type": "noauth"
+                }
+              }
+            },
+            {
+              "name": "Database latency",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/desk/db-latency",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "desk",
+                    "db-latency"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Reset sample data",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/desk/reset",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "desk",
+                    "reset"
+                  ]
+                },
+                "description": "Not allowed in production."
+              }
+            },
+            {
+              "name": "OpenAPI spec",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/openapi",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "openapi"
+                  ]
+                },
+                "description": "JSON spec behind /swagger."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin compat (/api/admin/*)",
+          "description": "Catch-all route. Only these four paths are implemented; anything else returns 501. Still behind the desk session (middleware).",
+          "item": [
+            {
+              "name": "Admin login (alt)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{adminUrl}}/api/admin/login",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "login"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Admin me (alt)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/admin/me",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "me"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Printer catalog",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/admin/printers/catalog",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "printers",
+                    "catalog"
+                  ]
+                },
+                "description": "App printer options (id, name, bridge, tagline)."
+              }
+            },
+            {
+              "name": "Admin logout (alt)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{adminUrl}}/api/admin/logout",
+                  "host": [
+                    "{{adminUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "logout"
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Print Service (backend :8787)",
+      "description": "Local Express service in `backend/` (`{{printServiceUrl}}`). No auth. Used by the app for Wi‑Fi printing and test payloads.",
+      "item": [
+        {
+          "name": "Status",
+          "description": "",
+          "item": [
+            {
+              "name": "Status page",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{printServiceUrl}}/",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    ""
+                  ]
+                },
+                "description": "JSON with endpoints + SDKs (HTML in a browser)."
+              }
+            },
+            {
+              "name": "Health",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{printServiceUrl}}/health",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "health"
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "SDKs",
+          "description": "",
+          "item": [
+            {
+              "name": "List SDKs",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/sdks",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "sdks"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "SDK detail",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/sdks/:sdkId",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "sdks",
+                    ":sdkId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "sdkId",
+                      "value": "td404"
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payloads",
+          "description": "Build TSC bytes (base64) without printing.",
+          "item": [
+            {
+              "name": "Test payload — text",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/print/test-payload",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "print",
+                    "test-payload"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"format\": \"tsc-text\",\n  \"widthMm\": 50,\n  \"heightMm\": 30,\n  \"gapMm\": 2,\n  \"density\": 8,\n  \"text\": \"Sez Print TD-404\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Test payload — bitmap",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/print/test-payload",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "print",
+                    "test-payload"
+                  ]
+                },
+                "description": "bitmapBase64 = 1-bit rows, bytesPerRow × height bytes.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"format\": \"tsc-bitmap\",\n  \"widthMm\": 50,\n  \"heightMm\": 30,\n  \"gapMm\": 2,\n  \"density\": 8,\n  \"copies\": 1,\n  \"bytesPerRow\": 1,\n  \"height\": 1,\n  \"bitmapBase64\": \"AA==\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Build bitmap",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/print/build-bitmap",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "print",
+                    "build-bitmap"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"widthMm\": 50,\n  \"heightMm\": 30,\n  \"copies\": 1,\n  \"bytesPerRow\": 1,\n  \"height\": 1,\n  \"bitmapBase64\": \"AA==\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Printers (sessions)",
+          "description": "",
+          "item": [
+            {
+              "name": "List sessions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/printers",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "printers"
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Connect Wi‑Fi printer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/printers/connect",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "printers",
+                    "connect"
+                  ]
+                },
+                "description": "Saves printerSessionId.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sdkId\": \"td404\",\n  \"transport\": \"wifi\",\n  \"ip\": \"{{printerIp}}\",\n  \"port\": 9100,\n  \"name\": \"Shop TD-404\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const body = pm.response.json();",
+                      "const v = body.printer && body.printer.id;",
+                      "if (v) { pm.collectionVariables.set('printerSessionId', v); console.log('printerSessionId =', v); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Connect Bluetooth (returns 501)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/printers/connect",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "printers",
+                    "connect"
+                  ]
+                },
+                "description": "Bluetooth must run on the device; returns 501 with a native integration hint.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sdkId\": \"td404\",\n  \"transport\": \"bluetooth-spp\",\n  \"macAddress\": \"AA:BB:CC:DD:EE:FF\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Get session",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/printers/:printerSessionId",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "printers",
+                    ":printerSessionId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "printerSessionId",
+                      "value": "{{printerSessionId}}"
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            },
+            {
+              "name": "Print raw bytes",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/printers/:printerSessionId/print",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "printers",
+                    ":printerSessionId",
+                    "print"
+                  ],
+                  "variable": [
+                    {
+                      "key": "printerSessionId",
+                      "value": "{{printerSessionId}}"
+                    }
+                  ]
+                },
+                "description": "encoding: base64 | raw. The sample data is a tiny TSC \"Hello\" label.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"encoding\": \"base64\",\n  \"data\": \"U0laRSA1MCBtbSwzMCBtbQ0KQ0xTDQpURVhUIDIwLDIwLCIzIiwwLDEsMSwiSGVsbG8iDQpQUklOVCAxDQo=\",\n  \"awaitAck\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Print sample label",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/printers/:printerSessionId/print-sample",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "printers",
+                    ":printerSessionId",
+                    "print-sample"
+                  ],
+                  "variable": [
+                    {
+                      "key": "printerSessionId",
+                      "value": "{{printerSessionId}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"text\": \"Hello from Postman\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "Disconnect",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{printServiceUrl}}/api/printers/:printerSessionId",
+                  "host": [
+                    "{{printServiceUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "printers",
+                    ":printerSessionId"
+                  ],
+                  "variable": [
+                    {
+                      "key": "printerSessionId",
+                      "value": "{{printerSessionId}}"
+                    }
+                  ]
+                },
+                "description": ""
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "noauth"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "mobile",
+      "value": "9876543210"
+    },
+    {
+      "key": "password",
+      "value": "password123"
+    },
+    {
+      "key": "otp",
+      "value": "123456"
+    },
+    {
+      "key": "otpProof",
+      "value": ""
+    },
+    {
+      "key": "appToken",
+      "value": ""
+    },
+    {
+      "key": "appVersion",
+      "value": "1.0.0"
+    },
+    {
+      "key": "appBuild",
+      "value": "1"
+    },
+    {
+      "key": "appPlatform",
+      "value": "android"
+    },
+    {
+      "key": "appDevice",
+      "value": "Postman"
+    },
+    {
+      "key": "printerName",
+      "value": "TD-404"
+    },
+    {
+      "key": "printerIp",
+      "value": "192.168.1.50"
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "feedbackId",
+      "value": ""
+    },
+    {
+      "key": "suggestionId",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "itemId",
+      "value": ""
+    },
+    {
+      "key": "legacyTemplateId",
+      "value": ""
+    },
+    {
+      "key": "assetId",
+      "value": ""
+    },
+    {
+      "key": "printerSessionId",
+      "value": ""
+    }
+  ]
+}

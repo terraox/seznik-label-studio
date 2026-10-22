@@ -1,0 +1,5 @@
+$kind: http-request
+description: Not allowed in production.
+url: "{{adminUrl}}/api/desk/reset"
+method: POST
+order: 3000

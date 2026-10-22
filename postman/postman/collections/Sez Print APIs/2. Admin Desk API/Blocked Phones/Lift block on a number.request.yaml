@@ -1,0 +1,14 @@
+$kind: http-request
+description: Only for numbers without an account.
+url: "{{adminUrl}}/api/phones"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "mobile": "9999999999",
+      "blocked": false
+    }
+order: 3000

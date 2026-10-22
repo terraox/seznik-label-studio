@@ -1,0 +1,5 @@
+$kind: http-request
+description: Built from the old JSON sample store.
+url: "{{adminUrl}}/api/telemetry"
+method: GET
+order: 6000

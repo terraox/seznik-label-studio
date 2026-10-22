@@ -1,0 +1,7 @@
+$kind: http-request
+description: Serves a file from the uploads folder.
+url: "{{adminUrl}}/api/media/:mediaName"
+method: GET
+pathVariables:
+  mediaName: example.png
+order: 10000

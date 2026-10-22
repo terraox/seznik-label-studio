@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{printServiceUrl}}/api/print/build-bitmap"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "widthMm": 50,
+      "heightMm": 30,
+      "copies": 1,
+      "bytesPerRow": 1,
+      "height": 1,
+      "bitmapBase64": "AA=="
+    }
+order: 3000

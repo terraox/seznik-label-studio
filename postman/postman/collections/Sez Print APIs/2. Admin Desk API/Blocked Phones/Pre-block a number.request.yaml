@@ -1,0 +1,15 @@
+$kind: http-request
+description: 409 if the number already has an account (block the user instead).
+url: "{{adminUrl}}/api/phones"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "mobile": "9999999999",
+      "blocked": true,
+      "reason": "Spam"
+    }
+order: 2000

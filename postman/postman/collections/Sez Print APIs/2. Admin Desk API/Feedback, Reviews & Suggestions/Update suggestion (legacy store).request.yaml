@@ -1,0 +1,16 @@
+$kind: http-request
+description: "status: new | reviewing | planned | rejected | shipped."
+url: "{{adminUrl}}/api/suggestions/:suggestionId"
+method: PATCH
+headers:
+  Content-Type: application/json
+pathVariables:
+  suggestionId: "{{suggestionId}}"
+body:
+  type: json
+  content: |-
+    {
+      "status": "planned",
+      "note": "Next release"
+    }
+order: 5000

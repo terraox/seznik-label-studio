@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{printServiceUrl}}/api/print/test-payload"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "format": "tsc-text",
+      "widthMm": 50,
+      "heightMm": 30,
+      "gapMm": 2,
+      "density": 8,
+      "text": "Sez Print TD-404"
+    }
+order: 1000

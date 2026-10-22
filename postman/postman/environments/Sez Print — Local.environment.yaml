@@ -1,0 +1,10 @@
+name: Sez Print — Local
+values:
+  - key: adminUrl
+    value: 'http://localhost:3000'
+  - key: printServiceUrl
+    value: 'http://localhost:8787'
+  - key: adminUsername
+    value: ''
+  - key: adminPassword
+    value: ''

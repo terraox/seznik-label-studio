@@ -1,0 +1,3 @@
+$kind: collection
+description: Library tables for **template** (`/api/library/template/...`). Items are SVG uploads sent as multipart form.
+order: 1000

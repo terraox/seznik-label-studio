@@ -1,0 +1,4 @@
+$kind: collection
+name: Admin compat (/api/admin/*)
+description: Catch-all route. Only these four paths are implemented; anything else returns 501. Still behind the desk session (middleware).
+order: 11000

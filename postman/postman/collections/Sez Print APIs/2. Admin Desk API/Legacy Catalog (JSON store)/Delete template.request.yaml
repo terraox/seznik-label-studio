@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{adminUrl}}/api/templates/:legacyTemplateId"
+method: DELETE
+pathVariables:
+  legacyTemplateId: "{{legacyTemplateId}}"
+order: 5000

@@ -1,0 +1,19 @@
+$kind: http-request
+description: Owner only. Send only the keys you want to change.
+url: "{{adminUrl}}/api/config"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "adminContact": {
+        "email": "support@seznik.in",
+        "phone": "9999999999",
+        "whatsapp": "9999999999"
+      },
+      "minAppBuild": 1,
+      "legacyCutoff": false
+    }
+order: 2000

@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{printServiceUrl}}/api/printers/:printerSessionId/print-sample"
+method: POST
+headers:
+  Content-Type: application/json
+pathVariables:
+  printerSessionId: "{{printerSessionId}}"
+body:
+  type: json
+  content: |-
+    {
+      "text": "Hello from Postman"
+    }
+order: 6000

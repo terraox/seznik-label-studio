@@ -1,0 +1,5 @@
+$kind: http-request
+description: JSON spec behind /swagger.
+url: "{{adminUrl}}/api/openapi"
+method: GET
+order: 4000

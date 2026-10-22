@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{adminUrl}}/api/assets/:assetId"
+method: PATCH
+pathVariables:
+  assetId: "{{assetId}}"
+body:
+  type: formdata
+  content:
+    - type: text
+      key: name
+      value: Star (renamed)
+    - type: file
+      key: file
+      src: []
+      description: Optional replacement
+order: 8000

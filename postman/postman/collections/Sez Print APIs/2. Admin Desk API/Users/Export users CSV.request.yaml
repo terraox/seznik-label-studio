@@ -1,0 +1,5 @@
+$kind: http-request
+description: Owner only (users.export). Returns text/csv — use "Send and Download".
+url: "{{adminUrl}}/api/users/export"
+method: GET
+order: 8000

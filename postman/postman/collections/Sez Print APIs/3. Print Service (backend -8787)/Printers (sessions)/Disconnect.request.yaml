@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{printServiceUrl}}/api/printers/:printerSessionId"
+method: DELETE
+pathVariables:
+  printerSessionId: "{{printerSessionId}}"
+order: 7000

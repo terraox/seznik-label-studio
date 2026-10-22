@@ -1,0 +1,7 @@
+$kind: http-request
+description: 409 if the category still has items.
+url: "{{adminUrl}}/api/library/template/categories/:categoryId"
+method: DELETE
+pathVariables:
+  categoryId: "{{categoryId}}"
+order: 4000

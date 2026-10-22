@@ -1,0 +1,5 @@
+$kind: http-request
+description: Current admin + role.
+url: "{{adminUrl}}/api/auth/me"
+method: GET
+order: 2000

@@ -1,0 +1,3 @@
+$kind: collection
+description: Build TSC bytes (base64) without printing.
+order: 3000
