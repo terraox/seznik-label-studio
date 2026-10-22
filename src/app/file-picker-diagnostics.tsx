@@ -3,6 +3,7 @@
  * Route: /file-picker-diagnostics
  */
 
+import { goBack } from '@/lib/go-back';
 import { getFilePickerDiagnostics } from 'local-file-picker';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -50,7 +51,7 @@ function FilePickerDiagnosticsScreenContent() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => goBack()} style={styles.backBtn}>
           <AppIcon name="chevron-back" size={22} tintColor="#111" />
         </Pressable>
         <Text style={styles.title}>File picker diagnostics</Text>

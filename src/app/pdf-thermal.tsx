@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -290,7 +291,7 @@ function PdfScreenContent() {
       {/* Top Navy Header */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={14}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <Text style={styles.backChevron}>‹</Text>

@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { useFonts } from 'expo-font';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -101,7 +102,7 @@ export default function FontLibraryScreen() {
     if (editing || row.downloadable || !row.ready || busyId) return;
     if (!fromEdit) return;
     editorBridge.fontResult = row.name;
-    router.back();
+    goBack();
   };
 
   const download = async (row: FontRow, applyAfterDownload = false) => {
@@ -111,7 +112,7 @@ export default function FontLibraryScreen() {
       await downloadCatalogFont(row.catalogItem);
       if (applyAfterDownload && fromEdit) {
         editorBridge.fontResult = row.name;
-        router.back();
+        goBack();
         return;
       }
     } catch (err) {

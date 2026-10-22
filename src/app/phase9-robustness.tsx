@@ -11,6 +11,7 @@
  * 5. Caliper Micro-Recalibration: Fine scale tuning (Sx, Sy) calculated directly from physical caliper measurements.
  */
 
+import { goBack } from '@/lib/go-back';
 import { useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import {
@@ -227,7 +228,7 @@ function Phase9RobustnessScreenContent() {
       <View style={styles.header}>
         <Pressable
           style={styles.backBtn}
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={8}
           accessibilityLabel="Go back"
         >

@@ -10,6 +10,7 @@
  * 6. Direct physical dispatch to Bluetooth/Wi-Fi thermal printers via PrinterManager.
  */
 
+import { goBack } from '@/lib/go-back';
 import { useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import {
@@ -203,7 +204,7 @@ function Phase7PipelineScreenContent() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+        <Pressable onPress={() => goBack()} style={styles.backBtn} hitSlop={10}>
           <AppIcon name="chevron.left" size={24} tintColor="#FFFFFF" />
         </Pressable>
         <View style={styles.headerTitles}>

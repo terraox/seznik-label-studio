@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { AppIcon } from '@/components/app-icon';
 import { EditableNumber } from '@/components/editable-number';
 import { Image } from 'expo-image';
@@ -502,7 +503,7 @@ export default function PrintPhotoScreen() {
         });
       }
       Alert.alert('Print Sent', `Job sent to ${deviceName ?? 'the printer'}.`);
-      if (printingSettings.returnPrevious) router.back();
+      if (printingSettings.returnPrevious) goBack();
     } catch (error) {
       const message = formatPrintFailure(error);
       if (message) Alert.alert('Print Failed', message);
@@ -633,7 +634,7 @@ export default function PrintPhotoScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />

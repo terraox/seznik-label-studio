@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -29,7 +30,7 @@ export default function DrawingColorScreen() {
       const next = patchLabelDocument(doc, { settings: { defaultDrawingColorIndex: index } });
       upsertDocument(next);
       editorBridge.labelSettingsDoc = next;
-      router.back();
+      goBack();
     },
     [getDocument, labelId, upsertDocument],
   );

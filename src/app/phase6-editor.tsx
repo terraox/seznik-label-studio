@@ -11,6 +11,7 @@
  * 7. End-to-end TSPL printing with zero layout distortion.
  */
 
+import { goBack } from '@/lib/go-back';
 import { useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import {
@@ -449,7 +450,7 @@ function Phase6EditorScreenContent() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+        <Pressable onPress={() => goBack()} style={styles.backBtn} hitSlop={10}>
           <AppIcon name="chevron.left" size={22} tintColor="#FFFFFF" />
         </Pressable>
         <View style={styles.headerTitles}>

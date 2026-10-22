@@ -3,6 +3,7 @@
  * Route: /dot-buffer-1k
  */
 
+import { goBack } from '@/lib/go-back';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -77,7 +78,7 @@ function DotBuffer1kScreenContent() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => goBack()} style={styles.backBtn}>
           <AppIcon name="chevron.left" tintColor="#0F172A" size={22} weight="semibold" />
         </Pressable>
         <Text style={styles.title}>Dot-buffer 1000-run</Text>

@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { AppIcon } from '@/components/app-icon';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -375,7 +376,7 @@ export default function DataFileScreen() {
     if (returnToLabelSettings) {
       if (!item.excel) return;
       editorBridge.dataSourceFileId = item.excel.id;
-      router.back();
+      goBack();
       return;
     }
     if (item.excel) {
@@ -420,7 +421,7 @@ export default function DataFileScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />

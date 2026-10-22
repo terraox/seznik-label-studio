@@ -4,6 +4,7 @@
  * Route: /calibration-dots
  */
 
+import { goBack } from '@/lib/go-back';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -106,7 +107,7 @@ function CalibrationDotsScreenContent() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
+        <Pressable onPress={() => goBack()} style={styles.back}>
           <AppIcon name="chevron.left" tintColor="#0F172A" size={22} weight="semibold" />
         </Pressable>
         <Text style={styles.title}>Calibration dots</Text>

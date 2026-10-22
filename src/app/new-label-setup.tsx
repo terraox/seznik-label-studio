@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, Switch, Text, View } from 'react-native';
@@ -405,7 +406,7 @@ export default function NewLabelSetupScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={14}
           accessibilityRole="button"
           accessibilityLabel="Back"

@@ -3,6 +3,7 @@
  * Prints a millimetre-true proof (no screenshot) so physical size can be measured.
  */
 
+import { goBack } from '@/lib/go-back';
 import { Fragment, useCallback, useState } from 'react';
 import { router } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
@@ -426,7 +427,7 @@ function CalibrationPrintScreenContent() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor="#FFFFFF" size={22} />

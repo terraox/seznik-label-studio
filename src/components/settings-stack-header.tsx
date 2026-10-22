@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,7 +26,7 @@ export function SettingsStackHeader({
   return (
     <View style={[styles.header, { paddingTop: insets.top + Spacing.one }]}>
       <Pressable
-        onPress={() => router.back()}
+        onPress={() => goBack()}
         hitSlop={12}
         android_ripple={androidRipple}
         style={({ pressed }) => [

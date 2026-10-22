@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -345,7 +346,7 @@ export default function PdfEditorScreen() {
       setStep('pick');
       return;
     }
-    router.back();
+    goBack();
   };
 
   const metaPageSize = session?.pageSizesPt[session.currentPageIndex] ?? { w: 612, h: 792 };

@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -70,7 +71,7 @@ export default function ClipartScreen() {
   const handleSelect = (item: ClipartItem) => {
     editorBridge.clipartResult = { id: item.id };
     if (fromEdit) {
-      router.back();
+      goBack();
       return;
     }
     router.push('/edit');

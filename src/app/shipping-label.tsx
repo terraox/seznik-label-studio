@@ -4,6 +4,7 @@
  * drag-and-drop repositioning, preset picker, PDF vector export, and direct thermal printing.
  */
 
+import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -37,7 +38,7 @@ export default function ShippingLabelScreen() {
       <View style={styles.header}>
         <Pressable
           hitSlop={12}
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor={C.text} size={18} />
           <Text style={styles.backText}>Back</Text>

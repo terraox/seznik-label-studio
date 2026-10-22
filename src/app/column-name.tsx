@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
 import { useState } from 'react';
@@ -39,14 +40,14 @@ export default function ColumnNameScreen() {
 
   const handleConfirm = () => {
     editorBridge.columnNameResult = draft;
-    router.back();
+    goBack();
   };
 
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.one }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />

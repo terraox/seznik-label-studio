@@ -6,6 +6,7 @@
  * Step 2 is the normal new-label size screen, which then opens the series on the canvas.
  */
 
+import { goBack } from '@/lib/go-back';
 import React, { useMemo, useState } from 'react';
 import {
   View,
@@ -121,7 +122,7 @@ export default function SerialLabelScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.navHeader}>
-        <Pressable hitSlop={12} onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable hitSlop={12} onPress={() => goBack()} style={styles.backBtn}>
           <AppIcon name="chevron.left" tintColor={C.text} size={20} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>

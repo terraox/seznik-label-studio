@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Switch, Text, View } from 'react-native';
@@ -177,7 +178,7 @@ export default function ExcelPrintScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={14}
           disabled={picking}
           accessibilityRole="button"

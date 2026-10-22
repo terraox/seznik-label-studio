@@ -3,6 +3,7 @@
  * then open the editor with that photo on the label, printing off.
  */
 
+import { goBack } from '@/lib/go-back';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -138,7 +139,7 @@ export default function ImageToLabelScreen() {
       setStep('upload');
       return;
     }
-    router.back();
+    goBack();
   };
 
   const sizePreview = imageUri ? (

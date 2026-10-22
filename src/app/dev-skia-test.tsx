@@ -7,6 +7,7 @@
  * Route: /dev-skia-test
  */
 
+import { goBack } from '@/lib/go-back';
 import React, { useCallback, useMemo, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -188,7 +189,7 @@ function DevSkiaTestScreenContent() {
     <SafeAreaView style={styles.container}>
       {/* Dev Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => goBack()}>
           <Ionicons name="arrow-back" size={24} color="#1E293B" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>

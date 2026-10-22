@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppIcon } from '@/components/app-icon';
@@ -249,7 +250,7 @@ export default function PrintingHistoryScreen() {
     <View style={styles.root}>
       <View style={[styles.dateHeader, { paddingTop: insets.top + Spacing.one }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={12}
           android_ripple={androidRipple}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>

@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -71,7 +72,7 @@ export default function ExcelDataPreviewScreen() {
       <View style={styles.root}>
         <View style={[styles.header, { paddingTop: insets.top + Spacing.one }]}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={12}
             style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}>
             <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
@@ -88,7 +89,7 @@ export default function ExcelDataPreviewScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.one }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={12}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
@@ -146,7 +147,7 @@ export default function ExcelDataPreviewScreen() {
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             style={({ pressed }) => [styles.footerBtn, pressed && styles.pressed]}>
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>

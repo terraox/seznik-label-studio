@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,7 +37,7 @@ export default function PrintPhotoModal() {
 
   return (
     <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={() => router.back()} />
+      <Pressable style={styles.backdrop} onPress={() => goBack()} />
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.sheet}>
@@ -65,7 +66,7 @@ export default function PrintPhotoModal() {
         </View>
 
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}>
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>

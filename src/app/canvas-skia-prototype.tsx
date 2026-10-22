@@ -6,6 +6,7 @@
  * the same millimetre drag/resize chrome with an `expo-image` artboard.
  */
 
+import { goBack } from '@/lib/go-back';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -45,7 +46,7 @@ function CanvasSkiaPrototypeScreenContent() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+        <Pressable onPress={() => goBack()} style={styles.backBtn} hitSlop={8}>
           <AppIcon name="chevron.left" size={24} tintColor="#FFFFFF" />
         </Pressable>
         <Text style={styles.headerTitle}>Skia prototype</Text>

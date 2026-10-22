@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, useWindowDimensions, View } from 'react-native';
@@ -64,7 +65,7 @@ export default function BorderLibraryScreen() {
       lineWidth: borderStyleStrokeMm(id),
       edgeGapMm: clampGap(Number.isFinite(parsedGap) ? parsedGap : undefined),
     };
-    router.back();
+    goBack();
   };
 
   return (

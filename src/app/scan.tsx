@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   CameraView,
@@ -263,7 +264,7 @@ export default function ScanScreen() {
     setScannedResult(null);
 
     if (returnToEdit) {
-      router.back();
+      goBack();
       return;
     }
 
@@ -299,7 +300,7 @@ export default function ScanScreen() {
       <View style={[styles.permissionContainer, { paddingTop: insets.top, paddingBottom: insets.bottom + 20 }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
+          <Pressable onPress={() => goBack()} hitSlop={12} style={styles.backButton}>
             <Text style={styles.backChevron}>‹</Text>
           </Pressable>
           <Text style={styles.headerTitle}>{screenTitle}</Text>
@@ -444,7 +445,7 @@ export default function ScanScreen() {
 
       {/* Top Header Bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={14} style={styles.backButton}>
+        <Pressable onPress={() => goBack()} hitSlop={14} style={styles.backButton}>
           <Text style={styles.backChevron}>‹</Text>
         </Pressable>
         <Text style={styles.headerTitle}>{screenTitle}</Text>

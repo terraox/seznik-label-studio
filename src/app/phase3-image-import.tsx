@@ -15,6 +15,7 @@
  * 7. Non-Printing Guarantee: Reference image emits 0 TSPL bitmap ink.
  */
 
+import { goBack } from '@/lib/go-back';
 import { useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -442,7 +443,7 @@ function Phase3ImageImportScreenContent() {
       <View style={styles.header}>
         <Pressable
           style={styles.backBtn}
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={8}
           accessibilityLabel="Go back"
         >

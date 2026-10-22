@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 
 import { ImageCropScreen } from '@/components/editor/image-crop-screen';
@@ -19,7 +20,7 @@ export default function ImageCropRoute() {
   const elementId = typeof params.elementId === 'string' ? params.elementId : undefined;
 
   if (!uri) {
-    router.back();
+    goBack();
     return null;
   }
 
@@ -28,7 +29,7 @@ export default function ImageCropRoute() {
       sourceUri={uri}
       sourceWidth={width > 0 ? width : undefined}
       sourceHeight={height > 0 ? height : undefined}
-      onCancel={() => router.back()}
+      onCancel={() => goBack()}
       onDone={(result) => {
         editorBridge.imageCropResult = {
           uri: result.uri,
@@ -38,7 +39,7 @@ export default function ImageCropRoute() {
           elementId,
           crop: result.crop,
         };
-        router.back();
+        goBack();
       }}
     />
   );

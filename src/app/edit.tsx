@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { PrintGridIcon, PrintRulerIcon, SafeModeIcon } from '@/components/editor/chrome-icons';
@@ -3212,12 +3213,12 @@ export default function EditScreen() {
   /** Back (header or hardware): prompt Save / Discard / Cancel when there are unsaved edits. */
   const requestLeave = useCallback(() => {
     if (!dirtyRef.current) {
-      router.back();
+      goBack();
       return;
     }
     Alert.alert('Unsaved changes', 'Save this label before leaving?', [
-      { text: 'Save', onPress: () => { saveDocument(false); router.back(); } },
-      { text: 'Discard', style: 'destructive', onPress: () => router.back() },
+      { text: 'Save', onPress: () => { saveDocument(false); goBack(); } },
+      { text: 'Discard', style: 'destructive', onPress: () => goBack() },
       { text: 'Cancel', style: 'cancel' },
     ]);
   }, [saveDocument]);

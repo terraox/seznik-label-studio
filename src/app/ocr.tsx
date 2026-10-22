@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -108,7 +109,7 @@ export default function OcrScreen() {
       setPreviewText('');
       return;
     }
-    router.back();
+    goBack();
   }, [cancelIdentify, step]);
 
   const openIdentifyStep = (uri: string) => {
@@ -270,7 +271,7 @@ export default function OcrScreen() {
     };
 
     if (returnToEdit) {
-      router.back();
+      goBack();
       return;
     }
 
@@ -289,7 +290,7 @@ export default function OcrScreen() {
     return (
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom + 20 }]}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerSide}>
+          <Pressable onPress={() => goBack()} hitSlop={12} style={styles.headerSide}>
             <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
           </Pressable>
           <Text style={styles.headerTitle}>OCR</Text>
@@ -329,7 +330,7 @@ export default function OcrScreen() {
         />
 
         <View style={[styles.header, styles.captureHeader, { paddingTop: insets.top + 8 }]}>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerSide}>
+          <Pressable onPress={() => goBack()} hitSlop={12} style={styles.headerSide}>
             <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
           </Pressable>
           <Text style={styles.headerTitle}>OCR</Text>

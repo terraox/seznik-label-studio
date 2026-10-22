@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -51,7 +52,7 @@ export function TemplateChoiceSheet({
 
   return (
     <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={() => router.back()} />
+      <Pressable style={styles.backdrop} onPress={() => goBack()} />
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.sheet}>
           {mode === 'choose' ? (
@@ -122,7 +123,7 @@ export function TemplateChoiceSheet({
           )}
         </View>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}>
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>

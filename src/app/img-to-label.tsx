@@ -4,6 +4,7 @@
  * existing `/edit` canvas. Image-only print uses that extract, not a ViewShot.
  */
 
+import { goBack } from '@/lib/go-back';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -216,7 +217,7 @@ export default function ImgToLabelScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <Pressable
-          onPress={() => (step === 'size' ? setStep('import') : router.back())}
+          onPress={() => (step === 'size' ? setStep('import') : goBack())}
           hitSlop={14}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <Text style={styles.backChevron}>‹</Text>

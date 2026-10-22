@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -154,7 +155,7 @@ export default function AsrScreen() {
     };
 
     if (returnToEdit) {
-      router.back();
+      goBack();
       return;
     }
 
@@ -164,7 +165,7 @@ export default function AsrScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerSide}>
+        <Pressable onPress={() => goBack()} hitSlop={12} style={styles.headerSide}>
           <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
         </Pressable>
         <Text style={styles.headerTitle}>ASR</Text>

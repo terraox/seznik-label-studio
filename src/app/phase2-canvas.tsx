@@ -9,6 +9,7 @@
  * 5. Wired directly to Phase 1 TSPL builder for instant on-device printing and inspection.
  */
 
+import { goBack } from '@/lib/go-back';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import {
@@ -281,7 +282,7 @@ function Phase2CanvasScreenContent() {
     <View style={styles.root}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+        <Pressable onPress={() => goBack()} style={styles.backBtn} hitSlop={8}>
           <AppIcon name="chevron.left" size={24} tintColor="#FFFFFF" />
         </Pressable>
         <Text style={styles.headerTitle}>Phase 2 — Canvas Foundation</Text>

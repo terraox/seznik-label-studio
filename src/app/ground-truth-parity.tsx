@@ -3,6 +3,7 @@
  * Route: /ground-truth-parity  (dev build, no printer)
  */
 
+import { goBack } from '@/lib/go-back';
 import * as FileSystem from 'expo-file-system/legacy';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
@@ -251,7 +252,7 @@ function GroundTruthParityScreenContent() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => goBack()} style={styles.backBtn}>
           <AppIcon name="chevron.left" tintColor="#0F172A" size={22} weight="semibold" />
         </Pressable>
         <Text style={styles.title}>Ground-truth TSPL diff</Text>

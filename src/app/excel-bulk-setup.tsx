@@ -1,3 +1,4 @@
+import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -292,7 +293,7 @@ export default function ExcelBulkSetupScreen() {
       <View style={styles.root}>
         <View style={[styles.header, { paddingTop: insets.top + Spacing.one }]}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBack()}
             hitSlop={12}
             style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}>
             <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
@@ -309,7 +310,7 @@ export default function ExcelBulkSetupScreen() {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.one }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           hitSlop={12}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor={C.onAccent} size={22} />
