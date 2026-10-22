@@ -11,10 +11,11 @@ import {
   setPurchasedPrinter,
   type AuthUserDto,
 } from '@/lib/auth/api';
-import { flushEvents } from '@/lib/telemetry/events';
+import { flushEvents, reportServerTotal } from '@/lib/telemetry/events';
 import { usePrinterStore } from '@/stores/printer-store';
 
-function applyPurchasedPrinter(printerId: string | null | undefined, chosen = false) {
+function applyPurchasedPrinter(printerId: string | null | undefined, chosen = false, serverTotal?: number) {
+  reportServerTotal(serverTotal);
   // Every sign-in / session refresh also sends any usage events waiting on the phone.
   void flushEvents();
   if (!isConsumerPrinterId(printerId)) return;
@@ -63,7 +64,7 @@ export const useAuthStore = create<AuthStoreState>()(
             user: result.user,
             needsPrinter: result.needsPrinter,
           });
-          applyPurchasedPrinter(result.user.printerId);
+          applyPurchasedPrinter(result.user.printerId, false, result.user.printCountTotal);
           return { ok: true, needsPrinter: result.needsPrinter };
         } catch (err) {
           return {
@@ -81,7 +82,7 @@ export const useAuthStore = create<AuthStoreState>()(
             user: result.user,
             needsPrinter: result.needsPrinter,
           });
-          applyPurchasedPrinter(result.user.printerId);
+          applyPurchasedPrinter(result.user.printerId, false, result.user.printCountTotal);
           return { ok: true, needsPrinter: result.needsPrinter };
         } catch (err) {
           return {
@@ -113,7 +114,7 @@ export const useAuthStore = create<AuthStoreState>()(
         try {
           const result = await fetchMe(token);
           set({ user: result.user, needsPrinter: result.needsPrinter });
-          applyPurchasedPrinter(result.user.printerId);
+          applyPurchasedPrinter(result.user.printerId, false, result.user.printCountTotal);
         } catch {
           set({ token: null, user: null, needsPrinter: false });
         }

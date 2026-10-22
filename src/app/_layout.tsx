@@ -4,7 +4,7 @@ import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { Component, type ErrorInfo, type ReactNode, useCallback, useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { AppState, ScrollView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
@@ -19,6 +19,7 @@ import { useIncomingSharedFile } from '@/lib/file-import/use-incoming-shared-fil
 import { startInstalledFontHydration } from '@/lib/fonts/runtime';
 import { hydrateUserClipartSvgs } from '@/lib/clipart/user-storage';
 import { migrateLegacyUserFiles } from '@/lib/user-files/migrate';
+import { flushNow } from '@/lib/telemetry/events';
 import { useAuthStore } from '@/stores/auth-store';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
 import { AppThemeProvider, DarkColors, useScheme, useSettingsHydrated } from '@/theme';
@@ -82,6 +83,15 @@ function AppRoot() {
 
   useEffect(() => {
     getPrinterManager().maybeAutoReconnect({ force: true });
+  }, []);
+
+  // Prints made offline are sent at start and whenever the app returns to the foreground.
+  useEffect(() => {
+    void flushNow();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void flushNow();
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {

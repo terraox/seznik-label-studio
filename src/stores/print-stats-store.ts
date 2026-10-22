@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { trackPrint, type PrintSource } from '@/lib/telemetry/events';
+import { bindPrintTotals, trackPrint, type PrintSource } from '@/lib/telemetry/events';
 import { usePrinterStore } from '@/stores/printer-store';
 
 /** What was printed, so the admin desk can rank label sizes and templates. */
@@ -25,8 +25,12 @@ export function statsDayKey(timestamp: number): string {
 const KEEP_DAYS = 8;
 
 type PrintStatsState = {
-  /** Every label printed since install (survives clearing print history). */
+  /** Every label printed on this phone since install (survives clearing print history). Used until the server total is known. */
   lifetime: number;
+  /** Labels the server has counted for this account, from the last sign-in or sync. */
+  serverTotal: number | null;
+  /** Labels printed but still waiting in the send queue. Not stored: rebuilt from the queue at start. */
+  pending: number;
   /** Labels printed per local day, trimmed to the last few days. */
   byDay: Record<string, number>;
   /** True once counts were seeded from the existing print history. */
@@ -48,6 +52,8 @@ export const usePrintStatsStore = create<PrintStatsState>()(
   persist(
     (set) => ({
       lifetime: 0,
+      serverTotal: null,
+      pending: 0,
       byDay: {},
       seeded: false,
       record: (copies, at = Date.now(), meta) => {
@@ -78,9 +84,22 @@ export const usePrintStatsStore = create<PrintStatsState>()(
           return { seeded: true, lifetime: s.lifetime + total, byDay: trim(byDay, Date.now()) };
         }),
     }),
-    { name: 'sez-print/print-stats', storage: createJSONStorage(() => AsyncStorage) },
+    {
+      name: 'sez-print/print-stats',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (s) => ({ lifetime: s.lifetime, serverTotal: s.serverTotal, byDay: s.byDay, seeded: s.seeded }),
+    },
   ),
 );
+
+bindPrintTotals(
+  (pending) => usePrintStatsStore.setState({ pending }),
+  (serverTotal) => usePrintStatsStore.setState({ serverTotal }),
+);
+
+/** The number every screen shows: what the server counted plus what is still queued, so phone and admin agree. */
+export const selectLifetime = (s: Pick<PrintStatsState, 'lifetime' | 'serverTotal' | 'pending'>) =>
+  s.serverTotal === null ? s.lifetime : s.serverTotal + s.pending;
 
 /** Labels printed today and over the last 7 days (today included). */
 export function printCounts(byDay: Record<string, number>, now = Date.now()) {

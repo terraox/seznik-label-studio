@@ -10,7 +10,8 @@ import { appHeaders, appPlatform } from '@/lib/telemetry/app-headers';
  */
 
 const QUEUE_KEY = 'sez-print/event-queue';
-const MAX_QUEUE = 500;
+const MAX_QUEUE = 5000; // a long offline stretch must not drop prints
+const RETRY_MS = [15_000, 60_000, 5 * 60_000];
 const BATCH = 50;
 // The server counts a printer once per 10 minutes but still moves "last connected" forward, so only drop rapid repeats here.
 const CONNECT_DEDUPE_MS = 60 * 1000;
@@ -23,6 +24,29 @@ let queue: QueuedEvent[] | null = null;
 let flushing = false;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let lastConnect: { key: string; at: number } | null = null;
+let retryStep = 0;
+
+/** Labels in queued `print` events the server has not confirmed yet. */
+let pendingLabels = 0;
+let pendingListener: ((labels: number) => void) | null = null;
+let serverTotalListener: ((total: number) => void) | null = null;
+
+/** The print stats store listens here, so the screen shows server total + pending without an import cycle. */
+export function bindPrintTotals(onPending: (labels: number) => void, onServerTotal: (total: number) => void) {
+  pendingListener = onPending;
+  serverTotalListener = onServerTotal;
+  onPending(pendingLabels);
+}
+
+/** Server-confirmed label count for the signed-in account (from sign-in, session refresh or a sync). */
+export function reportServerTotal(total: number | null | undefined) {
+  if (typeof total === 'number' && Number.isFinite(total)) serverTotalListener?.(total);
+}
+
+function recountPending(list: QueuedEvent[]) {
+  pendingLabels = list.reduce((sum, e) => (e.type === 'print' ? sum + (Number(e.labels) || 0) : sum), 0);
+  pendingListener?.(pendingLabels);
+}
 
 function uuid(): string {
   const hex = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
@@ -42,6 +66,7 @@ async function load(): Promise<QueuedEvent[]> {
   } catch {
     queue = [];
   }
+  recountPending(queue);
   return queue;
 }
 
@@ -57,16 +82,36 @@ async function enqueue(event: Omit<QueuedEvent, 'eventId' | 'occurredAt'> & { ty
   const list = await load();
   list.push({ ...event, eventId: uuid(), occurredAt: new Date().toISOString() });
   if (list.length > MAX_QUEUE) list.splice(0, list.length - MAX_QUEUE);
+  recountPending(list);
   await save();
   scheduleFlush();
 }
 
-function scheduleFlush(delayMs = 1500) {
-  if (flushTimer) return;
+function scheduleFlush(delayMs = 1500, replace = true) {
+  if (flushTimer) {
+    if (!replace) return;
+    clearTimeout(flushTimer);
+  }
   flushTimer = setTimeout(() => {
     flushTimer = null;
     void flushEvents();
   }, delayMs);
+}
+
+function scheduleRetry() {
+  const delay = RETRY_MS[Math.min(retryStep, RETRY_MS.length - 1)];
+  retryStep += 1;
+  scheduleFlush(delay, false); // never push back a sooner flush a new print already asked for
+}
+
+/** App came to the foreground (or the network is likely back): send now instead of waiting for the backoff. */
+export function flushNow() {
+  retryStep = 0;
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  return flushEvents();
 }
 
 /** Sends queued events. Stops quietly when signed out, offline or blocked; the queue is kept. */
@@ -76,8 +121,8 @@ export async function flushEvents(): Promise<void> {
   try {
     const { useAuthStore } = await import('@/stores/auth-store');
     const token = useAuthStore.getState().token;
-    if (!token) return;
     const list = await load();
+    if (!token) return;
     while (list.length > 0) {
       const batch = list.slice(0, BATCH);
       let res: Response;
@@ -88,24 +133,33 @@ export async function flushEvents(): Promise<void> {
           body: JSON.stringify({ sentAt: new Date().toISOString(), events: batch }),
         });
       } catch {
+        scheduleRetry(); // offline: try again soon, and whenever the app comes back to the foreground
         return;
       }
       const data = (await res.json().catch(() => null)) as
-        | { results?: { eventId: string; status: string; reason?: string }[] }
+        | { results?: { eventId: string; status: string; reason?: string }[]; printCountTotal?: number | null }
         | null;
       if (!data?.results) {
         // 400 for a missing printer, 401/403/429/5xx: nothing is dropped, try again later.
+        scheduleRetry();
         return;
       }
+      retryStep = 0;
+      reportServerTotal(data.printCountTotal);
       const done = new Set(
         data.results
           .filter((r) => r.status !== 'rejected' || r.reason !== 'SERVER_ERROR')
           .map((r) => r.eventId),
       );
+      for (const r of data.results) {
+        if (r.status === 'rejected') console.warn('[events] server rejected', r.eventId, r.reason);
+      }
       const before = list.length;
-      queue = list.filter((e) => !done.has(e.eventId));
+      // Filter in place: `list` is the live queue, and an event added during this send must survive.
+      const kept = list.filter((e) => !done.has(e.eventId));
       list.length = 0;
-      list.push(...queue);
+      list.push(...kept);
+      recountPending(list);
       await save();
       if (list.length === before) return; // nothing could be cleared, stop looping
     }

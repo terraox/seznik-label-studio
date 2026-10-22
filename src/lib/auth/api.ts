@@ -11,6 +11,8 @@ export type AuthUserDto = {
   printerName: string | null;
   createdAt: string;
   lastLoginAt: string | null;
+  /** Labels the server has counted for this account. */
+  printCountTotal?: number;
 };
 
 export type OtpPurpose = 'register' | 'login';
