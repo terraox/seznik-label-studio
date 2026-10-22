@@ -43,7 +43,12 @@ export const HOME_TOOLS = {
     group: 'labelType',
   },
   shipping: { label: 'Shipping', href: '/shipping-label', icon: 'cube-outline', group: 'labelType' },
-  fitImage: { label: 'Fit Image', href: '/img-to-label', icon: 'expand-outline', group: 'labelType' },
+  jewellery: {
+    label: 'Jewellery',
+    href: '/new-label-setup?isJewellery3Up=true',
+    icon: 'diamond-outline',
+    group: 'labelType',
+  },
 } as const satisfies Record<string, HomeTool>;
 
 export type HomeToolId = keyof typeof HOME_TOOLS;
@@ -57,7 +62,7 @@ export const CREATE_GRID_TOOLS: readonly HomeToolId[] = ['imageToLabel', 'serial
 export const FILE_TOOLS: readonly HomeToolId[] = ['excel', 'pdf', 'photo'];
 
 /** "Label types" — 4-column ToolGrid. */
-export const LABEL_TYPE_TOOLS: readonly HomeToolId[] = ['twoUps', 'shipping', 'fitImage'];
+export const LABEL_TYPE_TOOLS: readonly HomeToolId[] = ['twoUps', 'shipping', 'jewellery'];
 
 /** Groups that must fill whole 3-column rows. */
 export const TOOL_GRID_GROUPS = { create: CREATE_GRID_TOOLS, file: FILE_TOOLS } as const;

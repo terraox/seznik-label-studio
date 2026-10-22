@@ -20,7 +20,7 @@ const LEGACY_HOME_HREFS = [
   '/new-label-setup?isTwoUps=true',
   '/shipping-label',
   '/ecommerce-label',
-  '/img-to-label',
+  '/new-label-setup?isJewellery3Up=true',
   '/new-label-setup?serialEditor=1',
 ];
 
