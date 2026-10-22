@@ -159,7 +159,7 @@ type LabelPreviewProps = {
   bakeTd404Feed?: boolean;
   /** H/V print offset in mm. Moves every element, border included, by the same amount. */
   shiftMm?: ShiftMm;
-  /** Catalog preview of a multi-up row: draws a dashed partition between the labels. */
+  /** Catalog preview of a multi-up row: leaves the gap between the labels as bare liner. */
   upsDividers?: { columns: number; gapMm: number };
 };
 
@@ -464,8 +464,8 @@ function HiFiCatalogCanvas({
     );
   }
   const hiFi = {
-    widthPx: fitted.widthPx * density,
-    heightPx: fitted.heightPx * density,
+    widthPx: Math.round(fitted.widthPx * density),
+    heightPx: Math.round(fitted.heightPx * density),
     scale: fitted.scale * density,
   };
   return (
@@ -482,6 +482,9 @@ function HiFiCatalogCanvas({
     </View>
   );
 }
+
+/** Thinnest a border may be on a catalog card, in layout pixels. */
+const CATALOG_MIN_BORDER_PX = 1.5;
 
 function CatalogStockPreview({
   document,
@@ -500,7 +503,32 @@ function CatalogStockPreview({
   const padY = 14;
   const innerW = Math.max(0, slotWidth - padX * 2);
   const innerH = Math.max(0, height - padY * 2);
-  const fitted = fitLabelSize(document.widthMm, document.heightMm, innerW, innerH);
+  const fit = fitLabelSize(document.widthMm, document.heightMm, innerW, innerH);
+  // The label's left/right/top/bottom edges must sit on whole device pixels. On a fraction a 1 px
+  // border line is split across two pixels and shows faded, most visibly on the sides.
+  const snap = (v: number) => PixelRatio.roundToNearestPixel(v);
+  const fitted = {
+    widthPx: snap(fit.widthPx),
+    heightPx: snap(fit.heightPx),
+    scale: fit.widthPx > 0 ? snap(fit.widthPx) / document.widthMm : 0,
+  };
+  const labelLeft = snap((slotWidth - fitted.widthPx) / 2);
+  const labelTop = snap((height - fitted.heightPx) / 2);
+  // On a small card a 0.5 mm border is under a pixel and breaks into uneven dashes. Keep every
+  // border at least CATALOG_MIN_BORDER_PX thick so its shape reads; the outer edge does not move.
+  const shownDocument = useMemo(() => {
+    if (fitted.scale <= 0) return document;
+    const minMm = CATALOG_MIN_BORDER_PX / fitted.scale;
+    if (!document.elements.some((el) => el.type === 'border' && el.lineWidth > 0 && el.lineWidth < minMm)) {
+      return document;
+    }
+    return {
+      ...document,
+      elements: document.elements.map((el) =>
+        el.type === 'border' && el.lineWidth > 0 && el.lineWidth < minMm ? { ...el, lineWidth: minMm } : el,
+      ),
+    };
+  }, [document, fitted.scale]);
 
   return (
     <View
@@ -511,19 +539,26 @@ function CatalogStockPreview({
         if (Math.abs(next - slotWidth) > 1) setSlotWidth(next);
       }}>
       {slotWidth > 0 && fitted.scale > 0 ? (
-        <HiFiCatalogCanvas document={document} fitted={fitted} />
+        <View style={{ position: 'absolute', left: labelLeft, top: labelTop, width: fitted.widthPx, height: fitted.heightPx }}>
+          <HiFiCatalogCanvas document={shownDocument} fitted={fitted} />
+        </View>
       ) : null}
       {slotWidth > 0 && fitted.scale > 0 && upsDividers && upsDividers.columns >= 2
         ? Array.from({ length: upsDividers.columns - 1 }, (_, i) => {
             const cellW = (document.widthMm - upsDividers.gapMm * (upsDividers.columns - 1)) / upsDividers.columns;
-            const boundaryMm = (i + 1) * cellW + i * upsDividers.gapMm + upsDividers.gapMm / 2;
-            const x = (slotWidth - fitted.widthPx) / 2 + boundaryMm * fitted.scale;
+            // The gap between two labels, drawn as the bare liner so each label reads as its own piece.
+            const gapStartMm = (i + 1) * cellW + i * upsDividers.gapMm;
+            const gapPx = snap(Math.max(4, upsDividers.gapMm * fitted.scale));
+            const centerPx = (gapStartMm + upsDividers.gapMm / 2) * fitted.scale;
+            const x = snap(labelLeft + centerPx - gapPx / 2);
+            const top = labelTop;
+            const lineH = fitted.heightPx;
             return (
               <View
                 key={i}
                 style={[
-                  styles.upsDivider,
-                  { left: x - 1, top: (height - fitted.heightPx) / 2, height: fitted.heightPx },
+                  styles.upsGap,
+                  { left: x, width: gapPx, top, height: lineH },
                 ]}
               />
             );
@@ -645,12 +680,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  upsDivider: {
+  upsGap: {
     position: 'absolute',
-    width: 0,
-    borderLeftWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#E11D48', // theme-fixed: the cut line must read on any label colour
+    backgroundColor: CATALOG_STOCK_LINER,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderColor: '#C8D0D8', // theme-fixed: label edge on the liner, same as the create-label preview
   },
   catalogSlot: {
     width: '100%',
