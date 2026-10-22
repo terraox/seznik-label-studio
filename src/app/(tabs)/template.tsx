@@ -24,6 +24,8 @@ import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { JEWELRY_DIECUT_PREVIEW_SHEET } from '@/constants/jewelry-diecut';
 import { useTemplateCatalogStore, type CatalogTemplate } from '@/stores/template-catalog-store';
 import { sampleToElements } from '@/lib/template-sample-elements';
+import { starterSample } from '@/lib/template-sample-starter';
+import type { SampleElement } from '@/lib/template-sample';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLabelStore } from '@/stores/label-store';
 import { useOpenLabelFile } from '@/lib/label-share/use-open-label-file';
@@ -97,9 +99,39 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
   );
 });
 
-/** The template's own SVG, drawn at the label's proportions on the card. */
+/** The sample content stored for the template, or the built-in starter when none was stored yet. */
+function templateSampleLayout(t: CatalogTemplate): SampleElement[] {
+  if (Array.isArray(t.sampleLayout) && t.sampleLayout.length > 0) return t.sampleLayout as SampleElement[];
+  return starterSample(t.name, t.widthMm, t.heightMm) ?? [];
+}
+
+/** The template's own SVG with its sample content on top, drawn by the same renderer as the editor. */
 const TemplatePreview = memo(function TemplatePreview({ item }: { item: CatalogTemplate }) {
   useThemeRefresh();
+  const sampleDoc = useMemo(() => {
+    if (/jewel/i.test(item.name)) {
+      return createIndustryTemplateDocument({
+        name: item.name,
+        category: 'Jewelry',
+        widthMm: item.widthMm,
+        heightMm: item.heightMm,
+        previewType: JEWELRY_DIECUT_PREVIEW_SHEET,
+      });
+    }
+    const layout = templateSampleLayout(item);
+    if (layout.length === 0) return null;
+    const singleCircle = /circle/i.test(item.name) && !/2up|two up/i.test(item.name);
+    const doc = createLabelDocument({
+      name: item.name,
+      widthMm: item.widthMm,
+      heightMm: item.heightMm,
+      ...(singleCircle ? { mediaShape: 'circle' as const } : { background: { type: 'none' as const } }),
+    });
+    if (!singleCircle) doc.templateSvg = { xml: item.svgCode };
+    doc.elements = sampleToElements(layout, item.widthMm, item.heightMm);
+    return doc;
+  }, [item]);
+  if (sampleDoc) return <LabelPreview document={sampleDoc} catalogStock />;
   return (
     <View style={styles.svgPreviewWrap}>
       <View style={{ width: '100%', aspectRatio: item.widthMm / item.heightMm, maxHeight: 220 }}>
@@ -299,9 +331,9 @@ export default function TemplateScreen() {
           });
       // Every other shape (rounded, 2-up circles, cable) is drawn from the template's own SVG.
       if (!isJewellery && !singleCircle) doc.templateSvg = { xml: template.svgCode };
-      const layout = Array.isArray(template.sampleLayout) ? template.sampleLayout : [];
+      const layout = templateSampleLayout(template);
       if (!withSample) doc.elements = [];
-      else if (layout.length) doc.elements = sampleToElements(layout, template.widthMm, template.heightMm);
+      else if (!isJewellery && layout.length) doc.elements = sampleToElements(layout, template.widthMm, template.heightMm);
       upsertDocument(doc);
       router.push({
         pathname: '/edit',
@@ -314,7 +346,7 @@ export default function TemplateScreen() {
   /** Templates with sample content (and jewellery, which has its own) ask: empty label or with data. */
   const handleSelectTemplate = useCallback(
     (template: CatalogTemplate) => {
-      const hasSample = (Array.isArray(template.sampleLayout) && template.sampleLayout.length > 0) || /jewel/i.test(template.name);
+      const hasSample = templateSampleLayout(template).length > 0 || /jewel/i.test(template.name);
       if (hasSample) setChoiceFor(template);
       else openTemplate(template, false);
     },

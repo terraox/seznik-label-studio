@@ -31,7 +31,7 @@ export function sampleToElements(layout: unknown, widthMm: number, heightMm: num
         };
       }
       case 'barcode':
-        return { ...DEFAULT_BARCODE_STATE, ...frame, type: 'barcode', content: s.text || DEFAULT_BARCODE_STATE.content, height: s.height, drawingColorIndex: 1 };
+        return { ...DEFAULT_BARCODE_STATE, ...frame, type: 'barcode', content: s.text || DEFAULT_BARCODE_STATE.content, height: s.height, fontSize: Math.min(10, Math.max(4.5, Math.round(s.height * 0.55 * 2) / 2)), drawingColorIndex: 1 };
       case 'qrcode':
         return { ...DEFAULT_QRCODE_STATE, ...frame, type: 'qrcode', content: s.text || DEFAULT_QRCODE_STATE.content, height: s.height };
       default:
