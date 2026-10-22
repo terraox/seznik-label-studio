@@ -4,6 +4,7 @@ import { authenticateApp } from '@/lib/app-auth';
 import { corsPreflight, withCors } from '@/lib/cors';
 import { MAX_BATCH, processEvents } from '@/lib/events';
 import { hit } from '@/lib/rate-limit';
+import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,7 +53,9 @@ export async function POST(request: Request) {
     Number.isFinite(sent) ? new Date(sent) : null,
     request.headers.get('x-app-version')?.slice(0, 40) ?? null,
   );
-  const payload = { results, serverTime: new Date().toISOString() };
+  // The app shows this total plus whatever it still has queued, so both sides read the same number.
+  const total = await prisma.user.findUnique({ where: { id: auth.user.id }, select: { printCountTotal: true } });
+  const payload = { results, serverTime: new Date().toISOString(), printCountTotal: total?.printCountTotal ?? null };
   const onlyMissingPrinter = results.every((r) => r.status === 'rejected' && r.reason === 'PRINTER_REQUIRED');
   return reply(onlyMissingPrinter ? { ...payload, error: 'A printer is required.', code: 'PRINTER_REQUIRED' } : payload, onlyMissingPrinter ? 400 : 200);
 }

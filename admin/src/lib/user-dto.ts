@@ -11,6 +11,7 @@ export function toUserDto(user: User) {
     printerName: printerDisplayName(user.printerName),
     createdAt: user.createdAt.toISOString(),
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+    printCountTotal: user.printCountTotal,
   };
 }
 
