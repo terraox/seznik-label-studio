@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 import { FeedbackFormModal } from '@/components/feedback-form';
 import { useFeedbackStore } from '@/stores/feedback-store';
-import { usePrintStatsStore } from '@/stores/print-stats-store';
+import { selectLifetime, usePrintStatsStore } from '@/stores/print-stats-store';
 
 /** Screens where a popup would interrupt work in progress. */
 const BUSY_PATHS = ['/print', '/print-photo', '/edit', '/excel-print', '/pdf-thermal', '/serial-label'];
@@ -11,7 +11,7 @@ const BUSY_PATHS = ['/print', '/print-photo', '/edit', '/excel-print', '/pdf-the
 /** Asks for a star rating and a short review once the user has printed 100 labels. */
 export function FeedbackPrompt({ enabled }: { enabled: boolean }) {
   const pathname = usePathname();
-  const lifetime = usePrintStatsStore((s) => s.lifetime);
+  const lifetime = usePrintStatsStore(selectLifetime);
   const nextAt = useFeedbackStore((s) => s.nextAt);
   const [open, setOpen] = useState(false);
 

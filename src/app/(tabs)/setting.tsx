@@ -25,7 +25,7 @@ import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { usePrintHistoryStore } from '@/stores/print-history-store';
 import { FeedbackFormModal } from '@/components/feedback-form';
 import { useFeedbackStore } from '@/stores/feedback-store';
-import { printCounts, usePrintStatsStore } from '@/stores/print-stats-store';
+import { printCounts, selectLifetime, usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import {
   THEME_DARK_READY,
@@ -112,7 +112,7 @@ function ProfileCard() {
   const setPhotoUri = useSettingsStore((s) => s.setProfilePhotoUri);
 
   const byDay = usePrintStatsStore((s) => s.byDay);
-  const lifetime = usePrintStatsStore((s) => s.lifetime);
+  const lifetime = usePrintStatsStore(selectLifetime);
   const seeded = usePrintStatsStore((s) => s.seeded);
   const historyCount = usePrintHistoryStore((s) => s.entries.length);
   useEffect(() => {
@@ -230,7 +230,7 @@ export default function SettingScreen() {
   const sendFeedback = (rating: number, text: string) => {
     setFeedbackOpen(false);
     // Saved on the phone and sent to the admin desk's Feedback table with the next batch of events.
-    useFeedbackStore.getState().submit(rating, text, usePrintStatsStore.getState().lifetime);
+    useFeedbackStore.getState().submit(rating, text, selectLifetime(usePrintStatsStore.getState()));
     Alert.alert('Thank you', 'Your feedback has been sent.');
   };
 
