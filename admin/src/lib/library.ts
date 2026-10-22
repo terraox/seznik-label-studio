@@ -38,7 +38,7 @@ export function itemDto(item: any) {
     widthMm: (item.widthMm ?? null) as number | null,
     heightMm: (item.heightMm ?? null) as number | null,
     viewBox: (item.viewBox ?? null) as string | null,
-    status: item.status as 'draft' | 'published',
+    status: item.status as 'draft' | 'published' | 'disabled',
     contentHash: item.contentHash as string,
     sampleLayout: (item.sampleLayout ?? null) as unknown,
     svgCode: item.svgCode as string,

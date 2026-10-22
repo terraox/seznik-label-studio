@@ -1,19 +1,20 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { LayoutGrid, List, Pencil, Plus, Power, PowerOff, Search, Shapes, Trash2, Upload, X } from 'lucide-react';
 
 import { useDesk, useToast } from '@/components/desk';
 import { PageHeader } from '@/components/ui';
 import { SampleDesigner } from '@/components/sample-designer';
 import { api } from '@/lib/client';
+import { ago } from '@/lib/format';
 import { can } from '@/lib/permissions';
 
 type Kind = 'template' | 'clipart';
 type Category = { id: string; name: string; items: number };
 type Item = {
   id: string; name: string; categoryId: string; widthMm: number | null; heightMm: number | null;
-  status: 'draft' | 'published'; svgCode: string; updatedAt: string; sampleLayout?: unknown;
+  status: 'draft' | 'published' | 'disabled'; svgCode: string; updatedAt: string; sampleLayout?: unknown;
 };
 type SaveResult = { item: Item; removed: { what: string; count: number }[]; warnings?: string[] };
 
@@ -28,7 +29,16 @@ const COPY = {
   },
 } as const;
 
-const preview = (svg: string) => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+/** Data URL for a thumbnail; the viewBox gets a little room so outlines on the very edge are not clipped. */
+function preview(svg: string) {
+  const padded = svg.replace(/(<svg\b[^>]*?\sviewBox=")([^"]+)(")/i, (whole, a: string, box: string, c: string) => {
+    const [x, y, w, h] = box.trim().split(/[\s,]+/).map(Number);
+    if (![x, y, w, h].every(Number.isFinite)) return whole;
+    const pad = Math.max(w, h) * 0.03;
+    return `${a}${x - pad} ${y - pad} ${w + pad * 2} ${h + pad * 2}${c}`;
+  });
+  return `data:image/svg+xml;utf8,${encodeURIComponent(padded)}`;
+}
 const fileName = (name: string) => name.replace(/\.svg$/i, '').replace(/[_-]+/g, ' ').trim();
 
 export function LibraryDesk({ kind }: { kind: Kind }) {
@@ -47,6 +57,16 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   const [q, setQ] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [layout, setLayout] = useState<'tiles' | 'list'>('tiles');
+  useEffect(() => {
+    try { if (localStorage.getItem('sez-admin-lib-layout') === 'list') setLayout('list'); } catch { /* default */ }
+  }, []);
+  const chooseLayout = (value: 'tiles' | 'list') => {
+    setLayout(value);
+    try { localStorage.setItem('sez-admin-lib-layout', value); } catch { /* ignore */ }
+  };
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'disabled'>('all');
 
   const [form, setForm] = useState({ name: '', categoryId: '', widthMm: '', heightMm: '', status: 'published' });
   const [file, setFile] = useState<File | null>(null);
@@ -129,6 +149,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
       const removed = saved.removed.length ? ` (removed for safety: ${saved.removed.map((r) => r.what).join(', ')})` : '';
       toast(`${form.status === 'published' ? 'Published' : 'Saved as draft'}${removed}`);
       setFile(null); setFilePreview('');
+      setShowForm(false);
       if (fileInput.current) fileInput.current.value = '';
       setForm((cur) => ({ ...cur, name: '', widthMm: '', heightMm: '' }));
       loadItems(); loadCategories();
@@ -156,25 +177,49 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
     finally { setBusy(false); }
   }
 
-  async function deleteItem() {
-    if (!open || !window.confirm(`Delete “${open.name}”? This cannot be undone.`)) return;
-    try { await api(`${base}/items/${open.id}`, { method: 'DELETE' }); setOpen(null); loadItems(); loadCategories(); toast('Deleted'); }
+  /** Switches the template off (kept, but hidden from the app) or back on. */
+  async function toggleDisabled(target: Item | null = open) {
+    if (!target) return;
+    setBusy(true);
+    try {
+      const body = new FormData();
+      body.set('status', target.status === 'disabled' ? 'published' : 'disabled');
+      const saved = await send(`${base}/items/${target.id}`, 'PATCH', body);
+      toast(saved.item.status === 'disabled' ? 'Disabled. It is kept, but the app no longer gets it' : 'Enabled and published');
+      if (open?.id === target.id) {
+        setOpen(saved.item);
+        setEdit((cur) => ({ ...cur, status: saved.item.status }));
+      }
+      loadItems(); loadCategories();
+    } catch (e) { toast(e instanceof Error ? e.message : 'Could not save', 'bad'); }
+    finally { setBusy(false); }
+  }
+
+  async function deleteItem(target: Item | null = open) {
+    if (!target || !window.confirm(`Delete “${target.name}” for good? This cannot be undone. Use Disable to keep it.`)) return;
+    try { await api(`${base}/items/${target.id}`, { method: 'DELETE' }); setOpen((cur) => (cur?.id === target.id ? null : cur)); loadItems(); loadCategories(); toast('Deleted'); }
     catch (e) { toast(e instanceof Error ? e.message : 'Could not delete', 'bad'); }
   }
 
+  const shown = items.filter((i) => statusFilter === 'all' || i.status === statusFilter);
   const categoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? '';
 
   return (
     <>
       <PageHeader kicker={copy.kicker} title={copy.title} lede={copy.lede}>
         <button type="button" className="btn ghost" onClick={() => { loadCategories(); loadItems(); }}>Refresh</button>
+        {canEdit ? (
+          <button type="button" className="btn primary" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? <><X size={14} /> Close</> : <><Plus size={14} /> Add {copy.noun}</>}
+          </button>
+        ) : null}
       </PageHeader>
 
-      <div className="lib-layout">
+      <div className={`lib-layout${kind === 'clipart' ? ' lib-clip' : ''}`}>
         <aside className="panel lib-side">
           <h2>Categories</h2>
           <button className={categoryId === '' ? 'lib-cat on' : 'lib-cat'} onClick={() => setCategoryId('')}>
-            <span>All</span><small>{categories.reduce((n, c) => n + c.items, 0)}</small>
+            <span>All {copy.title.toLowerCase()}</span><small>{categories.reduce((n, c) => n + c.items, 0)}</small>
           </button>
           {categories.map((c) => (
             <div key={c.id} className="lib-cat-row">
@@ -199,7 +244,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
         </aside>
 
         <div className="lib-main">
-          {canEdit ? (
+          {canEdit && showForm ? (
             <form className="panel lib-form" onSubmit={submit}>
               <h2>Add {copy.noun}</h2>
               <div className="lib-form-grid">
@@ -229,22 +274,86 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
             </form>
           ) : null}
 
-          <section className="panel">
-            <div className="chart-head">
-              <div><h2>{copy.title}</h2><p className="chart-sum"><b>{total}</b> <span>{categoryId ? `in ${categoryName(categoryId)}` : 'in total'}</span></p></div>
-              <label className="modal-search"><Search size={14} /><input placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" /></label>
+          <section className="panel lib-panel">
+            <div className="lib-head">
+              <div className="lib-title">
+                <h2>{categoryId ? categoryName(categoryId) : `All ${copy.title.toLowerCase()}`}</h2>
+                <span className="lib-count">{shown.length}{shown.length !== total ? ` of ${total}` : ''}</span>
+              </div>
+              <div className="lib-tools">
+                <div className="seg" role="group" aria-label="Status">
+                  {(['all', 'published', 'draft', 'disabled'] as const).map((v) => (
+                    <button key={v} type="button" className={statusFilter === v ? 'on' : ''} onClick={() => setStatusFilter(v)}>{v === 'all' ? 'All' : v[0].toUpperCase() + v.slice(1)}</button>
+                  ))}
+                </div>
+                <div className="seg" role="group" aria-label="Layout">
+                  <button type="button" className={layout === 'tiles' ? 'on' : ''} onClick={() => chooseLayout('tiles')} aria-label="Tiles" title="Tiles"><LayoutGrid size={14} /></button>
+                  <button type="button" className={layout === 'list' ? 'on' : ''} onClick={() => chooseLayout('list')} aria-label="List" title="List"><List size={14} /></button>
+                </div>
+                <label className="modal-search"><Search size={14} /><input placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" /></label>
+              </div>
             </div>
-            <div className="lib-grid">
-              {items.map((item) => (
+            {layout === 'tiles' ? <div className="lib-grid">
+              {shown.map((item) => (
                 <button key={item.id} type="button" className="lib-card" onClick={() => openItem(item)}>
-                  <div className="lib-thumb"><img src={preview(item.svgCode)} alt={item.name} loading="lazy" /></div>
-                  <b>{item.name}</b>
-                  <small>{categoryName(item.categoryId)}{item.widthMm && item.heightMm ? ` · ${Math.round(item.widthMm * 10) / 10} × ${Math.round(item.heightMm * 10) / 10} mm` : ''}</small>
-                  <span className={item.status === 'published' ? 'badge shipped' : 'badge draft'}>{item.status}</span>
+                  <div className={item.status === 'disabled' ? 'lib-thumb dim' : 'lib-thumb'}>
+                    <img src={preview(item.svgCode)} alt={item.name} loading="lazy" />
+                    {canEdit ? (
+                      <span className="lib-acts">
+                        <span role="button" tabIndex={0} className="lib-act" title={item.status === 'disabled' ? 'Enable' : 'Disable'} aria-label={`${item.status === 'disabled' ? 'Enable' : 'Disable'} ${item.name}`}
+                          onClick={(e) => { e.stopPropagation(); void toggleDisabled(item); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void toggleDisabled(item); } }}>{item.status === 'disabled' ? <Power size={13} /> : <PowerOff size={13} />}</span>
+                        <span role="button" tabIndex={0} className="lib-act del" title="Delete" aria-label={`Delete ${item.name}`}
+                          onClick={(e) => { e.stopPropagation(); void deleteItem(item); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void deleteItem(item); } }}><Trash2 size={13} /></span>
+                      </span>
+                    ) : null}
+                    <span className={item.status === 'published' ? 'lib-pill live' : item.status === 'disabled' ? 'lib-pill off' : 'lib-pill'}>{item.status === 'published' ? 'Published' : item.status === 'disabled' ? 'Disabled' : 'Draft'}</span>
+                  </div>
+                  <div className="lib-info">
+                    <b title={item.name}>{item.name}</b>
+                    <small>
+                      {item.widthMm && item.heightMm ? <span className="lib-size-tag">{Math.round(item.widthMm * 10) / 10} × {Math.round(item.heightMm * 10) / 10} mm</span> : null}
+                      <span className="lib-cat-chip">{categoryName(item.categoryId)}</span>
+                    </small>
+                  </div>
                 </button>
               ))}
-            </div>
-            {items.length === 0 ? <p className="empty">{total === 0 && !q && !categoryId ? `No ${copy.title.toLowerCase()} yet. Upload the first one above.` : 'Nothing matches.'}</p> : null}
+            </div> : (
+              <div className="u-scroll lib-list">
+                <table className="table u-table" style={{ minWidth: 0 }}>
+                  <thead><tr><th>Template</th><th>Category</th><th>Size</th><th>Sample</th><th>Status</th><th>Updated</th>{canEdit ? <th className="num" /> : null}</tr></thead>
+                  <tbody>
+                    {shown.map((item) => (
+                      <tr key={item.id} className="u-row" onClick={() => openItem(item)}>
+                        <td>
+                          <div className="lib-row-name">
+                            <span className="lib-mini"><img src={preview(item.svgCode)} alt="" loading="lazy" /></span>
+                            <b>{item.name}</b>
+                          </div>
+                        </td>
+                        <td><span className="lib-cat-chip">{categoryName(item.categoryId)}</span></td>
+                        <td className="u-mono">{item.widthMm && item.heightMm ? `${Math.round(item.widthMm * 10) / 10} × ${Math.round(item.heightMm * 10) / 10} mm` : '—'}</td>
+                        <td>{Array.isArray(item.sampleLayout) && item.sampleLayout.length ? <span className="lib-has-sample">Sample</span> : <span className="u-muted">—</span>}</td>
+                        <td><span className={item.status === 'published' ? 'badge shipped' : item.status === 'disabled' ? 'badge rejected' : 'badge draft'}>{item.status}</span></td>
+                        <td>{ago(item.updatedAt)}</td>
+                        {canEdit ? <td className="num lib-row-acts" onClick={(e) => e.stopPropagation()}>
+                          <button className="btn small" disabled={busy} onClick={() => toggleDisabled(item)}>{item.status === 'disabled' ? <><Power size={12} /> Enable</> : <><PowerOff size={12} /> Disable</>}</button>
+                          <button className="btn small danger" onClick={() => deleteItem(item)}><Trash2 size={12} /> Delete</button>
+                        </td> : null}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {shown.length === 0 ? (
+              <div className="lib-empty">
+                <Shapes size={28} aria-hidden />
+                <p>{total === 0 && !q && !categoryId ? `No ${copy.title.toLowerCase()} yet.` : 'Nothing matches.'}</p>
+                {canEdit && total === 0 && !q && !categoryId ? <button className="btn primary" onClick={() => setShowForm(true)}><Plus size={14} /> Add {copy.noun}</button> : null}
+              </div>
+            ) : null}
           </section>
         </div>
       </div>
@@ -274,6 +383,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                   <div className="seg" role="group" aria-label="Status">
                     <button type="button" className={edit.status === 'published' ? 'on' : ''} onClick={() => setEdit({ ...edit, status: 'published' })}>Published</button>
                     <button type="button" className={edit.status === 'draft' ? 'on' : ''} onClick={() => setEdit({ ...edit, status: 'draft' })}>Draft</button>
+                    <button type="button" className={edit.status === 'disabled' ? 'on' : ''} onClick={() => setEdit({ ...edit, status: 'disabled' })}>Disabled</button>
                   </div>
                   <input ref={replaceInput} type="file" accept=".svg,image/svg+xml" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void saveItem(f); e.target.value = ''; }} />
                 </>
@@ -281,7 +391,10 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
             </div>
             {canEdit ? (
               <div className="modal-foot lib-foot">
-                <button className="btn danger" onClick={deleteItem}><Trash2 size={13} /> Delete</button>
+                <button className="btn danger" onClick={() => deleteItem()}><Trash2 size={13} /> Delete</button>
+                <button className="btn" disabled={busy} onClick={() => toggleDisabled(open)}>
+                  {open.status === 'disabled' ? <><Power size={13} /> Enable</> : <><PowerOff size={13} /> Disable</>}
+                </button>
                 <span style={{ flex: 1 }} />
                 {kind === 'template' ? (
                   <button className="btn" onClick={() => setDesigning(open)}>

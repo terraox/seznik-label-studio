@@ -32,7 +32,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
       if (!category) throw new HttpError(400, 'Choose a category.');
       data.categoryId = category.id;
     }
-    if (form.has('status')) data.status = form.get('status') === 'published' ? 'published' : 'draft';
+    if (form.has('status')) data.status = ['published', 'disabled'].includes(String(form.get('status'))) ? String(form.get('status')) : 'draft';
     const clean = await readSvg(form.get('file'));
     if (clean) Object.assign(data, { svgCode: clean.svg, viewBox: clean.viewBox, contentHash: clean.hash });
     if (form.has('widthMm') || form.has('heightMm') || clean) {

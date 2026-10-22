@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, MessageSquareText, Search, Star, ThumbsUp, X } from 'lucide-react';
 
 import { useDesk, useHideInternal, useToast } from '@/components/desk';
 import { PageHeader } from '@/components/ui';
@@ -33,7 +34,7 @@ export function FeedbackDesk() {
   const [to, setTo] = useState('');
   const [hideInternal] = useHideInternal();
   const [page, setPage] = useState(1);
-  const [openId, setOpenId] = useState('');
+  const [open, setOpen] = useState<Item | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
 
@@ -58,6 +59,7 @@ export function FeedbackDesk() {
     try {
       await api(`/api/feedback/${item.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
       toast('Saved');
+      setOpen((cur) => (cur && cur.id === item.id ? { ...cur, ...patch, adminNote: patch.adminNote ?? cur.adminNote } : cur));
       load();
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not save', 'bad');
@@ -69,6 +71,16 @@ export function FeedbackDesk() {
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); };
 
+  const from_ = data && data.total ? (page - 1) * data.pageSize + 1 : 0;
+  const to_ = data ? Math.min(page * data.pageSize, data.total) : 0;
+  const statusBadge = (st: string) => (st === 'resolved' ? 'badge shipped' : st === 'reviewed' ? 'badge reviewing' : 'badge');
+  const fill = (n: number) => <span className="fb-stars" aria-label={`${n} out of 5`}>{'★'.repeat(n)}<i>{'★'.repeat(5 - n)}</i></span>;
+  const kpis = [
+    { title: 'Average rating', value: summary ? (summary.average ?? '—') : '…', sub: 'out of 5 stars', Icon: Star, color: '#F59E0B' },
+    { title: 'Ratings', value: summary ? summary.count.toLocaleString() : '…', sub: 'sent from the app', Icon: ThumbsUp, color: '#10B981' },
+    { title: 'With a written note', value: data ? data.items.filter((i) => i.message).length.toLocaleString() : '…', sub: 'on this page', Icon: MessageSquareText, color: '#3B82F6' },
+  ];
+
   return (
     <>
       <PageHeader kicker="Feedback" title="Ratings and suggestions" lede="What people send from the app: a 1-5 star rating, a category and an optional note.">
@@ -77,88 +89,124 @@ export function FeedbackDesk() {
       {error ? <p className="err">{error}</p> : null}
 
       <section className="kpis" aria-label="Rating summary">
-        <article className="kpi">
-          <div className="kpi-top"><span className="kpi-title">Average rating</span></div>
-          <div className="kpi-value">{summary ? (summary.average ?? '—') : '…'}</div>
-          <div className="kpi-sub">{summary?.count ?? 0} ratings in total</div>
-        </article>
-        <article className="kpi" style={{ gridColumn: 'span 2' }}>
-          <div className="kpi-top"><span className="kpi-title">Stars</span></div>
-          {summary?.distribution.slice().reverse().map((d) => (
-            <div key={d.rating} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem' }}>
-              <span style={{ width: 28 }}>{d.rating} ★</span>
-              <div style={{ flex: 1, background: 'var(--paper-2)', borderRadius: 4, height: 8 }}>
-                <div style={{ width: `${(d.count / max) * 100}%`, background: '#F59E0B', height: 8, borderRadius: 4 }} />
-              </div>
-              <span style={{ width: 28, textAlign: 'right' }}>{d.count}</span>
+        {kpis.map(({ title, value, sub, Icon, color }) => (
+          <article className="kpi" key={title}>
+            <div className="kpi-top">
+              <span className="kpi-title">{title}</span>
+              <span className="kpi-icon" style={{ background: `${color}20`, border: `1px solid ${color}40` }}><Icon size={16} color={color} /></span>
             </div>
-          ))}
+            <div className="kpi-value">{value}</div>
+            <div className="kpi-sub">{sub}</div>
+          </article>
+        ))}
+        <article className="kpi">
+          <div className="kpi-top"><span className="kpi-title">Stars</span></div>
+          <div className="fb-dist">
+            {summary?.distribution.slice().reverse().map((d) => (
+              <button key={d.rating} type="button" className={rating === String(d.rating) ? 'fb-bar on' : 'fb-bar'} onClick={() => reset(setRating)(rating === String(d.rating) ? '' : String(d.rating))} title={`Show ${d.rating} star feedback`}>
+                <span>{d.rating} ★</span>
+                <div><i style={{ width: `${(d.count / max) * 100}%` }} /></div>
+                <b>{d.count}</b>
+              </button>
+            ))}
+          </div>
         </article>
       </section>
 
-      <section className="panel">
-        <div className="toolbar">
-          <input type="search" placeholder="Search text or name" value={q} onChange={(e) => reset(setQ)(e.target.value)} aria-label="Search" />
-          <select value={rating} onChange={(e) => reset(setRating)(e.target.value)} aria-label="Rating">
-            <option value="">All ratings</option>
-            {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} ★</option>)}
-          </select>
-          <select value={category} onChange={(e) => reset(setCategory)(e.target.value)} aria-label="Category">
+      <section className="panel users-panel">
+        <div className="u-toolbar">
+          <div className="u-search">
+            <Search size={15} aria-hidden />
+            <input type="search" placeholder="Search text or name…" value={q} onChange={(e) => reset(setQ)(e.target.value)} aria-label="Search" />
+            {q ? <button type="button" className="u-clear" onClick={() => reset(setQ)('')} aria-label="Clear search"><X size={14} /></button> : null}
+          </div>
+          <div className="seg" role="group" aria-label="Status">
+            {[['', 'All'], ['new', 'New'], ['reviewed', 'Reviewed'], ['resolved', 'Resolved']].map(([v, label]) => (
+              <button key={v} type="button" className={status === v ? 'on' : ''} onClick={() => reset(setStatus)(v)}>{label}</button>
+            ))}
+          </div>
+          <select className="u-select" value={category} onChange={(e) => reset(setCategory)(e.target.value)} aria-label="Category">
             <option value="">All categories</option>
             <option value="suggestion">Suggestion</option>
             <option value="bug">Bug</option>
             <option value="other">Other</option>
           </select>
-          <select value={status} onChange={(e) => reset(setStatus)(e.target.value)} aria-label="Status">
-            <option value="">All statuses</option>
-            <option value="new">New</option>
-            <option value="reviewed">Reviewed</option>
-            <option value="resolved">Resolved</option>
+          <select className="u-select" value={rating} onChange={(e) => reset(setRating)(e.target.value)} aria-label="Rating">
+            <option value="">All ratings</option>
+            {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} ★</option>)}
           </select>
-          <input type="date" value={from} onChange={(e) => reset(setFrom)(e.target.value)} aria-label="From date" />
-          <input type="date" value={to} onChange={(e) => reset(setTo)(e.target.value)} aria-label="To date" />
+          <input className="u-select" type="date" value={from} onChange={(e) => reset(setFrom)(e.target.value)} aria-label="From date" />
+          <input className="u-select" type="date" value={to} onChange={(e) => reset(setTo)(e.target.value)} aria-label="To date" />
         </div>
 
-        {data?.items.map((item) => (
-          <article className="card-row" key={item.id} style={{ marginBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <strong style={{ color: '#F59E0B' }}>{stars(item.rating)}</strong>
-              <span>
-                <span className="badge draft">{item.category}</span>{' '}
-                <span className={item.status === 'resolved' ? 'badge shipped' : item.status === 'reviewed' ? 'badge reviewing' : 'badge'}>{item.status}</span>
-              </span>
-            </div>
-            <p style={{ margin: '8px 0' }}>{item.message ?? <em>Rating only</em>}</p>
-            <small>
-              {item.user ? `${item.user.name} · ${item.user.mobile} · ` : ''}{ago(item.createdAt)}
-              {item.appVersion ? ` · app ${item.appVersion}` : ''}{item.platform ? ` · ${item.platform}` : ''}
-            </small>
-            {item.adminNote ? <div className="note" style={{ marginTop: 8 }}>Admin note: {item.adminNote}</div> : null}
-            {canEdit ? (
-              <div className="toolbar" style={{ marginTop: 10, marginBottom: 0 }}>
-                {['new', 'reviewed', 'resolved'].map((s) => (
-                  <button key={s} className={item.status === s ? 'btn small primary' : 'btn small'} disabled={item.status === s} onClick={() => save(item, { status: s })}>{s}</button>
-                ))}
-                {openId === item.id ? (
-                  <>
-                    <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the team" maxLength={1000} />
-                    <button className="btn small primary" onClick={() => { save(item, { adminNote: note }); setOpenId(''); }}>Save note</button>
-                  </>
-                ) : (
-                  <button className="btn small ghost" onClick={() => { setOpenId(item.id); setNote(item.adminNote ?? ''); }}>{item.adminNote ? 'Edit note' : 'Add note'}</button>
-                )}
-              </div>
-            ) : null}
-          </article>
-        ))}
-        {data && data.items.length === 0 ? <p>No feedback matches.</p> : null}
+        <div className="u-scroll">
+          <table className="table u-table">
+            <thead><tr><th>Rating</th><th>Message</th><th>Category</th><th>From</th><th>Status</th><th>Received</th></tr></thead>
+            <tbody>
+              {data?.items.map((item) => (
+                <tr key={item.id} className="u-row" onClick={() => { setOpen(item); setNote(item.adminNote ?? ''); }}>
+                  <td>{fill(item.rating)}</td>
+                  <td className="fb-msg">{item.message ? <span>{item.message}</span> : <span className="u-muted">Rating only</span>}{item.adminNote ? <small className="u-id">Note: {item.adminNote}</small> : null}</td>
+                  <td><span className="badge draft">{item.category}</span></td>
+                  <td>{item.user ? <div className="u-printer"><b>{item.user.name}</b><small>{item.user.mobile}</small></div> : <span className="u-muted">Anonymous</span>}</td>
+                  <td><span className={statusBadge(item.status)}>{item.status}</span></td>
+                  <td>{ago(item.createdAt)}</td>
+                </tr>
+              ))}
+              {!data ? <tr><td colSpan={6} className="empty">Loading feedback…</td></tr> : null}
+              {data && data.items.length === 0 ? <tr><td colSpan={6} className="empty">No feedback matches these filters.</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
 
-        <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
-          <button className="btn small" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
-          <span>Page {page} of {pages} · {data?.total ?? 0} items</span>
-          <button className="btn small" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button>
+        <div className="u-pager">
+          <nav className="pager" aria-label="Pages">
+            <button className="pager-step" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="Previous page"><ChevronLeft size={15} /></button>
+            {Array.from({ length: pages }, (_, i) => i + 1).slice(Math.max(0, page - 3), page + 2).map((n) => (
+              <button key={n} className={`pager-n${n === page ? ' on' : ''}`} onClick={() => setPage(n)} aria-current={n === page ? 'page' : undefined}>{n}</button>
+            ))}
+            <button className="pager-step" disabled={page >= pages} onClick={() => setPage(page + 1)} aria-label="Next page"><ChevronRight size={15} /></button>
+          </nav>
+          <span className="u-count">Showing {from_.toLocaleString()}–{to_.toLocaleString()} of {(data?.total ?? 0).toLocaleString()}</span>
         </div>
       </section>
+
+      {open ? (
+        <>
+          <button className="drawer-back" aria-label="Close" onClick={() => setOpen(null)} />
+          <div className="modal" role="dialog" aria-modal="true" aria-label="Feedback">
+            <div className="modal-head">
+              <div>
+                <h2>{fill(open.rating)}</h2>
+                <p>{open.user ? `${open.user.name} · ${open.user.mobile}` : 'Anonymous'} · {ago(open.createdAt)}{open.appVersion ? ` · app ${open.appVersion}` : ''}{open.platform ? ` · ${open.platform}` : ''}</p>
+              </div>
+              <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="Close"><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="fb-tags"><span className="badge draft">{open.category}</span><span className={statusBadge(open.status)}>{open.status}</span></div>
+              <p className="fb-full">{open.message ?? <em className="u-muted">Rating only, no message.</em>}</p>
+              {canEdit ? (
+                <>
+                  <label className="lib-label">Note for the team
+                    <textarea rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Only admins see this" />
+                  </label>
+                </>
+              ) : open.adminNote ? <div className="note">Admin note: {open.adminNote}</div> : null}
+            </div>
+            {canEdit ? (
+              <div className="modal-foot">
+                <div className="seg" role="group" aria-label="Set status">
+                  {['new', 'reviewed', 'resolved'].map((st) => (
+                    <button key={st} type="button" className={open.status === st ? 'on' : ''} onClick={() => save(open, { status: st })}>{st[0].toUpperCase() + st.slice(1)}</button>
+                  ))}
+                </div>
+                <span style={{ flex: 1 }} />
+                <button className="btn primary" disabled={note === (open.adminNote ?? '')} onClick={() => save(open, { adminNote: note })}>Save note</button>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

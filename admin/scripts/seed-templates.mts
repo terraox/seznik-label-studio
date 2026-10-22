@@ -20,7 +20,9 @@ const prisma = new PrismaClient();
 const dryRun = process.argv.includes('--dry-run');
 // Overwrites sample content that is already stored (otherwise only templates without one are filled).
 const refreshSamples = process.argv.includes('--refresh-samples');
-const CATEGORY = 'All';
+// Jewellery sheets go in their own category, everything else in General.
+const CATEGORY = 'General';
+const JEWELLERY = 'jewellery';
 const dir = path.join(import.meta.dirname, '..', '..', 'templates');
 
 type Node = Record<string, unknown>;
@@ -85,9 +87,10 @@ function jewellerySample(name: string, w: number, h: number): SampleElement[] {
 }
 
 const files = readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.svg')).sort();
-const category = dryRun
-  ? { id: 'dry-run' }
-  : await prisma.templateCategory.upsert({ where: { name: CATEGORY }, update: {}, create: { name: CATEGORY, sortOrder: 0 } });
+const categoryFor = async (name: string) =>
+  dryRun
+    ? { id: 'dry-run' }
+    : prisma.templateCategory.upsert({ where: { name }, update: {}, create: { name, sortOrder: name === CATEGORY ? 0 : 1 } });
 
 for (const file of files) {
   const { name, widthMm, heightMm } = parse(file);
@@ -96,6 +99,7 @@ for (const file of files) {
     console.log(`SKIP  ${file}: ${result.message}`);
     continue;
   }
+  const category = await categoryFor(/jewel/i.test(name) ? JEWELLERY : CATEGORY);
   const data = { categoryId: category.id, name, svgCode: result.svg, widthMm, heightMm, viewBox: result.viewBox, contentHash: result.hash, status: 'published' };
   const starter = /jewel/i.test(name) ? jewellerySample(name, widthMm, heightMm) : starterSample(name, widthMm, heightMm);
   if (dryRun) {
@@ -108,7 +112,7 @@ for (const file of files) {
   if (!existing) {
     await prisma.template.create({ data: withSample });
     console.log(`ADDED ${name}`);
-  } else if (existing.contentHash !== result.hash || existing.widthMm !== widthMm || existing.heightMm !== heightMm || withSample !== data) {
+  } else if (existing.contentHash !== result.hash || existing.widthMm !== widthMm || existing.heightMm !== heightMm || existing.categoryId !== category.id || withSample !== data) {
     await prisma.template.update({ where: { id: existing.id }, data: withSample });
     console.log(`UPDATED ${name}`);
   } else console.log(`same  ${name}`);

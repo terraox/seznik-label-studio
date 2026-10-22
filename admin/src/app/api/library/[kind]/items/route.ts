@@ -20,7 +20,7 @@ export async function GET(request: Request, ctx: Ctx) {
     const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get('pageSize')) || 48));
     const where = {
       ...(categoryId ? { categoryId } : {}),
-      ...(status === 'draft' || status === 'published' ? { status } : {}),
+      ...(status === 'draft' || status === 'published' || status === 'disabled' ? { status } : {}),
       ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
     };
     const [items, total] = await Promise.all([
