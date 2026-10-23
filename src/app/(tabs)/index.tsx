@@ -40,7 +40,6 @@ export default function HomeScreen() {
     [documents],
   );
 
-  const hasLabels = documents.length > 0;
 
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
@@ -108,7 +107,7 @@ export default function HomeScreen() {
           <FeatureBanners />
 
           <WalkthroughTarget id="home.newLabel">
-            <HeroCard compact={hasLabels} />
+            <HeroCard />
           </WalkthroughTarget>
 
           {recentLabel ? (

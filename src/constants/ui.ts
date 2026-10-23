@@ -40,8 +40,8 @@ export const HomeLayout = {
   contentPadTop: 16,
   gridColumns: 3,
   labelTypeColumns: 4,
-  /** New Label hero — WePrint-style broad card with left art. */
-  heroHeight: 96,
+  /** New Label hero: navy card with a label being designed in its corner. */
+  heroHeight: 148,
   /** 3-column tile min height (Print from file, More ways to create): art, title and hint. */
   tileHeight: 108,
   /** Drawn tool art on those tiles (tool-art.tsx). */
