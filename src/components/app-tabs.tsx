@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
+import { type ComponentProps } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,9 +8,17 @@ import { registerWalkthroughTarget } from '@/lib/walkthrough/registry';
 import { useTranslation } from '@/lib/i18n';
 import { makeStyles, useColors } from '@/theme';
 
-const ANDROID_BAR_HEIGHT = 62;
+const ANDROID_BAR_HEIGHT = 60;
 
-/** Selected tab reads bold in the accent colour; the others stay lighter and muted. */
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+/** Selected tab: filled icon in the brand ink. Others: outline icon, muted. Nothing else. */
+function tabIcon(icon: IoniconName) {
+  return function TabIcon({ focused, color }: { focused: boolean; color: string }) {
+    return <Ionicons name={focused ? icon : (`${icon}-outline` as IoniconName)} size={24} color={color} />;
+  };
+}
+
 function tabLabel({ focused, color, children }: { focused: boolean; color: string; children: string }) {
   return (
     <Text
@@ -17,8 +26,8 @@ function tabLabel({ focused, color, children }: { focused: boolean; color: strin
       style={{
         color,
         fontSize: 11,
-        fontWeight: focused ? '700' : '500',
-        marginBottom: Platform.OS === 'ios' ? 0 : 4,
+        fontWeight: focused ? '600' : '400',
+        marginBottom: Platform.OS === 'ios' ? 0 : 6,
       }}>
       {children}
     </Text>
@@ -39,7 +48,7 @@ export default function AppTabs() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: c.accent,
+        tabBarActiveTintColor: c.brandInk,
         tabBarInactiveTintColor: c.textMuted,
         tabBarLabel: tabLabel,
         tabBarItemStyle: styles.item,
@@ -49,98 +58,34 @@ export default function AppTabs() {
             ref={(node) => registerWalkthroughTarget('tabs.bar', node)}
             collapsable={false}
             style={styles.barBackground}
-            pointerEvents="none">
-            <View style={styles.gloss} />
-            <View style={styles.topHairline} />
-          </View>
+            pointerEvents="none"
+          />
         ),
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t('tab.home'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size + 2} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="template"
-        options={{
-          title: t('tab.template'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={size + 2} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="shop"
-        options={{
-          title: t('tab.shop'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="bag-handle" size={size + 2} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="help"
-        options={{
-          title: t('tab.help'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="help-circle" size={size + 2} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="setting"
-        options={{
-          title: t('tab.setting'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size + 2} color={color} />
-          ),
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: t('tab.home'), tabBarIcon: tabIcon('home') }} />
+      <Tabs.Screen name="template" options={{ title: t('tab.template'), tabBarIcon: tabIcon('grid') }} />
+      <Tabs.Screen name="shop" options={{ title: t('tab.shop'), tabBarIcon: tabIcon('bag-handle') }} />
+      <Tabs.Screen name="help" options={{ title: t('tab.help'), tabBarIcon: tabIcon('help-circle') }} />
+      <Tabs.Screen name="setting" options={{ title: t('tab.setting'), tabBarIcon: tabIcon('settings') }} />
     </Tabs>
   );
 }
 
-const useStyles = makeStyles((c, scheme) => ({
+const useStyles = makeStyles((c) => ({
   bar: {
     backgroundColor: c.surface,
-    borderTopWidth: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: c.hairline,
     height: Platform.OS === 'ios' ? 84 : ANDROID_BAR_HEIGHT,
-    paddingTop: 4,
-    ...(Platform.OS === 'android' ? { elevation: 10 } : null),
-    ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: c.shadow,
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 12,
-        }
-      : null),
+    paddingTop: 6,
+    elevation: 0,
+    shadowOpacity: 0,
   },
   barBackground: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: c.surface,
-    overflow: 'hidden',
-    // Light keeps its soft white gradient; dark is a flat surface.
-    ...(scheme === 'light'
-      ? { experimental_backgroundImage: 'linear-gradient(180deg, #FFFFFF 0%, #F7FAFC 55%, #F0F4F8 100%)' } // theme-fixed: light-only gradient
-      : null),
-  },
-  gloss: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 22,
-    backgroundColor: scheme === 'light' ? 'rgba(255, 255, 255, 0.85)' : 'transparent', // theme-fixed: light-only gloss
-  },
-  topHairline: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: scheme === 'light' ? 'rgba(45, 175, 229, 0.3)' : c.hairline, // theme-fixed: light sky hairline
   },
   item: {
-    paddingTop: 4,
     gap: 2,
   },
 }));
