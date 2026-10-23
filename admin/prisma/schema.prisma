@@ -58,13 +58,14 @@ model User {
   updatedAt         DateTime   @updatedAt
   lastLoginAt       DateTime?
 
-  statusEvents  UserStatusEvent[]
-  registeredAs  RegisteredPhone?
-  printEvents   PrintEvent[]
-  connections   PrinterConnection[]
-  printers      UserPrinter[]
-  feedback      Feedback[]
-  productClicks ProductClick[]
+  statusEvents     UserStatusEvent[]
+  registeredAs     RegisteredPhone?
+  printEvents      PrintEvent[]
+  connections      PrinterConnection[]
+  printers         UserPrinter[]
+  feedback         Feedback[]
+  templateRequests TemplateRequest[]
+  productClicks    ProductClick[]
 
   @@index([printerName])
   @@index([status])
@@ -220,6 +221,31 @@ model Feedback {
   @@index([status, createdAt])
 }
 
+/// "Can't find my template": a label the user asked us to add to the catalogue.
+model TemplateRequest {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  userId      String
+  /// What the label is for, in the user's words
+  description String
+  widthMm     Float?
+  heightMm    Float?
+  /// rectangle | rounded | circle | other
+  shape       String?
+  /// What the user had typed in Search Template
+  searchText  String?
+  appVersion  String?
+  platform    String?
+  /// new | in_progress | done | declined
+  status      String   @default("new")
+  adminNote   String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
 model ProductClick {
   id                  String   @id @default(cuid())
   eventId             String   @unique
@@ -250,22 +276,22 @@ model TemplateCategory {
 }
 
 model Template {
-  id          String   @id @default(cuid())
-  categoryId  String
-  name        String
+  id           String   @id @default(cuid())
+  categoryId   String
+  name         String
   /// The sanitised SVG code itself.
-  svgCode     String
-  widthMm     Float
-  heightMm    Float
-  viewBox     String?
+  svgCode      String
+  widthMm      Float
+  heightMm     Float
+  viewBox      String?
   /// Sample content (list of text / barcode / qrcode / line elements in mm), null when none.
   sampleLayout Json?
   /// sha256 of the sanitised SVG.
-  contentHash String
+  contentHash  String
   /// draft | published (only published reaches the app)
-  status      String   @default("draft")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status       String   @default("draft")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   category TemplateCategory @relation(fields: [categoryId], references: [id])
 

@@ -238,6 +238,27 @@ Table Feedback {
   Note: '[READY] Star ratings and suggestions from the app.'
 }
 
+Table TemplateRequest {
+  id varchar [pk]
+  eventId varchar [unique, not null]
+  userId varchar [not null]
+  description varchar [not null, note: 'What the label is for, in the user\'s words']
+  widthMm float
+  heightMm float
+  shape varchar [note: 'rectangle | rounded | circle | other']
+  searchText varchar [note: 'What the user had typed in Search Template']
+  appVersion varchar
+  platform varchar
+  status varchar [not null, default: 'new', note: 'new | in_progress | done | declined']
+  adminNote varchar
+  createdAt timestamp [not null]
+
+  indexes {
+    (status, createdAt)
+  }
+  Note: '[READY] "Can\'t find my template" requests from the app\'s Templates tab.'
+}
+
 Table ProductClick {
   id varchar [pk]
   eventId varchar [unique, not null]
@@ -302,6 +323,7 @@ Ref: PrinterConnection.printerId > Printer.id
 Ref: PrintEvent.userId > AppUser.id
 Ref: PrintEvent.printerId > Printer.id
 Ref: Feedback.userId > AppUser.id
+Ref: TemplateRequest.userId > AppUser.id
 Ref: ProductClick.userId > AppUser.id
 
 // ─────────────── Sample rows (made-up, to read the structure) ───────────────
