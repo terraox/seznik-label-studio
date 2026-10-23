@@ -104,6 +104,9 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
   );
 });
 
+/** The Industry list's first entry: every published template, whatever its categories. */
+const ALL_CATEGORY = '__all__';
+
 /** The sample content stored for the template, or the built-in starter when none was stored yet. */
 /** Two-up catalogue sheets can be edited together on one canvas or one label at a time (cable and jewellery sheets keep their own layout). */
 function isTwoUpTemplate(t: CatalogTemplate): boolean {
@@ -266,9 +269,10 @@ export default function TemplateScreen() {
     }, [refreshCatalog, authToken]),
   );
 
+  // "All" comes first and is the default; an admin category only while it still exists.
   const activeCategoryId = catalogCategories.some((c) => c.id === selectedCategory)
     ? selectedCategory
-    : (catalogCategories[0]?.id ?? '');
+    : ALL_CATEGORY;
   const categoryNames = useMemo(
     () => new Map(catalogCategories.map((c) => [c.id, c.name])),
     [catalogCategories],
@@ -323,6 +327,7 @@ export default function TemplateScreen() {
           t.categoryIds.some((id) => (categoryNames.get(id) ?? '').toLowerCase().includes(q)),
       );
     }
+    if (activeCategoryId === ALL_CATEGORY) return catalogTemplates;
     return catalogTemplates.filter((t) => t.categoryIds.includes(activeCategoryId));
   }, [searchQuery, activeCategoryId, catalogTemplates, categoryNames]);
 
@@ -678,7 +683,7 @@ export default function TemplateScreen() {
                 ))}
               </>
             ) : (
-            catalogCategories.map((cat) => {
+            [{ id: ALL_CATEGORY, name: 'All' }, ...catalogCategories].map((cat) => {
               const isSelected = activeCategoryId === cat.id;
               return (
                 <Pressable

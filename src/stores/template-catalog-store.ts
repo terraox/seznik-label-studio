@@ -10,7 +10,7 @@ export type CatalogCategory = { id: string; name: string };
 export type CatalogTemplate = {
   id: string;
   name: string;
-  /** Every category it sits in; empty when it has none, then it shows only in search. */
+  /** Admin categories it sits in; may be empty. Every template is listed under All either way. */
   categoryIds: string[];
   widthMm: number;
   heightMm: number;

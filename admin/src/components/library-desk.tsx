@@ -90,10 +90,12 @@ function rotateSvg(svg: string, clockwise: boolean): string | null {
 
 /** Full-size look at one item: the SVG on the left, everything known about it on the right. */
 /** Toggle chips for choosing any number of categories; none leaves the item under All only. */
+/** Every item is always in All (the app's first list); the admin categories are extra places to show it. */
 function CategoryPicker({ categories, value, onChange }: { categories: Category[]; value: string[]; onChange: (ids: string[]) => void }) {
-  if (!categories.length) return <p className="u-muted">Create a category first, or save it without one.</p>;
   return (
     <div className="lib-pick" role="group" aria-label="Categories">
+      <button type="button" className="on" aria-pressed disabled title="Everything is listed under All">All</button>
+      {!categories.length ? <span className="u-muted">Add categories to also list it under them.</span> : null}
       {categories.map((c) => {
         const on = value.includes(c.id);
         return (
@@ -424,7 +426,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
     const names = categoryNames(ids);
     return names.length
       ? names.map((n) => <span key={n} className="lib-cat-chip">{n}</span>)
-      : <span className="lib-cat-chip none">No category</span>;
+      : <span className="lib-cat-chip none">All only</span>;
   };
 
   return (
@@ -442,7 +444,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
         <aside className="panel lib-side">
           <h2>Categories</h2>
           <button className={categoryId === '' ? 'lib-cat on' : 'lib-cat'} onClick={() => setCategoryId('')}>
-            <span>All {copy.title.toLowerCase()}</span><small>{allCount}</small>
+            <span>All</span><small>{allCount}</small>
           </button>
           {canEdit && categories.length ? <p className="lib-drag-hint">{dragging ? 'Drop on a category to add it there' : `Drag a ${copy.noun} onto a category to add it`}</p> : null}
           {categories.map((c) => (
@@ -613,7 +615,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
           <button className="drawer-back" aria-label="Close" onClick={() => setOpen(null)} />
           <div className="modal lib-modal" role="dialog" aria-modal="true" aria-label={open.name}>
             <div className="modal-head">
-              <div><h2>{open.name}</h2><p>{categoryNames(open.categoryIds).join(', ') || 'No category'}</p></div>
+              <div><h2>{open.name}</h2><p>{categoryNames(open.categoryIds).join(', ') || 'All only'}</p></div>
               <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="Close"><X size={16} /></button>
             </div>
             <div className="modal-body">
