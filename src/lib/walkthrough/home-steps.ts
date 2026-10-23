@@ -41,7 +41,7 @@ const BASE_STEPS: readonly WalkthroughStep[] = [
     target: 'home.fromFile',
     scrolls: true,
     title: 'Print from a file',
-    body: 'Print labels in bulk from an Excel sheet, print a PDF, or print a photo.',
+    body: 'Print labels in bulk from an Excel sheet, print a PDF, or import a .seznik label file.',
   },
   {
     id: 'create',

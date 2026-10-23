@@ -10,7 +10,10 @@ export type HomeToolGroup = 'create' | 'file';
 
 export type HomeTool = {
   label: string;
-  href: string;
+  /** Where the tile goes. Tools with `action` run that instead. */
+  href?: string;
+  /** Runs in place instead of navigating: 'openLabelFile' opens the .seznik file picker. */
+  action?: 'openLabelFile';
   icon: ToolGlyph;
   /** One short line under the title on the home tile. */
   hint?: string;
@@ -39,7 +42,7 @@ export const HOME_TOOLS = {
     group: 'file',
   },
   pdf: { label: 'PDF', href: '/pdf', icon: 'document-text-outline', hint: 'Print any page', group: 'file' },
-  photo: { label: 'Photo', href: '/print-photo-modal', icon: 'images-outline', hint: 'Print a picture', group: 'file' },
+  importLabel: { label: 'Import', action: 'openLabelFile', icon: 'download-outline', hint: '.seznik label file', group: 'file' },
 } as const satisfies Record<string, HomeTool>;
 
 export type HomeToolId = keyof typeof HOME_TOOLS;
@@ -50,7 +53,7 @@ export const CREATE_HERO_TOOL: HomeToolId = 'newLabel';
 export const CREATE_GRID_TOOLS: readonly HomeToolId[] = ['imageToLabel', 'serialLabels', 'shippingLabels'];
 
 /** "Print from file" — 3-column ToolGrid. */
-export const FILE_TOOLS: readonly HomeToolId[] = ['excel', 'pdf', 'photo'];
+export const FILE_TOOLS: readonly HomeToolId[] = ['excel', 'pdf', 'importLabel'];
 
 /** Groups that must fill whole 3-column rows. */
 export const TOOL_GRID_GROUPS = { create: CREATE_GRID_TOOLS, file: FILE_TOOLS } as const;

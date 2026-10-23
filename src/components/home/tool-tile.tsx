@@ -1,27 +1,53 @@
 import { useRouter } from 'expo-router';
+import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { ToolArt, hasToolArt } from '@/components/home/tool-art';
 import { ToolIcon } from '@/components/home/tool-icon';
 import { HOME_TOOLS, type HomeTool, type HomeToolId } from '@/components/home/home-tools';
 import { androidRipple, HomeLayout } from '@/constants/ui';
+import { useOpenLabelFile } from '@/lib/label-share/use-open-label-file';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
-export function ToolTile({
+export function ToolTile({ id, minHeight = HomeLayout.tileHeight }: { id: HomeToolId; minHeight?: number }) {
+  const tool: HomeTool = HOME_TOOLS[id];
+  return tool.action === 'openLabelFile' ? (
+    <OpenLabelFileTile id={id} minHeight={minHeight} />
+  ) : (
+    <LinkTile id={id} minHeight={minHeight} />
+  );
+}
+
+function LinkTile({ id, minHeight }: { id: HomeToolId; minHeight: number }) {
+  const router = useRouter();
+  const tool: HomeTool = HOME_TOOLS[id];
+  return <TileBody id={id} minHeight={minHeight} onPress={() => router.push(tool.href as any)} />;
+}
+
+/** Import: picks a .seznik file and opens it on the canvas, like Import label in the New label sheet. */
+function OpenLabelFileTile({ id, minHeight }: { id: HomeToolId; minHeight: number }) {
+  const { openLabelFile, documentSourceSheet } = useOpenLabelFile();
+  return <TileBody id={id} minHeight={minHeight} onPress={() => void openLabelFile()} extra={documentSourceSheet} />;
+}
+
+function TileBody({
   id,
-  minHeight = HomeLayout.tileHeight,
+  minHeight,
+  onPress,
+  extra,
 }: {
   id: HomeToolId;
-  minHeight?: number;
+  minHeight: number;
+  onPress: () => void;
+  extra?: ReactNode;
 }) {
   useThemeRefresh();
-  const router = useRouter();
   const tool: HomeTool = HOME_TOOLS[id];
 
   return (
     <View style={styles.outer}>
       <Pressable
-        onPress={() => router.push(tool.href as any)}
+        onPress={onPress}
         android_ripple={androidRipple}
         accessibilityRole="button"
         accessibilityLabel={tool.hint ? `${tool.label}, ${tool.hint}` : tool.label}
@@ -52,6 +78,7 @@ export function ToolTile({
           ) : null}
         </View>
       </Pressable>
+      {extra}
     </View>
   );
 }

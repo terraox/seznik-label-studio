@@ -7,6 +7,7 @@ import {
   FILE_TOOLS,
   HOME_TOOLS,
   TOOL_GRID_GROUPS,
+  type HomeTool,
   type HomeToolId,
 } from '../home-tools';
 
@@ -15,7 +16,6 @@ const LEGACY_HOME_HREFS = [
   '/image-to-label',
   '/excel-print',
   '/pdf',
-  '/print-photo-modal',
   '/ecommerce-label',
   '/new-label-setup?serialEditor=1',
 ];
@@ -25,7 +25,10 @@ const GRID_COLUMNS = 3;
 const allIds = Object.keys(HOME_TOOLS) as HomeToolId[];
 
 test('every legacy home href is reachable exactly once', () => {
-  const hrefs = allIds.map((id) => HOME_TOOLS[id].href);
+  const hrefs = allIds.flatMap((id) => {
+    const tool: HomeTool = HOME_TOOLS[id];
+    return tool.href ? [tool.href] : [];
+  });
   for (const href of LEGACY_HOME_HREFS) {
     assert.equal(
       hrefs.filter((h) => h === href).length,
@@ -34,6 +37,19 @@ test('every legacy home href is reachable exactly once', () => {
     );
   }
   assert.equal(hrefs.length, LEGACY_HOME_HREFS.length);
+});
+
+test('Import tile opens the .seznik file picker', () => {
+  const tool: HomeTool = HOME_TOOLS.importLabel;
+  assert.equal(tool.action, 'openLabelFile');
+  assert.ok(FILE_TOOLS.includes('importLabel'));
+});
+
+test('every tool either links somewhere or runs an action', () => {
+  for (const id of allIds) {
+    const tool: HomeTool = HOME_TOOLS[id];
+    assert.ok(tool.href || tool.action, `${id} needs an href or an action`);
+  }
 });
 
 test('PDF tile keeps pointing at /pdf', () => {
