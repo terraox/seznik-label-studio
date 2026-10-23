@@ -31,9 +31,9 @@ test('density, speed, and gap clamp to the SDK range', () => {
   assert.equal(clampTd404GapMm(2.256), 2.26);
 });
 
-test('paper type maps to the three TSPL media lines', () => {
+test('paper type maps to the two TSPL media lines', () => {
   assert.equal(td404MediaForPaperType('Receipt'), 'continuous');
-  assert.equal(td404MediaForPaperType('Black mark'), 'bline');
+  assert.equal(td404MediaForPaperType('Black mark'), 'gap');
   assert.equal(td404MediaForPaperType('Label'), 'gap');
   assert.equal(td404MediaForPaperType('Cardstock'), 'gap');
   assert.equal(td404MediaForPaperType('Transparent'), 'gap');
@@ -46,7 +46,7 @@ test('paper type maps to the three TSPL media lines', () => {
   assert.equal(receipt.speed, 4);
 
   const mark = resolveTd404JobParams({ paperType: 'Black mark', gapMm: 3.5 });
-  assert.equal(mark.media, 'bline');
+  assert.equal(mark.media, 'gap');
   assert.equal(mark.gapMm, 3.5);
 
   const card = resolveTd404JobParams({ paperType: 'Cardstock', gapMm: 25, density: 40, speed: 0 });

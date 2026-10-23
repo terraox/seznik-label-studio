@@ -14,8 +14,9 @@ import {
 import { formatLiveDate, formatLiveTime } from '@/components/editor/types';
 import { BARCODE_MODES } from '@/lib/barcode-code128';
 import type { LabelUnit } from '@/lib/label-geometry';
-import { parseOrientation, readPaperType, type LabelOrientation, type PaperType } from '@/lib/label-document';
-import { PAPER_TYPES, paperTypeSelectionNote, paperTypeTestBadge } from '@/lib/printer/paper-type';
+import { parseOrientation, type LabelOrientation, type PaperType } from '@/lib/label-document';
+import { paperTypesFor, paperTypeSelectionNote, paperTypeTestBadge, shownPaperType } from '@/lib/printer/paper-type';
+import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { androidRipple } from '@/constants/ui';
 import { themedStyles, useThemeRefresh } from '@/theme';
@@ -45,7 +46,9 @@ export function DefaultPropertySettingsFields() {
   }, []);
 
   const orientation = `${defaults.orientation}°` as (typeof ORIENTATIONS)[number];
-  const paperType = readPaperType(defaults.paperType);
+  const printerSdkId = usePrinterStore((s) => s.sdkId);
+  /** TD-404 and Dev offer Receipt and Label only; a saved Transparent or Cardstock shows as Label there. */
+  const paperType = shownPaperType(defaults.paperType, printerSdkId);
 
   return (
     <>
@@ -74,7 +77,7 @@ export function DefaultPropertySettingsFields() {
         />
         <SettingsSegmentRow
           label="Paper Type"
-          options={PAPER_TYPES}
+          options={paperTypesFor(printerSdkId)}
           selected={paperType}
           badgeFor={(option) => paperTypeTestBadge(option)}
           onSelect={(value) => patchDefaults({ paperType: value as PaperType })}

@@ -382,7 +382,7 @@ export function tileDocumentOnSheet(
     name: `${source.name} · ${Math.round(page.widthMm)}×${Math.round(page.heightMm)}`,
     widthMm: page.widthMm,
     heightMm: page.heightMm,
-    paperType: 'Cardstock',
+    paperType: 'Label',
     elements,
     updatedAt: now,
   };

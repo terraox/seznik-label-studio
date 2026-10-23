@@ -24,7 +24,7 @@ import {
   divideTableRowHeights,
 } from '@/components/editor/types';
 import { createDefaultTableCell, resizeTableCells } from '@/lib/editor/table-cells';
-import type { LabelDocument, LabelElement } from '@/lib/label-document';
+import { readPaperType, type LabelDocument, type LabelElement } from '@/lib/label-document';
 import { LIMITS } from './limits';
 import { sanitizeSvgStrict } from './svg-strict';
 import { ShareFormatError } from './zip';
@@ -628,7 +628,6 @@ function validateElementList(raw: unknown, where: string, c: Collector, idMap: M
 // ───────────────────────────── document ─────────────────────────────
 
 const ORIENTATIONS = [0, 90, 180, 270];
-const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'];
 const MEDIA_SHAPES = ['rectangle', 'roundedRectangle', 'circle', 'ellipse', 'diecut'];
 const HEX = /^#[0-9a-fA-F]{3,8}$/;
 
@@ -809,7 +808,7 @@ export function validateDocument(raw: unknown, ctx: SchemaContext): ValidatedDoc
   doc.widthMm = width;
   doc.heightMm = height;
   doc.orientation = ORIENTATIONS.includes(raw.orientation as number) ? raw.orientation : 0;
-  doc.paperType = typeof raw.paperType === 'string' && PAPER_TYPES.includes(raw.paperType) ? raw.paperType : 'Label';
+  doc.paperType = readPaperType(raw.paperType);
   delete doc.mediaShape;
   if (raw.mediaShape !== undefined) {
     if (typeof raw.mediaShape === 'string' && MEDIA_SHAPES.includes(raw.mediaShape)) doc.mediaShape = raw.mediaShape;

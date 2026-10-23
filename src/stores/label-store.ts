@@ -3,12 +3,18 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { migrateDocumentBorders } from '@/lib/border-geometry';
-import { cloneDocument, generateId, type LabelDocument } from '@/lib/label-document';
+import { cloneDocument, generateId, readPaperType, type LabelDocument } from '@/lib/label-document';
 import { migrateDocumentReferenceImage } from '@/lib/reference-image';
 import { cleanupDeletedLabel, persistLabelFile } from '@/lib/user-files/labels';
 
+/** Black mark (and any unknown value) was saved before paper type changed. It opens as Label. */
+function migrateDocumentPaperType(doc: LabelDocument): LabelDocument {
+  const paperType = readPaperType(doc.paperType);
+  return paperType === doc.paperType ? doc : { ...doc, paperType };
+}
+
 function migrateStoredDocument(doc: LabelDocument): LabelDocument {
-  return migrateDocumentReferenceImage(migrateDocumentBorders(doc));
+  return migrateDocumentReferenceImage(migrateDocumentBorders(migrateDocumentPaperType(doc)));
 }
 
 export type LabelGroup = {

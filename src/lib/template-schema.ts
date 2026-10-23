@@ -60,7 +60,6 @@ export function canvasFillFromDocument(doc: Pick<LabelDocument, 'background' | '
   if (!doc.background || doc.background.type === 'none') return 'transparent';
   if (doc.background.type === 'color') return doc.background.color;
   if (doc.background.type === 'image') return 'transparent';
-  if (doc.paperType === 'Transparent') return 'transparent';
   return '#FFFFFF';
 }
 

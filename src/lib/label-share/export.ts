@@ -3,7 +3,7 @@
  * The caller passes a document obtained through `getDocument` (already migrated).
  */
 
-import type { LabelDocument, LabelElement } from '@/lib/label-document';
+import { readPaperType, type LabelDocument, type LabelElement } from '@/lib/label-document';
 import { LIMITS, SEZLABEL_FORMAT, SEZLABEL_KNOWN_LIMITS, SEZLABEL_MIN_APP_VERSION, SEZLABEL_SCHEMA_VERSION, SEZLABEL_EXTENSION } from './limits';
 import { sniffFont } from './font-sniff';
 import { imageExtension, sniffImage, type SniffedImage } from './image-sniff';
@@ -254,6 +254,8 @@ export async function buildSezlabel(source: LabelDocument, env: ExportEnv): Prom
   delete out.groupId;
   delete out.createdAt;
   delete out.updatedAt;
+  // Only Receipt, Label, Transparent or Cardstock is written. An old Black mark label goes out as Label.
+  out.paperType = readPaperType(out.paperType);
   out.schemaVersion = SEZLABEL_SCHEMA_VERSION;
 
   const documentBytes = enc.encode(stableStringify(out));

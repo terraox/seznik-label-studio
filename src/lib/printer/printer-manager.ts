@@ -20,6 +20,7 @@ import {
 } from '@/lib/printer/bluetooth-guard';
 import { assertJoshMonoBuffer, joshPackedPageDots } from '@/lib/printer/josh-mono-validate';
 import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
+import { tsplMedia } from '@/lib/printer/paper-type';
 import { joshCharging, joshFailMessage, joshPrintError, parseJoshFailure, type JoshPrinterStatus } from '@/lib/printer/josh-status';
 import { joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
@@ -3760,7 +3761,7 @@ class PrinterManager {
     speed?: number | null;
     vOffsetMm?: number;
     hOffsetMm?: number;
-    media?: 'gap' | 'bline' | 'continuous';
+    media?: 'gap' | 'bline' | 'continuous' | 'hole';
     orientation?: number;
     dpi?: number;
     threshold?: number;
@@ -3818,7 +3819,7 @@ class PrinterManager {
           xDots: spec.xOffsetDots,
           yDots: spec.yOffsetDots,
           copies: Math.max(1, Math.round(options.copies ?? 1)),
-          media: options.media ?? 'gap',
+          media: tsplMedia(options.media),
           orientation: options.orientation ?? 0,
           dpi: spec.dpi,
           direction: 1,
@@ -3908,7 +3909,7 @@ class PrinterManager {
     speed?: number | null;
     vOffsetMm?: number;
     hOffsetMm?: number;
-    media?: 'gap' | 'bline' | 'continuous';
+    media?: 'gap' | 'bline' | 'continuous' | 'hole';
     dpi?: number;
   }): Promise<boolean> {
     if (this.activeTransport !== 'td404-spp' || !this.usesTd404CommandSet) {
@@ -3963,7 +3964,7 @@ class PrinterManager {
           xDots: spec.xOffsetDots,
           yDots: spec.yOffsetDots,
           copies: Math.max(1, Math.round(options.copies ?? 1)),
-          media: options.media ?? 'gap',
+          media: tsplMedia(options.media),
           dpi: spec.dpi,
           direction: 1,
         });
@@ -4036,7 +4037,7 @@ class PrinterManager {
     dpi?: number;
     hOffsetMm?: number;
     vOffsetMm?: number;
-    media?: 'gap' | 'bline' | 'continuous';
+    media?: 'gap' | 'bline' | 'continuous' | 'hole';
     paperType?: 'tag' | 'continuous' | 'blacktag';
     threshold?: number;
     dither?: boolean;
@@ -4129,7 +4130,7 @@ class PrinterManager {
     dpi?: number;
     hOffsetMm?: number;
     vOffsetMm?: number;
-    media?: 'gap' | 'bline' | 'continuous';
+    media?: 'gap' | 'bline' | 'continuous' | 'hole';
     commandSet?: 'tspl' | 'escpos' | 'auto';
     /** Halftone/photo content only — ordered dither stipples solid shapes and text. */
     dither?: boolean;
@@ -4220,7 +4221,7 @@ class PrinterManager {
     dpi?: number;
     hOffsetMm?: number;
     vOffsetMm?: number;
-    media?: 'gap' | 'bline' | 'continuous';
+    media?: 'gap' | 'bline' | 'continuous' | 'hole';
     alignment?: 'left' | 'center';
   }): Promise<boolean> {
     if (!this.isJosh) {
@@ -4346,7 +4347,7 @@ class PrinterManager {
     dpi?: number;
     hOffsetMm?: number;
     vOffsetMm?: number;
-    media?: 'gap' | 'bline' | 'continuous';
+    media?: 'gap' | 'bline' | 'continuous' | 'hole';
     alignment?: 'left' | 'center';
   }): Promise<boolean> {
     if (!this.isJosh) {
@@ -4443,7 +4444,7 @@ class PrinterManager {
     dpi?: number;
     hOffsetMm?: number;
     vOffsetMm?: number;
-    media?: 'gap' | 'bline' | 'continuous';
+    media?: 'gap' | 'bline' | 'continuous' | 'hole';
     threshold?: number;
   }): Promise<boolean> {
     if (!this.isTez) {

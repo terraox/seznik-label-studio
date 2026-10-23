@@ -159,7 +159,7 @@ export async function printVardrzLabel(
     vOffsetMm?: number;
     hOffsetMm?: number;
     copies?: number;
-    media?: 'gap' | 'bline' | 'continuous';
+    media?: 'gap' | 'bline' | 'continuous' | 'hole';
     paperWidth?: '58mm' | '80mm';
   }
 ): Promise<boolean> {

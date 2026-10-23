@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import type { AutoWrapping, QrErrorLevel, QrZoneSize } from '@/components/editor/types';
 import { DEFAULT_CANVAS_SPLIT_RATIO } from '@/lib/editor/canvas-split';
-import type { LabelOrientation, PaperType } from '@/lib/label-document';
+import { readPaperType, type LabelOrientation, type PaperType } from '@/lib/label-document';
 import type { AppearancePreference } from '@/theme/tokens';
 
 export type ColorMode = 'Original' | 'B & W' | 'Halftone';
@@ -208,6 +208,15 @@ export const useSettingsStore = create<SettingsStoreState>()(
     {
       name: 'sez-print/settings',
       storage: createJSONStorage(() => AsyncStorage),
+      // Same shallow merge as the default. A saved Black mark (or unknown) default opens as Label.
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<SettingsStoreState>;
+        const merged = { ...current, ...saved };
+        if (saved.defaults) {
+          merged.defaults = { ...saved.defaults, paperType: readPaperType(saved.defaults.paperType) };
+        }
+        return merged;
+      },
     },
   ),
 );

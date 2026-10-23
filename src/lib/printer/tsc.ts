@@ -25,7 +25,7 @@ export type TscJobOptions = {
    * Media sensor: gap (default), black-mark (BLINE), or continuous.
    * Wrong mode causes overlapping prints on one physical label.
    */
-  media?: 'gap' | 'bline' | 'continuous';
+  media?: 'gap' | 'bline' | 'continuous' | 'hole';
 };
 
 function concatBytes(parts: Uint8Array[]): Uint8Array {

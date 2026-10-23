@@ -269,7 +269,7 @@ export function fullDocument(phone: FakePhone): LabelDocument {
     widthMm: 100,
     heightMm: 60,
     orientation: 90,
-    paperType: 'Cardstock',
+    paperType: 'Receipt',
     mediaShape: 'diecut',
     mediaGeometry: {
       type: 'rat_tail', bodyWidthMm: 63.5, bodyHeightMm: 14.3, tailLengthMm: 36.5, tailHeightMm: 4,

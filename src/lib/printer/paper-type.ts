@@ -1,15 +1,38 @@
 /**
  * Paper type → the sensor command each active printer actually sends.
- * Cardstock and Transparent have no SDK value; they use the label gap command.
- * Receipt sends the continuous command. That command is unconfirmed on hardware.
+ * Josh: Label GAP_GAP, Receipt GAP_NONE, Transparent GAP_HOLE, Cardstock GAP_BLACK.
+ * TD-404 / Dev: Label GAP n, Receipt GAP 0. Transparent and Cardstock print as Label there.
+ * Receipt, Transparent and Cardstock are unconfirmed on hardware. The TSPL BLINE line stays
+ * below but no paper type reaches it on TD-404 or Dev.
  */
 
-import { JOSH_GAP_TYPE } from '@/lib/printer/josh-print';
+import { readPaperType, type PaperType } from '@/lib/label-document';
+import { JOSH_GAP_TYPE, joshGapTypeFromMedia } from '@/lib/printer/josh-print';
 
-export const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'] as const;
+/** TD-404, Dev and the other TSPL-style printers. */
+export const PAPER_TYPES = ['Receipt', 'Label'] as const satisfies readonly PaperType[];
+/** Josh (LPAPI) has a sensor for each. */
+export const JOSH_PAPER_TYPES = ['Label', 'Receipt', 'Transparent', 'Cardstock'] as const satisfies readonly PaperType[];
 
 export type PaperPrinterId = 'josh' | 'td404' | 'dev';
-export type PaperMedia = 'gap' | 'bline' | 'continuous';
+/** 'hole' is Josh only. TSPL builders treat it as gap. */
+export type PaperMedia = 'gap' | 'bline' | 'continuous' | 'hole';
+
+/** TSPL has no hole sensor, so a Josh-only 'hole' media goes out as gap. */
+export function tsplMedia(media: PaperMedia | null | undefined): 'gap' | 'bline' | 'continuous' {
+  return media === 'bline' || media === 'continuous' ? media : 'gap';
+}
+
+/** Chips for the printer in use (printer-store sdkId). */
+export function paperTypesFor(sdkId: string | null | undefined): readonly PaperType[] {
+  return sdkId === 'josh' ? JOSH_PAPER_TYPES : PAPER_TYPES;
+}
+
+/** The chip to select: a type this printer does not offer shows as Label. The saved value is kept. */
+export function shownPaperType(paperType: unknown, sdkId: string | null | undefined): PaperType {
+  const type = readPaperType(paperType);
+  return paperTypesFor(sdkId).includes(type) ? type : 'Label';
+}
 
 const GAP_MIN_MM = 0;
 const GAP_MAX_MM = 20;
@@ -20,10 +43,18 @@ export function paperPrinterId(flags: { isJosh: boolean; isDev: boolean }): Pape
   return 'td404';
 }
 
-/** Receipt is continuous. Black mark is the mark sensor. Every other stock is gap paper. */
-export function mediaForPaperType(paperType: string | null | undefined): PaperMedia {
-  if (paperType === 'Receipt') return 'continuous';
-  if (paperType === 'Black mark') return 'bline';
+/**
+ * Receipt is continuous. On Josh, Transparent is the hole sensor and Cardstock the black-mark
+ * sensor. Everything else, and Transparent / Cardstock on TD-404 and Dev, is gap paper.
+ */
+export function mediaForPaperType(
+  paperType: string | null | undefined,
+  printer: PaperPrinterId = 'td404',
+): PaperMedia {
+  const type = readPaperType(paperType);
+  if (type === 'Receipt') return 'continuous';
+  if (printer === 'josh' && type === 'Transparent') return 'hole';
+  if (printer === 'josh' && type === 'Cardstock') return 'bline';
   return 'gap';
 }
 
@@ -65,9 +96,9 @@ export type PaperTypeCommand = {
   media: PaperMedia;
   /** Millimetres written to the printer. Receipt is 0. Dev is the rounded integer. */
   gapMm: number;
-  /** LPAPI GAP_TYPE. 0 = GAP_NONE, 2 = GAP_GAP, 3 = GAP_BLACK. Never -1 for a chosen type. */
+  /** LPAPI GAP_TYPE. 0 = GAP_NONE, 1 = GAP_HOLE, 2 = GAP_GAP, 3 = GAP_BLACK. Never -1 for a chosen type. */
   joshGapType: number;
-  /** LPAPI GAP_LENGTH, 0.01 mm. */
+  /** LPAPI GAP_LENGTH, 0.01 mm. Receipt is 0 and native does not send it. */
   joshGapLength01mm: number;
   /** The one TSPL line that changes. Josh does not send it. Includes CRLF. */
   mediaLine: string;
@@ -83,16 +114,11 @@ export function paperTypeCommand(input: {
   labelName?: string | null;
 }): PaperTypeCommand {
   void input.labelName;
-  const media = input.media ?? mediaForPaperType(input.paperType);
+  const media = input.media ?? mediaForPaperType(input.paperType, input.printer);
   const fallback = input.printer === 'td404' ? 2 : 3;
   const clamped = media === 'continuous' ? 0 : clampGapMm(input.gapMm, fallback);
   const gapMm = input.printer === 'dev' ? Math.max(0, Math.round(clamped)) : clamped;
-  const joshGapType =
-    media === 'continuous'
-      ? JOSH_GAP_TYPE.receipt
-      : media === 'bline'
-        ? JOSH_GAP_TYPE.blackMark
-        : JOSH_GAP_TYPE.label;
+  const joshGapType = joshGapTypeFromMedia(media);
   const mediaLine =
     input.printer === 'dev' ? devMediaLine(media, gapMm) : td404MediaLine(media, gapMm);
   return {
@@ -105,24 +131,24 @@ export function paperTypeCommand(input: {
   };
 }
 
-/** Log and label text. No trailing CRLF. */
+/** Log and label text. No trailing CRLF. Josh Receipt sends no GAP_LENGTH. */
 export function formatPaperTypeSetting(command: PaperTypeCommand): string {
   if (command.printer === 'josh') {
+    if (command.joshGapType === JOSH_GAP_TYPE.receipt) return `GAP_TYPE=${command.joshGapType}`;
     return `GAP_TYPE=${command.joshGapType} GAP_LENGTH=${command.joshGapLength01mm}`;
   }
   return command.mediaLine.replace(/\r\n$/, '');
 }
 
-/** Chip badge. Receipt and Black mark stay marked Test until a roll confirms them. */
+/** Chip badge. Receipt, Transparent and Cardstock stay marked Test until a roll confirms them. */
 export function paperTypeTestBadge(paperType: string): 'Test' | null {
-  if (paperType === 'Receipt' || paperType === 'Black mark') return 'Test';
-  return null;
+  return paperType === 'Receipt' || paperType === 'Transparent' || paperType === 'Cardstock' ? 'Test' : null;
 }
 
 /** Caption under the chips for the selected type. */
 export function paperTypeSelectionNote(paperType: string): string | null {
   if (paperType === 'Receipt') return 'Test. Continuous feed. Gap length is 0 mm.';
-  if (paperType === 'Black mark') return 'Test. Uses the black-mark sensor.';
-  if (paperType === 'Cardstock' || paperType === 'Transparent') return 'Same gap as Label.';
+  if (paperType === 'Transparent') return 'Test. Uses the hole sensor. Gap Length is the hole length.';
+  if (paperType === 'Cardstock') return 'Test. Uses the black-mark sensor. Gap Length is the mark length.';
   return null;
 }

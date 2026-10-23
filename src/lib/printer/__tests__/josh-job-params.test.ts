@@ -30,9 +30,10 @@ test('resolved Auto 10/3 passes through; gap clamps 0–20 mm', () => {
 
 test('paper type maps to LPAPI GAP_TYPE; receipt zeros gap millimetres', () => {
   assert.equal(joshMediaForPaperType('Receipt'), 'continuous');
-  assert.equal(joshMediaForPaperType('Black mark'), 'bline');
+  assert.equal(joshMediaForPaperType('Black mark'), 'gap');
   assert.equal(joshMediaForPaperType('Label'), 'gap');
-  assert.equal(joshMediaForPaperType('Cardstock'), 'gap');
+  assert.equal(joshMediaForPaperType('Transparent'), 'hole');
+  assert.equal(joshMediaForPaperType('Cardstock'), 'bline');
 
   const receipt = resolveJoshJobParams({ paperType: 'Receipt', gapMm: 3, density: 12, speed: 4 });
   assert.equal(receipt.media, 'continuous');
@@ -49,8 +50,8 @@ test('paper type maps to LPAPI GAP_TYPE; receipt zeros gap millimetres', () => {
   assert.equal(floor.speed, 1);
 
   const mark = resolveJoshJobParams({ paperType: 'Black mark', gapMm: 3.5 });
-  assert.equal(mark.media, 'bline');
-  assert.equal(mark.gapType, JOSH_GAP_TYPE.blackMark);
+  assert.equal(mark.media, 'gap');
+  assert.equal(mark.gapType, JOSH_GAP_TYPE.label);
   assert.equal(mark.gapMm, 3.5);
 
   const label = resolveJoshJobParams({ paperType: 'Label', gapMm: 3 });
@@ -74,23 +75,24 @@ test('explicit media wins over paper type', () => {
   assert.equal(job.speed, 1);
 });
 
-test('five paper chips use LPAPI gap type; only receipt zeros the gap', () => {
+test('Josh GAP_TYPE: Receipt 0, Transparent 1, Label 2, Cardstock 3; old Black mark is 2', () => {
   const receipt = resolveJoshJobParams({ paperType: 'Receipt', gapMm: 3 });
   assert.equal(receipt.gapType, JOSH_GAP_TYPE.receipt);
   assert.equal(receipt.gapMm, 0);
   assert.equal(joshGapLength01mm(receipt.gapMm), 0);
 
-  for (const paperType of ['Label', 'Cardstock', 'Transparent'] as const) {
+  for (const [paperType, media, gapType] of [
+    ['Label', 'gap', 2],
+    ['Black mark', 'gap', 2],
+    ['Transparent', 'hole', 1],
+    ['Cardstock', 'bline', 3],
+  ] as const) {
     const job = resolveJoshJobParams({ paperType, gapMm: 3 });
-    assert.equal(job.media, 'gap');
-    assert.equal(job.gapType, JOSH_GAP_TYPE.label);
-    assert.equal(job.gapMm, 3);
-    assert.equal(joshGapLength01mm(job.gapMm), 300);
+    assert.equal(job.media, media, paperType);
+    assert.equal(job.gapType, gapType, paperType);
+    assert.equal(job.gapMm, 3, paperType);
+    assert.equal(joshGapLength01mm(job.gapMm), 300, paperType);
   }
-
-  const mark = resolveJoshJobParams({ paperType: 'Black mark', gapMm: 3 });
-  assert.equal(mark.media, 'bline');
-  assert.equal(mark.gapType, JOSH_GAP_TYPE.blackMark);
-  assert.equal(mark.gapMm, 3);
-  assert.equal(joshGapLength01mm(mark.gapMm), 300);
+  assert.equal(JOSH_GAP_TYPE.hole, 1);
+  assert.equal(JOSH_GAP_TYPE.blackMark, 3);
 });

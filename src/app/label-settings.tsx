@@ -25,7 +25,7 @@ import { editorBridge, isBorderRemoval } from '@/constants/editor-bridge';
 import { DRAWING_COLORS } from '@/components/editor/types';
 import { borderBoxForCenterGap } from '@/lib/border-geometry';
 import { generateId, parseOrientation, readPaperType, type LabelDocument, type LabelOrientation, type PaperType } from '@/lib/label-document';
-import { paperTypeSelectionNote, paperTypeTestBadge } from '@/lib/printer/paper-type';
+import { paperTypesFor, paperTypeSelectionNote, paperTypeTestBadge, shownPaperType } from '@/lib/printer/paper-type';
 import { clampLabelMm } from '@/lib/label-geometry';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import {
@@ -47,7 +47,6 @@ import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
-const PAPER_TYPES = ['Receipt', 'Label', 'Cardstock', 'Transparent', 'Black mark'] as const;
 const MIRROR_MODES = ['Close', 'Reverse', 'Syntropy'] as const;
 
 export default function LabelSettingsScreen() {
@@ -360,14 +359,14 @@ export default function LabelSettingsScreen() {
         />
         <SettingsSegmentRow
           label="Paper Type"
-          options={PAPER_TYPES}
-          selected={readPaperType(doc.paperType)}
+          options={paperTypesFor(printerSdkId)}
+          selected={shownPaperType(doc.paperType, printerSdkId)}
           badgeFor={(option) => paperTypeTestBadge(option)}
           onSelect={(paperType) => commit({ paperType: paperType as PaperType })}
           showDivider
         />
-        {paperTypeSelectionNote(readPaperType(doc.paperType)) ? (
-          <SettingsNote>{paperTypeSelectionNote(readPaperType(doc.paperType)) ?? ''}</SettingsNote>
+        {paperTypeSelectionNote(shownPaperType(doc.paperType, printerSdkId)) ? (
+          <SettingsNote>{paperTypeSelectionNote(shownPaperType(doc.paperType, printerSdkId)) ?? ''}</SettingsNote>
         ) : null}
         <SettingsStepperRow
           label="Gap Length"

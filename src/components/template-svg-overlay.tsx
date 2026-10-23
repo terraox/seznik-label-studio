@@ -5,9 +5,8 @@ import { SvgXml } from 'react-native-svg';
 import { acrossLayout } from '@/lib/across';
 import type { LabelDocument } from '@/lib/label-document';
 
-/** Label colour of the stock: the document's own colour, white by default, none for transparent stock. */
+/** Label colour of the stock: the document's own colour, white by default. */
 function labelColor(doc: Pick<LabelDocument, 'background' | 'paperType'>): string | null {
-  if (doc.paperType === 'Transparent') return null;
   return doc.background?.type === 'color' ? doc.background.color : '#FFFFFF'; // theme-fixed: label paper colour (document data)
 }
 

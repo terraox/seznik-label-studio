@@ -471,7 +471,7 @@ export type PrintSpec = {
   /** Printhead Y offset (in dots). */
   yOffsetDots: number;
   /** Media sensor mode. */
-  mediaType: 'gap' | 'bline' | 'continuous';
+  mediaType: 'gap' | 'bline' | 'continuous' | 'hole';
   /** Inter-label gap length in mm. */
   gapMm: number;
 };
@@ -483,7 +483,7 @@ export type CreatePrintSpecOptions = {
   orientation?: LabelOrientation;
   profile?: PrinterProfile;
   calibration?: PrintCalibration;
-  mediaType?: 'gap' | 'bline' | 'continuous';
+  mediaType?: 'gap' | 'bline' | 'continuous' | 'hole';
   gapMm?: number;
 };
 

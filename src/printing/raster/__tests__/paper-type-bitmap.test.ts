@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { LabelDocument, PaperType } from '@/lib/label-document';
+import { LEGACY_PAPER_TYPES, type LabelDocument } from '@/lib/label-document';
 import { rasterizeDocumentToBitmap } from '@/printing/raster/skia-rasterizer';
 
 const dpi = 203;
-const types: PaperType[] = ['Label', 'Receipt', 'Black mark', 'Cardstock', 'Transparent'];
+/** Every paper type, plus the old stored value, which opens as Label. */
+const types: string[] = ['Label', 'Receipt', 'Transparent', 'Cardstock', ...LEGACY_PAPER_TYPES];
 
-function doc(paperType: PaperType): LabelDocument {
+function doc(paperType: string): LabelDocument {
   return {
     id: 'paper-type-bitmap',
     name: paperType === 'Label' ? 'black mark sample' : paperType,

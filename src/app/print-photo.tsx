@@ -55,13 +55,15 @@ import {
 import { printArtworkJob } from '@/lib/printer/universal-bridge';
 import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-manager';
 import {
-  PAPER_TYPES,
   formatPaperTypeSetting,
   paperPrinterId,
   paperTypeCommand,
+  paperTypesFor,
   paperTypeSelectionNote,
   paperTypeTestBadge,
+  shownPaperType,
 } from '@/lib/printer/paper-type';
+import type { PaperType } from '@/lib/label-document';
 import { logPrintTrace } from '@/printing';
 import { usePrinterStore } from '@/stores/printer-store';
 import { usePrintStatsStore } from '@/stores/print-stats-store';
@@ -217,7 +219,10 @@ export default function PrintPhotoScreen() {
   const [darkness, setDarkness] = useState<number | null>(null);
   const [speed, setSpeed] = useState<number | null>(null);
   const [orientation, setOrientation] = useState<(typeof ORIENTATIONS)[number]>('0°');
-  const [paperType, setPaperType] = useState<(typeof PAPER_TYPES)[number]>(defaults.paperType);
+  const [paperType, setPaperType] = useState<PaperType>(defaults.paperType);
+  const printerSdkId = usePrinterStore((s) => s.sdkId);
+  /** TD-404 and Dev offer Receipt and Label only; Transparent and Cardstock show as Label there. */
+  const shownPaper = shownPaperType(paperType, printerSdkId);
   const [gapLength, setGapLength] = useState(3);
   const [hOffset, setHOffset] = useState(0);
   const [vOffset, setVOffset] = useState(0);
@@ -846,13 +851,13 @@ export default function PrintPhotoScreen() {
           <ChipGroup options={ORIENTATIONS} selected={orientation} onSelect={setOrientation} />
           <Text style={[styles.groupLabel, styles.groupSpaced]}>Paper Type</Text>
           <ChipGroup
-            options={PAPER_TYPES}
-            selected={paperType}
+            options={paperTypesFor(printerSdkId)}
+            selected={shownPaper}
             onSelect={setPaperType}
             badgeFor={(option) => paperTypeTestBadge(option)}
           />
-          {paperTypeSelectionNote(paperType) ? (
-            <Text style={styles.paperNote}>{paperTypeSelectionNote(paperType)}</Text>
+          {paperTypeSelectionNote(shownPaper) ? (
+            <Text style={styles.paperNote}>{paperTypeSelectionNote(shownPaper)}</Text>
           ) : null}
           <StepperRow
             label="Gap Length"

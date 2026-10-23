@@ -120,7 +120,8 @@ import {
 import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-manager';
 import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
 import {
-  PAPER_TYPES,
+  paperTypesFor,
+  shownPaperType,
   formatPaperTypeSetting,
   paperPrinterId,
   paperTypeCommand,
@@ -2369,6 +2370,7 @@ export default function PrintScreen() {
               paper.heightMm,
               joshJob?.gapMm ?? gapLength,
               joshJob?.speed ?? printSpeed,
+              (joshJob?.media ?? media) === 'continuous',
             );
             await new Promise<void>((resolve) => setTimeout(resolve, pitchMs));
           }
@@ -2823,25 +2825,24 @@ export default function PrintScreen() {
               </View>
             ) : null}
 
-            {qualityBridge === 'josh-lpapi' ? (
-              <View style={styles.cardSection}>
-                <Text style={styles.groupLabel}>Paper Type</Text>
-                <ChipGroup
-                  options={PAPER_TYPES}
-                  selected={paperType}
-                  onSelect={changePaperType}
-                  badgeFor={(option) => paperTypeTestBadge(option)}
-                />
-                {paperTypeSelectionNote(paperType) ? (
-                  <Text style={styles.helperText}>{paperTypeSelectionNote(paperType)}</Text>
-                ) : null}
-                {jewelryDieCutJob ? (
-                  <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
-                    💡 Clear-liner jewelry rolls with black timing lines on the back require Paper Type set to "Black mark". If prints skip or overlap, run "Calibrate Paper Sensor" in Printer Connect.
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
+            {/* Every printer: Josh shows four types, TD-404 / Dev show Receipt and Label. */}
+            <View style={styles.cardSection}>
+              <Text style={styles.groupLabel}>Paper Type</Text>
+              <ChipGroup
+                options={paperTypesFor(printerSdkId)}
+                selected={shownPaperType(paperType, printerSdkId)}
+                onSelect={changePaperType}
+                badgeFor={(option) => paperTypeTestBadge(option)}
+              />
+              {paperTypeSelectionNote(shownPaperType(paperType, printerSdkId)) ? (
+                <Text style={styles.helperText}>{paperTypeSelectionNote(shownPaperType(paperType, printerSdkId))}</Text>
+              ) : null}
+              {jewelryDieCutJob ? (
+                <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
+                  💡 Jewelry rolls print as Label. If prints skip or overlap, run “Calibrate Paper Sensor” in Printer Connect.
+                </Text>
+              ) : null}
+            </View>
           </View>
 
           {/* Collapsible Advanced Settings (Darkness, Speed, Offsets, Orientation) */}

@@ -111,6 +111,8 @@ export default function PrinterDiagnosticsScreen() {
   const [gapMmText, setGapMmText] = useState(() => String(defaultDiagnosticGapMm()));
   const [gridTestOpen, setGridTestOpen] = useState(false);
   const [joshStatus, setJoshStatus] = useState<JoshPrinterStatus | null>(null);
+  /** PrinterParam gap fields, read once per visit. 'missing' = no report from this build or printer. */
+  const [joshGap, setJoshGap] = useState<{ gapType: number; gapLength: number; supportedGapTypes: number[] } | 'missing' | null>(null);
 
   const gridPreset = useMemo(
     () => DIAGNOSTIC_GRID_SIZE_PRESETS.find((p) => p.id === gridPresetId) ?? DIAGNOSTIC_GRID_SIZE_PRESETS[0],
@@ -134,14 +136,24 @@ export default function PrinterDiagnosticsScreen() {
   }, []);
 
   // Josh: read the printer about once a second while this page is open (no print job is sent).
-  // Nothing is read while a print runs.
+  // Nothing is read while a print runs. The gap report is read once, in the same loop, so the
+  // two PrinterParam reads never overlap.
   useEffect(() => {
     if (sdkId !== 'josh') return;
     let stopped = false;
+    let gapRead = false;
     const loop = async () => {
       while (!stopped) {
         const manager = getPrinterManager();
-        const s = usePrinterStore.getState().status === 'connected' && manager.isJosh
+        const linked = usePrinterStore.getState().status === 'connected' && manager.isJosh;
+        if (linked && !gapRead) {
+          gapRead = true;
+          const gap = await manager.readJoshGapReport();
+          if (stopped) return;
+          setJoshGap(gap ? gap : 'missing');
+          console.info(`[PAPER-TYPE] josh ${gap?.line ?? 'printer gap report unavailable'}`);
+        }
+        const s = linked
           ? await manager.readJoshPrinterStatus(700)
           : null;
         if (stopped) return;
@@ -431,6 +443,27 @@ export default function PrinterDiagnosticsScreen() {
                 })()}
               />
               <DiagRow label="Paper" value={joshPrinterSays(joshStatus?.printerStatus)} />
+              <DiagRow
+                label="Gap type"
+                value={joshGap == null ? 'n/a' : joshGap === 'missing' ? 'not reported' : String(joshGap.gapType)}
+                mono
+              />
+              <DiagRow
+                label="Gap length"
+                value={joshGap == null ? 'n/a' : joshGap === 'missing' ? 'not reported' : `${joshGap.gapLength} (printer units)`}
+                mono
+              />
+              <DiagRow
+                label="Supported gap types"
+                value={
+                  joshGap == null
+                    ? 'n/a'
+                    : joshGap === 'missing'
+                      ? 'not reported'
+                      : `${joshGap.supportedGapTypes.join(',') || 'none listed'} · Receipt 0 ${joshGap.supportedGapTypes.includes(0) ? 'yes' : 'no'} · Label 2 ${joshGap.supportedGapTypes.includes(2) ? 'yes' : 'no'}`
+                }
+                mono
+              />
             </View>
           ) : null}
 

@@ -20,6 +20,7 @@ import {
 import { createTd404Adapter, createTd404Capabilities } from '@/printing/adapters/td404/TD404Adapter';
 import { defaultPrintQueue } from '@/printing/printer/PrintQueue';
 import { encodeTscBitmapJob, inspectTsplJob } from '@/lib/printer/tsc';
+import { tsplMedia } from '@/lib/printer/paper-type';
 import { createPrintGeometry, type PrintGeometry } from '@/lib/printer/print-spec';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import {
@@ -41,7 +42,7 @@ export type ArtworkPrintInput = {
   flipY?: boolean;
   copies?: number;
   gapMm?: number;
-  mediaType?: 'gap' | 'bline' | 'continuous';
+  mediaType?: 'gap' | 'bline' | 'continuous' | 'hole';
   density?: number | null;
   speed?: number | null;
   offsetXmm?: number;
@@ -323,7 +324,7 @@ export async function printPreparedGrayJob(
   const adapter = adapterFromManager();
   const bytes = await adapter.encode(job, {
     gapMm: input.gapMm,
-    mediaType: input.mediaType,
+    mediaType: tsplMedia(input.mediaType),
     density: input.density,
     speed: input.speed,
     offsetXmm: input.offsetXmm,
@@ -471,7 +472,7 @@ async function runArtworkJob(
   const adapter = adapterFromManager();
   const bytes = await adapter.encode(rendered, {
     gapMm: input.gapMm,
-    mediaType: input.mediaType,
+    mediaType: tsplMedia(input.mediaType),
     density: input.density,
     speed: input.speed,
     offsetXmm: input.offsetXmm,

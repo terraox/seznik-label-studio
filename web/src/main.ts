@@ -81,7 +81,7 @@ function drawPanels() {
     field('Width (mm)', `<input id="lW" type="number" step="0.1" min="1" max="2000" value="${doc.widthMm}">`),
     field('Height (mm)', `<input id="lH" type="number" step="0.1" min="1" max="2000" value="${doc.heightMm}">`),
     field('Orientation', `<select id="lOri">${[0, 90, 180, 270].map((o) => `<option ${o === doc.orientation ? 'selected' : ''}>${o}</option>`).join('')}</select>`),
-    field('Paper', `<select id="lPaper">${['Label', 'Receipt', 'Cardstock', 'Transparent', 'Black mark'].map((p) => `<option ${p === doc.paperType ? 'selected' : ''}>${p}</option>`).join('')}</select>`),
+    field('Paper', `<select id="lPaper">${['Label', 'Receipt', 'Transparent', 'Cardstock'].map((p) => `<option ${p === doc.paperType ? 'selected' : ''}>${p}</option>`).join('')}</select>`),
     field('Shape', `<select id="lShape">${['rectangle', 'roundedRectangle', 'circle', 'ellipse', 'diecut'].map((p) => `<option ${p === (doc.mediaShape ?? 'rectangle') ? 'selected' : ''}>${p}</option>`).join('')}</select>`),
     field('Background', `<input id="lBg" type="color" value="${doc.background?.type === 'color' ? doc.background.color.slice(0, 7) : '#ffffff'}">`),
   ].join('');

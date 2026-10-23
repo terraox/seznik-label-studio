@@ -3,6 +3,7 @@ import {
   applyUpsBatchMirror,
   createUpsConfig,
   parseOrientation,
+  readPaperType,
   type LabelDocument,
   type LabelOrientation,
   type PaperType,
@@ -140,17 +141,14 @@ function applyMirrorMode(doc: LabelDocument, settings: LabelSettings): LabelDocu
 }
 
 /**
- * Set the paper type and keep the canvas fill in step: Transparent clears a plain
- * white fill, other papers turn an empty fill white. Coloured and image backgrounds stay.
+ * Set the paper type and keep the canvas fill in step: an empty fill turns white.
+ * Coloured and image backgrounds stay.
  */
 export function applyPaperType(doc: LabelDocument, paperType: PaperType): LabelDocument {
   const bg = doc.background;
-  const plainWhite = bg?.type === 'color' && /^#?f{3}(f{3})?$/i.test(bg.color.trim());
   const empty = !bg || bg.type === 'none';
-  let background = bg;
-  if (paperType === 'Transparent' && plainWhite) background = { type: 'none' };
-  else if (paperType !== 'Transparent' && empty) background = { type: 'color', color: '#FFFFFF' };
-  return { ...doc, paperType, background };
+  const background: LabelDocument['background'] = empty ? { type: 'color', color: '#FFFFFF' } : bg;
+  return { ...doc, paperType: readPaperType(paperType), background };
 }
 
 export type LabelDocumentPatch = {

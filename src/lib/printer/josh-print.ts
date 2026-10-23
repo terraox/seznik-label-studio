@@ -19,8 +19,7 @@ export const JOSH_DOTS_PER_MM = dotsPerMm(JOSH_HARDWARE_DPI);
 
 /**
  * IDzPrinter.PrintParamValue in LPAPI-2026-01-08-R.jar.
- * GAP_NONE 0, GAP_HOLE 1, GAP_GAP 2, GAP_BLACK 3.
- * Cardstock and Transparent have no SDK value; they use GAP_GAP.
+ * GAP_NONE 0 (Receipt), GAP_HOLE 1 (Transparent), GAP_GAP 2 (Label), GAP_BLACK 3 (Cardstock).
  */
 export const JOSH_GAP_TYPE = {
   printerDefault: -1,
@@ -49,9 +48,10 @@ export function joshLabelDots(
 }
 
 export function joshGapTypeFromMedia(
-  media: 'gap' | 'bline' | 'continuous' | undefined,
+  media: 'gap' | 'bline' | 'continuous' | 'hole' | undefined,
 ): number {
   if (media === 'continuous') return JOSH_GAP_TYPE.receipt;
+  if (media === 'hole') return JOSH_GAP_TYPE.hole;
   if (media === 'bline') return JOSH_GAP_TYPE.blackMark;
   return JOSH_GAP_TYPE.label;
 }
@@ -242,13 +242,15 @@ function roundMm(value: number): number {
 /**
  * Same wait as JoshPrinterManager.labelPitchMs. A collated job pauses between
  * separate copies=1 sends. The native wait runs only when one call has copies > 1.
- * Feed length is height + max(gap, or 3 when gap is not positive, and 2), at
- * speed inches/sec when speed > 0 else 3, plus 250 ms, clamped to 400–3000.
- * Truncates the way Kotlin converts the sum to Long.
+ * Label feed is height + max(gap, or 3 when gap is not positive, and 2).
+ * Receipt (continuous) has no gap, so its feed is the height alone.
+ * Then speed inches/sec when speed > 0 else 3, plus 250 ms, clamped to 400–3000,
+ * so the wait is never zero or negative. Truncates the way Kotlin converts the sum to Long.
  */
-export function joshLabelPitchMs(heightMm: number, gapMm: number, speed: number): number {
+export function joshLabelPitchMs(heightMm: number, gapMm: number, speed: number, continuous = false): number {
+  const feedMm = Number.isFinite(heightMm) ? Math.max(0, heightMm) : 0;
   const gapPart = gapMm > 0 ? gapMm : 3;
-  const pitchMm = heightMm + Math.max(gapPart, 2);
+  const pitchMm = continuous ? feedMm : feedMm + Math.max(gapPart, 2);
   const ips = speed > 0 ? speed : 3;
   const mmPerSec = Math.max(ips * 25.4, 20);
   const raw = (pitchMm / mmPerSec) * 1000 + 250;

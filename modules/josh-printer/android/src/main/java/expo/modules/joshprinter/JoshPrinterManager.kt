@@ -1547,7 +1547,13 @@ class JoshPrinterManager(private val context: Context) {
         forceGap: Boolean = false,
     ): LpapiSessionParams {
         val gapTypeValue = if (paramGapType >= 0) paramGapType else GAP_TYPE_LABEL
-        val gapLengthValue = gapMmTo01mm(if (paramGapLengthMm >= 0.0) paramGapLengthMm else LABEL_GAP_MM)
+        // Receipt (GAP_NONE) is continuous: no gap length is set or put in the Bundle (-1 = omit).
+        val sendGapLength = gapTypeValue != GAP_TYPE_RECEIPT
+        val gapLengthValue = if (sendGapLength) {
+            gapMmTo01mm(if (paramGapLengthMm >= 0.0) paramGapLengthMm else LABEL_GAP_MM)
+        } else {
+            -1
+        }
         val density = if (paramDensity >= 0) {
             paramDensity.coerceIn(PrintParamValue.MIN_PRINT_DARKNESS, PrintParamValue.MAX_PRINT_DARKNESS)
         } else {
@@ -1561,13 +1567,17 @@ class JoshPrinterManager(private val context: Context) {
         }
         Log.i(
             TAG,
-            "[$jobId] [$phase:GAP] ${gapTypeName(gapTypeValue)} type=$gapTypeValue length=${paramGapLengthMm}mm → $gapLengthValue (0.01 mm) force=$forceGap",
+            if (sendGapLength) {
+                "[$jobId] [$phase:GAP] ${gapTypeName(gapTypeValue)} type=$gapTypeValue length=${paramGapLengthMm}mm → $gapLengthValue (0.01 mm) force=$forceGap"
+            } else {
+                "[$jobId] [$phase:GAP] ${gapTypeName(gapTypeValue)} type=$gapTypeValue length not sent (continuous) force=$forceGap"
+            },
         )
         // Every job. A cached skip left the printer on the previous sensor when the
         // last command was not accepted. LPAPI setPrintPageGapType is command byte 66.
         try {
             currentApi.setPrintPageGapType(gapTypeValue)
-            currentApi.setPrintPageGapLength(gapLengthValue)
+            if (sendGapLength) currentApi.setPrintPageGapLength(gapLengthValue)
             lastJobGapType = gapTypeValue
             lastJobGapLength = gapLengthValue
         } catch (e: Exception) {
@@ -1627,9 +1637,14 @@ class JoshPrinterManager(private val context: Context) {
         Log.w(TAG, "[$jobId] still busy after ${timeoutMs}ms — continuing")
     }
 
-    /** Mechanical time to feed one label + gap at the job speed (inches/sec). */
-    private fun labelPitchMs(heightMm: Double, gapMm: Double, speed: Int): Long {
-        val pitchMm = heightMm + max(if (gapMm > 0.0) gapMm else LABEL_GAP_MM, 2.0)
+    /**
+     * Mechanical time to feed one label + gap at the job speed (inches/sec).
+     * Continuous (Receipt) has no gap, so it feeds the height alone. The 400 ms floor
+     * keeps the wait positive at gap 0. Same as joshLabelPitchMs in josh-print.ts.
+     */
+    private fun labelPitchMs(heightMm: Double, gapMm: Double, speed: Int, continuous: Boolean = false): Long {
+        val feedMm = if (heightMm.isFinite()) max(heightMm, 0.0) else 0.0
+        val pitchMm = if (continuous) feedMm else feedMm + max(if (gapMm > 0.0) gapMm else LABEL_GAP_MM, 2.0)
         val ips = if (speed > 0) speed.toDouble() else 3.0
         val mmPerSec = (ips * 25.4).coerceAtLeast(20.0)
         return ((pitchMm / mmPerSec) * 1000.0 + COPY_GAP_SLACK_MS).toLong().coerceIn(400L, 3_000L)
@@ -1645,8 +1660,9 @@ class JoshPrinterManager(private val context: Context) {
         heightMm: Double,
         gapMm: Double,
         speed: Int,
+        continuous: Boolean = false,
     ) {
-        val pitchMs = labelPitchMs(heightMm, gapMm, speed)
+        val pitchMs = labelPitchMs(heightMm, gapMm, speed, continuous)
         val t0 = System.currentTimeMillis()
         // Idle may be Connected or Connected2 — do not wait for a specific enum.
         waitWhilePrinterBusy(currentApi, jobId, pitchMs + 8_000L)
@@ -1773,6 +1789,7 @@ class JoshPrinterManager(private val context: Context) {
                     heightMm,
                     paramGapLengthMm,
                     session.speed,
+                    session.gapTypeValue == GAP_TYPE_RECEIPT,
                 )
             }
             val used = submitMmJobWithFallbacks(
@@ -1802,6 +1819,7 @@ class JoshPrinterManager(private val context: Context) {
                 heightMm,
                 paramGapLengthMm,
                 session.speed,
+                session.gapTypeValue == GAP_TYPE_RECEIPT,
             )
         }
         finishSubmitWithoutDeviceAck(jobId)

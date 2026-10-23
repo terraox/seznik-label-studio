@@ -33,7 +33,7 @@ export interface PdfPrintOptions {
   /** Label gap in mm. Default: 3. */
   gapMm?: number;
   /** Media type: gap, continuous (receipt), or bline (black mark). Default: 'gap'. */
-  mediaType?: 'gap' | 'continuous' | 'bline';
+  mediaType?: 'gap' | 'continuous' | 'bline' | 'hole';
   /** Apply Floyd-Steinberg error diffusion for continuous tones. Default: true. */
   dither?: boolean;
   /** Document name for history logging. */

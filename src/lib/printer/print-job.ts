@@ -343,7 +343,7 @@ export function encodeConnectedPrinterJob(
     speed: number | null;
     vOffsetMm: number;
     hOffsetMm?: number;
-    media?: 'gap' | 'bline' | 'continuous';
+    media?: 'gap' | 'bline' | 'continuous' | 'hole';
     forceLeftAligned?: boolean;
     dpi?: number;
   },
@@ -451,7 +451,7 @@ export type NativePngPrintOptions = {
   speed?: number | null;
   vOffsetMm?: number;
   hOffsetMm?: number;
-  media?: 'gap' | 'bline' | 'continuous';
+  media?: 'gap' | 'bline' | 'continuous' | 'hole';
   orientation?: number;
   dpi?: number;
   threshold?: number;

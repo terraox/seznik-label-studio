@@ -2,6 +2,7 @@ import type { PaperType } from '@/lib/label-document';
 import { buildDiagnosticCompactLabelDocument } from '@/lib/printer/diagnostic-test-label';
 import { printLabelDocumentMainPipeline } from '@/lib/printer/main-pipeline-print';
 import {
+  JOSH_PAPER_TYPES,
   PAPER_TYPES,
   formatPaperTypeSetting,
   paperPrinterId,
@@ -9,7 +10,6 @@ import {
   type PaperPrinterId,
 } from '@/lib/printer/paper-type';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
-import { usePrinterStore } from '@/stores/printer-store';
 
 export const PAPER_TYPE_TEST_GAP_MM = 3;
 
@@ -19,9 +19,8 @@ export const PAPER_TYPE_TEST_PHOTO =
 const EXPECT: Record<PaperType, string> = {
   Label: 'One die-cut label. Stops at the next gap.',
   Receipt: 'Continuous feed. No gap seek. Unconfirmed.',
-  'Black mark': 'Starts after the mark. Sensor may mis-feed.',
-  Cardstock: 'Same command as Label. Not its own sensor.',
-  Transparent: 'Same command as Label. Not its own sensor.',
+  Transparent: 'Josh: hole sensor. TD-404 and Dev: same as Label. Unconfirmed.',
+  Cardstock: 'Josh: black-mark sensor. TD-404 and Dev: same as Label. Unconfirmed.',
 };
 
 export type PaperTypeTestRow = {
@@ -38,7 +37,7 @@ export function activePaperTypeTestPrinter(): PaperPrinterId | null {
 }
 
 export function paperTypeTestRows(printer: PaperPrinterId): PaperTypeTestRow[] {
-  return PAPER_TYPES.map((paperType) => {
+  return (printer === 'josh' ? JOSH_PAPER_TYPES : PAPER_TYPES).map((paperType) => {
     const command = paperTypeCommand({
       printer,
       paperType,
@@ -61,13 +60,6 @@ export async function printPaperTypeTestRow(paperType: PaperType): Promise<strin
   const printer = activePaperTypeTestPrinter();
   if (!printer) {
     throw new Error('Connect a Josh, TD-404, or Dev printer.');
-  }
-  if (
-    printer === 'dev' &&
-    paperType === 'Black mark' &&
-    usePrinterStore.getState().devCommandSet === 'escpos'
-  ) {
-    throw new Error('ESC/POS has no black-mark command. Switch Dev to TSPL before this row.');
   }
   const command = paperTypeCommand({
     printer,

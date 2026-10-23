@@ -39,7 +39,11 @@ export type LabelReferenceImage = {
 };
 
 export type LabelOrientation = 0 | 90 | 180 | 270;
-export type PaperType = 'Receipt' | 'Label' | 'Cardstock' | 'Transparent' | 'Black mark';
+/**
+ * Receipt is continuous paper. Label is gap paper. Transparent and Cardstock are Josh only
+ * (hole and black-mark sensors); other printers print them as Label. Older values are read by readPaperType.
+ */
+export type PaperType = 'Receipt' | 'Label' | 'Transparent' | 'Cardstock';
 /** Physical stock outline. Printers still receive a rectangular BITMAP; this clips preview/capture ink. */
 export type MediaShape = 'rectangle' | 'roundedRectangle' | 'circle' | 'ellipse' | 'diecut';
 
@@ -264,21 +268,17 @@ export function parseOrientation(value: string | undefined): LabelOrientation {
   return numeric === 90 || numeric === 180 || numeric === 270 ? numeric : 0;
 }
 
-const PAPER_TYPE_VALUES = new Set<string>([
-  'Receipt',
-  'Label',
-  'Cardstock',
-  'Transparent',
-  'Black mark',
-]);
+const PAPER_TYPE_VALUES: readonly PaperType[] = ['Receipt', 'Label', 'Transparent', 'Cardstock'];
+
+/** Values saved before paper type changed. They open as Label. */
+export const LEGACY_PAPER_TYPES = ['Black mark'] as const;
 
 /**
- * Read a stored or route paper type. A missing or unknown value is Label.
- * An explicit Cardstock stays Cardstock — this does not rewrite saved labels.
+ * The one place a stored, imported or route paper type is read. Receipt, Label, Transparent
+ * and Cardstock stay. Everything else, including Black mark, missing and unknown, is Label.
  */
 export function readPaperType(value: unknown): PaperType {
-  if (typeof value === 'string' && PAPER_TYPE_VALUES.has(value)) return value as PaperType;
-  return 'Label';
+  return PAPER_TYPE_VALUES.includes(value as PaperType) ? (value as PaperType) : 'Label';
 }
 
 export function parsePaperType(value: string | undefined): PaperType {
@@ -298,7 +298,7 @@ export function createLabelDocument(params: {
   background?: TemplateBackground;
 }): LabelDocument {
   const now = Date.now();
-  const paperType = params.paperType ?? 'Label';
+  const paperType = readPaperType(params.paperType);
   return {
     id: generateId('label'),
     name: params.name,
@@ -309,9 +309,7 @@ export function createLabelDocument(params: {
     mediaShape: params.mediaShape,
     mediaGeometry: params.mediaGeometry,
     elements: params.elements ?? [],
-    background:
-      params.background ??
-      (paperType === 'Transparent' ? { type: 'none' } : { type: 'color', color: '#FFFFFF' }),
+    background: params.background ?? { type: 'color', color: '#FFFFFF' },
     groupId: params.groupId ?? null,
     createdAt: now,
     updatedAt: now,
@@ -485,11 +483,7 @@ export function composeUpsDocument(doc: LabelDocument): LabelDocument {
         }
       : undefined,
     background:
-      synced.background?.type === 'color'
-        ? synced.background
-        : synced.paperType === 'Transparent'
-          ? { type: 'none' }
-          : { type: 'color', color: '#FFFFFF' },
+      synced.background?.type === 'color' ? synced.background : { type: 'color', color: '#FFFFFF' },
     ups: undefined,
     updatedAt: Date.now(),
   };
