@@ -6,12 +6,14 @@ export type ToolGlyph = ComponentProps<typeof Ionicons>['name'];
 
 export type MaterialGlyph = ComponentProps<typeof MaterialCommunityIcons>['name'];
 
-export type HomeToolGroup = 'create' | 'file' | 'labelType';
+export type HomeToolGroup = 'create' | 'file';
 
 export type HomeTool = {
   label: string;
   href: string;
   icon: ToolGlyph;
+  /** One short line under the title on the home tile. */
+  hint?: string;
   /** Glyph from MaterialCommunityIcons, for marks Ionicons does not have (Excel). Overrides `icon`. */
   materialIcon?: MaterialGlyph;
   group: HomeToolGroup;
@@ -19,12 +21,13 @@ export type HomeTool = {
 
 export const HOME_TOOLS = {
   newLabel: { label: 'New Label', href: '/new-label', icon: 'add-circle-outline', group: 'create' },
-  imageToLabel: { label: 'Upload label', href: '/image-to-label', icon: 'image-outline', group: 'create' },
-  serialLabels: { label: 'Serial Labels', href: '/new-label-setup?serialEditor=1', icon: 'list-outline', group: 'create' },
+  imageToLabel: { label: 'Upload label', href: '/image-to-label', icon: 'image-outline', hint: 'From a soft copy', group: 'create' },
+  serialLabels: { label: 'Serial Labels', href: '/new-label-setup?serialEditor=1', icon: 'list-outline', hint: '001, 002, 003…', group: 'create' },
   shippingLabels: {
     label: 'Shipping Labels',
     href: '/ecommerce-label',
     icon: 'cube-outline',
+    hint: 'Marketplace PDFs',
     group: 'create',
   },
   excel: {
@@ -32,23 +35,11 @@ export const HOME_TOOLS = {
     href: '/excel-print',
     icon: 'grid-outline',
     materialIcon: 'file-excel-outline',
+    hint: 'Bulk from a sheet',
     group: 'file',
   },
-  pdf: { label: 'PDF', href: '/pdf', icon: 'document-text-outline', group: 'file' },
-  photo: { label: 'Photo', href: '/print-photo-modal', icon: 'images-outline', group: 'file' },
-  twoUps: {
-    label: 'Multi Label',
-    href: '/new-label-setup?isTwoUps=true',
-    icon: 'copy-outline',
-    group: 'labelType',
-  },
-  shipping: { label: 'Shipping', href: '/shipping-label', icon: 'cube-outline', group: 'labelType' },
-  jewellery: {
-    label: 'Jewellery',
-    href: '/new-label-setup?isJewellery3Up=true',
-    icon: 'diamond-outline',
-    group: 'labelType',
-  },
+  pdf: { label: 'PDF', href: '/pdf', icon: 'document-text-outline', hint: 'Print any page', group: 'file' },
+  photo: { label: 'Photo', href: '/print-photo-modal', icon: 'images-outline', hint: 'Print a picture', group: 'file' },
 } as const satisfies Record<string, HomeTool>;
 
 export type HomeToolId = keyof typeof HOME_TOOLS;
@@ -60,9 +51,6 @@ export const CREATE_GRID_TOOLS: readonly HomeToolId[] = ['imageToLabel', 'serial
 
 /** "Print from file" — 3-column ToolGrid. */
 export const FILE_TOOLS: readonly HomeToolId[] = ['excel', 'pdf', 'photo'];
-
-/** "Label types" — 4-column ToolGrid. */
-export const LABEL_TYPE_TOOLS: readonly HomeToolId[] = ['twoUps', 'shipping', 'jewellery'];
 
 /** Groups that must fill whole 3-column rows. */
 export const TOOL_GRID_GROUPS = { create: CREATE_GRID_TOOLS, file: FILE_TOOLS } as const;

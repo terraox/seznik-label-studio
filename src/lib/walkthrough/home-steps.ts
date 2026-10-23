@@ -51,13 +51,6 @@ const BASE_STEPS: readonly WalkthroughStep[] = [
     body: 'Scan an existing label, make serial-number labels, or set a fully custom label size.',
   },
   {
-    id: 'labelTypes',
-    target: 'home.labelTypes',
-    scrolls: true,
-    title: 'Ready-made label types',
-    body: 'Multi Label, Shipping and Jewellery labels come with a layout already set up.',
-  },
-  {
     id: 'shop',
     target: 'home.shop',
     scrolls: true,

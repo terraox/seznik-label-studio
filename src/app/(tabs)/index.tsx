@@ -6,11 +6,7 @@ import { ContinueCard } from '@/components/home/continue-card';
 import { FeatureBanners } from '@/components/home/feature-banners';
 import { HeroCard } from '@/components/home/hero-card';
 import { HomeHeader } from '@/components/home/home-header';
-import {
-  CREATE_GRID_TOOLS,
-  FILE_TOOLS,
-  LABEL_TYPE_TOOLS,
-} from '@/components/home/home-tools';
+import { CREATE_GRID_TOOLS, FILE_TOOLS } from '@/components/home/home-tools';
 import { SectionHeading } from '@/components/home/section-heading';
 import { ToolGrid } from '@/components/home/tool-grid';
 import { MaxContentWidth } from '@/constants/theme';
@@ -147,13 +143,6 @@ export default function HomeScreen() {
             <SectionHeading>More ways to create</SectionHeading>
             <WalkthroughTarget id="home.create">
               <ToolGrid ids={CREATE_GRID_TOOLS} columns={3} />
-            </WalkthroughTarget>
-          </View>
-
-          <View style={styles.section}>
-            <SectionHeading>Label types</SectionHeading>
-            <WalkthroughTarget id="home.labelTypes">
-              <ToolGrid ids={LABEL_TYPE_TOOLS} columns={3} />
             </WalkthroughTarget>
           </View>
 

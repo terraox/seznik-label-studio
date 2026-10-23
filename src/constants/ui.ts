@@ -42,8 +42,10 @@ export const HomeLayout = {
   labelTypeColumns: 4,
   /** New Label hero — WePrint-style broad card with left art. */
   heroHeight: 96,
-  /** 3-column tile min height (Print from file, More ways to create). */
-  tileHeight: 80,
+  /** 3-column tile min height (Print from file, More ways to create): art, title and hint. */
+  tileHeight: 108,
+  /** Drawn tool art on those tiles (tool-art.tsx). */
+  tileArtSize: 46,
   /** 4-column Label types tile min height. */
   labelTypeTileHeight: 72,
   /** Section heading text line (~13) + space below heading. */

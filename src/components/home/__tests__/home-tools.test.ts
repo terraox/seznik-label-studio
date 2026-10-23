@@ -6,7 +6,6 @@ import {
   CREATE_HERO_TOOL,
   FILE_TOOLS,
   HOME_TOOLS,
-  LABEL_TYPE_TOOLS,
   TOOL_GRID_GROUPS,
   type HomeToolId,
 } from '../home-tools';
@@ -17,15 +16,11 @@ const LEGACY_HOME_HREFS = [
   '/excel-print',
   '/pdf',
   '/print-photo-modal',
-  '/new-label-setup?isTwoUps=true',
-  '/shipping-label',
   '/ecommerce-label',
-  '/new-label-setup?isJewellery3Up=true',
   '/new-label-setup?serialEditor=1',
 ];
 
 const GRID_COLUMNS = 3;
-const LABEL_TYPE_COLUMNS = 3;
 
 const allIds = Object.keys(HOME_TOOLS) as HomeToolId[];
 
@@ -52,22 +47,17 @@ test('every tool icon is an Ionicons outline glyph', () => {
 });
 
 test('every tool is placed in exactly one home section', () => {
-  const placed = [CREATE_HERO_TOOL, ...CREATE_GRID_TOOLS, ...FILE_TOOLS, ...LABEL_TYPE_TOOLS];
+  const placed = [CREATE_HERO_TOOL, ...CREATE_GRID_TOOLS, ...FILE_TOOLS];
   assert.deepEqual([...placed].sort(), [...allIds].sort());
 });
 
 test('section membership matches each tool group', () => {
   for (const id of [CREATE_HERO_TOOL, ...CREATE_GRID_TOOLS]) assert.equal(HOME_TOOLS[id].group, 'create');
   for (const id of FILE_TOOLS) assert.equal(HOME_TOOLS[id].group, 'file');
-  for (const id of LABEL_TYPE_TOOLS) assert.equal(HOME_TOOLS[id].group, 'labelType');
 });
 
 test('3-column ToolGrid groups have length 3', () => {
   for (const [name, ids] of Object.entries(TOOL_GRID_GROUPS)) {
     assert.equal(ids.length, GRID_COLUMNS, `${name} grid has ${ids.length} tiles`);
   }
-});
-
-test('Label types row has exactly 3 tiles', () => {
-  assert.equal(LABEL_TYPE_TOOLS.length, LABEL_TYPE_COLUMNS);
 });

@@ -7,7 +7,6 @@ export function SectionHeading({ children }: { children: string }) {
   useThemeRefresh();
   return (
     <View style={styles.wrap}>
-      <View style={styles.bar} />
       <Text
         maxFontSizeMultiplier={HomeLayout.labelMaxFontScale}
         style={styles.text}>
@@ -23,16 +22,12 @@ const styles = themedStyles((c) => ({
     marginBottom: HomeLayout.sectionHeadingGap,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 8,
   },
-  bar: { width: 3, height: 13, borderRadius: 2, backgroundColor: c.accent, marginBottom: 3 },
   text: {
-    fontSize: 11.5,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '700',
-    color: c.textSecondary,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    color: c.text,
     flexShrink: 1,
   },
 }));
