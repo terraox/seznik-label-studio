@@ -5,7 +5,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import { AnalyticsFooter, type FooterInfo } from '@/components/analytics-footer';
 import { useHideInternal } from '@/components/desk';
-import { PageHeader } from '@/components/ui';
+import { PageHeader, Skeleton, SkeletonRows } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 
@@ -43,7 +43,7 @@ export function ShopDesk() {
       {error ? <p className="err">{error}</p> : null}
 
       {view === 'products' ? <section className="panel">
-        <p className="lede">{data ? `${data.totalClicks.toLocaleString()} clicks across ${data.products.length} products` : 'Loading…'}</p>
+        <p className="lede">{data ? `${data.totalClicks.toLocaleString()} clicks across ${data.products.length} products` : <Skeleton width={240} />}</p>
         <div style={{ overflowX: 'auto' }}>
           <table className="table">
             <thead><tr><th>Product</th><th>Type</th><th>Clicks</th><th>People</th><th>Last 7 days</th><th>This month</th><th>Last click</th></tr></thead>
@@ -62,7 +62,7 @@ export function ShopDesk() {
         <section className="panel users-panel">
           <div className="u-sechead">
             <h2>Who clicked what</h2>
-            <p>{data ? `${data.people.length.toLocaleString()} ${data.people.length === 1 ? 'person has' : 'people have'} tapped a buy button. Click a person to see each product.` : 'Loading…'}</p>
+            <p>{data ? `${data.people.length.toLocaleString()} ${data.people.length === 1 ? 'person has' : 'people have'} tapped a buy button. Click a person to see each product.` : <Skeleton width={320} />}</p>
           </div>
           <div className="u-scroll">
             <table className="table u-table" style={{ minWidth: 0 }}>
@@ -90,7 +90,7 @@ export function ShopDesk() {
                     ) : null}
                   </Fragment>
                 ))}
-                {!data ? <tr><td colSpan={5} className="empty">Loading…</td></tr> : null}
+                {!data ? <SkeletonRows cols={5} /> : null}
                 {data && data.people.length === 0 ? <tr><td colSpan={5} className="empty">Nobody has tapped a product yet.</td></tr> : null}
               </tbody>
             </table>

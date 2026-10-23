@@ -13,7 +13,8 @@ export function sampleToElements(layout: unknown, widthMm: number, heightMm: num
   const checked = cleanSampleLayout(layout, widthMm, heightMm);
   if (!checked.ok) return [];
   return checked.layout.map((s: SampleElement): LabelElement => {
-    const frame = { id: generateId(), left: s.left, top: s.top, width: s.width };
+    // Rotation turns the box about its centre in the editor too, so the frame carries over as is.
+    const frame = { id: generateId(), left: s.left, top: s.top, width: s.width, rotation: s.rotation ?? 0 };
     switch (s.type) {
       case 'text': {
         const text = s.text ?? '';

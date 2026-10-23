@@ -5,7 +5,7 @@ import { Ban, ChevronLeft, ChevronRight, Search, ShieldCheck, X } from 'lucide-r
 
 import { useDesk, useHideInternal, useToast } from '@/components/desk';
 import { PlatformTag } from '@/components/platform';
-import { Field, PageHeader } from '@/components/ui';
+import { Field, Loader, PageHeader, Skeleton, SkeletonRows } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 import { can } from '@/lib/permissions';
@@ -297,7 +297,7 @@ export function UsersDesk() {
                   ) : null}
                 </tr>
               ))}
-              {!data ? <tr><td colSpan={canEdit ? 9 : 7} className="empty">Loading users…</td></tr> : null}
+              {!data ? <SkeletonRows cols={canEdit ? 9 : 7} /> : null}
               {data && data.users.length === 0 ? <tr><td colSpan={canEdit ? 9 : 7} className="empty">No users match this search.</td></tr> : null}
             </tbody>
           </table>
@@ -379,9 +379,9 @@ export function UsersDesk() {
             <div className="ucard-body">
               <section className="ucard-stats">
                 <div><b>{detail.printCountTotal.toLocaleString()}</b><span>Labels printed</span></div>
-                <div><b>{extras ? (extras.labelsLast7Days ?? 0).toLocaleString() : '…'}</b><span>Last 7 days</span></div>
-                <div><b>{extras ? extras.printers.length : '…'}</b><span>Printers used</span></div>
-                <div><b>{extras ? extras.printers.reduce((n, p) => n + p.connections, 0).toLocaleString() : '…'}</b><span>Connections</span></div>
+                <div><b>{extras ? (extras.labelsLast7Days ?? 0).toLocaleString() : <Skeleton width={34} height={14} />}</b><span>Last 7 days</span></div>
+                <div><b>{extras ? extras.printers.length : <Skeleton width={24} height={14} />}</b><span>Printers used</span></div>
+                <div><b>{extras ? extras.printers.reduce((n, p) => n + p.connections, 0).toLocaleString() : <Skeleton width={30} height={14} />}</b><span>Connections</span></div>
               </section>
 
               <section className="ucard-sec">
@@ -409,7 +409,7 @@ export function UsersDesk() {
 
               <details className="ucard-sec ucard-fold">
                 <summary><h3>Printers connected <small>{extras ? extras.printers.length : ''}</small></h3></summary>
-                {!extras ? <p className="u-muted">Loading…</p> : extras.printers.length === 0 ? <p className="u-muted">No printer has connected yet.</p> : (
+                {!extras ? <Loader compact label="Loading printers" /> : extras.printers.length === 0 ? <p className="u-muted">No printer has connected yet.</p> : (
                   <div className="ucard-scroll">
                     <table className="table ucard-table">
                       <thead><tr><th>Printer</th><th>First connected</th><th>Last connected</th><th className="num">Connections</th><th className="num">Labels</th></tr></thead>
@@ -431,7 +431,7 @@ export function UsersDesk() {
 
               <details className="ucard-sec ucard-fold">
                 <summary><h3>Connection history <small>{extras ? `${extras.connections.length}${extras.moreConnections ? '+' : ''}` : ''}</small></h3></summary>
-                {!extras ? <p className="u-muted">Loading…</p> : extras.connections.length === 0 ? <p className="u-muted">Nothing yet. Connections appear once the user connects a printer in the app.</p> : (
+                {!extras ? <Loader compact label="Loading connections" /> : extras.connections.length === 0 ? <p className="u-muted">Nothing yet. Connections appear once the user connects a printer in the app.</p> : (
                   <ol className="timeline">
                     {extras.connections.map((c) => (
                       <li key={c.id}>
@@ -460,7 +460,7 @@ export function UsersDesk() {
                       </tbody>
                     </table>
                   </div>
-                ) : <p className="u-muted">{extras ? 'Nothing printed yet.' : 'Loading…'}</p>}
+                ) : extras ? <p className="u-muted">Nothing printed yet.</p> : <Loader compact label="Loading prints" />}
               </details>
 
               <details className="ucard-sec ucard-fold">
@@ -471,7 +471,7 @@ export function UsersDesk() {
                       <li key={c.id}><b>{c.product}</b> <span className="u-muted">· {c.category} · {ago(c.at)}</span></li>
                     ))}
                   </ul>
-                ) : <p className="u-muted">{extras ? 'Has not pressed Buy on any product yet.' : 'Loading…'}</p>}
+                ) : extras ? <p className="u-muted">Has not pressed Buy on any product yet.</p> : <Loader compact label="Loading shop clicks" />}
               </details>
 
               <details className="ucard-sec ucard-fold">
@@ -487,7 +487,7 @@ export function UsersDesk() {
                       <li key={f.id}>{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)} · {f.category} · {ago(f.createdAt)}{f.message ? <div>“{f.message}”</div> : null}</li>
                     ))}
                   </ul>
-                ) : <p className="u-muted">{extras ? 'No feedback yet.' : 'Loading…'}</p>}
+                ) : extras ? <p className="u-muted">No feedback yet.</p> : <Loader compact label="Loading feedback" />}
               </details>
 
               <details className="ucard-sec ucard-fold">

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Search, X } from 'lucide-react';
 
 import { useHideInternal } from '@/components/desk';
-import { PageHeader } from '@/components/ui';
+import { PageHeader, SkeletonRows } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 
@@ -94,7 +94,7 @@ export function PrinterNamesDesk({ line, label }: { line: string; label: string 
                   <td>{d.lastConnected ? ago(d.lastConnected) : <span className="u-muted">—</span>}</td>
                 </tr>
               ))}
-              {!devices ? <tr><td colSpan={7} className="empty">Loading…</td></tr> : null}
+              {!devices ? <SkeletonRows cols={7} /> : null}
               {devices && rows.length === 0 ? <tr><td colSpan={7} className="empty">{q ? 'No name matches this search.' : 'No printer of this line has connected yet.'}</td></tr> : null}
             </tbody>
           </table>

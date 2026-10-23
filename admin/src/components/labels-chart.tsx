@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { EChartsComposedChart, type ChartConfig } from '@/components/evilcharts/charts/echarts-composed-chart';
+import { Loader } from '@/components/ui';
 
 export type PrintSeries = {
   hourly: { hour: number; labels: number; jobs: number }[];
@@ -63,7 +64,7 @@ export function LabelsChart({ series }: { series: PrintSeries | null }) {
 
       <div className="chart-box">
         {!series ? (
-          <p className="loading">Loading chart…</p>
+          <Loader compact label="Loading chart" />
         ) : (
           <EChartsComposedChart key={view} className="h-full w-full" xDataKey="label" data={rows} config={config} curveType="monotone">
             <EChartsComposedChart.Grid />

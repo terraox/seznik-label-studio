@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlaskConical, Search, X } from 'lucide-react';
 
 import { useHideInternal, useToast } from '@/components/desk';
+import { Skeleton } from '@/components/ui';
 import { api } from '@/lib/client';
 import type { AdminUserDto } from '@/lib/user-dto';
 
@@ -25,7 +26,7 @@ export function TestAccounts({
         </button>
         <div className="test-switch-text">
           <b>Exclude test accounts</b>
-          <span>{count === undefined ? '…' : `${count} account${count === 1 ? '' : 's'} marked`}</span>
+          <span>{count === undefined ? <Skeleton width={90} height={10} /> : `${count} account${count === 1 ? '' : 's'} marked`}</span>
         </div>
         <button type="button" className="btn small" onClick={() => setOpen(true)}>
           <FlaskConical size={13} /> Manage

@@ -6,7 +6,7 @@ import { Cable, ChevronLeft, ChevronRight, Plug, Printer, Search, Users, X } fro
 
 import { useDesk, useHideInternal, useToast } from '@/components/desk';
 import { AnalyticsFooter, type FooterInfo } from '@/components/analytics-footer';
-import { Drawer, PageHeader } from '@/components/ui';
+import { Drawer, PageHeader, Skeleton, SkeletonRows } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 import { can } from '@/lib/permissions';
@@ -120,7 +120,7 @@ export function PrintersDesk() {
               <span className="kpi-title">{title}</span>
               <span className="kpi-icon" style={{ background: `${color}20`, border: `1px solid ${color}40` }}><Icon size={16} color={color} /></span>
             </div>
-            <div className="kpi-value">{value === undefined ? '…' : value.toLocaleString()}</div>
+            <div className="kpi-value">{value === undefined ? <Skeleton /> : value.toLocaleString()}</div>
             <div className="kpi-sub">{sub}</div>
           </article>
         ))}
@@ -181,7 +181,7 @@ export function PrintersDesk() {
                   </tr>
                 );
               })}
-              {!data ? <tr><td colSpan={8} className="empty">Loading printers…</td></tr> : null}
+              {!data ? <SkeletonRows cols={8} /> : null}
               {data && rows.length === 0 ? <tr><td colSpan={8} className="empty">{q ? 'Nothing matches this search.' : 'No printers have connected yet.'}</td></tr> : null}
             </tbody>
           </table>
@@ -217,7 +217,7 @@ export function PrintersDesk() {
                   {users.map((u) => (
                     <tr key={u.id}><td>{u.name}</td><td>{u.mobile}</td><td>{u.connections}</td><td>{u.labels}</td><td>{u.lastConnected ? ago(u.lastConnected) : '—'}</td></tr>
                   ))}
-                  {users.length === 0 ? <tr><td colSpan={5}>Loading…</td></tr> : null}
+                  {users.length === 0 ? <SkeletonRows cols={5} rows={3} /> : null}
                 </tbody>
               </table>
             </>

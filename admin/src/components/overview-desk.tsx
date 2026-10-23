@@ -8,7 +8,7 @@ import { AnalyticsFooter, type FooterInfo } from '@/components/analytics-footer'
 import { LabelsChart } from '@/components/labels-chart';
 import { PlatformCard } from '@/components/platform';
 import { TestAccounts } from '@/components/test-accounts';
-import { PageHeader } from '@/components/ui';
+import { Loader, PageHeader, Skeleton } from '@/components/ui';
 import { api } from '@/lib/client';
 
 type Summary = {
@@ -38,6 +38,7 @@ export function OverviewDesk() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [prints, setPrints] = useState<Prints | null>(null);
   const [labels, setLabels] = useState<LabelRow[]>([]);
+  const [labelsLoaded, setLabelsLoaded] = useState(false);
   const [windowId, setWindowId] = useState('all');
   const [hideInternal] = useHideInternal();
   const [error, setError] = useState('');
@@ -53,9 +54,13 @@ export function OverviewDesk() {
         setSummary(s);
         setPrints(p);
         setLabels(l.labels);
+        setLabelsLoaded(true);
         setError('');
       })
-      .catch((e: Error) => setError(e.message));
+      .catch((e: Error) => {
+        setError(e.message);
+        setLabelsLoaded(true);
+      });
   }, [hideInternal, windowId]);
 
   useEffect(load, [load]);
@@ -89,7 +94,7 @@ export function OverviewDesk() {
               <span className="kpi-title">{title}</span>
               <span className="kpi-icon" style={{ background: `${color}20`, border: `1px solid ${color}40` }}><Icon size={16} color={color} /></span>
             </div>
-            <div className="kpi-value">{value === undefined ? '…' : typeof value === 'number' ? value.toLocaleString() : value}</div>
+            <div className="kpi-value">{value === undefined ? <Skeleton /> : typeof value === 'number' ? value.toLocaleString() : value}</div>
             <div className="kpi-sub">{sub}</div>
           </article>
         ))}
@@ -99,8 +104,8 @@ export function OverviewDesk() {
         {totals.map(({ title, block }) => (
           <article className="kpi" key={title}>
             <div className="kpi-top"><span className="kpi-title">Labels · {title}</span></div>
-            <div className="kpi-value">{block ? block.labels.toLocaleString() : '…'}</div>
-            <div className="kpi-sub">{block ? `${block.jobs.toLocaleString()} print job${block.jobs === 1 ? '' : 's'}` : ''}</div>
+            <div className="kpi-value">{block ? block.labels.toLocaleString() : <Skeleton />}</div>
+            <div className="kpi-sub">{block ? `${block.jobs.toLocaleString()} print job${block.jobs === 1 ? '' : 's'}` : <Skeleton width="45%" height={9} />}</div>
           </article>
         ))}
       </section>
@@ -119,7 +124,9 @@ export function OverviewDesk() {
             ))}
           </div>
         </div>
-        {labels.length === 0 ? (
+        {!labelsLoaded ? (
+          <Loader compact label="Loading labels" />
+        ) : labels.length === 0 ? (
           <p className="empty">Nothing printed in this window yet.</p>
         ) : (
           <div className="top-labels" role="table" aria-label="Most printed labels">

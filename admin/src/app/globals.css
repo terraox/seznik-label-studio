@@ -519,7 +519,7 @@ html.dark .ptag.web { color: #a5b4fc; }
 .lib-tools .modal-search { min-width: 240px; }
 .lib-empty { display: grid; justify-items: center; gap: 10px; padding: 40px 0; color: var(--muted); }
 .lib-empty p { margin: 0; }
-.lib-thumb { position: relative; width: 100%; aspect-ratio: 4 / 3; display: grid; place-items: center; border-radius: 8px; background: #fff; border: 1px solid var(--line); overflow: hidden; }
+.lib-thumb { position: relative; width: 100%; aspect-ratio: 4 / 3; display: grid; place-items: center; border-radius: 8px; background: #EEF1F6 radial-gradient(circle, #D3D9E3 1px, transparent 1.3px) 0 0 / 14px 14px; border: 1px solid var(--line); overflow: hidden; } /* theme-fixed: a soft grey table so white label stock stands out in both themes */
 .lib-thumb > img { position: absolute; inset: 0; margin: auto; width: 88%; height: 88%; object-fit: contain; } /* absolute: a % height inside an aspect-ratio box can fall back to auto and overflow */
 .lib-row-name { display: flex; align-items: center; gap: 12px; }
 .lib-mini { display: grid; place-items: center; flex: 0 0 56px; width: 56px; height: 44px; border-radius: 8px; border: 1px solid var(--line); background: #fff; overflow: hidden; }
@@ -527,7 +527,8 @@ html.dark .ptag.web { color: #a5b4fc; }
 .lib-list { margin-top: 14px; max-height: none; }
 .lib-thumb.big { aspect-ratio: 16 / 9; }
 .lib-foot { align-items: center; flex-wrap: wrap; justify-content: flex-start; }
-.lib-modal { top: 5vh; max-height: 90vh; width: min(660px, calc(100vw - 32px)); }
+/* Centred in the window with room above and below; the body scrolls when it is taller. */
+.lib-modal { top: 50%; transform: translate(-50%, -50%); max-height: min(84vh, 860px); width: min(660px, calc(100vw - 32px)); }
 .lib-modal .modal-body { flex: 1; min-height: 0; overflow-y: auto; }
 .lib-modal .modal-foot { flex: none; border-top: 1px solid var(--line); }
 .lib-rotate { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
@@ -663,7 +664,7 @@ html.dark .ptag.web { color: #a5b4fc; }
 
 /* Library viewer: the SVG large on the left, its details on the right. */
 .lib-view { inset: 6vh 6vw; }
-.lib-view-stage { position: relative; flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 32px; background: #fff repeating-conic-gradient(#eef0f3 0% 25%, transparent 0% 50%) 50% / 20px 20px; } /* theme-fixed: SVGs are drawn for white label stock */
+.lib-view-stage { position: relative; flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 32px; background: #EEF1F6 radial-gradient(circle, #D3D9E3 1px, transparent 1.3px) 0 0 / 14px 14px; } /* theme-fixed: SVGs are drawn for white label stock, so they sit on a grey table */
 .lib-view-stage > img { position: absolute; inset: 32px; width: calc(100% - 64px); height: calc(100% - 64px); object-fit: contain; }
 .lib-view-stage > img.dim { opacity: 0.35; filter: grayscale(1); }
 .lib-view-facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; margin: 0; font-size: 0.85rem; }
@@ -744,6 +745,10 @@ html.dark .ptag.web { color: #a5b4fc; }
 .sd-align { display: flex; flex-wrap: wrap; gap: 4px; }
 .sd-warn { margin: 0; color: #E53935; font-size: 0.78rem; }
 .sd-note { margin: 0; font-size: 0.76rem; }
+.sd-layers h4 small { font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+/* Several elements picked: a dashed box around them all, and the box being dragged out on the canvas. */
+.sd-group { position: absolute; border: 1.5px dashed #E8543C; border-radius: 4px; pointer-events: none; z-index: 3; } /* the app's selection colour */
+.sd-marquee { position: absolute; border: 1px solid var(--brand); background: var(--brand-soft); pointer-events: none; z-index: 4; }
 .sd-layers { display: grid; gap: 4px; }
 .sd-layer { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text-main); font-size: 0.82rem; text-align: left; cursor: pointer; }
 .sd-layer span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -753,6 +758,8 @@ html.dark .ptag.web { color: #a5b4fc; }
 /* Read-only template + sample preview (tiles, viewer, edit window). */
 .sd-preview { position: absolute; inset: 6%; display: grid; place-items: center; pointer-events: none; }
 .sd-preview.dim { opacity: 0.35; filter: grayscale(1); }
+/* The label lifts off the table: the shadow follows its die-cut shape, not a box. */
+.sd-preview-label, .lib-thumb > img, .lib-view-stage > img:not(.dim) { filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, 0.22)) drop-shadow(0 6px 14px rgba(15, 23, 42, 0.14)); }
 .sd-preview-label { position: relative; overflow: hidden; }
 .sd-pv-el { position: absolute; }
 .sd-pv-el.qrcode svg { position: absolute; inset: 0; }
@@ -762,3 +769,32 @@ html.dark .ptag.web { color: #a5b4fc; }
 .lib-design-badge { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 99px; background: rgba(66, 188, 199, 0.92); color: #fff; font-size: 0.68rem; font-weight: 700; }
 .lib-mini { position: relative; }
 .lib-mini .sd-preview { inset: 4%; }
+
+/* ── Loading: the label-printing loader and shimmer placeholders ───────────────────────── */
+.ld { display: grid; justify-items: center; align-content: center; gap: 14px; padding: 56px 16px; color: var(--muted); min-height: 220px; }
+.ld.compact { gap: 8px; padding: 18px 8px; min-height: 0; }
+.ld-art { position: relative; width: 64px; height: 60px; }
+.ld.compact .ld-art { transform: scale(0.7); margin: -8px 0; }
+/* The printer slot sits on top; the label feeds out from under it. */
+.ld-slot { position: absolute; z-index: 1; top: 6px; left: 4px; right: 4px; height: 10px; border-radius: 5px; background: var(--brand); box-shadow: 0 2px 6px -2px rgba(15, 23, 42, 0.35); }
+.ld-feed { position: absolute; top: 11px; left: 14px; right: 14px; height: 49px; overflow: hidden; }
+.ld-tag { position: absolute; inset: 0 0 4px; display: grid; align-content: start; gap: 5px; padding: 10px 7px 0; border: 1.5px solid var(--brand); border-top: 0; border-radius: 0 0 7px 7px; background: var(--card); animation: ld-feed 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite; }
+.ld-tag i { display: block; height: 3px; border-radius: 2px; background: var(--brand); opacity: 0.85; transform-origin: left; animation: ld-print 1.8s ease-out infinite; }
+.ld-tag i:nth-child(2) { width: 70%; animation-delay: 0.12s; }
+.ld-tag i:nth-child(3) { width: 45%; animation-delay: 0.24s; }
+.ld-text { font-size: 0.82rem; font-weight: 600; letter-spacing: 0.01em; }
+@keyframes ld-feed { 0% { transform: translateY(-100%); opacity: 1; } 45%, 78% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(0); opacity: 0; } }
+@keyframes ld-print { 0%, 30% { transform: scaleX(0); } 55%, 100% { transform: scaleX(1); } }
+
+.skel { display: inline-block; vertical-align: middle; max-width: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--paper-2) 25%, var(--line) 37%, var(--paper-2) 63%); background-size: 400% 100%; animation: skel 1.4s ease infinite; }
+.skel.round { border-radius: 99px; }
+.skel-row td { padding-top: 14px; padding-bottom: 14px; }
+.skel-card { pointer-events: none; }
+.skel-card:hover { border-color: var(--line); box-shadow: none; }
+.skel-thumb { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; }
+.kpi-value .skel { height: 22px; width: 64%; border-radius: 7px; }
+@keyframes skel { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ld-tag, .ld-tag i, .skel { animation: none; }
+}

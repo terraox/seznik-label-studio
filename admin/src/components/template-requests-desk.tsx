@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock3, Inbox, Search, X, XCircle } from 'lucide-react';
 
 import { useDesk, useHideInternal, useToast } from '@/components/desk';
-import { PageHeader } from '@/components/ui';
+import { PageHeader, Skeleton, SkeletonRows } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 import { can } from '@/lib/permissions';
@@ -84,7 +84,7 @@ export function TemplateRequestsDesk() {
               <span className="kpi-title">{title}</span>
               <span className="kpi-icon" style={{ background: `${color}20`, border: `1px solid ${color}40` }}><Icon size={16} color={color} /></span>
             </div>
-            <div className="kpi-value">{counts ? counts[key].toLocaleString() : '…'}</div>
+            <div className="kpi-value">{counts ? counts[key].toLocaleString() : <Skeleton />}</div>
             <div className="kpi-sub">{sub}</div>
           </article>
         ))}
@@ -119,7 +119,7 @@ export function TemplateRequestsDesk() {
                   <td>{ago(item.createdAt)}</td>
                 </tr>
               ))}
-              {!data ? <tr><td colSpan={7} className="empty">Loading requests…</td></tr> : null}
+              {!data ? <SkeletonRows cols={7} /> : null}
               {data && data.items.length === 0 ? <tr><td colSpan={7} className="empty">No requests match these filters.</td></tr> : null}
             </tbody>
           </table>

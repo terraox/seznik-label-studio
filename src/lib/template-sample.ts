@@ -19,6 +19,19 @@ export type SampleElement = {
   fontSize?: number;
   bold?: boolean;
   align?: 'left' | 'center' | 'right';
+  /**
+   * Quarter turn clockwise (0, 90, 180, 270) about the box centre, as editor elements turn.
+   * left / top / width / height stay the unturned box. Absent means 0.
+   */
+  rotation?: SampleRotation;
+};
+
+export type SampleRotation = 0 | 90 | 180 | 270;
+
+const quarterTurn = (deg: unknown): SampleRotation => {
+  const n = typeof deg === 'number' ? deg : Number(deg);
+  if (!Number.isFinite(n)) return 0;
+  return ((((Math.round(n / 90) * 90) % 360) + 360) % 360) as SampleRotation;
 };
 
 export const MAX_SAMPLE_ELEMENTS = 60;
@@ -54,6 +67,8 @@ export function cleanSampleLayout(
       height: num(e.height, 0.1, 1000, type === 'line' ? 0.4 : 5),
     };
     if (type !== 'line') out.text = String(e.text ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, MAX_TEXT_CHARS);
+    const rotation = quarterTurn(e.rotation);
+    if (rotation) out.rotation = rotation;
     if (type === 'text') {
       out.fontSize = num(e.fontSize, 3, 120, 8);
       out.bold = e.bold === true;
@@ -67,3 +82,31 @@ export function cleanSampleLayout(
 /** Height of a text block in mm for the given point size and line count (matches the editor closely enough to place boxes). */
 export const sampleTextHeightMm = (fontSize: number, lines: number) =>
   Math.round(fontSize * 0.3528 * 1.25 * Math.max(1, lines) * 100) / 100;
+
+/** The box an element covers on the label once turned (a quarter turn swaps width and height about the centre). */
+export function sampleVisualBox(el: Pick<SampleElement, 'left' | 'top' | 'width' | 'height' | 'rotation'>) {
+  const sideways = el.rotation === 90 || el.rotation === 270;
+  const width = sideways ? el.height : el.width;
+  const height = sideways ? el.width : el.height;
+  return { left: el.left + (el.width - width) / 2, top: el.top + (el.height - height) / 2, width, height };
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Turns the sample with its template a quarter turn: the label goes from W x H to H x W, every
+ * element moves to where it lands and turns with it, so the design looks the same, just turned.
+ */
+export function turnSampleLayout(layout: SampleElement[], widthMm: number, heightMm: number, clockwise: boolean): SampleElement[] {
+  return layout.map((el) => {
+    const cx = el.left + el.width / 2;
+    const cy = el.top + el.height / 2;
+    // Clockwise: (x, y) on W x H lands at (H - y, x). Anticlockwise: at (y, W - x).
+    const [nx, ny] = clockwise ? [heightMm - cy, cx] : [cy, widthMm - cx];
+    const rotation = quarterTurn((el.rotation ?? 0) + (clockwise ? 90 : 270));
+    const next: SampleElement = { ...el, left: r2(nx - el.width / 2), top: r2(ny - el.height / 2) };
+    if (rotation) next.rotation = rotation;
+    else delete next.rotation;
+    return next;
+  });
+}

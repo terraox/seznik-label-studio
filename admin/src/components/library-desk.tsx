@@ -4,9 +4,10 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Copy, Download, Eye, LayoutGrid, List, PenTool, Pencil, Plus, Power, PowerOff, RotateCcw, RotateCw, Search, Shapes, Trash2, Upload, X } from 'lucide-react';
 
 import { useDesk, useToast } from '@/components/desk';
-import { PageHeader } from '@/components/ui';
+import { PageHeader, Skeleton, SkeletonCards, SkeletonRows } from '@/components/ui';
 import { SampleDesigner, SamplePreview } from '@/components/sample-designer';
 import { detectSvgSizeMm, type SvgSize } from '@/lib/catalog/svg-size';
+import { turnSampleLayout, type SampleElement } from '@/lib/sample-layout';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 import { can } from '@/lib/permissions';
@@ -208,6 +209,9 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   const [categoryId, setCategoryId] = useState('');
   const [items, setItems] = useState<Item[]>([]);
   const [total, setTotal] = useState(0);
+  /** False until the first list arrives, so the page shows placeholders, not "No templates yet". */
+  const [loaded, setLoaded] = useState(false);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
   const [q, setQ] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [busy, setBusy] = useState(false);
@@ -242,14 +246,14 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   const [edit, setEdit] = useState({ name: '', categoryIds: [] as string[], widthMm: '', heightMm: '', status: 'published' });
 
   const loadCategories = useCallback(() => {
-    api<{ categories: Category[]; all: number }>(`${base}/categories`).then((r) => { setCategories(r.categories); setAllCount(r.all); }).catch((e: Error) => toast(e.message, 'bad'));
+    api<{ categories: Category[]; all: number }>(`${base}/categories`).then((r) => { setCategories(r.categories); setAllCount(r.all); }).catch((e: Error) => toast(e.message, 'bad')).finally(() => setCategoriesLoaded(true));
   }, [base, toast]);
 
   const loadItems = useCallback(() => {
     const params = new URLSearchParams();
     if (categoryId) params.set('categoryId', categoryId);
     if (q.trim()) params.set('q', q.trim());
-    api<{ items: Item[]; total: number }>(`${base}/items?${params}`).then((r) => { setItems(r.items); setTotal(r.total); }).catch((e: Error) => toast(e.message, 'bad'));
+    api<{ items: Item[]; total: number }>(`${base}/items?${params}`).then((r) => { setItems(r.items); setTotal(r.total); }).catch((e: Error) => toast(e.message, 'bad')).finally(() => setLoaded(true));
   }, [base, categoryId, q, toast]);
 
   useEffect(loadCategories, [loadCategories]);
@@ -368,10 +372,12 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
     setEdit({ name: item.name, categoryIds: item.categoryIds, widthMm: item.widthMm?.toString() ?? '', heightMm: item.heightMm?.toString() ?? '', status: item.status });
   }
 
-  async function saveItem(replacement?: File, fields = edit, done = replacement ? 'Picture replaced' : 'Saved') {
-    if (!open) return;
+  /** Saves the open item; gives back what the server stored, or null when it did not save. */
+  async function saveItem(replacement?: File, fields = edit, done = replacement ? 'Picture replaced' : 'Saved'): Promise<Item | null> {
+    if (!open) return null;
     setBusy(true);
     try {
+      if (turn.current?.timer) { saveTurn(); await turn.current.saving; }
       const body = new FormData();
       Object.entries(fields).forEach(([k, v]) => body.set(k, Array.isArray(v) ? JSON.stringify(v) : v));
       if (replacement) body.set('file', replacement);
@@ -379,21 +385,79 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
       toast(done);
       setOpen(saved.item);
       loadItems(); loadCategories();
-    } catch (e) { toast(e instanceof Error ? e.message : 'Could not save', 'bad'); }
+      return saved.item;
+    } catch (e) { toast(e instanceof Error ? e.message : 'Could not save', 'bad'); return null; }
     finally { setBusy(false); }
   }
 
-  /** Turns the template a quarter turn and saves it; width and height swap with it. */
-  async function rotate(clockwise: boolean) {
+  // Turning shows at once; clicks in quick succession are saved together once they stop.
+  const turn = useRef<{ before: Item; latest: Item; timer: number | null; saving: Promise<void> }>(null);
+
+  /** Swaps one item everywhere it is shown: the list, the open box and the viewer. */
+  function showItem(next: Item) {
+    setItems((cur) => cur.map((i) => (i.id === next.id ? next : i)));
+    setOpen((cur) => (cur?.id === next.id ? next : cur));
+    setViewing((cur) => (cur?.id === next.id ? next : cur));
+  }
+
+  /** Sends the latest turned picture, size and design; one save at a time, always the newest state. */
+  function saveTurn() {
+    const t = turn.current;
+    if (!t) return;
+    if (t.timer) window.clearTimeout(t.timer);
+    t.timer = null;
+    t.saving = t.saving.then(async () => {
+      const item = t.latest;
+      if (item === t.before) return;
+      try {
+        const body = new FormData();
+        body.set('file', new File([item.svgCode], 'turned.svg', { type: 'image/svg+xml' }));
+        body.set('widthMm', String(item.widthMm ?? ''));
+        body.set('heightMm', String(item.heightMm ?? ''));
+        const saved = (await send(`${base}/items/${item.id}`, 'PATCH', body)).item;
+        const layout = Array.isArray(item.sampleLayout) && item.sampleLayout.length ? item.sampleLayout : null;
+        if (layout) await api(`/api/library/template/items/${item.id}/sample`, { method: 'PUT', body: JSON.stringify({ layout }) });
+        t.before = item;
+        // Another turn may have landed meanwhile; only show the server copy when this is still the newest.
+        if (t.latest === item) showItem({ ...saved, sampleLayout: layout });
+        toast('Turn saved');
+      } catch (e) {
+        toast(e instanceof Error ? `Could not save the turn: ${e.message}` : 'Could not save the turn', 'bad');
+        t.latest = t.before;
+        showItem(t.before);
+        setEdit((cur) => ({ ...cur, widthMm: t.before.widthMm?.toString() ?? '', heightMm: t.before.heightMm?.toString() ?? '' }));
+      }
+    });
+  }
+
+  /** Turns the template a quarter turn: width and height swap, and the designed sample turns with it. */
+  function rotate(clockwise: boolean) {
     if (!open) return;
     const turned = rotateSvg(open.svgCode, clockwise);
     if (!turned) return toast('This SVG has no viewBox, so it cannot be turned', 'bad');
-    const hasSample = Array.isArray(open.sampleLayout) && open.sampleLayout.length > 0;
-    if (hasSample && !window.confirm('The designed sample does not turn with it. Check it afterwards. Turn anyway?')) return;
-    const fields = { ...edit, widthMm: edit.heightMm, heightMm: edit.widthMm };
-    setEdit(fields);
-    await saveItem(new File([turned], 'turned.svg', { type: 'image/svg+xml' }), fields, clockwise ? 'Turned right' : 'Turned left');
+    const w = open.widthMm ?? Number(edit.widthMm);
+    const h = open.heightMm ?? Number(edit.heightMm);
+    const sample = Array.isArray(open.sampleLayout) && open.sampleLayout.length > 0 ? (open.sampleLayout as SampleElement[]) : null;
+    const next: Item = {
+      ...open,
+      svgCode: turned,
+      widthMm: h || open.heightMm,
+      heightMm: w || open.widthMm,
+      sampleLayout: sample && w && h ? turnSampleLayout(sample, w, h, clockwise) : open.sampleLayout,
+    };
+    if (turn.current?.latest.id !== open.id) {
+      if (turn.current) saveTurn(); // a different template still waiting: send it now
+      turn.current = { before: open, latest: next, timer: null, saving: turn.current?.saving ?? Promise.resolve() };
+    }
+    const t = turn.current!;
+    t.latest = next;
+    showItem(next);
+    setEdit((cur) => ({ ...cur, widthMm: cur.heightMm, heightMm: cur.widthMm }));
+    if (t.timer) window.clearTimeout(t.timer);
+    t.timer = window.setTimeout(saveTurn, 600);
   }
+  // Leaving the page sends a turn that is still waiting.
+  useEffect(() => () => saveTurn(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Switches the template off (kept, but hidden from the app) or back on. */
   async function toggleDisabled(target: Item | null = open) {
@@ -444,7 +508,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
         <aside className="panel lib-side">
           <h2>Categories</h2>
           <button className={categoryId === '' ? 'lib-cat on' : 'lib-cat'} onClick={() => setCategoryId('')}>
-            <span>All</span><small>{allCount}</small>
+            <span>All</span><small>{categoriesLoaded ? allCount : <Skeleton width={14} height={9} />}</small>
           </button>
           {canEdit && categories.length ? <p className="lib-drag-hint">{dragging ? 'Drop on a category to add it there' : `Drag a ${copy.noun} onto a category to add it`}</p> : null}
           {categories.map((c) => (
@@ -465,7 +529,8 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
               ) : null}
             </div>
           ))}
-          {categories.length === 0 ? <p className="u-muted">No categories yet. Add the first one below.</p> : null}
+          {!categoriesLoaded ? [0, 1, 2].map((i) => <div key={i} className="lib-cat skel-cat" aria-hidden><Skeleton width={['58%', '44%', '66%'][i]} /></div>) : null}
+          {categoriesLoaded && categories.length === 0 ? <p className="u-muted">No categories yet. Add the first one below.</p> : null}
           {canEdit ? (
             <div className="lib-add-cat">
               <input placeholder="New category" value={newCategory} maxLength={60} onChange={(e) => setNewCategory(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newCategory.trim()) void addCategory(); }} />
@@ -534,6 +599,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
               </div>
             </div>
             {layout === 'tiles' ? <div className="lib-grid">
+              {!loaded ? <SkeletonCards count={8} /> : null}
               {shown.map((item) => (
                 <button key={item.id} type="button" className={dragging === item.id ? 'lib-card lifted' : 'lib-card'} onClick={() => openItem(item)} {...dragProps(item)}>
                   <div className={item.status === 'disabled' ? 'lib-thumb dim' : 'lib-thumb'}>
@@ -573,6 +639,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                 <table className="table u-table" style={{ minWidth: 0 }}>
                   <thead><tr><th>Template</th><th>Categories</th><th>Size</th><th>Sample</th><th>Status</th><th>Updated</th><th className="num" /></tr></thead>
                   <tbody>
+                    {!loaded ? <SkeletonRows cols={7} rows={6} /> : null}
                     {shown.map((item) => (
                       <tr key={item.id} className={dragging === item.id ? 'u-row lifted' : 'u-row'} onClick={() => openItem(item)} {...dragProps(item)}>
                         <td>
@@ -599,7 +666,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                 </table>
               </div>
             )}
-            {shown.length === 0 ? (
+            {loaded && shown.length === 0 ? (
               <div className="lib-empty">
                 <Shapes size={28} aria-hidden />
                 <p>{total === 0 && !q && !categoryId ? `No ${copy.title.toLowerCase()} yet.` : 'Nothing matches.'}</p>

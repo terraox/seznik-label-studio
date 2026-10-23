@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { Skeleton } from '@/components/ui';
 import { api } from '@/lib/client';
 
 export function platformKind(value: string | null | undefined): 'android' | 'ios' | 'web' | null {
@@ -76,7 +77,7 @@ export function PlatformCard({
           return (
             <div key={p.key} className={`plat-tile${value === 0 ? ' is-empty' : ''}`}>
               <PlatformTag value={p.key} />
-              <b>{value === null ? '…' : value.toLocaleString()}</b>
+              <b>{value === null ? <Skeleton width={36} height={14} /> : value.toLocaleString()}</b>
               <span>{basis === 'prints' ? 'print jobs' : 'registered'}</span>
               <small>{value !== null && total ? `${Math.round((value / total) * 100)}% of ${noun}s` : ' '}</small>
             </div>

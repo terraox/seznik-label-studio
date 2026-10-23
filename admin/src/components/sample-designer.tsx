@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlignCenter, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignLeft, AlignRight,
-  AlignStartHorizontal, AlignStartVertical, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BringToFront, Copy, Maximize,
-  Minus, Plus, QrCode, Redo2, ScanBarcode, SendToBack, Trash2, Type, Undo2, X,
+  AlignStartHorizontal, AlignStartVertical, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BringToFront, Clipboard, ClipboardPaste, Copy, Maximize,
+  Minus, Plus, QrCode, Redo2, RotateCcw, RotateCw, ScanBarcode, SendToBack, Trash2, Type, Undo2, X,
 } from 'lucide-react';
 
 import { useToast } from '@/components/desk';
@@ -12,11 +12,15 @@ import { api } from '@/lib/client';
 import {
   APP_FONT, INK, INK_BLACK, PT_MM, barcodeBars, barcodeFontPt, qrModules, textHeightMm, textLineMm, textPadXMm, textPadYMm,
 } from '@/lib/sample-render';
-import type { SampleElement, SampleElementType } from '@/lib/sample-layout';
+import { sampleVisualBox, type SampleElement, type SampleElementType, type SampleRotation } from '@/lib/sample-layout';
 
 type Template = { id: string; name: string; widthMm: number | null; heightMm: number | null; svgCode: string; sampleLayout?: unknown };
 type Mode = 'move' | 'e' | 's';
-type Drag = { id: string; mode: Mode; sx: number; sy: number; start: SampleElement; moved: boolean };
+/** Moving or resizing elements (`starts` holds every element that moves), or drawing a selection box. */
+type Drag =
+  | { kind: 'el'; id: string; mode: Mode; sx: number; sy: number; start: SampleElement; starts: SampleElement[]; moved: boolean }
+  | { kind: 'box'; sx: number; sy: number; add: string[]; moved: boolean };
+type Box = { left: number; top: number; width: number; height: number };
 type Guide = { axis: 'x' | 'y'; at: number };
 
 // The app's selection chrome (lib/editor/canvas-chrome.ts).
@@ -32,6 +36,9 @@ const MIN_MM = 0.5;
 const MIN_SQUARE_MM = 5;
 const SNAP_PX = 6;
 const NUDGE_MM = 0.5;
+/** The app turns elements in quarter turns only, about the box centre. */
+const ANGLES: SampleRotation[] = [0, 90, 180, 270];
+const turned = (el: SampleElement, by: number) => (((((el.rotation ?? 0) + by) % 360) + 360) % 360) as SampleRotation;
 
 const TYPE_NAME: Record<SampleElementType, string> = { text: 'Text', barcode: 'Barcode', qrcode: 'QR code', line: 'Line' };
 const TYPE_ICON: Record<SampleElementType, typeof Type> = { text: Type, barcode: ScanBarcode, qrcode: QrCode, line: Minus };
@@ -39,6 +46,16 @@ const TYPE_ICON: Record<SampleElementType, typeof Type> = { text: Type, barcode:
 const HANDLES: Record<SampleElementType, ('e' | 's')[]> = { text: ['e'], line: ['e'], barcode: ['e', 's'], qrcode: ['e', 's'] };
 
 const round = (n: number) => Math.round(n * 100) / 100;
+/** Copied elements, kept while the admin is open so they can be pasted into another template too. */
+let clipboard: SampleElement[] = [];
+/** The box around several turned or upright elements, as seen on the label. */
+function boundsOf(els: SampleElement[]): Box {
+  const boxes = els.map(sampleVisualBox);
+  const left = Math.min(...boxes.map((b) => b.left));
+  const top = Math.min(...boxes.map((b) => b.top));
+  return { left, top, width: Math.max(...boxes.map((b) => b.left + b.width)) - left, height: Math.max(...boxes.map((b) => b.top + b.height)) - top };
+}
+const overlaps = (a: Box, b: Box) => a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
 let counter = 0;
 const newId = () => `e${Date.now().toString(36)}${(counter += 1)}`;
 
@@ -146,7 +163,7 @@ export function SamplePreview({ svgCode, widthMm, heightMm, layout, dim }: { svg
         <div className="sd-preview-label" style={{ width: W * scale, height: H * scale }}>
           <img className="sd-template" src={src} alt="" draggable={false} />
           {elements.map((el) => (
-            <div key={el.id} className={`sd-pv-el ${el.type}`} style={{ left: el.left * scale, top: el.top * scale, width: el.width * scale, height: Math.max(1, el.height * scale) }}>
+            <div key={el.id} className={`sd-pv-el ${el.type}`} style={{ left: el.left * scale, top: el.top * scale, width: el.width * scale, height: Math.max(1, el.height * scale), transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined }}>
               <ElementView el={el} scale={scale} />
             </div>
           ))}
@@ -217,7 +234,11 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
   const H = template.heightMm ?? 30;
   const initial = useMemo(() => (Array.isArray(template.sampleLayout) ? (template.sampleLayout as SampleElement[]) : []), [template.sampleLayout]);
   const [items, setItems] = useState<SampleElement[]>(() => initial.map(fit));
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selection, setSelection] = useState<string[]>([]);
+  const selected = selection.length === 1 ? selection[0] : null;
+  const [marquee, setMarquee] = useState<Box | null>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const pasteCount = useRef(0);
   const [dirty, setDirty] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -267,7 +288,16 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
     setItems((cur) => cur.map((e) => (e.id === id ? fit({ ...e, ...patch }) : e)));
     setDirty(true);
   }, [record]);
+  /** Changes every element in `ids` in one undo step. */
+  const changeMany = useCallback((ids: string[], patch: (e: SampleElement) => Partial<SampleElement>, tag?: string) => {
+    if (!ids.length) return;
+    record(tag ? `${tag}:${ids.join(',')}` : undefined);
+    setItems((cur) => cur.map((e) => (ids.includes(e.id) ? fit({ ...e, ...patch(e) }) : e)));
+    setDirty(true);
+  }, [record]);
   const current = items.find((e) => e.id === selected) ?? null;
+  const group = items.filter((e) => selection.includes(e.id));
+  const currentBox = group.length ? boundsOf(group) : null;
 
   // Fit the label into the canvas area; zoom multiplies that.
   useLayoutEffect(() => {
@@ -285,22 +315,44 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
     record();
     const el = create(type, W, H, items);
     setItems((cur) => [...cur, el]);
-    setSelected(el.id);
+    setSelection([el.id]);
     setDirty(true);
   }
-  function remove(id: string) {
+  function remove(ids: string[]) {
+    if (!ids.length) return;
     record();
-    setItems((cur) => cur.filter((e) => e.id !== id));
-    setSelected(null);
+    setItems((cur) => cur.filter((e) => !ids.includes(e.id)));
+    setSelection([]);
     setEditing(null);
     setDirty(true);
   }
-  function duplicate(el: SampleElement) {
+  /** Adds copies of `els`, moved by `offset` mm, on top of everything and selected. */
+  function place(els: SampleElement[], offset: number) {
+    if (!els.length) return;
     record();
-    const copy = { ...el, id: newId(), left: round(el.left + 2), top: round(el.top + 2) };
-    setItems((cur) => [...cur, copy]);
-    setSelected(copy.id);
+    const copies = els.map((el) => ({ ...el, id: newId(), left: round(el.left + offset), top: round(el.top + offset) }));
+    setItems((cur) => [...cur, ...copies]);
+    setSelection(copies.map((c) => c.id));
+    setEditing(null);
     setDirty(true);
+  }
+  const duplicate = (els: SampleElement[]) => place(els, 2);
+  function copy(els: SampleElement[], cut = false) {
+    if (!els.length) return;
+    clipboard = els.map((e) => ({ ...e }));
+    pasteCount.current = 0;
+    if (cut) remove(els.map((e) => e.id));
+    toast(`${cut ? 'Cut' : 'Copied'} ${els.length === 1 ? '1 element' : `${els.length} elements`}`);
+  }
+  function paste() {
+    if (!clipboard.length) return toast('Nothing copied yet', 'bad');
+    // Each paste steps 2 mm further, so repeated pastes do not stack exactly.
+    pasteCount.current += 1;
+    place(clipboard, 2 * pasteCount.current);
+  }
+  /** Click selects one; Shift or Ctrl/⌘ adds it or takes it out. */
+  function pick(id: string, toggle: boolean) {
+    setSelection((cur) => (toggle ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : [id]));
   }
   function reorder(id: string, toFront: boolean) {
     record();
@@ -309,13 +361,14 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
   }
 
   /** Snaps a moving edge set to the label's edges and centre and to the other elements. Returns the shift and the guide. */
-  const snapAxis = useCallback((edges: number[], axis: 'x' | 'y', skip: string) => {
+  const snapAxis = useCallback((edges: number[], axis: 'x' | 'y', skip: string[]) => {
     const limit = axis === 'x' ? W : H;
     const targets = [0, limit / 2, limit];
     for (const o of itemsRef.current) {
-      if (o.id === skip) continue;
-      const a = axis === 'x' ? o.left : o.top;
-      const s = axis === 'x' ? o.width : o.height;
+      if (skip.includes(o.id)) continue;
+      const b = sampleVisualBox(o);
+      const a = axis === 'x' ? b.left : b.top;
+      const s = axis === 'x' ? b.width : b.height;
       targets.push(a, a + s / 2, a + s);
     }
     const th = SNAP_PX / scale;
@@ -330,9 +383,22 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
   function begin(event: React.PointerEvent, el: SampleElement, mode: Mode) {
     if (event.button !== 0) return;
     event.stopPropagation();
-    setSelected(el.id);
+    if (mode === 'move' && (event.shiftKey || event.metaKey || event.ctrlKey)) { pick(el.id, true); return; }
+    // Pressing on a member of a group moves the whole group; anything else selects just that element.
+    const ids = mode === 'move' && selection.includes(el.id) ? selection : [el.id];
+    if (!(mode === 'move' && selection.includes(el.id))) setSelection([el.id]);
     if (editing && editing !== el.id) setEditing(null);
-    drag.current = { id: el.id, mode, sx: event.clientX, sy: event.clientY, start: { ...el }, moved: false };
+    const starts = itemsRef.current.filter((e) => ids.includes(e.id)).map((e) => ({ ...e }));
+    drag.current = { kind: 'el', id: el.id, mode, sx: event.clientX, sy: event.clientY, start: { ...el }, starts, moved: false };
+  }
+
+  /** Pressing on empty canvas starts a selection box; Shift or Ctrl/⌘ keeps what is already selected. */
+  function beginBox(event: React.PointerEvent) {
+    if (event.button !== 0) return;
+    const keep = event.shiftKey || event.metaKey || event.ctrlKey;
+    if (!keep) setSelection([]);
+    setEditing(null);
+    drag.current = { kind: 'box', sx: event.clientX, sy: event.clientY, add: keep ? selection : [], moved: false };
   }
 
   useEffect(() => {
@@ -344,28 +410,77 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
       if (!d.moved) {
         if (dxPx * dxPx + dyPx * dyPx < 9) return; // a click, not a drag
         d.moved = true;
-        record();
+        if (d.kind === 'el') record();
+      }
+      if (d.kind === 'box') {
+        const a = toMm(d.sx, d.sy);
+        const b = toMm(event.clientX, event.clientY);
+        const box = { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) };
+        setMarquee(box);
+        const hit = itemsRef.current.filter((e) => overlaps(box, sampleVisualBox(e))).map((e) => e.id);
+        setSelection([...new Set([...d.add, ...hit])]);
+        return;
+      }
+      if (d.mode === 'move' && d.starts.length > 1) {
+        // A group moves together and snaps by its outline.
+        let mx = dxPxToMm(dxPx);
+        let my = dxPxToMm(dyPx);
+        const nextGuides: Guide[] = [];
+        if (!event.altKey) {
+          const b0 = boundsOf(d.starts);
+          const b = { ...b0, left: b0.left + mx, top: b0.top + my };
+          const ids = d.starts.map((e) => e.id);
+          const sx = snapAxis([b.left, b.left + b.width / 2, b.left + b.width], 'x', ids);
+          if (sx) { mx += sx.shift; nextGuides.push({ axis: 'x', at: sx.at }); }
+          const sy = snapAxis([b.top, b.top + b.height / 2, b.top + b.height], 'y', ids);
+          if (sy) { my += sy.shift; nextGuides.push({ axis: 'y', at: sy.at }); }
+        }
+        setGuides(nextGuides);
+        const moved = new Map(d.starts.map((e) => [e.id, { left: round(e.left + mx), top: round(e.top + my) }]));
+        setHud(`${d.starts.length} elements  ·  moved ${round(mx)}, ${round(my)} mm`);
+        setItems((cur) => cur.map((e) => (moved.has(e.id) ? { ...e, ...moved.get(e.id) } : e)));
+        setDirty(true);
+        return;
       }
       const dx = dxPx / scale;
       const dy = dyPx / scale;
       const s = d.start;
+      const self = [s.id];
       const nextGuides: Guide[] = [];
       let patch: Partial<SampleElement>;
       if (d.mode === 'move') {
         let left = s.left + dx;
         let top = s.top + dy;
         if (!event.altKey) {
-          const sx = snapAxis([left, left + s.width / 2, left + s.width], 'x', s.id);
+          // Snap what is seen: a turned element covers its box with width and height swapped.
+          const b = sampleVisualBox({ ...s, left, top });
+          const sx = snapAxis([b.left, b.left + b.width / 2, b.left + b.width], 'x', self);
           if (sx) { left += sx.shift; nextGuides.push({ axis: 'x', at: sx.at }); }
-          const sy = snapAxis([top, top + s.height / 2, top + s.height], 'y', s.id);
+          const sy = snapAxis([b.top, b.top + b.height / 2, b.top + b.height], 'y', self);
           if (sy) { top += sy.shift; nextGuides.push({ axis: 'y', at: sy.at }); }
         }
         patch = { left: round(left), top: round(top) };
         setHud(`X ${round(left)}  ·  Y ${round(top)} mm`);
+      } else if (s.rotation) {
+        // A turned element: the handle drags along its own axis, and the edge opposite the handle stays put.
+        const a = (s.rotation * Math.PI) / 180;
+        const [cos, sin] = [Math.round(Math.cos(a)), Math.round(Math.sin(a))];
+        const min = s.type === 'qrcode' ? MIN_SQUARE_MM : MIN_MM;
+        const grown = d.mode === 'e'
+          ? { width: Math.max(min, s.width + dx * cos + dy * sin) }
+          : s.type === 'qrcode'
+            ? { width: Math.max(min, s.height - dx * sin + dy * cos) }
+            : { height: Math.max(min, s.height - dx * sin + dy * cos) };
+        const f = fit({ ...s, ...grown });
+        const dw = f.width - s.width;
+        const dh = f.height - s.height;
+        const cx = s.left + s.width / 2 + (cos * dw - sin * dh) / 2;
+        const cy = s.top + s.height / 2 + (sin * dw + cos * dh) / 2;
+        patch = { ...grown, width: round(f.width), height: round(f.height), left: round(cx - f.width / 2), top: round(cy - f.height / 2) };
       } else if (d.mode === 'e') {
         let width = s.width + dx;
         if (!event.altKey) {
-          const sx = snapAxis([s.left + width], 'x', s.id);
+          const sx = snapAxis([s.left + width], 'x', self);
           if (sx) { width += sx.shift; nextGuides.push({ axis: 'x', at: sx.at }); }
         }
         width = Math.max(s.type === 'qrcode' ? MIN_SQUARE_MM : MIN_MM, width);
@@ -373,7 +488,7 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
       } else {
         let height = s.height + dy;
         if (!event.altKey) {
-          const sy = snapAxis([s.top + height], 'y', s.id);
+          const sy = snapAxis([s.top + height], 'y', self);
           if (sy) { height += sy.shift; nextGuides.push({ axis: 'y', at: sy.at }); }
         }
         height = Math.max(s.type === 'qrcode' ? MIN_SQUARE_MM : MIN_MM, height);
@@ -388,9 +503,19 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
       setDirty(true);
     }
     function onUp() {
+      const d = drag.current;
+      // A click (no drag) on one member of a group narrows the selection to it.
+      if (d?.kind === 'el' && !d.moved && d.starts.length > 1) setSelection([d.id]);
       drag.current = null;
       setGuides([]);
       setHud(null);
+      setMarquee(null);
+    }
+    function dxPxToMm(v: number) { return v / scale; }
+    /** The label point under the pointer, in mm. */
+    function toMm(clientX: number, clientY: number) {
+      const r = stage.current?.getBoundingClientRect();
+      return r ? { x: (clientX - r.left) / scale, y: (clientY - r.top) / scale } : { x: 0, y: 0 };
     }
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
@@ -402,7 +527,8 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
     };
   }, [scale, snapAxis, record]);
 
-  // Keyboard, as on a desktop design tool: arrows nudge (Shift = 2 mm), Delete, Ctrl/Cmd + D, Z, Y.
+  // Keyboard, as on a desktop design tool: arrows nudge (Shift = 2 mm), Delete, R turns,
+  // Ctrl/Cmd + A, C, X, V, D, Z, Y. Everything acts on the whole selection.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
@@ -410,18 +536,23 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
-      if (e.key === 'Escape') { setEditing(null); setSelected(null); return; }
-      const el = itemsRef.current.find((i) => i.id === selected);
-      if (!el) return;
-      if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicate(el); return; }
-      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(el.id); return; }
-      if (e.key === 'Enter' && el.type !== 'line') { e.preventDefault(); setEditing(el.id); return; }
+      if (e.key === 'Escape') { setEditing(null); setSelection([]); return; }
+      const key = e.key.toLowerCase();
+      if (mod && key === 'a') { e.preventDefault(); setSelection(itemsRef.current.map((i) => i.id)); return; }
+      if (mod && key === 'v') { e.preventDefault(); paste(); return; }
+      const els = itemsRef.current.filter((i) => selection.includes(i.id));
+      if (!els.length) return;
+      const ids = els.map((i) => i.id);
+      if (mod && key === 'c') { e.preventDefault(); copy(els); return; }
+      if (mod && key === 'x') { e.preventDefault(); copy(els, true); return; }
+      if (mod && key === 'd') { e.preventDefault(); duplicate(els); return; }
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(ids); return; }
+      if (e.key === 'Enter' && els.length === 1 && els[0].type !== 'line') { e.preventDefault(); setEditing(els[0].id); return; }
+      if (!mod && key === 'r') { e.preventDefault(); changeMany(ids, (el) => ({ rotation: turned(el, e.shiftKey ? 270 : 90) })); return; }
       const step = e.shiftKey ? 2 : NUDGE_MM;
-      const moves: Record<string, Partial<SampleElement>> = {
-        ArrowLeft: { left: round(el.left - step) }, ArrowRight: { left: round(el.left + step) },
-        ArrowUp: { top: round(el.top - step) }, ArrowDown: { top: round(el.top + step) },
-      };
-      if (moves[e.key]) { e.preventDefault(); change(el.id, moves[e.key], 'nudge'); }
+      const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+      const m = moves[e.key];
+      if (m) { e.preventDefault(); changeMany(ids, (el) => ({ left: round(el.left + m[0]), top: round(el.top + m[1]) }), 'nudge'); }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -446,7 +577,7 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
       if (!Array.isArray(parsed)) throw new Error('Must be a list');
       record();
       setItems(parsed.map((e, i) => fit({ ...(e as SampleElement), id: (e as SampleElement).id || newId() + i })));
-      setSelected(null);
+      setSelection([]);
       setDirty(true);
       setJson(null);
     } catch { toast('That is not a valid list of elements', 'bad'); }
@@ -455,7 +586,11 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
   const close = () => (!dirty || window.confirm('Discard unsaved changes?')) && onClose();
   const svgSrc = useMemo(() => stretchedSvg(template.svgCode), [template.svgCode]);
   const editingEl = items.find((e) => e.id === editing) ?? null;
-  const align = (patch: Partial<SampleElement>) => current && change(current.id, patch);
+  const editingBox = editingEl ? sampleVisualBox(editingEl) : null;
+  // Align what is seen: a turned element covers its box with width and height swapped.
+  const seen = current ? sampleVisualBox(current) : null;
+  const alignX = (to: (w: number) => number) => current && seen && change(current.id, { left: round(to(seen.width) - (seen.left - current.left)) });
+  const alignY = (to: (h: number) => number) => current && seen && change(current.id, { top: round(to(seen.height) - (seen.top - current.top)) });
 
   return (
     <>
@@ -464,33 +599,34 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
         <div className="designer-head">
           <div>
             <h2>Design sample · {template.name}</h2>
-            <p>{round(W)} × {round(H)} mm. Drag to move, pull the round handles to resize, double-click to change the text. Hold Alt to drag without snapping.</p>
+            <p>{round(W)} × {round(H)} mm. Drag to move, pull the round handles to resize, double-click to change the text, R to turn. Shift-click or drag a box to pick several; Ctrl/⌘ + C / V to copy and paste. Hold Alt to drag without snapping.</p>
           </div>
           <button type="button" className="icon-btn" onClick={close} aria-label="Close"><X size={16} /></button>
         </div>
 
         <div className="designer-body">
           <div className="sd-canvas-wrap">
-          <div className="sd-canvas" ref={wrap} onPointerDown={() => { setSelected(null); setEditing(null); }}>
+          <div className="sd-canvas" ref={wrap} onPointerDown={beginBox}>
             <div className="sd-board" style={{ width: px(W) + RULER + PAD * 2, height: px(H) + RULER + PAD * 2 }}>
               <div className="sd-frame" style={{ left: PAD, top: PAD }}>
                 <span className="sd-corner" />
-                <div className="sd-ruler-top" style={{ left: RULER }}><Ruler axis="x" lengthMm={W} scale={scale} band={current ? [current.left, current.left + current.width] : null} /></div>
-                <div className="sd-ruler-left" style={{ top: RULER }}><Ruler axis="y" lengthMm={H} scale={scale} band={current ? [current.top, current.top + current.height] : null} /></div>
-                <div className="sd-stage" style={{ left: RULER, top: RULER, width: px(W), height: px(H) }}>
+                <div className="sd-ruler-top" style={{ left: RULER }}><Ruler axis="x" lengthMm={W} scale={scale} band={currentBox ? [currentBox.left, currentBox.left + currentBox.width] : null} /></div>
+                <div className="sd-ruler-left" style={{ top: RULER }}><Ruler axis="y" lengthMm={H} scale={scale} band={currentBox ? [currentBox.top, currentBox.top + currentBox.height] : null} /></div>
+                <div className="sd-stage" ref={stage} style={{ left: RULER, top: RULER, width: px(W), height: px(H) }}>
                   <img className="sd-template" src={svgSrc} alt="" draggable={false} />
                   {items.map((el) => {
-                    const on = el.id === selected;
+                    const on = selection.includes(el.id);
+                    const handles = el.id === selected;
                     const thin = el.type === 'line' && px(el.height) < 14;
                     return (
                       <div key={el.id} className={`sd-el ${el.type}${on ? ' on' : ''}`}
-                        style={{ left: px(el.left), top: px(el.top), width: px(el.width), height: Math.max(1, px(el.height)) }}
+                        style={{ left: px(el.left), top: px(el.top), width: px(el.width), height: Math.max(1, px(el.height)), transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined }}
                         onPointerDown={(e) => begin(e, el, 'move')}
                         onDoubleClick={(e) => { e.stopPropagation(); if (el.type !== 'line') setEditing(el.id); }}>
                         <ElementView el={el} scale={scale} />
                         {thin ? <span className="sd-hit" /> : null}
                         {on ? <span className="sd-outline" style={{ borderColor: SELECTION }} /> : null}
-                        {on ? HANDLES[el.type].map((h) => (
+                        {handles ? HANDLES[el.type].map((h) => (
                           <span key={h} className={`sd-handle ${h}`} style={{ background: HANDLE, width: HANDLE_PX, height: HANDLE_PX }}
                             title={h === 'e' ? (el.type === 'qrcode' ? 'Resize' : el.type === 'line' ? 'Length' : 'Width') : el.type === 'qrcode' ? 'Resize' : 'Height'}
                             onPointerDown={(e) => begin(e, el, h)}><HandleIcon mode={h} /></span>
@@ -498,16 +634,22 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
                       </div>
                     );
                   })}
+                  {group.length > 1 && currentBox ? (
+                    <span className="sd-group" style={{ left: px(currentBox.left) - 4, top: px(currentBox.top) - 4, width: px(currentBox.width) + 8, height: px(currentBox.height) + 8 }} />
+                  ) : null}
+                  {marquee ? (
+                    <span className="sd-marquee" style={{ left: px(marquee.left), top: px(marquee.top), width: px(marquee.width), height: px(marquee.height) }} />
+                  ) : null}
                   {guides.map((g, i) => (
                     <span key={i} className="sd-guide" style={g.axis === 'x'
                       ? { left: px(g.at), top: -RULER, bottom: 0, width: 1, background: GUIDE }
                       : { top: px(g.at), left: -RULER, right: 0, height: 1, background: GUIDE }} />
                   ))}
-                  {hud && current ? (
-                    <span className="sd-hud" style={{ left: px(current.left + current.width / 2), top: px(current.top + current.height) + 22 }}>{hud}</span>
+                  {hud && currentBox ? (
+                    <span className="sd-hud" style={{ left: px(currentBox.left + currentBox.width / 2), top: px(currentBox.top + currentBox.height) + 22 }}>{hud}</span>
                   ) : null}
-                  {editingEl ? (
-                    <div className="sd-quick" style={{ left: Math.min(px(editingEl.left), px(W) - 260), top: px(editingEl.top + editingEl.height) + 10 }}
+                  {editingEl && editingBox ? (
+                    <div className="sd-quick" style={{ left: Math.min(px(editingBox.left), px(W) - 260), top: px(editingBox.top + editingBox.height) + 10 }}
                       onPointerDown={(e) => e.stopPropagation()}>
                       <b>{editingEl.type === 'text' ? 'Text' : editingEl.type === 'barcode' ? 'Barcode value' : 'QR content'}</b>
                       {editingEl.type === 'text' ? (
@@ -548,8 +690,10 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
                 <div className="sd-panel-head">
                   <h3>{TYPE_NAME[current.type]}</h3>
                   <div className="sd-row">
-                    <button className="icon-btn" onClick={() => duplicate(current)} title="Duplicate (Ctrl/⌘ + D)" aria-label="Duplicate"><Copy size={14} /></button>
-                    <button className="icon-btn" onClick={() => remove(current.id)} title="Delete" aria-label="Delete"><Trash2 size={14} /></button>
+                    <button className="icon-btn" onClick={() => copy([current])} title="Copy (Ctrl/⌘ + C)" aria-label="Copy"><Clipboard size={14} /></button>
+                    <button className="icon-btn" onClick={paste} title="Paste (Ctrl/⌘ + V)" aria-label="Paste"><ClipboardPaste size={14} /></button>
+                    <button className="icon-btn" onClick={() => duplicate([current])} title="Duplicate (Ctrl/⌘ + D)" aria-label="Duplicate"><Copy size={14} /></button>
+                    <button className="icon-btn" onClick={() => remove([current.id])} title="Delete" aria-label="Delete"><Trash2 size={14} /></button>
                   </div>
                 </div>
 
@@ -608,28 +752,106 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
                     <span className="u-muted">{NUDGE_MM} mm</span>
                   </div>
                   <div className="sd-align" role="group" aria-label="Align on the label">
-                    <button className="icon-btn" title="Left edge" onClick={() => align({ left: 0 })}><AlignStartVertical size={15} /></button>
-                    <button className="icon-btn" title="Centre across" onClick={() => align({ left: round((W - current.width) / 2) })}><AlignCenterVertical size={15} /></button>
-                    <button className="icon-btn" title="Right edge" onClick={() => align({ left: round(W - current.width) })}><AlignEndVertical size={15} /></button>
-                    <button className="icon-btn" title="Top edge" onClick={() => align({ top: 0 })}><AlignStartHorizontal size={15} /></button>
-                    <button className="icon-btn" title="Centre down" onClick={() => align({ top: round((H - current.height) / 2) })}><AlignCenterHorizontal size={15} /></button>
-                    <button className="icon-btn" title="Bottom edge" onClick={() => align({ top: round(H - current.height) })}><AlignEndHorizontal size={15} /></button>
+                    <button className="icon-btn" title="Left edge" onClick={() => alignX(() => 0)}><AlignStartVertical size={15} /></button>
+                    <button className="icon-btn" title="Centre across" onClick={() => alignX((w) => (W - w) / 2)}><AlignCenterVertical size={15} /></button>
+                    <button className="icon-btn" title="Right edge" onClick={() => alignX((w) => W - w)}><AlignEndVertical size={15} /></button>
+                    <button className="icon-btn" title="Top edge" onClick={() => alignY(() => 0)}><AlignStartHorizontal size={15} /></button>
+                    <button className="icon-btn" title="Centre down" onClick={() => alignY((h) => (H - h) / 2)}><AlignCenterHorizontal size={15} /></button>
+                    <button className="icon-btn" title="Bottom edge" onClick={() => alignY((h) => H - h)}><AlignEndHorizontal size={15} /></button>
                     <button className="icon-btn" title="Bring to front" onClick={() => reorder(current.id, true)}><BringToFront size={15} /></button>
                     <button className="icon-btn" title="Send to back" onClick={() => reorder(current.id, false)}><SendToBack size={15} /></button>
                   </div>
                 </section>
+
+                <section>
+                  <h4>Rotation</h4>
+                  <div className="sd-row sd-rotate">
+                    <div className="seg" role="group" aria-label="Turn">
+                      <button type="button" onClick={() => change(current.id, { rotation: turned(current, 270) })} title="Turn left 90° (Shift + R)" aria-label="Turn left 90°"><RotateCcw size={14} /></button>
+                      <button type="button" onClick={() => change(current.id, { rotation: turned(current, 90) })} title="Turn right 90° (R)" aria-label="Turn right 90°"><RotateCw size={14} /></button>
+                    </div>
+                    <div className="seg" role="group" aria-label="Angle">
+                      {ANGLES.map((a) => (
+                        <button key={a} type="button" className={(current.rotation ?? 0) === a ? 'on' : ''} onClick={() => change(current.id, { rotation: a })} title={a ? `Turned ${a}°` : 'Upright'}>{a}°</button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="u-muted sd-note">Turns about its centre, in quarter turns as in the app. R turns right, Shift + R left.</p>
+                </section>
+              </div>
+            ) : group.length > 1 && currentBox ? (
+              <div className="sd-panel">
+                <div className="sd-panel-head">
+                  <h3>{group.length} elements</h3>
+                  <div className="sd-row">
+                    <button className="icon-btn" onClick={() => copy(group)} title="Copy (Ctrl/⌘ + C)" aria-label="Copy"><Clipboard size={14} /></button>
+                    <button className="icon-btn" onClick={paste} title="Paste (Ctrl/⌘ + V)" aria-label="Paste"><ClipboardPaste size={14} /></button>
+                    <button className="icon-btn" onClick={() => duplicate(group)} title="Duplicate (Ctrl/⌘ + D)" aria-label="Duplicate"><Copy size={14} /></button>
+                    <button className="icon-btn" onClick={() => remove(selection)} title="Delete" aria-label="Delete"><Trash2 size={14} /></button>
+                  </div>
+                </div>
+                <section>
+                  <h4>Move together</h4>
+                  <div className="sd-row sd-nudge">
+                    <div className="seg" role="group" aria-label="Nudge">
+                      {([[ArrowLeft, -NUDGE_MM, 0], [ArrowUp, 0, -NUDGE_MM], [ArrowDown, 0, NUDGE_MM], [ArrowRight, NUDGE_MM, 0]] as const).map(([Icon, mx, my], i) => (
+                        <button key={i} type="button" onClick={() => changeMany(selection, (e) => ({ left: round(e.left + mx), top: round(e.top + my) }), 'nudge')}><Icon size={14} /></button>
+                      ))}
+                    </div>
+                    <span className="u-muted">{round(currentBox.width)} × {round(currentBox.height)} mm</span>
+                  </div>
+                  <p className="u-muted sd-note">On the label, as one block:</p>
+                  <div className="sd-align" role="group" aria-label="Align the group on the label">
+                    <button className="icon-btn" title="Left edge" onClick={() => changeMany(selection, (e) => ({ left: round(e.left - currentBox.left) }))}><AlignStartVertical size={15} /></button>
+                    <button className="icon-btn" title="Centre across" onClick={() => changeMany(selection, (e) => ({ left: round(e.left + (W - currentBox.width) / 2 - currentBox.left) }))}><AlignCenterVertical size={15} /></button>
+                    <button className="icon-btn" title="Right edge" onClick={() => changeMany(selection, (e) => ({ left: round(e.left + W - currentBox.width - currentBox.left) }))}><AlignEndVertical size={15} /></button>
+                    <button className="icon-btn" title="Top edge" onClick={() => changeMany(selection, (e) => ({ top: round(e.top - currentBox.top) }))}><AlignStartHorizontal size={15} /></button>
+                    <button className="icon-btn" title="Centre down" onClick={() => changeMany(selection, (e) => ({ top: round(e.top + (H - currentBox.height) / 2 - currentBox.top) }))}><AlignCenterHorizontal size={15} /></button>
+                    <button className="icon-btn" title="Bottom edge" onClick={() => changeMany(selection, (e) => ({ top: round(e.top + H - currentBox.height - currentBox.top) }))}><AlignEndHorizontal size={15} /></button>
+                  </div>
+                  <p className="u-muted sd-note">To each other, inside the selection:</p>
+                  <div className="sd-align" role="group" aria-label="Align the elements to each other">
+                    {([
+                      ['Left edges', AlignStartVertical, (b: Box) => ({ dx: currentBox.left - b.left, dy: 0 })],
+                      ['Centres across', AlignCenterVertical, (b: Box) => ({ dx: currentBox.left + currentBox.width / 2 - (b.left + b.width / 2), dy: 0 })],
+                      ['Right edges', AlignEndVertical, (b: Box) => ({ dx: currentBox.left + currentBox.width - (b.left + b.width), dy: 0 })],
+                      ['Top edges', AlignStartHorizontal, (b: Box) => ({ dx: 0, dy: currentBox.top - b.top })],
+                      ['Centres down', AlignCenterHorizontal, (b: Box) => ({ dx: 0, dy: currentBox.top + currentBox.height / 2 - (b.top + b.height / 2) })],
+                      ['Bottom edges', AlignEndHorizontal, (b: Box) => ({ dx: 0, dy: currentBox.top + currentBox.height - (b.top + b.height) })],
+                    ] as const).map(([title, Icon, shift]) => (
+                      <button key={title} className="icon-btn" title={title} onClick={() => changeMany(selection, (e) => { const d = shift(sampleVisualBox(e)); return { left: round(e.left + d.dx), top: round(e.top + d.dy) }; })}><Icon size={15} /></button>
+                    ))}
+                  </div>
+                </section>
+                <section>
+                  <h4>Rotation</h4>
+                  <div className="sd-row sd-rotate">
+                    <div className="seg" role="group" aria-label="Turn each">
+                      <button type="button" onClick={() => changeMany(selection, (e) => ({ rotation: turned(e, 270) }))} title="Turn each left 90° (Shift + R)" aria-label="Turn each left 90°"><RotateCcw size={14} /></button>
+                      <button type="button" onClick={() => changeMany(selection, (e) => ({ rotation: turned(e, 90) }))} title="Turn each right 90° (R)" aria-label="Turn each right 90°"><RotateCw size={14} /></button>
+                    </div>
+                    <div className="seg" role="group" aria-label="Angle">
+                      {ANGLES.map((a) => (
+                        <button key={a} type="button" className={group.every((e) => (e.rotation ?? 0) === a) ? 'on' : ''} onClick={() => changeMany(selection, () => ({ rotation: a }))}>{a}°</button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="u-muted sd-note">Each element turns about its own centre.</p>
+                </section>
               </div>
             ) : (
-              <p className="u-muted designer-hint">{items.length ? 'Click an element on the label to edit it.' : 'Add a text, barcode, QR code or line to start.'}</p>
+              <p className="u-muted designer-hint">{items.length
+                ? 'Click an element to edit it. Shift or Ctrl/⌘-click, or drag a box on empty space, to pick several. Ctrl/⌘ + A picks all.'
+                : 'Add a text, barcode, QR code or line to start.'}</p>
             )}
 
             {items.length ? (
               <section className="sd-layers">
-                <h4>Elements</h4>
+                <h4>Elements <small className="u-muted">Shift or Ctrl/⌘ to pick several</small></h4>
                 {[...items].reverse().map((el) => {
                   const Icon = TYPE_ICON[el.type];
                   return (
-                    <button key={el.id} className={el.id === selected ? 'sd-layer on' : 'sd-layer'} onClick={() => setSelected(el.id)}>
+                    <button key={el.id} className={selection.includes(el.id) ? 'sd-layer on' : 'sd-layer'} onClick={(e) => pick(el.id, e.shiftKey || e.metaKey || e.ctrlKey)}>
                       <Icon size={14} /><span>{el.type === 'line' ? `Line ${round(el.width)} mm` : el.text || TYPE_NAME[el.type]}</span>
                     </button>
                   );

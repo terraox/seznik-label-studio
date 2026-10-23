@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, MessageSquareText, Search, Star, ThumbsUp, X } from 'lucide-react';
 
 import { useDesk, useHideInternal, useToast } from '@/components/desk';
-import { PageHeader } from '@/components/ui';
+import { PageHeader, Skeleton, SkeletonRows } from '@/components/ui';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 import { can } from '@/lib/permissions';
@@ -95,7 +95,7 @@ export function FeedbackDesk() {
               <span className="kpi-title">{title}</span>
               <span className="kpi-icon" style={{ background: `${color}20`, border: `1px solid ${color}40` }}><Icon size={16} color={color} /></span>
             </div>
-            <div className="kpi-value">{value}</div>
+            <div className="kpi-value">{value === '…' ? <Skeleton /> : value}</div>
             <div className="kpi-sub">{sub}</div>
           </article>
         ))}
@@ -153,7 +153,7 @@ export function FeedbackDesk() {
                   <td>{ago(item.createdAt)}</td>
                 </tr>
               ))}
-              {!data ? <tr><td colSpan={6} className="empty">Loading feedback…</td></tr> : null}
+              {!data ? <SkeletonRows cols={6} /> : null}
               {data && data.items.length === 0 ? <tr><td colSpan={6} className="empty">No feedback matches these filters.</td></tr> : null}
             </tbody>
           </table>
