@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect as SvgRect, Stop, SvgXml } from 'react-native-svg';
 
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
+import { TemplateRequestModal, type TemplateRequestDraft } from '@/components/template-request-form';
+import { trackTemplateRequest } from '@/lib/telemetry/events';
 import { ShareNodeIcon } from '@/components/home-icons';
 import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -326,6 +328,13 @@ export default function TemplateScreen() {
 
   const [choiceFor, setChoiceFor] = useState<{ template: CatalogTemplate; mode: AcrossMode } | null>(null);
   const [arrangeFor, setArrangeFor] = useState<CatalogTemplate | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const sendTemplateRequest = (draft: TemplateRequestDraft) => {
+    setRequestOpen(false);
+    // Queued on the phone and sent to the admin desk's Template requests with the next batch of events.
+    trackTemplateRequest({ ...draft, searchText: searchQuery });
+    Alert.alert('Request sent', 'Thank you. We will add this label to the templates.');
+  };
 
   /** The 2-up sheet as labels edited one at a time: one cell-sized label with a panel per column. */
   const openSeparate = useCallback(
@@ -785,12 +794,35 @@ export default function TemplateScreen() {
                 <Text style={styles.emptyText}>No templates found</Text>
               </View>
             )}
+
+            {!catalogLoading || catalogTemplates.length > 0 ? (
+              <Pressable
+                onPress={() => setRequestOpen(true)}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.requestCard,
+                  { maxWidth: templateCardMaxWidth, width: '100%' },
+                  pressed && styles.cardPressed,
+                ]}>
+                <View style={styles.requestText}>
+                  <Text style={styles.requestTitle}>Can’t find your template?</Text>
+                  <Text style={styles.requestSub}>Tell us what label you need and we will add it.</Text>
+                </View>
+                <Text style={styles.requestAction}>Request</Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
           )}
         </View>
       </View>
       )}
       </View>
+
+      <TemplateRequestModal
+        visible={requestOpen}
+        onCancel={() => setRequestOpen(false)}
+        onSubmit={sendTemplateRequest}
+      />
 
       <IosAlertModal
         visible={arrangeFor !== null}
@@ -1143,6 +1175,36 @@ const styles = themedStyles((c, scheme) => ({
   emptyText: {
     color: c.textMuted,
     fontSize: 14,
+  },
+  requestCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: c.accent,
+    backgroundColor: c.surface,
+  },
+  requestText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  requestTitle: {
+    color: c.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  requestSub: {
+    color: c.textSecondary,
+    fontSize: 13,
+  },
+  requestAction: {
+    color: c.accent,
+    fontSize: 14,
+    fontWeight: '700',
   },
   cloudContent: {
     flex: 1,

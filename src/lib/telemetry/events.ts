@@ -235,6 +235,27 @@ export function trackFeedback(rating: number, message: string) {
   });
 }
 
+export type TemplateRequestShape = 'rectangle' | 'rounded' | 'circle' | 'other';
+
+/** "Can't find my template": a label the user wants added to the catalogue. Size is optional. */
+export function trackTemplateRequest(request: {
+  description: string;
+  widthMm?: number | null;
+  heightMm?: number | null;
+  shape?: TemplateRequestShape | null;
+  searchText?: string;
+}) {
+  void enqueue({
+    type: 'template_request',
+    description: request.description.trim().slice(0, 500),
+    ...(request.widthMm ? { widthMm: request.widthMm } : {}),
+    ...(request.heightMm ? { heightMm: request.heightMm } : {}),
+    ...(request.shape ? { shape: request.shape } : {}),
+    ...(request.searchText?.trim() ? { searchText: request.searchText.trim().slice(0, 120) } : {}),
+    platform: appPlatform(),
+  });
+}
+
 /** The user pressed Buy on a shop product. */
 export function trackProductClick(productKey: string, productName: string, category: 'labels' | 'printers') {
   void enqueue({ type: 'product_click', productKey, productName, category, source: 'shop_buy' });
