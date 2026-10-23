@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Platform, Text, View } from 'react-native';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useShallow } from 'zustand/react/shallow';
 
 import {
   BluetoothBlockers,
@@ -25,7 +26,7 @@ import {
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 import { isBluetoothOffError } from '@/lib/printer/bluetooth-guard';
-import { bridgeDisplayLabel, defaultBridgeForConsumer } from '@/lib/printer/printer-bridge';
+import { bridgeDisplayLabel, defaultBridgeForConsumer, lastDeviceForConsumer } from '@/lib/printer/printer-bridge';
 import { getAmbiguousModelCandidates } from '@/lib/printer/printer-heuristics';
 import {
   getPrinterManager,
@@ -174,7 +175,8 @@ export default function PrinterConnectScreen() {
   const userTargetRef = useRef<string | null>(null);
 
   const activeBridge = defaultBridgeForConsumer(selectedModel);
-  const lastForBridge = usePrinterStore((s) => s.lastDeviceForBridge[activeBridge] ?? null);
+  // Per family, not per bridge: Tejas and Rudra share a bridge but each shows its own last printer.
+  const lastForBridge = usePrinterStore(useShallow((s) => lastDeviceForConsumer(s, selectedModel)));
 
   const refreshCaps = useCallback(() => {
     const mgr = getPrinterManager();
@@ -193,7 +195,7 @@ export default function PrinterConnectScreen() {
       if (connectingId || autoConnectingRef.current) return;
       const store = usePrinterStore.getState();
       if (store.status === 'connecting' || store.status === 'printing') return;
-      const last = store.lastDeviceForBridge[defaultBridgeForConsumer(selectedModel)];
+      const last = lastDeviceForConsumer(store, selectedModel);
       if (!last?.id) return;
       if (last.consumer !== selectedModel) return;
       const picked = userTargetRef.current;
@@ -456,7 +458,7 @@ export default function PrinterConnectScreen() {
     }
 
     const mgr = getPrinterManager();
-    const lastId = usePrinterStore.getState().lastDeviceForBridge[defaultBridgeForConsumer(selectedModel)]?.id;
+    const lastId = lastDeviceForConsumer(usePrinterStore.getState(), selectedModel)?.id;
     const switching = lastId != null && normalizePrinterMac(lastId) !== normalizePrinterMac(device.id);
     userTargetRef.current = device.id;
     mgr.invalidatePendingReconnects();

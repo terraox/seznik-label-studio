@@ -22,6 +22,7 @@ import { migrateLegacyUserFiles } from '@/lib/user-files/migrate';
 import { flushNow } from '@/lib/telemetry/events';
 import { useAuthStore } from '@/stores/auth-store';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
+import { usePrinterStore } from '@/stores/printer-store';
 import { AppThemeProvider, DarkColors, useScheme, useSettingsHydrated } from '@/theme';
 
 /** React Navigation colours for dark mode. Light keeps DefaultTheme exactly as before. */
@@ -81,8 +82,15 @@ function AppRoot() {
     void preloadFeatureBanners();
   }, []);
 
+  // Connect to the last printer on open. The saved printers load from storage after the first
+  // render, so wait for them; before that there is no last printer to reconnect to.
   useEffect(() => {
-    getPrinterManager().maybeAutoReconnect({ force: true });
+    const reconnect = () => getPrinterManager().maybeAutoReconnect({ force: true });
+    if (usePrinterStore.persist.hasHydrated()) {
+      reconnect();
+      return;
+    }
+    return usePrinterStore.persist.onFinishHydration(reconnect);
   }, []);
 
   // Prints made offline are sent at start and whenever the app returns to the foreground.

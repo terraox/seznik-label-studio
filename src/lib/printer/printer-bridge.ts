@@ -1,4 +1,4 @@
-import type { ConsumerPrinterId } from '@/constants/printer-models';
+import type { ConsumerPrinterId, LastModelDevice } from '@/constants/printer-models';
 import { consumerIdFromLegacy } from '@/constants/printer-models';
 import type { PrinterTransport } from '@/stores/printer-store';
 
@@ -13,6 +13,31 @@ export type LastBridgeDevice = {
 /** Default native transport when the user picks a family card on Connect. */
 export function defaultBridgeForConsumer(consumer: ConsumerPrinterId): PrinterTransport {
   return consumer === 'josh' ? 'josh-lpapi' : 'bluetooth-spp';
+}
+
+/**
+ * Last printer connected for this family. Tejas and Rudra share the TD-404 bridge, so the bridge
+ * entry alone would show a Tejas on Rudra. Falls back to the bridge entry only when it is this family's.
+ */
+export function lastDeviceForConsumer(
+  state: {
+    lastDeviceForModel: Partial<Record<ConsumerPrinterId, LastModelDevice>>;
+    lastDeviceForBridge: Partial<Record<PrinterTransport, LastBridgeDevice>>;
+  },
+  consumer: ConsumerPrinterId,
+): LastBridgeDevice | null {
+  const bridgeEntry = state.lastDeviceForBridge[defaultBridgeForConsumer(consumer)];
+  const own = state.lastDeviceForModel[consumer];
+  if (own?.id) {
+    const sameAsBridge = bridgeEntry?.id === own.id && bridgeEntry.consumer === consumer;
+    return {
+      id: own.id,
+      name: own.name,
+      consumer,
+      connectedAt: own.connectedAt ?? (sameAsBridge ? bridgeEntry.connectedAt : undefined),
+    };
+  }
+  return bridgeEntry?.consumer === consumer ? bridgeEntry : null;
 }
 
 export function bridgeDisplayLabel(transport: PrinterTransport): string {

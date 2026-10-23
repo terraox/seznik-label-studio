@@ -58,7 +58,7 @@ import {
   SEZNIK_PRINTER_MODELS,
   toDriverModel,
 } from '@/constants/printer-models';
-import { defaultBridgeForConsumer } from '@/lib/printer/printer-bridge';
+import { defaultBridgeForConsumer, lastDeviceForConsumer } from '@/lib/printer/printer-bridge';
 
 export type DiscoveredPrinter = {
   id: string;
@@ -463,8 +463,7 @@ class PrinterManager {
           if (event.connected) {
             if (!this.autoReconnectSuppressed) {
               const store = usePrinterStore.getState();
-              const bridge = defaultBridgeForConsumer(store.selectedPrinterModel);
-              const last = store.lastDeviceForBridge[bridge];
+              const last = lastDeviceForConsumer(store, store.selectedPrinterModel);
               if (last?.id && normalizePrinterMac(last.id) === mac) {
                 if (this.manualConnectMac && this.manualConnectMac !== mac) return;
                 if (this.isConnectionHealthy()) {
@@ -2952,6 +2951,23 @@ class PrinterManager {
     return normalizePrinterMac(known) === normalizePrinterMac(deviceId);
   }
 
+  /**
+   * Auto-reconnect only brings back the printer when the app opens. Once a live session ends
+   * (printer switched off or the user tapped Disconnect), stop retrying until the user connects
+   * again or the app is reopened. Connecting again clears the block.
+   */
+  setupSessionDropGuard(): void {
+    if (this.sessionDropUnsub) return;
+    this.sessionDropUnsub = usePrinterStore.subscribe((next, prev) => {
+      const wasLive = prev.status === 'connected' || prev.status === 'printing';
+      const isLive = next.status === 'connected' || next.status === 'printing';
+      if (wasLive && next.status === 'disconnected') this.suppressAutoReconnect();
+      else if (!wasLive && isLive) this.autoReconnectSuppressed = false;
+    });
+  }
+
+  private sessionDropUnsub: (() => void) | null = null;
+
   /** User tapped Disconnect — block every automatic reconnect until they connect again manually. */
   suppressAutoReconnect(): void {
     this.autoReconnectSuppressed = true;
@@ -3008,7 +3024,7 @@ class PrinterManager {
 
     const consumer = store.selectedPrinterModel;
     const bridge = defaultBridgeForConsumer(consumer);
-    const last = store.lastDeviceForBridge[bridge];
+    const last = lastDeviceForConsumer(store, consumer);
     if (!last?.id) return;
     if (this.manualConnectMac && normalizePrinterMac(last.id) !== this.manualConnectMac) return;
     if (last.consumer !== consumer) return;
@@ -3543,7 +3559,7 @@ class PrinterManager {
       return false;
     }
     const bridge = defaultBridgeForConsumer(consumer);
-    const pending = usePrinterStore.getState().lastDeviceForBridge[bridge];
+    const pending = lastDeviceForConsumer(usePrinterStore.getState(), consumer);
     if (
       this.manualConnectMac &&
       pending?.id &&
@@ -3564,7 +3580,7 @@ class PrinterManager {
         return false;
       }
     }
-    const entry = usePrinterStore.getState().lastDeviceForBridge[bridge];
+    const entry = lastDeviceForConsumer(usePrinterStore.getState(), consumer);
     if (!entry?.id) return false;
     if (entry.consumer !== consumer) {
       console.info(
@@ -4761,6 +4777,7 @@ export function getPrinterManager(): PrinterManager {
   if (!manager) {
     manager = new PrinterManager();
     manager.setupAclListener();
+    manager.setupSessionDropGuard();
     setupAppStateListener();
     persistPrinterManagerSingleton();
   }

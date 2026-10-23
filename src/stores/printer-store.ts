@@ -7,6 +7,7 @@ import {
   consumerIdFromLegacy,
   migrateLastDeviceForModel,
   toDriverModel,
+  type LastModelDevice,
   type ConsumerPrinterId,
   type SeznikPrinterModelId,
 } from '@/constants/printer-models';
@@ -47,7 +48,8 @@ type PrinterStoreState = {
   backendPrinterId: string | null;
   lastDeviceId: string | null;
   lastDeviceName: string | null;
-  lastDeviceForModel: Partial<Record<ConsumerPrinterId, { id: string; name: string }>>;
+  /** Last successful connection per printer family. Tejas and Rudra share a bridge, so the Connect card reads this. */
+  lastDeviceForModel: Partial<Record<ConsumerPrinterId, LastModelDevice>>;
   /** Last successful connection per native bridge (Josh LPAPI, TD-404 SPP, Tez, …). */
   lastDeviceForBridge: Partial<Record<PrinterTransport, LastBridgeDevice>>;
   /** MAC → model pin. Overrides name heuristics on reconnect (addendum §5). */
@@ -213,7 +215,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
               consumer === state.selectedPrinterModel ? consumer : state.selectedPrinterModel,
             lastDeviceForModel: {
               ...state.lastDeviceForModel,
-              [consumer]: { id: deviceId, name: deviceName },
+              [consumer]: { id: deviceId, name: deviceName, connectedAt: bridgeEntry.connectedAt },
             },
             lastDeviceForBridge: transport
               ? {

@@ -196,11 +196,14 @@ export function consumerIdFromLegacy(
   return 'tejas';
 }
 
+/** Last printer connected for one family. connectedAt is missing on entries saved before it existed. */
+export type LastModelDevice = { id: string; name: string; connectedAt?: number };
+
 export function migrateLastDeviceForModel(
-  raw: Partial<Record<string, { id: string; name: string }>> | null | undefined,
-): Partial<Record<ConsumerPrinterId, { id: string; name: string }>> {
+  raw: Partial<Record<string, LastModelDevice>> | null | undefined,
+): Partial<Record<ConsumerPrinterId, LastModelDevice>> {
   const source = raw ?? {};
-  const next: Partial<Record<ConsumerPrinterId, { id: string; name: string }>> = {};
+  const next: Partial<Record<ConsumerPrinterId, LastModelDevice>> = {};
   if (source.tejas) next.tejas = source.tejas;
   else if (source.td404) next.tejas = source.td404;
   if (source.rudra) next.rudra = source.rudra;
