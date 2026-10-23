@@ -7,8 +7,6 @@ import {
 } from '@/lib/printer/josh-status';
 
 type JoshProgressStore = JoshProgressState & {
-  /** A failure that arrived after the print call had already returned. Shown once, then cleared. */
-  lateFailure: string | null;
   /** Latest PrinterParam.printerStatus code from the live watcher. Null when not watching or not reported. */
   deviceStatus: number | null;
   setDeviceStatus: (code: number | null) => void;
@@ -18,7 +16,6 @@ type JoshProgressStore = JoshProgressState & {
   settle: (ms: number) => void;
   fail: (message: string) => void;
   setBulk: (index: number | null, total: number | null) => void;
-  setLateFailure: (message: string | null) => void;
   reset: () => void;
 };
 
@@ -49,7 +46,6 @@ function armClear(
 
 export const useJoshProgressStore = create<JoshProgressStore>((set, get) => ({
   ...JOSH_PROGRESS_IDLE,
-  lateFailure: null,
   deviceStatus: null,
   setDeviceStatus: (deviceStatus) => set({ deviceStatus }),
   apply: (event) => {
@@ -77,7 +73,6 @@ export const useJoshProgressStore = create<JoshProgressStore>((set, get) => ({
     set((s) => ({ ...s, phase: 'failed', failure: message }));
   },
   setBulk: (bulkIndex, bulkTotal) => set((s) => ({ ...s, bulkIndex, bulkTotal })),
-  setLateFailure: (lateFailure) => set({ lateFailure }),
   reset: () => {
     stopTimers();
     set({ ...JOSH_PROGRESS_IDLE });

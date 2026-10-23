@@ -653,9 +653,7 @@ class PrinterManager {
     if (this.joshProgressSub || typeof josh.addJoshPrintProgressListener !== 'function') return;
     this.joshProgressSub = josh.addJoshPrintProgressListener((event) => {
       const store = useJoshProgressStore.getState();
-      if (event.progress === 'FAILED' && this.joshPrintsInFlight === 0) {
-        store.setLateFailure(joshFailMessage(event.reason, event.reasonCode));
-      }
+      // A FAILED after the call returned still lands in the progress card below.
       // The SDK also sends CONNECTED when the printer connects, which is not a print. Other
       // events are kept after the call returns: the printer is still printing then.
       if (event.progress === 'CONNECTED' && this.joshPrintsInFlight === 0) return;

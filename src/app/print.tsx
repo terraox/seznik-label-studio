@@ -630,17 +630,11 @@ export default function PrintScreen() {
   const [printProgress, setPrintProgress] = useState<string | null>(null);
   // A boolean, not the text: the text changes with every printer event and would re-render this whole screen.
   const joshProgressLine = useJoshProgressStore((s) => s.phase !== 'idle');
-  const joshLateFailure = useJoshProgressStore((s) => s.lateFailure);
   const joshStatusWarning = useJoshProgressStore((s) => joshStatusAlert(s.deviceStatus));
   useEffect(() => {
     if (printerSdkId !== 'josh') return;
     return getPrinterManager().watchJoshStatus();
   }, [printerSdkId]);
-  useEffect(() => {
-    if (!joshLateFailure) return;
-    useJoshProgressStore.getState().setLateFailure(null);
-    Alert.alert('Printer problem', joshLateFailure);
-  }, [joshLateFailure]);
   const [darkness, setDarkness] = useState<number | null>(null);
   const [speed, setSpeed] = useState<number | null>(null);
   const [orientation, setOrientation] = useState<(typeof ORIENTATIONS)[number]>('0°');
@@ -1245,7 +1239,8 @@ export default function PrintScreen() {
         if (printingSettings.returnPrevious) goBack();
       } catch (error) {
         const message = formatPrintFailure(error);
-        if (message) Alert.alert('Print Failed', message);
+        // Josh's progress card already shows the failure.
+        if (message && useJoshProgressStore.getState().phase !== 'failed') Alert.alert('Print Failed', message);
       } finally {
         printingLockRef.current = false;
         setPrinting(false);
@@ -2447,7 +2442,13 @@ export default function PrintScreen() {
             : serialRun
               ? `\n\nPrinted ${serialRun.cursor ? Math.min(serialRun.cursor.total, serialRun.cursor.nextIndex) : labelsCompleted} of ${pageCount} labels. Print again to continue where it stopped.`
               : '';
-        Alert.alert('Print Failed', `${message}${sent}`);
+        // Josh's progress card already shows the failure: add the count there instead of a second popup.
+        const joshCard = useJoshProgressStore.getState();
+        if (joshCard.phase === 'failed') {
+          if (sent) joshCard.fail(`${joshCard.failure ?? message}${sent}`);
+        } else {
+          Alert.alert('Print Failed', `${message}${sent}`);
+        }
       }
     } finally {
       printingLockRef.current = false;
