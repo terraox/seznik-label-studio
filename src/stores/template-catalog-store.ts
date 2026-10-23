@@ -10,7 +10,8 @@ export type CatalogCategory = { id: string; name: string };
 export type CatalogTemplate = {
   id: string;
   name: string;
-  categoryId: string;
+  /** Null when the admin deleted its category; it then shows only in search. */
+  categoryId: string | null;
   widthMm: number;
   heightMm: number;
   svgCode: string;

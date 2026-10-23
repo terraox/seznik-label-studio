@@ -14,7 +14,7 @@ import { can } from '@/lib/permissions';
 type Kind = 'template' | 'clipart';
 type Category = { id: string; name: string; items: number };
 type Item = {
-  id: string; name: string; categoryId: string; widthMm: number | null; heightMm: number | null;
+  id: string; name: string; categoryId: string | null; widthMm: number | null; heightMm: number | null;
   status: 'draft' | 'published' | 'disabled'; svgCode: string; updatedAt: string; sampleLayout?: unknown;
 };
 type SaveResult = { item: Item; removed: { what: string; count: number }[]; warnings?: string[] };
@@ -184,6 +184,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   const replaceInput = useRef<HTMLInputElement>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [allCount, setAllCount] = useState(0);
   const [categoryId, setCategoryId] = useState('');
   const [items, setItems] = useState<Item[]>([]);
   const [total, setTotal] = useState(0);
@@ -221,7 +222,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   const [edit, setEdit] = useState({ name: '', categoryId: '', widthMm: '', heightMm: '', status: 'published' });
 
   const loadCategories = useCallback(() => {
-    api<{ categories: Category[] }>(`${base}/categories`).then((r) => setCategories(r.categories)).catch((e: Error) => toast(e.message, 'bad'));
+    api<{ categories: Category[]; all: number }>(`${base}/categories`).then((r) => { setCategories(r.categories); setAllCount(r.all); }).catch((e: Error) => toast(e.message, 'bad'));
   }, [base, toast]);
 
   const loadItems = useCallback(() => {
@@ -270,12 +271,23 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   }
 
   async function deleteCategory(c: Category) {
-    if (!window.confirm(`Delete the category “${c.name}”?`)) return;
+    const what = c.items === 1 ? `Its 1 ${copy.noun} stays` : `Its ${c.items} ${copy.title.toLowerCase()} stay`;
+    const ask = c.items > 0
+      ? `Delete the category “${c.name}”? ${what} under All ${copy.title.toLowerCase()}, without a category.`
+      : `Delete the category “${c.name}”?`;
+    if (!window.confirm(ask)) return;
+    // Show the result straight away: the category goes, its items lose the category; the reload confirms it.
+    setCategories((cur) => cur.filter((x) => x.id !== c.id));
+    setItems((cur) => cur.map((i) => (i.categoryId === c.id ? { ...i, categoryId: null } : i)));
+    if (categoryId === c.id) setCategoryId('');
     try {
       await api(`${base}/categories/${c.id}`, { method: 'DELETE' });
-      if (categoryId === c.id) setCategoryId('');
-      loadCategories();
-    } catch (e) { toast(e instanceof Error ? e.message : 'Could not delete', 'bad'); }
+      toast('Category deleted');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not delete', 'bad');
+    }
+    loadCategories();
+    loadItems();
   }
 
   async function submit(event: FormEvent) {
@@ -304,7 +316,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
 
   function openItem(item: Item) {
     setOpen(item);
-    setEdit({ name: item.name, categoryId: item.categoryId, widthMm: item.widthMm?.toString() ?? '', heightMm: item.heightMm?.toString() ?? '', status: item.status });
+    setEdit({ name: item.name, categoryId: item.categoryId ?? '', widthMm: item.widthMm?.toString() ?? '', heightMm: item.heightMm?.toString() ?? '', status: item.status });
   }
 
   async function saveItem(replacement?: File, fields = edit, done = replacement ? 'Picture replaced' : 'Saved') {
@@ -359,7 +371,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   }
 
   const shown = items.filter((i) => statusFilter === 'all' || i.status === statusFilter);
-  const categoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? '';
+  const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? 'No category';
 
   return (
     <>
@@ -376,7 +388,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
         <aside className="panel lib-side">
           <h2>Categories</h2>
           <button className={categoryId === '' ? 'lib-cat on' : 'lib-cat'} onClick={() => setCategoryId('')}>
-            <span>All {copy.title.toLowerCase()}</span><small>{categories.reduce((n, c) => n + c.items, 0)}</small>
+            <span>All {copy.title.toLowerCase()}</span><small>{allCount}</small>
           </button>
           {categories.map((c) => (
             <div key={c.id} className="lib-cat-row">
@@ -563,6 +575,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                   <label className="lib-label">Name<input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></label>
                   <label className="lib-label">Category
                     <select value={edit.categoryId} onChange={(e) => setEdit({ ...edit, categoryId: e.target.value })}>
+                      {edit.categoryId ? null : <option value="">No category</option>}
                       {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </label>

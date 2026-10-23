@@ -28,9 +28,11 @@ export async function PATCH(request: Request, ctx: Ctx) {
       data.name = name;
     }
     if (form.has('categoryId')) {
-      const category = await t.category.findUnique({ where: { id: String(form.get('categoryId')) } });
-      if (!category) throw new HttpError(400, 'Choose a category.');
-      data.categoryId = category.id;
+      // Empty means "no category", the state an item is left in when its category is deleted.
+      const wanted = String(form.get('categoryId'));
+      const category = wanted ? await t.category.findUnique({ where: { id: wanted } }) : null;
+      if (wanted && !category) throw new HttpError(400, 'Choose a category.');
+      data.categoryId = category?.id ?? null;
     }
     if (form.has('status')) data.status = ['published', 'disabled'].includes(String(form.get('status'))) ? String(form.get('status')) : 'draft';
     const clean = await readSvg(form.get('file'), kind);

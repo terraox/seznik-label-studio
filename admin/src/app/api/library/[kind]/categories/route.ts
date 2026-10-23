@@ -11,8 +11,11 @@ export async function GET(_request: Request, ctx: Ctx) {
   try {
     await requirePermission('catalog.view');
     const t = tables(asKind((await ctx.params).kind));
-    const rows = await t.category.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], include: { _count: { select: { [t.itemRelation]: true } } } });
-    return json({ categories: rows.map((c) => ({ id: c.id, name: c.name, items: c._count[t.itemRelation] as number })) });
+    const [rows, all] = await Promise.all([
+      t.category.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], include: { _count: { select: { [t.itemRelation]: true } } } }),
+      t.item.count(),
+    ]);
+    return json({ categories: rows.map((c) => ({ id: c.id, name: c.name, items: c._count[t.itemRelation] as number })), all });
   } catch (error) {
     return fail(error);
   }

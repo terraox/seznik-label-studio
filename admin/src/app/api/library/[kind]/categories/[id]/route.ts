@@ -30,9 +30,7 @@ export async function DELETE(_request: Request, ctx: Ctx) {
     const { kind, id } = await ctx.params;
     const t = tables(asKind(kind));
     if (!(await t.category.findUnique({ where: { id } }))) throw new HttpError(404, 'That category does not exist.');
-    if ((await t.item.count({ where: { categoryId: id } })) > 0) {
-      throw new HttpError(409, 'This category still has items. Move or delete them first.');
-    }
+    // Its items stay: the database clears their categoryId and they show under All.
     await t.category.delete({ where: { id } });
     return json({ ok: true });
   } catch (error) {

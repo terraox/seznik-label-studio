@@ -277,7 +277,7 @@ model TemplateCategory {
 
 model Template {
   id           String   @id @default(cuid())
-  categoryId   String
+  categoryId   String?
   name         String
   /// The sanitised SVG code itself.
   svgCode      String
@@ -293,7 +293,8 @@ model Template {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  category TemplateCategory @relation(fields: [categoryId], references: [id])
+  /// Null once its category is deleted; it then shows only under All.
+  category TemplateCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([categoryId])
   @@index([status, updatedAt])
@@ -311,7 +312,7 @@ model ClipartCategory {
 
 model Clipart {
   id          String   @id @default(cuid())
-  categoryId  String
+  categoryId  String?
   name        String
   /// The sanitised SVG code itself.
   svgCode     String
@@ -324,7 +325,8 @@ model Clipart {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  category ClipartCategory @relation(fields: [categoryId], references: [id])
+  /// Null once its category is deleted; it then shows only under All.
+  category ClipartCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([categoryId])
   @@index([status, updatedAt])

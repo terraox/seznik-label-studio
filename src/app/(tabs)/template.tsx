@@ -320,7 +320,7 @@ export default function TemplateScreen() {
         (t) =>
           t.name.toLowerCase().includes(q) ||
           `${t.widthMm} x ${t.heightMm}`.includes(q) ||
-          (categoryNames.get(t.categoryId) ?? '').toLowerCase().includes(q),
+          (categoryNames.get(t.categoryId ?? '') ?? '').toLowerCase().includes(q),
       );
     }
     return catalogTemplates.filter((t) => t.categoryId === activeCategoryId);
@@ -370,7 +370,7 @@ export default function TemplateScreen() {
         openSeparate(template, withSample);
         return;
       }
-      const category = categoryNames.get(template.categoryId) ?? '';
+      const category = categoryNames.get(template.categoryId ?? '') ?? '';
       const isJewellery = isJewellerySheetTemplate(template);
       const singleCircle = /circle/i.test(template.name) && !/2up|two up/i.test(template.name);
       const doc = isJewellery
@@ -782,7 +782,7 @@ export default function TemplateScreen() {
               <IndustryTemplateCard
                 key={item.id}
                 item={item}
-                category={categoryNames.get(item.categoryId) ?? ''}
+                category={categoryNames.get(item.categoryId ?? '') ?? ''}
                 showCategory={!!searchQuery.trim()}
                 cardMaxWidth={templateCardMaxWidth}
                 onPress={handleSelectTemplate}

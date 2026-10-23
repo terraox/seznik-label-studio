@@ -132,7 +132,7 @@ Table TemplateCategory {
 
 Table Template {
   id varchar [pk]
-  categoryId varchar [not null]
+  categoryId varchar [note: 'Null once its category is deleted']
   name varchar [not null]
   svgCode text [not null, note: 'The sanitised SVG code']
   widthMm float [not null]
@@ -156,7 +156,7 @@ Table ClipartCategory {
 
 Table Clipart {
   id varchar [pk]
-  categoryId varchar [not null]
+  categoryId varchar [note: 'Null once its category is deleted']
   name varchar [not null]
   svgCode text [not null, note: 'The sanitised SVG code']
   widthMm float
@@ -169,8 +169,8 @@ Table Clipart {
   Note: '[READY] Clipart added by the admin, on top of the clipart bundled in the app.'
 }
 
-Ref: Template.categoryId > TemplateCategory.id
-Ref: Clipart.categoryId > ClipartCategory.id
+Ref: Template.categoryId > TemplateCategory.id [delete: set null]
+Ref: Clipart.categoryId > ClipartCategory.id [delete: set null]
 
 Table PrinterConnection {
   id varchar [pk]

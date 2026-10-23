@@ -34,7 +34,7 @@ export function itemDto(item: any) {
   return {
     id: item.id as string,
     name: item.name as string,
-    categoryId: item.categoryId as string,
+    categoryId: (item.categoryId ?? null) as string | null,
     widthMm: (item.widthMm ?? null) as number | null,
     heightMm: (item.heightMm ?? null) as number | null,
     viewBox: (item.viewBox ?? null) as string | null,
