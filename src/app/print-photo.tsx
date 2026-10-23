@@ -974,7 +974,7 @@ const styles = themedStyles((c, scheme) => ({
     maxWidth: 180,
   },
   connectionConnected: { backgroundColor: c.successFill },
-  connectionText: { color: c.onAccent, fontSize: 13, fontWeight: '500' },
+  connectionText: { color: c.onAccent, fontSize: 13, fontWeight: '500', flexShrink: 1 },
   scroll: { flex: 1, width: '100%' },
   previewArea: {
     width: '100%',
@@ -1024,6 +1024,7 @@ const styles = themedStyles((c, scheme) => ({
     color: c.link,
     fontSize: 14,
     fontWeight: '600',
+    flexShrink: 1,
   },
   addPhotoCard: {
     marginTop: 14,
@@ -1101,7 +1102,7 @@ const styles = themedStyles((c, scheme) => ({
     marginTop: 14,
     marginBottom: 8,
   },
-  sliderValue: { fontSize: 14, fontWeight: '500', color: c.accent },
+  sliderValue: { fontSize: 14, fontWeight: '500', color: c.accent, flexShrink: 1 },
   sliderTrack: {
     height: 4,
     borderRadius: 2,
@@ -1172,6 +1173,7 @@ const styles = themedStyles((c, scheme) => ({
     textAlign: 'center',
     fontSize: 15,
     fontWeight: '500',
+    flexShrink: 1,
   },
   footer: {
     position: 'absolute',

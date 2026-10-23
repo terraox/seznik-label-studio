@@ -82,7 +82,7 @@ export function PdfSharpnessTool({
 
       <View style={styles.headerRow}>
         <Text style={styles.label}>Sharpness / Contrast</Text>
-        <Text style={styles.value}>{pct}%</Text>
+        <Text style={styles.value} /* layout-ok: short percentage */>{pct}%</Text>
       </View>
 
       {/* Interactive Slider Row with Steppers */}
@@ -168,7 +168,7 @@ const styles = themedStyles((c) => ({
   wrap: { gap: 10 },
   help: { fontSize: 12, color: c.textMuted, lineHeight: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  label: { fontSize: 12, fontWeight: '600', color: c.text },
+  label: { fontSize: 12, fontWeight: '600', color: c.text, flexShrink: 1 },
   value: { fontSize: 15, fontWeight: '700', color: c.accent },
   sliderRow: {
     flexDirection: 'row',

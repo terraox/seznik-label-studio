@@ -208,10 +208,10 @@ const styles = StyleSheet.create({
   rules: { gap: 6, marginTop: -4 },
   rule: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ruleMark: { width: 16, fontSize: 13, color: AUTH_COLORS.muted },
-  ruleText: { fontSize: 13, color: AUTH_COLORS.muted },
+  ruleText: { fontSize: 13, color: AUTH_COLORS.muted, flexShrink: 1 },
   ruleMet: { color: AUTH_COLORS.success },
   error: { color: AUTH_COLORS.error, fontSize: 13, textAlign: 'center' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 8 },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' },
   footerText: { color: AUTH_COLORS.muted, fontSize: 14 },
   footerLink: { color: AUTH_COLORS.blue, fontSize: 14, fontWeight: '700' },
 });

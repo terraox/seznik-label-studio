@@ -187,7 +187,7 @@ const styles = themedStyles((c) => ({
     backgroundColor: c.header,
   },
   back: { width: 32, alignItems: 'center' },
-  title: { ...Type.modalTitle, color: c.onHeader },
+  title: { ...Type.modalTitle, color: c.onHeader, flexShrink: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32 },
   body: { padding: 16, gap: 8 },
   previewCard: {

@@ -123,7 +123,7 @@ function LineStylePreview({ style, active }: { style: LineStyle; active?: boolea
   }
   if (style === 'dashed') {
     return (
-      <View style={styles.dashedWrap}>
+      <View style={styles.dashedWrap} /* layout-ok: dash icon inside a fixed swatch */>
         {[0, 1, 2, 3, 4].map((i) => (
           <View key={i} style={[styles.dashSegment, { backgroundColor: color }]} />
         ))}
@@ -384,6 +384,7 @@ const styles = themedStyles((c) => ({
     lineHeight: 20,
     includeFontPadding: false,
     ...Platform.select({ android: { textAlignVertical: 'center' as const }, default: {} }),
+    flexShrink: 1,
   },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 16 },
   sectionGap: { height: 8, backgroundColor: c.fillStrong },
@@ -422,7 +423,7 @@ const styles = themedStyles((c) => ({
   stepperCircleActive: { borderColor: c.accent, backgroundColor: c.accent },
   stepperSymbol: { fontSize: 18, lineHeight: 20, color: c.textSecondary, fontWeight: '500' },
   stepperSymbolActive: { color: c.onAccent },
-  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: c.accent },
+  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: c.accent, flexShrink: 1 },
   toggleRow: {
     minHeight: 52,
     paddingHorizontal: 16,
@@ -439,8 +440,10 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    flexWrap: 'wrap',
+    alignContent: 'center',
   },
-  lineStyleRow: { flexDirection: 'row', gap: 6, flexShrink: 0 },
+  lineStyleRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', flexShrink: 1, marginLeft: 'auto' },
   lineStyleBtn: {
     width: 44,
     height: 36,
@@ -462,8 +465,9 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    flexWrap: 'wrap',
   },
-  colorGroup: { flexDirection: 'row', gap: 8 },
+  colorGroup: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', flexShrink: 1, marginLeft: 'auto' },
   colorOuter: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   colorOuterActive: { borderWidth: 2, borderColor: c.accent },
   colorDot: { width: 20, height: 20, borderRadius: 10 },

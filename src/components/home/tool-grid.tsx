@@ -15,7 +15,7 @@ export function ToolGrid({
     columns === 4 ? HomeLayout.labelTypeTileHeight : HomeLayout.tileHeight;
 
   return (
-    <View style={styles.row}>
+    <View style={styles.row} /* layout-ok: tiles flex to share the row */>
       {ids.map((id) => (
         <ToolTile key={id} id={id} minHeight={minHeight} />
       ))}

@@ -755,6 +755,7 @@ const styles = themedStyles((c) => ({
       android: { textAlignVertical: 'center' as const },
       default: {},
     }),
+    flexShrink: 1,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -838,6 +839,7 @@ const styles = themedStyles((c) => ({
     fontSize: 14,
     fontWeight: '600',
     color: c.accent,
+    flexShrink: 1,
   },
   toggleRow: {
     minHeight: 52,
@@ -958,10 +960,14 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    flexWrap: 'wrap',
   },
   colorGroup: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
+    flexShrink: 1,
+    marginLeft: 'auto',
   },
   colorOuter: {
     width: 28,

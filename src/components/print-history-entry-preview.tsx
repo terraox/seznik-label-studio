@@ -69,7 +69,7 @@ export function PrintHistoryEntryPreview({
   return (
     <View style={[styles.placeholder, { width, height: maxHeight }]}>
       <AppIcon name={icon} tintColor="#94A3B8" size={compact ? 28 : 36} />
-      <Text style={styles.placeholderText} numberOfLines={2}>
+      <Text allowFontScaling={false} style={styles.placeholderText} numberOfLines={2}>
         {entry.labelName}
       </Text>
     </View>

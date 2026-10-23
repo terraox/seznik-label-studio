@@ -62,7 +62,8 @@ export function useImageSourcePicker(): {
     try {
       const source = await requestFileSource();
       if (!source) return null;
-      return source === 'local' ? pickFromLibrary() : pickFromDrive();
+      // Await here so a picker failure lands in the catch below, not as an unhandled rejection.
+      return await (source === 'local' ? pickFromLibrary() : pickFromDrive());
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not open that image.';
       Alert.alert('Image', message);

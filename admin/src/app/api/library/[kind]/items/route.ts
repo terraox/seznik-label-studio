@@ -45,7 +45,7 @@ export async function POST(request: Request, ctx: Ctx) {
     if (!name) throw new HttpError(400, 'Give it a name.');
     const category = await t.category.findUnique({ where: { id: String(form.get('categoryId') ?? '') } });
     if (!category) throw new HttpError(400, 'Choose a category.');
-    const clean = await readSvg(form.get('file'));
+    const clean = await readSvg(form.get('file'), kind);
     if (!clean) throw new HttpError(400, 'Choose an SVG file.');
     const { widthMm, heightMm } = sizeFrom(kind, form.get('widthMm'), form.get('heightMm'), clean);
     const created = await t.item.create({

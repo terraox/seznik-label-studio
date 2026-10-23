@@ -157,6 +157,7 @@ const styles = themedStyles((c, scheme) => ({
     color: c.onAccent,
     fontSize: 14,
     fontWeight: '500',
+    flexShrink: 1,
   },
   previewWrap: {
     backgroundColor: '#FFFFFF', // theme-fixed: light preview (previewWrap)

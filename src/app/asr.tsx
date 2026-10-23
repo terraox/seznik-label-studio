@@ -382,6 +382,7 @@ const styles = themedStyles((c) => ({
     fontSize: 15,
     color: c.textSecondary,
     fontWeight: '500',
+    flexShrink: 1,
   },
   radioLabelActive: {
     color: c.accent,

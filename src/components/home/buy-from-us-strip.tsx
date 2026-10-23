@@ -109,7 +109,7 @@ export function BuyFromUsStrip() {
 
       {products.length > 0 ? (
         <View style={styles.track}>
-          <Animated.View style={[styles.row, { width: loopWidth * 2 + PAD }, marqueeStyle]}>
+          <Animated.View style={[styles.row, { width: loopWidth * 2 + PAD }, marqueeStyle]} /* layout-ok: marquee row is meant to be wider than the screen */>
             {tiles.map((product, index) => (
               <Pressable
                 key={`${product.id}-${index}`}

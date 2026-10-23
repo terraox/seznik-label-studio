@@ -106,7 +106,7 @@ export function FeatureBanners() {
           ))}
         </ScrollView>
       ) : null}
-      <View style={styles.dots} pointerEvents="none">
+      <View style={styles.dots} pointerEvents="none" /* layout-ok: page indicator dots */>
         {BANNERS.map((_, i) => (
           <View key={i} style={[styles.dot, i === index && styles.dotOn]} />
         ))}

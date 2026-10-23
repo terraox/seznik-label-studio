@@ -47,10 +47,10 @@ export function FeedbackFormModal({
         { text: cancelLabel, style: 'cancel', onPress: onCancel },
         { text: 'Submit', bold: true, disabled: rating === 0, onPress: () => onSubmit(rating, text) },
       ]}>
-      <View style={styles.stars}>
+      <View style={styles.stars} /* layout-ok: five fixed-size stars */>
         {[1, 2, 3, 4, 5].map((n) => (
           <Pressable key={n} hitSlop={6} onPress={() => setRating(n)} accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`}>
-            <Text style={[styles.star, n <= rating && styles.starOn]}>{n <= rating ? '★' : '☆'}</Text>
+            <Text allowFontScaling={false} style={[styles.star, n <= rating && styles.starOn]}>{n <= rating ? '★' : '☆'}</Text>
           </Pressable>
         ))}
       </View>

@@ -297,7 +297,7 @@ const styles = themedStyles((c) => ({
   body: { flex: 1 },
   bodyContent: { paddingBottom: 24 },
   block: { paddingHorizontal: 16, paddingVertical: 10 },
-  rowLabel: { fontSize: 14, color: c.textSecondary, marginBottom: 8 },
+  rowLabel: { fontSize: 14, color: c.textSecondary, marginBottom: 8, flexShrink: 1 },
   segmentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   segmentChip: {
     paddingHorizontal: 12,
@@ -347,7 +347,7 @@ const styles = themedStyles((c) => ({
   stepperCircleActive: { backgroundColor: c.accent },
   stepperSymbol: { fontSize: 18, color: c.textSecondary, lineHeight: 20 },
   stepperSymbolActive: { color: c.onAccent },
-  stepperValue: { fontSize: 14, color: c.text, minWidth: 72, textAlign: 'center' },
+  stepperValue: { fontSize: 14, color: c.text, minWidth: 72, textAlign: 'center', flexShrink: 1 },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -355,8 +355,8 @@ const styles = themedStyles((c) => ({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  colorRow: { paddingHorizontal: 16, paddingVertical: 10 },
-  colorGroup: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  colorRow: { paddingHorizontal: 16, paddingVertical: 10, flexWrap: 'wrap' },
+  colorGroup: { flexDirection: 'row', gap: 10, marginTop: 4, flexWrap: 'wrap', flexShrink: 1, marginLeft: 'auto' },
   colorOuter: {
     width: 30,
     height: 30,

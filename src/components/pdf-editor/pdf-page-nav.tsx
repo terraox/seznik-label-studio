@@ -21,7 +21,7 @@ export function PdfPageNav({
       <Pressable onPress={onPrev} disabled={index <= 0} hitSlop={10} style={styles.arrow}>
         <AppIcon name="chevron.left" size={22} tintColor={index <= 0 ? C.textDisabled : C.text} />
       </Pressable>
-      <Text style={styles.counter}>
+      <Text style={styles.counter} /* layout-ok: page counter in a minWidth slot */>
         {n} / {total}
       </Text>
       <Pressable onPress={onNext} disabled={index >= total - 1} hitSlop={10} style={styles.arrow}>

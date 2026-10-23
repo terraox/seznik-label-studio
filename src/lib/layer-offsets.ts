@@ -57,13 +57,23 @@ export function labelHasOffsetBorder(doc: LabelDocument | null | undefined, brid
   return doc.elements.some(isOffsetBorder);
 }
 
-/** The offsets that are actually applied: no border means no border offset. */
+/**
+ * The offsets that are actually applied. With no border the Print screen shows one plain offset
+ * (the printer offset), so neither layer offset applies; a border this printer cannot move on its
+ * own keeps only the elements offset.
+ */
 export function effectiveLayerOffsets(
   doc: LabelDocument | null | undefined,
   offsets: LayerOffsetsMm,
   bridge: LayerBridge,
 ): LayerOffsetsMm {
+  if (!doc?.elements.some(isOffsetBorder)) return ZERO_LAYER_OFFSETS;
   return labelHasOffsetBorder(doc, bridge) ? offsets : { elements: offsets.elements, border: { x: 0, y: 0 } };
+}
+
+/** Printable content other than the border the border offset moves. */
+export function labelHasOffsetElements(doc: LabelDocument | null | undefined): boolean {
+  return doc?.elements.some((el) => !isOffsetBorder(el) && el.needPrinting !== false && el.visible !== false) ?? false;
 }
 
 /** A label-frame offset expressed in the paper frame of a label turned by `deg` (clockwise). */

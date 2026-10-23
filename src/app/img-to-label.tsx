@@ -441,7 +441,7 @@ const styles = themedStyles((c) => ({
     backgroundColor: c.fill,
   },
   pdfNavText: { fontSize: 13, fontWeight: '600', color: c.text },
-  pdfNavLabel: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
+  pdfNavLabel: { fontSize: 13, fontWeight: '600', color: c.textSecondary, flexShrink: 1 },
   pageSpinner: { marginTop: 4 },
   cropOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 20 },
   changeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },

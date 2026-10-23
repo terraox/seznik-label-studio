@@ -174,7 +174,7 @@ export function SignatureDrawingBoard({
             </Pressable>
           </View>
 
-          <View style={styles.brushRow}>
+          <View style={styles.brushRow} /* layout-ok: six fixed brush dots */>
             {BRUSH_DOT_SIZES.map((size, index) => {
               const active = index === brushIndex;
               return (

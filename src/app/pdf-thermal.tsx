@@ -21,6 +21,7 @@ import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import { loadAndRenderPdf, printPdfToThermal, type RenderedPdfPage } from '@/lib/pdf-printer';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
+import { pdfModalPreviewSize } from '@/lib/layout/screen-sizes';
 import { formatPrintFailure } from '@/lib/printer/print-job';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
@@ -277,14 +278,11 @@ function PdfScreenContent() {
   };
 
   const currentPage = renderedPages[currentPageIndex] ?? null;
-  const modalPreviewWidth = Math.min(screenWidth - 64, 320);
-  const modalPreviewHeight =
-    currentPage && currentPage.widthMm > 0
-      ? Math.min(
-          Math.round((modalPreviewWidth * currentPage.heightMm) / currentPage.widthMm),
-          Math.round(screenHeight * 0.36),
-        )
-      : 220;
+  const { width: modalPreviewWidth, height: modalPreviewHeight } = pdfModalPreviewSize(
+    screenWidth,
+    screenHeight,
+    currentPage,
+  );
 
   return (
     <View style={styles.root}>
@@ -294,7 +292,7 @@ function PdfScreenContent() {
           onPress={() => goBack()}
           hitSlop={14}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-          <Text style={styles.backChevron}>‹</Text>
+          <Text allowFontScaling={false} style={styles.backChevron}>‹</Text>
         </Pressable>
 
         <Text style={styles.headerTitle}>PDF</Text>
@@ -565,7 +563,7 @@ function PdfScreenContent() {
                       ]}>
                       <Text style={styles.stepperBtnText}>−</Text>
                     </Pressable>
-                    <Text style={styles.stepperValText}>{copies}</Text>
+                    <Text style={styles.stepperValText} /* layout-ok: copy count in a minWidth slot */>{copies}</Text>
                     <Pressable
                       disabled={printing}
                       onPress={() => setCopies((c) => Math.min(99, c + 1))}
@@ -1134,6 +1132,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#475569',
+    flexShrink: 1,
   },
 
   // Scope Selector
@@ -1179,11 +1178,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    rowGap: 8,
   },
   settingLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: '#334155',
+    flexShrink: 1,
   },
   stepperGroup: {
     flexDirection: 'row',
@@ -1220,6 +1222,9 @@ const styles = StyleSheet.create({
   densityGroup: {
     flexDirection: 'row',
     gap: 6,
+    flexWrap: 'wrap',
+    flexShrink: 1,
+    marginLeft: 'auto',
   },
   densityChip: {
     paddingVertical: 5,
@@ -1262,11 +1267,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 1,
   },
   printCtaText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+    flexShrink: 1,
   },
   btnDisabled: {
     opacity: 0.45,

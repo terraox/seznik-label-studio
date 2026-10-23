@@ -9,6 +9,7 @@ import { RollCard } from '@/components/shop/roll-card';
 import { RollSheet } from '@/components/shop/roll-sheet';
 import { SizeSwatch } from '@/components/shop/size-swatch';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { ShopGrid, shopCardWidth, shopListWidth } from '@/lib/layout/screen-sizes';
 import { androidRipple } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { groupPrintersByCategory } from '@/lib/shop/filter-catalog';
@@ -18,8 +19,7 @@ import type { ShopCatalog, ShopCategory } from '@/lib/shop/types';
 import { useLabelStore } from '@/stores/label-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-const PAD = Spacing.three;
-const GAP = 12;
+const { pad: PAD, gap: GAP } = ShopGrid;
 /** One scale for the size strip, so a shipping label really looks bigger than a price tag. */
 const STRIP_PX_PER_MM = 0.5;
 
@@ -28,8 +28,8 @@ export default function ShopScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const tabPad = useTabBarPadding(Spacing.four);
-  const listWidth = Math.min(windowWidth, MaxContentWidth);
-  const cardWidth = (listWidth - PAD * 2 - GAP) / 2;
+  const listWidth = shopListWidth(windowWidth);
+  const cardWidth = shopCardWidth(windowWidth);
 
   const [catalog, setCatalog] = useState<ShopCatalog | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -342,7 +342,7 @@ const styles = themedStyles((c) => ({
   },
   searchInput: { flex: 1, fontSize: 15, color: c.text, paddingVertical: 10 },
   section: { gap: 12 },
-  h2: { fontSize: 19, fontWeight: '800', color: c.text, letterSpacing: -0.4 },
+  h2: { fontSize: 19, fontWeight: '800', color: c.text, letterSpacing: -0.4, flexShrink: 1 },
   rail: { gap: 10, paddingRight: PAD },
   use: {
     width: 150,

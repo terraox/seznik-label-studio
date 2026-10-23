@@ -775,6 +775,7 @@ const styles = themedStyles((c) => ({
     fontSize: 13,
     fontWeight: '500',
     color: c.textSecondary,
+    flexShrink: 1,
   },
   segmentRow: {
     flexDirection: 'row',
@@ -869,6 +870,7 @@ const styles = themedStyles((c) => ({
     color: c.text,
     minWidth: 48,
     textAlign: 'center',
+    flexShrink: 1,
   },
   toggleRow: {
     flexDirection: 'row',
@@ -907,6 +909,7 @@ const styles = themedStyles((c) => ({
     fontSize: 15,
     fontWeight: '600',
     color: c.textSecondary,
+    flexShrink: 1,
   },
   sliderBlock: {
     position: 'relative',

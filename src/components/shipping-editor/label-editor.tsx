@@ -378,7 +378,7 @@ export function LabelEditor({
               style={styles.zoomBtn}>
               <Text style={styles.zoomText}>−</Text>
             </Pressable>
-            <Text style={styles.zoomLabel}>{Math.round(zoomLevel * 100)}%</Text>
+            <Text style={styles.zoomLabel} /* layout-ok: zoom percent in a minWidth slot */>{Math.round(zoomLevel * 100)}%</Text>
             <Pressable
               onPress={() => setZoomLevel((z) => Math.min(1.6, z + 0.15))}
               style={styles.zoomBtn}>
@@ -743,6 +743,7 @@ const styles = themedStyles((c) => ({
     fontSize: 13,
     fontWeight: '700',
     color: c.text,
+    flexShrink: 1,
   },
   inspectorRow: {
     flexDirection: 'row',
@@ -753,6 +754,7 @@ const styles = themedStyles((c) => ({
   inspectorLabel: {
     fontSize: 11,
     color: c.textSecondary,
+    flexShrink: 1,
   },
   stepperGroup: {
     flexDirection: 'row',
@@ -886,6 +888,7 @@ const styles = themedStyles((c) => ({
     fontSize: 16,
     fontWeight: '700',
     color: c.text,
+    flexShrink: 1,
   },
   dataRow: {
     marginBottom: 12,

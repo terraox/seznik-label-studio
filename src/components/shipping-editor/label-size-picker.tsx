@@ -269,6 +269,7 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 17,
     fontWeight: '700',
     color: c.text,
+    flexShrink: 1,
   },
   closeButton: {
     padding: 6,
@@ -286,6 +287,7 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 13,
     fontWeight: '600',
     color: c.textSecondary,
+    flexShrink: 1,
   },
   dpiToggle: {
     flexDirection: 'row',

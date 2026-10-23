@@ -394,7 +394,7 @@ export function SettingsStepperRow({
             style={[styles.stepperCircle, minusDisabled && styles.stepperCircleDisabled]}>
             <Text style={[styles.stepperSymbol, minusDisabled && styles.stepperSymbolDisabled]}>−</Text>
           </Pressable>
-          <Text style={styles.stepperValue}>{value}</Text>
+          <Text style={styles.stepperValue} /* layout-ok: stepper value in a minWidth slot */>{value}</Text>
           <Pressable
             disabled={plusDisabled}
             onPress={onPlus}
@@ -542,11 +542,13 @@ const useStyles = makeStyles((c, scheme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 1,
   },
   valueText: {
     fontSize: 14,
     fontWeight: '500',
     color: c.accent,
+    flexShrink: 1,
   },
   statusText: {
     fontSize: 14,
@@ -646,21 +648,32 @@ const useStyles = makeStyles((c, scheme) => ({
   segmentBadgeActive: {
     color: c.onAccent,
   },
+  // Label and swatches share one line when they fit. When they do not (narrow phone, long label,
+  // large font) the swatches move to their own line instead of squeezing the label.
   colorRow: {
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
   colorLabel: {
-    flex: 1,
+    // Sized by its text (not flex: 1's zero basis) so the row knows when to wrap; still takes the
+    // leftover width when everything fits.
+    flex: 0,
+    flexGrow: 1,
+    flexShrink: 1,
     paddingRight: 8,
   },
   colorGroup: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    flexShrink: 1,
     gap: 10,
+    // Stays right-aligned when it moves to its own line.
+    marginLeft: 'auto',
   },
   colorOuter: {
     width: 44,
@@ -763,6 +776,7 @@ const useStyles = makeStyles((c, scheme) => ({
     fontSize: 15,
     fontWeight: '500',
     color: c.danger,
+    flexShrink: 1,
   },
   pressed: {
     opacity: 0.7,

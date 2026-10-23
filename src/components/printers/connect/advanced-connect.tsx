@@ -178,7 +178,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  outlineText: { color: c.accent, fontSize: 14, fontWeight: '700' },
+  outlineText: { color: c.accent, fontSize: 14, fontWeight: '700', flexShrink: 1 },
   diag: {
     marginTop: 6,
     minHeight: 40,

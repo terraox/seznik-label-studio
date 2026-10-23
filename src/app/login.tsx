@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   otpBlock: { gap: 10 },
   hint: { fontSize: 13, color: AUTH_COLORS.muted, textAlign: 'center' },
   error: { color: AUTH_COLORS.error, fontSize: 13, textAlign: 'center' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 8 },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' },
   footerText: { color: AUTH_COLORS.muted, fontSize: 14 },
   footerLink: { color: AUTH_COLORS.blue, fontSize: 14, fontWeight: '700' },
 });

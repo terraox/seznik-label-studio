@@ -369,12 +369,12 @@ function ScannabilityInspectorCard({
           <Text style={styles.scannabilityTitle}>Optical Scannability</Text>
           <View style={[styles.scannabilityBadge, { backgroundColor: badgeBg }]}>
             <View style={[styles.scannabilityDot, { backgroundColor: badgeColor }]} />
-            <Text style={[styles.scannabilityBadgeText, { color: badgeColor }]}>
+            <Text style={[styles.scannabilityBadgeText, { color: badgeColor }]} /* layout-ok: one-word badge */>
               {badgeTitle}
             </Text>
           </View>
         </View>
-        <Text style={[styles.scannabilityScore, { color: badgeColor }]}>
+        <Text style={[styles.scannabilityScore, { color: badgeColor }]} /* layout-ok: short score */>
           {report.score}/100
         </Text>
       </View>
@@ -701,6 +701,7 @@ const styles = themedStyles((c) => ({
     lineHeight: 20,
     includeFontPadding: false,
     ...Platform.select({ android: { textAlignVertical: 'center' as const }, default: {} }),
+    flexShrink: 1,
   },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 16 },
   sectionGap: { height: 8, backgroundColor: c.fillStrong },
@@ -754,7 +755,7 @@ const styles = themedStyles((c) => ({
   stepperSymbol: { fontSize: 18, lineHeight: 20, color: c.textSecondary, fontWeight: '500' },
   stepperSymbolActive: { color: c.onAccent },
   stepperSymbolDisabled: { color: c.textDisabled },
-  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: c.accent },
+  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: c.accent, flexShrink: 1 },
   toggleRow: {
     minHeight: 52,
     paddingHorizontal: 16,
@@ -794,8 +795,8 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  navRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  navValue: { fontSize: 14, color: c.textSecondary },
+  navRight: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  navValue: { fontSize: 14, color: c.textSecondary, flexShrink: 1 },
   styleRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   styleBtn: {
     flex: 1,
@@ -835,8 +836,9 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    flexWrap: 'wrap',
   },
-  colorGroup: { flexDirection: 'row', gap: 8 },
+  colorGroup: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', flexShrink: 1, marginLeft: 'auto' },
   colorOuter: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   colorOuterActive: { borderWidth: 2, borderColor: c.accent },
   colorDot: { width: 20, height: 20, borderRadius: 10 },
@@ -893,6 +895,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
+    flexShrink: 1,
   },
   scannabilityTitle: {
     fontSize: 14,

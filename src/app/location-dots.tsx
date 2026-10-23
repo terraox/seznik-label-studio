@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F8FAFC' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8 },
   back: { padding: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
+  title: { fontSize: 18, fontWeight: '700', color: '#0F172A', flexShrink: 1 },
   body: { padding: 16, gap: 12 },
   sub: { color: '#334155', fontSize: 14, lineHeight: 20 },
   hidden: { position: 'absolute', top: -10000, left: 0 },

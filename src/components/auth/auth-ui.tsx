@@ -96,7 +96,7 @@ export function AuthField({
             style={styles.fieldIcon}
           />
         ) : null}
-        {prefix ? <Text style={styles.prefix}>{prefix}</Text> : null}
+        {prefix ? <Text style={styles.prefix} /* layout-ok: short dial-code prefix */>{prefix}</Text> : null}
         <TextInput
           style={styles.input}
           placeholderTextColor="#94A3B8"

@@ -105,6 +105,27 @@ test('every <Text> in a print-safe file sets an explicit colour', () => {
   assert.deepEqual(failures, [], `Android paints colourless text white in dark mode:\n${failures.join('\n')}`);
 });
 
+/** `Text` here is Skia's, which draws at the font size it is given and has no font scaling. */
+const SKIA_TEXT = /import\s*\{[^}]*\bText\b[^}]*\}\s*from\s*['"]@shopify\/react-native-skia['"]/;
+
+test('every <Text> in a print-safe file ignores the phone font size', () => {
+  const failures: string[] = [];
+  for (const file of ALL_PRINT_SAFE.filter((f) => f.endsWith('.tsx'))) {
+    const source = readFileSync(file, 'utf8');
+    if (SKIA_TEXT.test(source)) continue;
+    for (const { tag, line } of openingTags(source)) {
+      if (!/\ballowFontScaling=\{false\}/.test(tag)) {
+        failures.push(`${relative(ROOT, file)}:${line} ${tag.replace(/\s+/g, ' ').slice(0, 90)}`);
+      }
+    }
+  }
+  assert.deepEqual(
+    failures,
+    [],
+    `Label text must print the same on every phone; add allowFontScaling={false}:\n${failures.join('\n')}`,
+  );
+});
+
 /** Resolve an import specifier to a file under src (aliases and relative paths only). */
 function resolveImport(from: string, spec: string): string | null {
   let base: string;

@@ -343,6 +343,7 @@ const styles = themedStyles((c) => ({
   statusText: {
     fontSize: 11.5,
     fontWeight: '600',
+    flexShrink: 1,
   },
   actionArrow: {
     marginLeft: 8,

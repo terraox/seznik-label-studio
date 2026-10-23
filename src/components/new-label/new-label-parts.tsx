@@ -178,7 +178,7 @@ export function StepperRow({
             style={({ pressed }) => [styles.stepBtn, (disabled || minusDisabled) && styles.dim, pressed && styles.pressed]}>
             <Text style={styles.stepBtnText}>−</Text>
           </Pressable>
-          <Text style={styles.stepValue}>{valueText}</Text>
+          <Text style={styles.stepValue} /* layout-ok: stepper value in a minWidth slot */>{valueText}</Text>
           <Pressable
             disabled={disabled || plusDisabled}
             onPress={onPlus}
@@ -335,7 +335,7 @@ const styles = themedStyles((c, scheme) => ({
   },
   stepBtnText: { fontSize: 20, color: c.text, lineHeight: 22 },
   stepValue: { minWidth: 40, textAlign: 'center', fontSize: 16, fontWeight: '600', color: c.text },
-  chipRow: { flexDirection: 'row', gap: 8 },
+  chipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: {
     minWidth: 52,
     minHeight: 36,

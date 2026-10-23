@@ -453,7 +453,7 @@ export default function ExcelBulkSetupScreen() {
               <Text style={[styles.columnName, locked && styles.columnNameLocked]} numberOfLines={1}>
                 {locked ? `${name} · label count` : name}
               </Text>
-              <View style={styles.kindRow}>
+              <View style={styles.kindRow} /* layout-ok: three fixed icon buttons; the column name beside them shrinks */>
                 {KINDS.map(({ id, Glyph }) => (
                   <Pressable
                     key={id}

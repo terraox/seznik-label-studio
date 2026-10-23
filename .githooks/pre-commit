@@ -1,3 +1,12 @@
 #!/bin/sh
-# Blocks commits that add secrets. Enable once per clone: npm run hooks:install
-exec node scripts/secret-scan.mjs --staged
+# Blocks commits that add secrets or layout risks. Enable once per clone: npm run hooks:install
+node scripts/secret-scan.mjs --staged || exit 1
+
+# Layout risks, pinned screen sizes and the font-scale cap (npm run layout:report lists any risk).
+# Only when the commit touches app code, so doc-only commits stay fast.
+if git diff --cached --name-only | grep -qE '^(src/|patches/|package\.json$)'; then
+  npm run -s test:layout || {
+    echo 'pre-commit: npm run test:layout failed. See npm run layout:report.' >&2
+    exit 1
+  }
+fi

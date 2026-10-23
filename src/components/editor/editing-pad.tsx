@@ -177,7 +177,7 @@ export function EditingPad({
             />
             <View style={styles.zoomCluster}>
               <PadBtn label="−" onPress={onZoomOut} />
-              <Text style={styles.zoomLabel}>{formatViewZoomLabel(viewZoom)}</Text>
+              <Text style={styles.zoomLabel} /* layout-ok: zoom percent in a minWidth slot */>{formatViewZoomLabel(viewZoom)}</Text>
               <PadBtn label="+" onPress={onZoomIn} />
             </View>
           </View>

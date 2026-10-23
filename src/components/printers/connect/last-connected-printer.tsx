@@ -203,7 +203,7 @@ const styles = themedStyles((c, scheme) => ({
   btName: { fontSize: 12, color: c.textMuted },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 13, fontWeight: '700' },
+  statusText: { fontSize: 13, fontWeight: '700', flexShrink: 1 },
   lastWrap: { alignItems: 'flex-end', gap: 1 },
   lastLabel: { fontSize: 10, fontWeight: '700', color: c.textMuted, letterSpacing: 0.3, textTransform: 'uppercase' },
   lastDate: { fontSize: 12, fontWeight: '700', color: c.text },

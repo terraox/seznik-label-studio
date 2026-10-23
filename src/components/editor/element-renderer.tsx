@@ -941,7 +941,7 @@ function BarcodeContent({
         )
       ) : (
         <View style={styles.invalidBox}>
-          <Text style={styles.invalidText}>Invalid barcode content</Text>
+          <Text allowFontScaling={false} style={styles.invalidText}>Invalid barcode content</Text>
         </View>
       )}
       {element.textFlag === "Bottom" ? label : null}
@@ -1108,7 +1108,7 @@ function QrcodeContent({
 
   return (
     <View style={styles.invalidBox}>
-      <Text style={styles.invalidText}>Invalid 2D barcode content</Text>
+      <Text allowFontScaling={false} style={styles.invalidText}>Invalid 2D barcode content</Text>
     </View>
   );
 }
@@ -1458,6 +1458,7 @@ function TableContent({
           >
             {cell && flat ? (
               <Text
+                allowFontScaling={false}
                 numberOfLines={1}
                 ellipsizeMode="clip"
                 style={[
@@ -1796,7 +1797,7 @@ export function ElementContentView({
           />
         ) : forPrint && !sticker ? null : (
           // Unknown clipart id: the editor shows a placeholder star, print draws nothing.
-          <Text style={{ fontSize: (size === "100%" ? unit : size) * 0.7, color: previewColor }}>
+          <Text allowFontScaling={false} style={{ fontSize: (size === "100%" ? unit : size) * 0.7, color: previewColor }}>
             {element.glyph ?? "★"}
           </Text>
         );

@@ -32,6 +32,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useLabelStore } from '@/stores/label-store';
 import { useOpenLabelFile } from '@/lib/label-share/use-open-label-file';
 import { useTranslation } from '@/lib/i18n';
+import { templateLayout } from '@/lib/layout/screen-sizes';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 function formatCatalogMm(n: number): string {
@@ -107,6 +108,11 @@ function isTwoUpTemplate(t: CatalogTemplate): boolean {
   return /2up|two up/i.test(t.name) && !/cable|jewel/i.test(t.name);
 }
 
+/** The 3-up jewellery sheet uses the built-in rat-tail die-cut; other jewellery templates use their admin SVG and design. */
+function isJewellerySheetTemplate(t: CatalogTemplate): boolean {
+  return /jewel/i.test(t.name) && /3\s*-?\s*up|three up/i.test(t.name);
+}
+
 function templateSampleLayout(t: CatalogTemplate): SampleElement[] {
   if (Array.isArray(t.sampleLayout) && t.sampleLayout.length > 0) return t.sampleLayout as SampleElement[];
   return starterSample(t.name, t.widthMm, t.heightMm) ?? [];
@@ -116,7 +122,7 @@ function templateSampleLayout(t: CatalogTemplate): SampleElement[] {
 const TemplatePreview = memo(function TemplatePreview({ item }: { item: CatalogTemplate }) {
   useThemeRefresh();
   const sampleDoc = useMemo(() => {
-    if (/jewel/i.test(item.name)) {
+    if (isJewellerySheetTemplate(item)) {
       return createIndustryTemplateDocument({
         name: item.name,
         category: 'Jewelry',
@@ -218,8 +224,7 @@ export default function TemplateScreen() {
   const { openLabelFile, documentSourceSheet } = useOpenLabelFile('push');
   const { width: windowWidth } = useWindowDimensions();
 
-  const layoutWidth = Math.min(windowWidth, MaxContentWidth);
-  const templateCardMaxWidth = Math.min(520, layoutWidth - 124);
+  const { layoutWidth, cardMaxWidth: templateCardMaxWidth } = templateLayout(windowWidth);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'local' | 'industry' | 'cloud'>('industry');
@@ -357,7 +362,7 @@ export default function TemplateScreen() {
         return;
       }
       const category = categoryNames.get(template.categoryId) ?? '';
-      const isJewellery = /jewel/i.test(template.name);
+      const isJewellery = isJewellerySheetTemplate(template);
       const singleCircle = /circle/i.test(template.name) && !/2up|two up/i.test(template.name);
       const doc = isJewellery
         ? createIndustryTemplateDocument({
@@ -400,7 +405,7 @@ export default function TemplateScreen() {
         setArrangeFor(template);
         return;
       }
-      const hasSample = templateSampleLayout(template).length > 0 || /jewel/i.test(template.name);
+      const hasSample = templateSampleLayout(template).length > 0 || isJewellerySheetTemplate(template);
       if (hasSample) setChoiceFor({ template, mode: 'together' });
       else openTemplate(template, false);
     },

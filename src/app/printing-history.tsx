@@ -422,11 +422,13 @@ const styles = themedStyles((c, scheme) => ({
     fontWeight: '700',
     color: c.text,
     letterSpacing: 0.3,
+    flexShrink: 1,
   },
   timeLabel: {
     fontSize: 12,
     fontWeight: '500',
     color: c.textMuted,
+    flexShrink: 1,
   },
   iconActions: {
     flexDirection: 'row',

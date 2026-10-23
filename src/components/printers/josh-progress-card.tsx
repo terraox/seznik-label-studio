@@ -61,7 +61,7 @@ export function JoshProgressCard() {
                     {done ? 'Print completed' : bulk ? `${bulk} · Printing` : 'Printing'}
                   </Text>
                 </View>
-                {count ? <Text style={styles.count}>{count}</Text> : null}
+                {count ? <Text style={styles.count} /* layout-ok: short page count */>{count}</Text> : null}
               </View>
               {/* A finished print always shows a full bar, so nothing is left unfilled at the end. */}
               <View style={styles.track} accessibilityRole="progressbar" accessibilityLabel={text}>
@@ -118,8 +118,8 @@ const styles = themedStyles((c) => ({
   title: { textAlign: 'center', color: c.text, fontSize: 17, fontWeight: '700' },
   divider: { height: 1, backgroundColor: c.hairline, marginHorizontal: -20 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  status: { color: c.text, fontSize: 14, fontWeight: '600' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  status: { color: c.text, fontSize: 14, fontWeight: '600', flexShrink: 1 },
   count: { color: c.textMuted, fontSize: 14, fontWeight: '600' },
   track: { height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: c.fill, borderWidth: 1, borderColor: c.hairline },
   fill: { height: '100%', borderRadius: 6, backgroundColor: c.success },

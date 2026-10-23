@@ -143,6 +143,7 @@ const styles = themedStyles((c) => ({
     fontSize: 15,
     fontWeight: '700',
     color: c.text,
+    flexShrink: 1,
   },
   templateBtn: {
     flexDirection: 'row',
@@ -184,6 +185,7 @@ const styles = themedStyles((c) => ({
     fontSize: 16,
     fontWeight: '700',
     color: c.text,
+    flexShrink: 1,
   },
   templateOption: {
     flexDirection: 'row',

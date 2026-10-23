@@ -182,6 +182,7 @@ const styles = themedStyles((c) => ({
     color: c.textMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
+    flexShrink: 1,
   },
   rescanBtn: {
     flexDirection: 'row',

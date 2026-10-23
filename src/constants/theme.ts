@@ -61,4 +61,4 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const MaxContentWidth = 800;
+export { MaxContentWidth } from '@/lib/layout/screen-sizes';

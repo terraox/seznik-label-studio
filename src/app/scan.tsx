@@ -11,13 +11,13 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Dimensions,
   Easing,
   Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,12 +28,11 @@ import { cloneLabelFromImage } from '@/lib/label-clone';
 import { clampLabelMm } from '@/lib/label-geometry';
 import { isScanEmptyError, payloadFromBarcodeResult, SCAN_CODE_TYPES } from '@/lib/scan-codes';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { scanFrameSize, scanTopMaskHeight } from '@/lib/layout/screen-sizes';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SCAN_FRAME_SIZE = Math.min(Math.round(SCREEN_WIDTH * 0.72), 280);
 const CORNER_COLOR = '#A3E635'; // Lime green matching screenshot // theme-fixed: camera overlay
 const CORNER_LENGTH = 28;
 const CORNER_THICKNESS = 4.5;
@@ -72,6 +71,8 @@ function LightbulbIcon({ active = false, size = 38 }: { active?: boolean; size?:
 export default function ScanScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const frameSize = scanFrameSize(windowWidth);
   const params = useLocalSearchParams<{ from?: string | string[]; mode?: string | string[] }>();
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
   const modeParam = Array.isArray(params.mode) ? params.mode[0] : params.mode;
@@ -120,7 +121,7 @@ export default function ScanScreen() {
 
   const translateY = scanLineAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, SCAN_FRAME_SIZE - 6],
+    outputRange: [0, frameSize - 6],
   });
 
   const handleBarcodeScanned = (result: BarcodeScanningResult) => {
@@ -301,7 +302,7 @@ export default function ScanScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => goBack()} hitSlop={12} style={styles.backButton}>
-            <Text style={styles.backChevron}>‹</Text>
+            <Text allowFontScaling={false} style={styles.backChevron}>‹</Text>
           </Pressable>
           <Text style={styles.headerTitle}>{screenTitle}</Text>
           <View style={styles.headerRightPlaceholder} />
@@ -362,7 +363,7 @@ export default function ScanScreen() {
     );
   }
 
-  const topMaskHeight = Math.max((SCREEN_HEIGHT - SCAN_FRAME_SIZE) / 2 - 40, insets.top + 70);
+  const topMaskHeight = scanTopMaskHeight(windowHeight, frameSize, insets.top);
 
   return (
     <View style={styles.container}>
@@ -387,10 +388,10 @@ export default function ScanScreen() {
         <View style={[styles.maskDark, { height: topMaskHeight }]} />
 
         {/* Middle Row */}
-        <View style={{ flexDirection: 'row', height: SCAN_FRAME_SIZE }}>
+        <View style={{ flexDirection: 'row', height: frameSize }}>
           <View style={[styles.maskDark, { flex: 1 }]} />
           {/* Central Cutout Frame */}
-          <View style={styles.scanBox}>
+          <View style={[styles.scanBox, { width: frameSize, height: frameSize }]}>
             {/* 4 Lime-Green Corner Brackets */}
             <View style={[styles.corner, styles.cornerTL]} />
             <View style={[styles.corner, styles.cornerTR]} />
@@ -446,7 +447,7 @@ export default function ScanScreen() {
       {/* Top Header Bar */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => goBack()} hitSlop={14} style={styles.backButton}>
-          <Text style={styles.backChevron}>‹</Text>
+          <Text allowFontScaling={false} style={styles.backChevron}>‹</Text>
         </Pressable>
         <Text style={styles.headerTitle}>{screenTitle}</Text>
         <Pressable onPress={handlePhotoPick} hitSlop={14} style={styles.photoButton}>
@@ -674,6 +675,7 @@ const styles = themedStyles((c) => ({
     color: c.onAccent,
     fontSize: 19,
     fontWeight: '600',
+    flexShrink: 1,
   },
   photoButton: {
     minWidth: 44,
@@ -690,8 +692,6 @@ const styles = themedStyles((c) => ({
     width: 44,
   },
   scanBox: {
-    width: SCAN_FRAME_SIZE,
-    height: SCAN_FRAME_SIZE,
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: 'transparent',

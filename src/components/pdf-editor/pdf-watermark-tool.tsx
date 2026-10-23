@@ -406,7 +406,7 @@ function Meter({
     <View style={styles.meter}>
       <View style={styles.meterHead}>
         <Text style={styles.kicker}>{label}</Text>
-        <Text style={styles.meterValue}>{valueLabel}</Text>
+        <Text style={styles.meterValue} /* layout-ok: short meter value */>{valueLabel}</Text>
       </View>
       <View
         style={styles.trackHit}
@@ -434,6 +434,7 @@ const styles = themedStyles((c) => ({
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     color: c.textMuted,
+    flexShrink: 1,
   },
   hint: { fontSize: 12, lineHeight: 16, color: c.textMuted },
   segment: {
@@ -472,7 +473,7 @@ const styles = themedStyles((c) => ({
   chipOn: { backgroundColor: c.accentSoft },
   chipText: { fontSize: 11, fontWeight: '600', color: c.textSecondary },
   chipTextOn: { color: c.accent },
-  swatches: { flexDirection: 'row', gap: 8 },
+  swatches: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   swatch: {
     width: 28,
     height: 28,

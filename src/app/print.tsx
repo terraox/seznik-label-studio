@@ -169,6 +169,7 @@ import {
   clampLayerOffsetMm,
   effectiveLayerOffsets,
   labelHasOffsetBorder,
+  labelHasOffsetElements,
   isOffsetBorder,
   layerOffsetsOf,
   layerOffsetWarning,
@@ -205,6 +206,7 @@ import {
   type PrintSizePreset,
 } from '@/lib/print-sizes';
 import { logCaptureSha1 } from '@/lib/debug/capture-hash';
+import { printPreviewBounds } from '@/lib/layout/screen-sizes';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
@@ -395,7 +397,7 @@ function StepperRow({
             style={[styles.stepperValue, valueColor ? { color: valueColor } : null]}
           />
         ) : (
-          <Text style={[styles.stepperValue, valueColor ? { color: valueColor } : null]}>{value}</Text>
+          <Text style={[styles.stepperValue, valueColor ? { color: valueColor } : null]} /* layout-ok: stepper value in a minWidth slot */>{value}</Text>
         )}
         <Pressable
           disabled={plusDisabled}
@@ -1029,8 +1031,7 @@ export default function PrintScreen() {
 
   // Bound the preview to 42 % of the screen height so tall documents
   // (A4 portrait, long receipts) never overflow the preview area.
-  const maxPreviewHeight = Math.round(height * 0.42);
-  const baseCardWidth = Math.min(width - 48, MaxContentWidth - 48);
+  const { maxPreviewHeight, baseCardWidth } = printPreviewBounds(width, height);
   const activeDoc = displayDocument ?? previewDocument;
 
   // Elements / Border offsets: TD-404 and Josh (any turn) whose label the headless raster draws.
@@ -1102,6 +1103,53 @@ export default function PrintScreen() {
       });
     },
     [layerOffsets, params.labelId],
+  );
+  /** Elements and border: Together, Elements only and Border only. Just one of them: its own offset. */
+  const offsetLayout: 'both' | 'elements' | 'border' =
+    docHasBorder && labelHasOffsetElements(activeDoc) ? 'both' : docHasBorder ? 'border' : 'elements';
+  const wholeOffsetRows = (
+    <>
+      <StepperRow
+        label="Horizontal"
+        hint="−  moves left   ·   +  moves right"
+        value={`${hOffset.toFixed(2)} mm`}
+        minusDisabled={hOffset <= -10}
+        onMinus={() => setHOffset((v) => Math.max(-10, Math.round((v - 0.5) * 100) / 100))}
+        onPlus={() => setHOffset((v) => Math.min(10, Math.round((v + 0.5) * 100) / 100))}
+        bordered
+      />
+      <StepperRow
+        label="Vertical"
+        hint="−  moves up   ·   +  moves down"
+        value={`${vOffset.toFixed(2)} mm`}
+        minusDisabled={vOffset <= -10}
+        onMinus={() => setVOffset((v) => Math.max(-10, Math.round((v - 0.5) * 100) / 100))}
+        onPlus={() => setVOffset((v) => Math.min(20, Math.round((v + 0.5) * 100) / 100))}
+      />
+    </>
+  );
+  const layerOffsetRows = (layer: 'elements' | 'border', disabled: boolean) => (
+    <>
+      <StepperRow
+        label="Horizontal"
+        hint="−  moves left   ·   +  moves right"
+        value={`${layerOffsets[layer].x.toFixed(2)} mm`}
+        minusDisabled={disabled || layerOffsets[layer].x <= LAYER_OFFSET_MIN_MM}
+        plusDisabled={disabled || layerOffsets[layer].x >= LAYER_OFFSET_MAX_MM}
+        onMinus={() => changeLayerOffset(layer, 'x', layerOffsets[layer].x - LAYER_OFFSET_STEP_MM)}
+        onPlus={() => changeLayerOffset(layer, 'x', layerOffsets[layer].x + LAYER_OFFSET_STEP_MM)}
+        bordered
+      />
+      <StepperRow
+        label="Vertical"
+        hint="−  moves up   ·   +  moves down"
+        value={`${layerOffsets[layer].y.toFixed(2)} mm`}
+        minusDisabled={disabled || layerOffsets[layer].y <= LAYER_OFFSET_MIN_MM}
+        plusDisabled={disabled || layerOffsets[layer].y >= LAYER_OFFSET_MAX_MM}
+        onMinus={() => changeLayerOffset(layer, 'y', layerOffsets[layer].y - LAYER_OFFSET_STEP_MM)}
+        onPlus={() => changeLayerOffset(layer, 'y', layerOffsets[layer].y + LAYER_OFFSET_STEP_MM)}
+      />
+    </>
   );
   const { widthPx: cardWidth, heightPx: cardHeight } = fitLabelSize(
     activeDoc?.widthMm ?? 80,
@@ -2909,117 +2957,81 @@ export default function PrintScreen() {
                     });
                     const total = `H ${printOffsetMm.x.toFixed(2)} mm, V ${printOffsetMm.y.toFixed(2)} mm`;
                     if (!unrotatedJob) {
-                      return `Total offset ${total} (this printer plus Label Settings). The label is turned in dots, elements move and the border stays put.`;
+                      return `Total offset ${total} (this printer plus Label Settings). The label is turned in dots${docHasBorder ? ', elements move and the border stays put' : ''}.`;
                     }
-                    return `Total offset ${total} (this printer plus Label Settings), plus 0 mm across and 2 mm down on text and codes. The border is its own layer and stays ${TD404_BORDER_GAP_MM} mm from the die-cut on every side.`;
+                    return `Total offset ${total} (this printer plus Label Settings), plus 0 mm across and 2 mm down on text and codes.${docHasBorder ? ` The border is its own layer and stays ${TD404_BORDER_GAP_MM} mm from the die-cut on every side.` : ''}`;
                   })()}
                 </Text>
-                <Pressable
-                  onPress={() => setShowTogetherOffset((v) => !v)}
-                  style={({ pressed }) => [styles.offsetFoldHeader, pressed && styles.pressed]}>
-                  <Text style={styles.offsetFoldTitle}>Whole label shift (elements + border)</Text>
-                  <View style={styles.advancedHeaderRight}>
-                    <Text style={styles.advancedStatusText}>{showTogetherOffset ? 'Hide' : 'Show'}</Text>
-                    <View style={styles.advancedChevron}>
-                      <AppIcon
-                        name={showTogetherOffset ? 'chevron.up' : 'chevron.down'}
-                        tintColor={C.textSecondary}
-                        size={16}
-                      />
-                    </View>
-                  </View>
-                </Pressable>
-                {showTogetherOffset ? (
+                {offsetLayout === 'both' ? (
                   <>
+                    <Pressable
+                      onPress={() => setShowTogetherOffset((v) => !v)}
+                      style={({ pressed }) => [styles.offsetFoldHeader, pressed && styles.pressed]}>
+                      <Text style={styles.offsetFoldTitle}>Whole label shift (elements + border)</Text>
+                      <View style={styles.advancedHeaderRight}>
+                        <Text style={styles.advancedStatusText}>{showTogetherOffset ? 'Hide' : 'Show'}</Text>
+                        <View style={styles.advancedChevron}>
+                          <AppIcon
+                            name={showTogetherOffset ? 'chevron.up' : 'chevron.down'}
+                            tintColor={C.textSecondary}
+                            size={16}
+                          />
+                        </View>
+                      </View>
+                    </Pressable>
+                    {showTogetherOffset ? (
+                      <>
+                        <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
+                          Moves everything on the label together: elements and border. Use it to fix a printer that
+                          prints the whole label off-centre. Saved for this printer.
+                        </Text>
+                        {wholeOffsetRows}
+                      </>
+                    ) : null}
+                    <Text style={[styles.groupLabel, { marginTop: 12 }]}>Elements only (text, codes, shapes)</Text>
                     <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
-                      Moves everything on the label together: elements and border. Use it to fix a printer that
-                      prints the whole label off-centre. Saved for this printer.
+                      Moves only the content; the border stays put. Saved with this label.
                     </Text>
-                <StepperRow
-                  label="Horizontal"
-                  hint="−  moves left   ·   +  moves right"
-                  value={`${hOffset.toFixed(2)} mm`}
-                  minusDisabled={hOffset <= -10}
-                  onMinus={() => setHOffset((v) => Math.max(-10, Math.round((v - 0.5) * 100) / 100))}
-                  onPlus={() => setHOffset((v) => Math.min(10, Math.round((v + 0.5) * 100) / 100))}
-                  bordered
-                />
-                <StepperRow
-                  label="Vertical"
-                  hint="−  moves up   ·   +  moves down"
-                  value={`${vOffset.toFixed(2)} mm`}
-                  minusDisabled={vOffset <= -10}
-                  onMinus={() => setVOffset((v) => Math.max(-10, Math.round((v - 0.5) * 100) / 100))}
-                  onPlus={() => setVOffset((v) => Math.min(20, Math.round((v + 0.5) * 100) / 100))}
-                />
+                    {layerOffsetRows('elements', !layerOffsetsUsable)}
+                    <Text style={[styles.groupLabel, { marginTop: 12 }]}>Border only</Text>
+                    <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
+                      Moves only the border frame; the content stays put. Saved with this label.
+                    </Text>
+                    {!layerHasBorder ? (
+                      <Text style={{ color: C.warning, fontSize: 12, paddingBottom: 6 }}>
+                        {layerBridge == null
+                          ? `Not available for this printer. Works for TD-404 and Josh. (Detected: ${printerSdkId ?? 'no printer'} / ${printerTransport ?? 'no transport'} / ${orientation})`
+                          : !layerOffsetsUsable
+                            ? 'Not available: this label has photos, tables, times, arc text or signatures, which print as one picture.'
+                            : 'Not available: Josh moves only a rectangular die-cut border on its own.'}
+                      </Text>
+                    ) : null}
+                    {layerOffsetRows('border', !layerHasBorder)}
+                    <Text style={{ color: C.textMuted, fontSize: 12, paddingTop: 8 }}>
+                      {!layerOffsetsUsable
+                        ? 'Elements and Border offsets work for TD-404 and Josh labels the app draws directly (not photos, tables or signatures).'
+                        : !layerHasBorder
+                          ? 'Only the Elements offset applies here. Minus moves left or up, plus moves right or down. Added to the offsets above.'
+                          : 'Minus moves left or up, plus moves right or down. Added to the offsets above; 0 and 0 leaves the print unchanged.'}
+                    </Text>
                   </>
-                ) : null}
-                <Text style={[styles.groupLabel, { marginTop: 12 }]}>Elements only (text, codes, shapes)</Text>
-                <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
-                  Moves only the content; the border stays put. Saved with this label.
-                </Text>
-                <StepperRow
-                  label="Horizontal"
-                  hint="−  moves left   ·   +  moves right"
-                  value={`${layerOffsets.elements.x.toFixed(2)} mm`}
-                  minusDisabled={!layerOffsetsUsable || layerOffsets.elements.x <= LAYER_OFFSET_MIN_MM}
-                  plusDisabled={!layerOffsetsUsable || layerOffsets.elements.x >= LAYER_OFFSET_MAX_MM}
-                  onMinus={() => changeLayerOffset('elements', 'x', layerOffsets.elements.x - LAYER_OFFSET_STEP_MM)}
-                  onPlus={() => changeLayerOffset('elements', 'x', layerOffsets.elements.x + LAYER_OFFSET_STEP_MM)}
-                  bordered
-                />
-                <StepperRow
-                  label="Vertical"
-                  hint="−  moves up   ·   +  moves down"
-                  value={`${layerOffsets.elements.y.toFixed(2)} mm`}
-                  minusDisabled={!layerOffsetsUsable || layerOffsets.elements.y <= LAYER_OFFSET_MIN_MM}
-                  plusDisabled={!layerOffsetsUsable || layerOffsets.elements.y >= LAYER_OFFSET_MAX_MM}
-                  onMinus={() => changeLayerOffset('elements', 'y', layerOffsets.elements.y - LAYER_OFFSET_STEP_MM)}
-                  onPlus={() => changeLayerOffset('elements', 'y', layerOffsets.elements.y + LAYER_OFFSET_STEP_MM)}
-                />
-                {docHasBorder ? (
+                ) : offsetLayout === 'elements' ? (
                   <>
-                  <Text style={[styles.groupLabel, { marginTop: 12 }]}>Border only</Text>
-                  <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
-                    Moves only the border frame; the content stays put. Saved with this label.
-                  </Text>
-                  {!layerHasBorder ? (
-                    <Text style={{ color: C.warning, fontSize: 12, paddingBottom: 6 }}>
-                      {layerBridge == null
-                        ? `Not available for this printer. Works for TD-404 and Josh. (Detected: ${printerSdkId ?? 'no printer'} / ${printerTransport ?? 'no transport'} / ${orientation})`
-                        : !layerOffsetsUsable
-                          ? 'Not available: this label has photos, tables, times, arc text or signatures, which print as one picture.'
-                          : 'Not available: Josh moves only a rectangular die-cut border on its own.'}
+                    <Text style={[styles.groupLabel, { marginTop: 12 }]}>Offset</Text>
+                    <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
+                      Moves everything on the label. Saved for this printer.
                     </Text>
-                  ) : null}
-                  <StepperRow
-                    label="Horizontal"
-                    hint="−  moves left   ·   +  moves right"
-                    value={`${layerOffsets.border.x.toFixed(2)} mm`}
-                    minusDisabled={!layerHasBorder || layerOffsets.border.x <= LAYER_OFFSET_MIN_MM}
-                    plusDisabled={!layerHasBorder || layerOffsets.border.x >= LAYER_OFFSET_MAX_MM}
-                    onMinus={() => changeLayerOffset('border', 'x', layerOffsets.border.x - LAYER_OFFSET_STEP_MM)}
-                    onPlus={() => changeLayerOffset('border', 'x', layerOffsets.border.x + LAYER_OFFSET_STEP_MM)}
-                    bordered
-                  />
-                  <StepperRow
-                    label="Vertical"
-                    hint="−  moves up   ·   +  moves down"
-                    value={`${layerOffsets.border.y.toFixed(2)} mm`}
-                    minusDisabled={!layerHasBorder || layerOffsets.border.y <= LAYER_OFFSET_MIN_MM}
-                    plusDisabled={!layerHasBorder || layerOffsets.border.y >= LAYER_OFFSET_MAX_MM}
-                    onMinus={() => changeLayerOffset('border', 'y', layerOffsets.border.y - LAYER_OFFSET_STEP_MM)}
-                    onPlus={() => changeLayerOffset('border', 'y', layerOffsets.border.y + LAYER_OFFSET_STEP_MM)}
-                  />
+                    {wholeOffsetRows}
                   </>
-                ) : null}
-                <Text style={{ color: C.textMuted, fontSize: 12, paddingTop: 8 }}>
-                  {!layerOffsetsUsable
-                    ? 'Elements and Border offsets work for TD-404 and Josh labels the app draws directly (not photos, tables or signatures).'
-                    : !layerHasBorder
-                      ? 'This label has no border, so only the Elements offset applies. Minus moves left or up, plus moves right or down. Added to the offsets above.'
-                      : 'Minus moves left or up, plus moves right or down. Added to the offsets above; 0 and 0 leaves the print unchanged.'}
-                </Text>
+                ) : (
+                  <>
+                    <Text style={[styles.groupLabel, { marginTop: 12 }]}>Border offset</Text>
+                    <Text style={{ color: C.textMuted, fontSize: 12, paddingBottom: 6 }}>
+                      {layerHasBorder ? 'Moves the border. Saved with this label.' : 'Moves the border. Saved for this printer.'}
+                    </Text>
+                    {layerHasBorder ? layerOffsetRows('border', false) : wholeOffsetRows}
+                  </>
+                )}
                 {layerWarning ? (
                   <Text style={{ color: C.warning, fontSize: 12, paddingTop: 6 }}>{layerWarning}</Text>
                 ) : null}
@@ -3102,6 +3114,7 @@ const styles = themedStyles((c, scheme) => ({
   connectionText: {
     color: c.onAccent,
     ...Type.badge,
+    flexShrink: 1,
   },
   scroll: {
     flex: 1,
@@ -3197,6 +3210,7 @@ const styles = themedStyles((c, scheme) => ({
     color: c.onAccent,
     fontSize: 13,
     fontWeight: '600',
+    flexShrink: 1,
   },
   pageNavBtn: {
     minWidth: 32,
@@ -3342,16 +3356,19 @@ const styles = themedStyles((c, scheme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flexShrink: 1,
   },
   advancedHeaderTitle: {
     ...Type.body,
     fontWeight: '600',
     color: c.text,
+    flexShrink: 1,
   },
   advancedHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 1,
   },
   offsetFoldHeader: {
     flexDirection: 'row',
@@ -3380,6 +3397,7 @@ const styles = themedStyles((c, scheme) => ({
   advancedStatusText: {
     fontSize: 12,
     color: c.textSecondary,
+    flexShrink: 1,
   },
   advancedBody: {
     paddingTop: 6,

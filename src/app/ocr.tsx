@@ -12,10 +12,10 @@ import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -33,10 +33,8 @@ import {
   useOcrSession,
 } from '@/lib/ocr';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
+import { ocrPreviewSize } from '@/lib/layout/screen-sizes';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const PREVIEW_SIZE = Math.min(Math.round(SCREEN_WIDTH * 0.62), 260);
 
 const BARCODE_TYPES: BarcodeType[] = [
   'ean13',
@@ -76,6 +74,7 @@ function RadioOption({
 export default function OcrScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
+  const previewSize = ocrPreviewSize(useWindowDimensions().width);
   const params = useLocalSearchParams<{ from?: string | string[] }>();
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
   const returnToEdit = fromParam === 'edit';
@@ -389,7 +388,7 @@ export default function OcrScreen() {
       </View>
 
       <View style={styles.identifyBlueSection}>
-        <View style={styles.imageFrame}>
+        <View style={[styles.imageFrame, { width: previewSize, height: previewSize }]}>
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={styles.previewImage} contentFit="cover" />
           ) : (
@@ -595,8 +594,6 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
   },
   imageFrame: {
-    width: PREVIEW_SIZE,
-    height: PREVIEW_SIZE,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: c.surface,
@@ -675,6 +672,7 @@ const styles = themedStyles((c) => ({
     fontSize: 15,
     color: c.textSecondary,
     fontWeight: '500',
+    flexShrink: 1,
   },
   radioLabelActive: {
     color: c.accent,

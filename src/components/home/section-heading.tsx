@@ -19,7 +19,7 @@ export function SectionHeading({ children }: { children: string }) {
 
 const styles = themedStyles((c) => ({
   wrap: {
-    height: HomeLayout.sectionHeadingBlock - HomeLayout.sectionHeadingGap,
+    minHeight: HomeLayout.sectionHeadingBlock - HomeLayout.sectionHeadingGap,
     marginBottom: HomeLayout.sectionHeadingGap,
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -33,5 +33,6 @@ const styles = themedStyles((c) => ({
     color: c.textSecondary,
     letterSpacing: 1,
     textTransform: 'uppercase',
+    flexShrink: 1,
   },
 }));

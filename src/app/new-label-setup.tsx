@@ -777,7 +777,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  switchLabel: { fontSize: 15, fontWeight: '500', color: c.text },
+  switchLabel: { fontSize: 15, fontWeight: '500', color: c.text, flexShrink: 1 },
   templatesLink: {
     paddingHorizontal: 14,
     paddingVertical: 13,
@@ -789,7 +789,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  templatesLinkText: { fontSize: 15, fontWeight: '500', color: c.accent },
+  templatesLinkText: { fontSize: 15, fontWeight: '500', color: c.accent, flexShrink: 1 },
   chevronRight: { color: c.textMuted, fontSize: 22, fontWeight: '300' },
   stickyHost: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   bottomBar: { paddingHorizontal: 16, paddingTop: 10, backgroundColor: c.bg },

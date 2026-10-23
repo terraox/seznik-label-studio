@@ -7,7 +7,6 @@ import {
   Alert,
   AppState,
   ActivityIndicator,
-  Dimensions,
   InteractionManager,
   LayoutAnimation,
   BackHandler,
@@ -284,6 +283,7 @@ import { CANVAS_BOTTOM_CHIP_CLEARANCE_PX, EDITOR_STAGE_MARGIN_PX, clampLabelMm, 
 import { applyDocumentStockSize, type StockSizeHandling } from '@/lib/stock-size';
 import { sortLayers } from '@/lib/template-schema';
 import { useTranslation } from '@/lib/i18n';
+import { editorFallbackViewportPx } from '@/lib/layout/screen-sizes';
 import {
   isJewelryDieCutDocument,
   JEWELRY_DIECUT,
@@ -825,9 +825,9 @@ export default function EditScreen() {
   const bulkGestureSnapshotRef = useRef<LabelElement[] | null>(null);
   const [pickerRows, setPickerRows] = useState(2);
   const [pickerColumns, setPickerColumns] = useState(3);
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const initialStageWidth = useMemo(
-    () => Math.min(windowWidth || Dimensions.get('window').width, MaxContentWidth),
+    () => Math.min(windowWidth, MaxContentWidth),
     [windowWidth],
   );
   const [stageWidth, setStageWidth] = useState(initialStageWidth);
@@ -850,7 +850,7 @@ export default function EditScreen() {
     restoreCanvasSplitHeight({
       ratio: effectiveSplitRatio,
       fullscreen: Boolean(editorSettings.canvasSplitFullscreen),
-      viewportPx: Math.max(Dimensions.get('window').height, 560) * 0.62,
+      viewportPx: editorFallbackViewportPx(windowHeight),
       panelMinPx: PANEL_MIN_HEIGHT_PX,
       panelDefaultPx: PANEL_DEFAULT_HEIGHT_PX,
     }),
@@ -859,7 +859,7 @@ export default function EditScreen() {
   const canvasHeightSv = useSharedValue(canvasSplitH);
   const isDividerDraggingSv = useSharedValue(false);
   const splitViewportHSv = useSharedValue(
-    splitViewportH > 0 ? splitViewportH : Math.max(Dimensions.get('window').height, 560) * 0.62,
+    splitViewportH > 0 ? splitViewportH : editorFallbackViewportPx(windowHeight),
   );
   const workspaceWSv = useSharedValue(120);
   const rulerSizeSv = useSharedValue(rulerSize);
@@ -1130,7 +1130,7 @@ export default function EditScreen() {
       ? fitSplitH
       : splitViewportH > 0
         ? splitViewportH
-        : Math.max(Dimensions.get('window').height, 560) * 0.62;
+        : editorFallbackViewportPx(windowHeight);
   const { canvasWidthPx, canvasHeightPx, pxPerMM, boardOffsetXPx, boardOffsetYPx, innerWidthPx, innerHeightPx } =
     useMemo(() => {
       const fitted = fitEditorPadBoard(doc.widthMm, doc.heightMm, workspaceW, baseWorkspaceH, rulerSize, EDITOR_STAGE_MARGIN_PX);
@@ -5091,6 +5091,7 @@ export default function EditScreen() {
                   pressed && doc.ups!.activeIndex > 0 && styles.pressed,
                 ]}>
                 <Text
+                  allowFontScaling={false}
                   style={[
                     styles.upsPagerChevron,
                     doc.ups!.activeIndex <= 0 && styles.upsPagerChevronDisabled,
@@ -5098,7 +5099,7 @@ export default function EditScreen() {
                   ‹
                 </Text>
               </Pressable>
-              <Text style={styles.upsPagerText}>
+              <Text style={styles.upsPagerText} /* layout-ok: panel index in a minWidth slot */>
                 {doc.ups.activeIndex + 1}/{doc.ups.columns}
               </Text>
               <Pressable
@@ -5111,6 +5112,7 @@ export default function EditScreen() {
                   pressed && doc.ups!.activeIndex < doc.ups!.columns - 1 && styles.pressed,
                 ]}>
                 <Text
+                  allowFontScaling={false}
                   style={[
                     styles.upsPagerChevron,
                     doc.ups!.activeIndex >= doc.ups!.columns - 1 && styles.upsPagerChevronDisabled,
@@ -5486,6 +5488,7 @@ const styles = themedStyles((c, scheme) => ({
   imageIngestText: {
     ...Type.action,
     color: c.text,
+    flexShrink: 1,
   },
   body: {
     flex: 1,

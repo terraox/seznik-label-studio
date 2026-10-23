@@ -62,7 +62,7 @@ export function PdfScopeSelector({
             onChangeText={(t) => onChange({ mode: 'range', start: scope.start, end: Number(t) || 0 })}
             style={styles.input}
           />
-          <Text style={styles.hint}>of {pageCount}</Text>
+          <Text style={styles.hint} /* layout-ok: short page count */>of {pageCount}</Text>
         </View>
       ) : null}
       {rangeError ? <Text style={styles.err}>{rangeError}</Text> : null}

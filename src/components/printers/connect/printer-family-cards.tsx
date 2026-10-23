@@ -26,7 +26,7 @@ export function PrinterFamilyCards({ selectedId, onSelect }: PrinterFamilyCardsP
   return (
     <View style={styles.wrap}>
       <Text style={styles.heading}>Choose your printer</Text>
-      <View style={styles.row}>
+      <View style={styles.row} /* layout-ok: cards flex to share the row */>
         {CONSUMER_PRINTER_LIST.map((printer) => (
           <FamilyCard
             key={printer.id}

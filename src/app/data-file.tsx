@@ -1,4 +1,5 @@
 import { goBack } from '@/lib/go-back';
+import { DataFileGrid, dataFileTileWidth } from '@/lib/layout/screen-sizes';
 import { AppIcon } from '@/components/app-icon';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -35,9 +36,7 @@ interface ImportedDataFile {
   excel?: ImportedExcelFile;
 }
 
-const GRID_COLUMNS = 3;
-const GRID_GAP = 10;
-const GRID_PAD = 12;
+const { columns: GRID_COLUMNS, gap: GRID_GAP, pad: GRID_PAD } = DataFileGrid;
 
 function formatSizeCompact(bytes?: number): string {
   if (!bytes || bytes <= 0) return '';
@@ -170,9 +169,7 @@ export default function DataFileScreen() {
   );
   const [editing, setEditing] = useState(false);
 
-  const gridTileWidth = Math.floor(
-    (Math.min(windowWidth, MaxContentWidth) - GRID_PAD * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
-  );
+  const gridTileWidth = dataFileTileWidth(windowWidth);
 
   const excelFiles = useDataStore((s) => s.excelFiles);
   const pdfFiles = useDataStore((s) => s.pdfFiles);

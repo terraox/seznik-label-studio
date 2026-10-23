@@ -115,6 +115,6 @@ const styles = themedStyles((c) => ({
     borderRadius: 2,
     paddingHorizontal: 2,
   },
-  text: { fontSize: 14, fontWeight: '700', color: c.text },
+  text: { fontSize: 14, fontWeight: '700', color: c.text, flexShrink: 1 },
   onDark: { color: c.onAccent },
 }));

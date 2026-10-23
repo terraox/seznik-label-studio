@@ -35,7 +35,7 @@ function PreviewBarcode({ value }: { value: string }) {
 
   if (!content) return null;
   if (!barsPath) {
-    return <Text style={styles.invalid}>Invalid barcode content</Text>;
+    return <Text allowFontScaling={false} style={styles.invalid}>Invalid barcode content</Text>;
   }
 
   return (
@@ -43,7 +43,7 @@ function PreviewBarcode({ value }: { value: string }) {
       <Svg width="100%" height={52} viewBox="0 0 1000 100" preserveAspectRatio="none">
         <Path d={barsPath} fill={BARCODE_INK} />
       </Svg>
-      <Text style={styles.barcodeText} numberOfLines={1}>
+      <Text allowFontScaling={false} style={styles.barcodeText} numberOfLines={1}>
         {formatBarcodeHri('CODE-128', content)}
       </Text>
     </View>
@@ -57,7 +57,7 @@ export function ExcelLabelPreview({ sheet, mappings, displayHead }: ExcelLabelPr
   if (included.length === 0) {
     return (
       <View style={styles.card}>
-        <Text style={styles.empty}>Select at least one column</Text>
+        <Text allowFontScaling={false} style={styles.empty}>Select at least one column</Text>
       </View>
     );
   }
@@ -79,7 +79,7 @@ export function ExcelLabelPreview({ sheet, mappings, displayHead }: ExcelLabelPr
         }
         const text = displayHead && value ? `${name}: ${value}` : value;
         return (
-          <Text key={mapping.columnIndex} style={styles.text}>
+          <Text allowFontScaling={false} key={mapping.columnIndex} style={styles.text}>
             {text}
           </Text>
         );

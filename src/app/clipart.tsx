@@ -29,14 +29,13 @@ import { Spacing } from '@/constants/theme';
 import { hydrateUserClipartSvgs, importUserClipartFile, removeUserClipart } from '@/lib/clipart/user-storage';
 import type { ClipartItem } from '@/lib/clipart/types';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
+import { ClipartGrid, clipartTileWidth } from '@/lib/layout/screen-sizes';
 import { useUserClipartStore } from '@/stores/user-clipart-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type GalleryCategory = ClipartCategoryId | 'local' | (typeof LINE_EMOJI_GROUPS)[number]['id'];
 
-const RAIL_WIDTH = 84;
-const GRID_COLUMNS = 3;
-const GRID_GAP = 6;
+const { railWidth: RAIL_WIDTH, columns: GRID_COLUMNS, gap: GRID_GAP } = ClipartGrid;
 
 const RAILS: { id: GalleryCategory; label: string }[] = [
   { id: 'retail', label: 'Retail' },
@@ -115,11 +114,7 @@ export default function ClipartScreen() {
     ]);
   };
 
-  const mainWidth = width - RAIL_WIDTH;
-  const gridPad = Spacing.two * 2;
-  const tileWidth = Math.floor(
-    (mainWidth - gridPad - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
-  );
+  const tileWidth = clipartTileWidth(width);
 
   const icons = useMemo(() => {
     const list = emojiMode

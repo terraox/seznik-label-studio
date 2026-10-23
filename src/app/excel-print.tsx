@@ -481,7 +481,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  switchLabel: { fontSize: 15, fontWeight: '500', color: c.text },
+  switchLabel: { fontSize: 15, fontWeight: '500', color: c.text, flexShrink: 1 },
   stickyHost: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   bottomBar: { paddingHorizontal: 16, paddingTop: 10, backgroundColor: c.bg },
   continueBtn: { backgroundColor: c.accentFill, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },

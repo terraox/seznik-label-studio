@@ -242,7 +242,7 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
   border-radius: 10px;
   font-size: 0.85rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  z-index: 40;
+  z-index: 100; /* above the edit window (60) and the sample designer (70) */
 }
 .toast.bad { border-left-color: var(--bad); }
 
@@ -494,7 +494,8 @@ html.dark .ptag.web { color: #a5b4fc; }
 .lib-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; aspect-ratio: 1; padding: 12px; border: 2px dashed var(--line); border-radius: 14px; background: var(--paper-2); color: var(--muted); font-size: 0.82rem; }
 .lib-drop:hover { border-color: var(--brand); color: var(--brand); }
 .lib-drop.has { border-style: solid; background: #fff; }
-.lib-drop img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.lib-drop { position: relative; }
+.lib-drop img { position: absolute; inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); object-fit: contain; }
 .lib-fields { display: grid; gap: 12px; align-content: start; }
 .lib-fields label, .lib-label { display: grid; gap: 5px; font-size: 0.78rem; font-weight: 600; color: var(--muted); }
 .lib-fields input, .lib-fields select, .lib-label input, .lib-label select { height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--text-main); font-size: 0.88rem; font-weight: 400; }
@@ -519,13 +520,19 @@ html.dark .ptag.web { color: #a5b4fc; }
 .lib-empty { display: grid; justify-items: center; gap: 10px; padding: 40px 0; color: var(--muted); }
 .lib-empty p { margin: 0; }
 .lib-thumb { position: relative; width: 100%; aspect-ratio: 4 / 3; display: grid; place-items: center; border-radius: 8px; background: #fff; border: 1px solid var(--line); overflow: hidden; }
-.lib-thumb img { width: 88%; height: 88%; object-fit: contain; }
+.lib-thumb > img { position: absolute; inset: 0; margin: auto; width: 88%; height: 88%; object-fit: contain; } /* absolute: a % height inside an aspect-ratio box can fall back to auto and overflow */
 .lib-row-name { display: flex; align-items: center; gap: 12px; }
 .lib-mini { display: grid; place-items: center; flex: 0 0 56px; width: 56px; height: 44px; border-radius: 8px; border: 1px solid var(--line); background: #fff; overflow: hidden; }
-.lib-mini img { width: 90%; height: 90%; object-fit: contain; }
+.lib-mini > img { width: 90%; height: 90%; object-fit: contain; }
 .lib-list { margin-top: 14px; max-height: none; }
 .lib-thumb.big { aspect-ratio: 16 / 9; }
-.lib-foot { align-items: center; }
+.lib-foot { align-items: center; flex-wrap: wrap; justify-content: flex-start; }
+.lib-modal { top: 5vh; max-height: 90vh; width: min(660px, calc(100vw - 32px)); }
+.lib-modal .modal-body { flex: 1; min-height: 0; overflow-y: auto; }
+.lib-modal .modal-foot { flex: none; border-top: 1px solid var(--line); }
+.lib-rotate { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+.lib-rotate .lib-act { border: 0; cursor: pointer; }
+.lib-rotate .lib-act:disabled { opacity: 0.5; cursor: default; }
 
 /* The EvilCharts components are written with Tailwind utilities, which this app does not ship. */
 [data-chart] { position: relative; display: flex; flex-direction: column; font-size: 0.75rem; }
@@ -593,7 +600,7 @@ html.dark .ptag.web { color: #a5b4fc; }
 .u-link { color: var(--brand); font-size: 0.78rem; font-weight: 600; text-decoration: none; cursor: pointer; }
 .u-link:hover { text-decoration: underline; }
 .lib-pill.off { background: rgba(239, 68, 68, 0.9); }
-.lib-thumb.dim img { opacity: 0.35; filter: grayscale(1); }
+.lib-thumb.dim > img, .lib-thumb.dim .sd-preview { opacity: 0.35; filter: grayscale(1); }
 .lib-cat-chip { padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); background: var(--paper-2); color: var(--text-main); font-weight: 600; }
 .lib-acts { position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
 .lib-card:hover .lib-acts, .lib-acts:focus-within { opacity: 1; }
@@ -630,3 +637,105 @@ html.dark .ptag.web { color: #a5b4fc; }
 .latency-bars { display: flex; align-items: flex-end; gap: 6px; height: 44px; }
 .latency-bars i { flex: 1; border-radius: 3px; background: var(--brand); opacity: 0.8; }
 .latency-card .btn { justify-self: start; }
+
+/* Library viewer: the SVG large on the left, its details on the right. */
+.lib-view { inset: 6vh 6vw; }
+.lib-view-stage { position: relative; flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 32px; background: #fff repeating-conic-gradient(#eef0f3 0% 25%, transparent 0% 50%) 50% / 20px 20px; } /* theme-fixed: SVGs are drawn for white label stock */
+.lib-view-stage > img { position: absolute; inset: 32px; width: calc(100% - 64px); height: calc(100% - 64px); object-fit: contain; }
+.lib-view-stage > img.dim { opacity: 0.35; filter: grayscale(1); }
+.lib-view-facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; margin: 0; font-size: 0.85rem; }
+.lib-view-facts dt { color: var(--muted); }
+.lib-view-facts dd { margin: 0; min-width: 0; }
+.lib-view-id { font-size: 0.72rem; word-break: break-all; }
+.lib-view-warn { color: var(--warn); }
+@media (max-width: 860px) { .lib-view { inset: 3vh 3vw; } .lib-view-stage { min-height: 45%; } }
+.lib-view-from { display: block; margin-top: 2px; color: var(--muted); font-size: 0.74rem; }
+.lib-file-size { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.lib-file-size b { color: var(--text-main); }
+.lib-file-size .u-link { border: 0; background: none; padding: 0; }
+
+/* Sample designer: the label drawn and edited the way the app's editor does it. */
+.sd .designer-body { min-height: 0; }
+.sd-canvas-wrap { position: relative; flex: 1; min-width: 0; min-height: 0; }
+.sd-canvas { position: absolute; inset: 0; display: flex; overflow: auto; background: var(--paper-2); }
+.sd-board { position: relative; flex: none; margin: auto; } /* auto margins centre it without clipping when zoomed past the view */
+.sd-frame { position: absolute; }
+.sd-corner { position: absolute; left: 0; top: 0; width: 22px; height: 22px; background: var(--card); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.sd-ruler-top, .sd-ruler-left { position: absolute; }
+.sd-ruler-top { top: 0; }
+.sd-ruler-left { left: 0; }
+.sd-ruler { display: block; background: var(--card); }
+.sd-ruler line { stroke: var(--muted); stroke-width: 1; }
+.sd-ruler text { fill: var(--muted); font-size: 9px; font-family: ui-monospace, monospace; }
+.sd-ruler-band { fill: var(--brand); opacity: 0.18; }
+.sd-stage { position: absolute; background: transparent; touch-action: none; user-select: none; box-shadow: 0 1px 0 var(--line), 0 6px 22px -10px rgba(0, 0, 0, 0.35); }
+.sd-template { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sd-el { position: absolute; cursor: move; }
+.sd-el:not(.on):hover { outline: 1px solid rgba(45, 175, 229, 0.85); }
+.sd-text { position: absolute; left: 0; top: 0; right: 0; white-space: pre-wrap; overflow-wrap: anywhere; pointer-events: none; }
+.sd-barcode { position: absolute; inset: 0; display: flex; flex-direction: column; text-align: center; white-space: nowrap; overflow: hidden; pointer-events: none; }
+/* Direct child only: the resize handles' arrow icons are svgs too. */
+.sd-el.qrcode > svg { position: absolute; inset: 0; pointer-events: none; }
+.sd-line { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.sd-hit { position: absolute; left: 0; right: 0; top: 50%; height: 14px; transform: translateY(-50%); }
+.sd-invalid { position: absolute; inset: 0; display: grid; place-items: center; border: 1px dashed #E53935; color: #E53935; font-size: 11px; text-align: center; background: rgba(229, 57, 53, 0.06); }
+.sd-outline { position: absolute; inset: 0; border: 1.5px dashed; pointer-events: none; }
+.sd-el.line .sd-outline { inset: -4px 0; }
+.sd-handle { position: absolute; z-index: 2; display: grid; place-items: center; border-radius: 50%; opacity: 0.9; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
+.sd-handle:hover { opacity: 1; }
+/* Just outside the box, so they never cover a small element's content. */
+.sd-handle.e { right: -28px; top: 50%; margin-top: -11px; cursor: ew-resize; }
+.sd-handle.s { bottom: -28px; left: 50%; margin-left: -11px; cursor: ns-resize; }
+.sd-handle.e::before { content: ''; position: absolute; right: 100%; top: 50%; width: 6px; border-top: 1.5px dashed #E8543C; }
+.sd-handle.s::before { content: ''; position: absolute; bottom: 100%; left: 50%; height: 6px; border-left: 1.5px dashed #E8543C; }
+.sd-guide { position: absolute; z-index: 3; pointer-events: none; }
+.sd-hud { position: absolute; z-index: 4; transform: translateX(-50%); padding: 3px 8px; border-radius: 6px; background: rgba(15, 23, 42, 0.85); color: #fff; font-size: 11px; font-family: ui-monospace, monospace; white-space: nowrap; pointer-events: none; }
+.sd-quick { position: absolute; z-index: 5; width: 260px; display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.45); cursor: default; }
+.sd-quick b { font-size: 0.8rem; }
+.sd-quick textarea, .sd-quick input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--text-main); font: inherit; font-size: 0.88rem; resize: vertical; }
+.sd-quick-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sd-quick-foot small { color: var(--muted); font-size: 0.72rem; }
+.sd-zoom { position: absolute; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); font-size: 0.78rem; }
+.sd-zoom span { min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
+.sd-side { gap: 16px; }
+.sd-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sd-tool { display: grid; justify-items: center; gap: 6px; padding: 12px 4px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); color: var(--text-main); font-size: 0.74rem; font-weight: 600; cursor: pointer; }
+.sd-tool:hover { border-color: var(--brand); color: var(--brand); }
+.sd-panel { display: grid; gap: 14px; }
+.sd-panel section { display: grid; gap: 10px; }
+.sd-panel h4, .sd-layers h4 { margin: 0; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.sd-panel-head { display: flex; align-items: center; justify-content: space-between; }
+.sd-panel-head h3 { margin: 0; font-size: 0.95rem; }
+.sd-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sd-field { display: grid; gap: 6px; font-size: 0.8rem; color: var(--muted); }
+.sd-field textarea, .sd-field input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--text-main); font: inherit; font-size: 0.86rem; resize: vertical; }
+.sd-font { display: flex; align-items: center; gap: 6px; }
+.sd-font input[type='range'] { flex: 1; min-width: 0; accent-color: #42BCC7; }
+.sd-font b { min-width: 48px; text-align: right; color: var(--text-main); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.sd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sd-num { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--card); }
+.sd-num span { width: 44px; padding: 0 8px; color: var(--muted); font-size: 0.74rem; font-weight: 600; }
+.sd-num input { flex: 1; min-width: 0; height: 32px; padding: 0 8px 0 0; border: 0; background: transparent; color: var(--text-main); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.sd-num input:disabled { color: var(--muted); }
+.sd-nudge { justify-content: space-between; }
+.sd-align { display: flex; flex-wrap: wrap; gap: 4px; }
+.sd-warn { margin: 0; color: #E53935; font-size: 0.78rem; }
+.sd-note { margin: 0; font-size: 0.76rem; }
+.sd-layers { display: grid; gap: 4px; }
+.sd-layer { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text-main); font-size: 0.82rem; text-align: left; cursor: pointer; }
+.sd-layer span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sd-layer:hover { background: var(--paper-2); }
+.sd-layer.on { background: var(--brand-soft); color: var(--brand); }
+.sd-field textarea, .sd-quick textarea { height: 78px; min-height: 52px; }
+/* Read-only template + sample preview (tiles, viewer, edit window). */
+.sd-preview { position: absolute; inset: 6%; display: grid; place-items: center; pointer-events: none; }
+.sd-preview.dim { opacity: 0.35; filter: grayscale(1); }
+.sd-preview-label { position: relative; overflow: hidden; }
+.sd-pv-el { position: absolute; }
+.sd-pv-el.qrcode svg { position: absolute; inset: 0; }
+.lib-view-stage .sd-preview { inset: 32px; }
+.lib-sample-toggle { position: absolute; left: 8px; bottom: 8px; z-index: 3; }
+.lib-sample-toggle button { padding: 4px 10px; font-size: 0.74rem; }
+.lib-design-badge { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 99px; background: rgba(66, 188, 199, 0.92); color: #fff; font-size: 0.68rem; font-weight: 700; }
+.lib-mini { position: relative; }
+.lib-mini .sd-preview { inset: 4%; }

@@ -258,7 +258,7 @@ export default function EcommerceLabelScreen() {
           </View>
 
           <Text style={styles.heading}>Choose your platform</Text>
-          <View style={styles.tiles}>
+          <View style={styles.tiles} /* layout-ok: tiles flex to share the row */>
             {PLATFORMS.map((p) => (
               <PlatformTile
                 key={p.id}
@@ -537,7 +537,7 @@ const styles = themedStyles((c, scheme) => ({
     backgroundColor: c.surface,
     ...cardElevation(c, scheme),
   },
-  link: { fontSize: 14, fontWeight: '700', color: c.accent },
+  link: { fontSize: 14, fontWeight: '700', color: c.accent, flexShrink: 1 },
   sampleBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
   upload: {
     alignItems: 'center',
@@ -581,7 +581,7 @@ const styles = themedStyles((c, scheme) => ({
     backgroundColor: c.accentSoft,
   },
   navOff: { opacity: 0.35 },
-  navText: { fontSize: 15, fontWeight: '700', color: c.text, minWidth: 56, textAlign: 'center' },
+  navText: { fontSize: 15, fontWeight: '700', color: c.text, minWidth: 56, textAlign: 'center', flexShrink: 1 },
   skipNote: { fontSize: 12, color: c.textMuted, textAlign: 'center', paddingBottom: 12, backgroundColor: c.surface },
   bottomBar: {
     flexDirection: 'row',

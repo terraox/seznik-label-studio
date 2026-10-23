@@ -63,7 +63,7 @@ function SettingRow({
           ]}>
           <Text style={[styles.stepperSymbol, minusDisabled && styles.stepperSymbolDisabled]}>−</Text>
         </Pressable>
-        <Text style={[styles.stepperValue, valueColor ? { color: valueColor } : null]}>{value}</Text>
+        <Text style={[styles.stepperValue, valueColor ? { color: valueColor } : null]} /* layout-ok: stepper value in a minWidth slot */>{value}</Text>
         <Pressable
           disabled={plusDisabled}
           onPress={onPlus}
@@ -332,7 +332,7 @@ export const PdfPrintPanel = forwardRef<
                 style={styles.input}
                 editable={!printing}
               />
-              <Text style={styles.hint}>of {pageCount}</Text>
+              <Text style={styles.hint} /* layout-ok: short page count */>of {pageCount}</Text>
             </View>
           ) : null}
           {mode === 'custom' ? (
@@ -564,7 +564,7 @@ const styles = themedStyles((c, scheme) => ({
   tipBtnText: { fontSize: 14, fontWeight: '700', color: c.accentInk },
   tipBtnTextDone: { color: c.textSecondary },
   advHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  advLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  advLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
   advChevron: {
     width: 28,
     height: 28,
@@ -573,7 +573,7 @@ const styles = themedStyles((c, scheme) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  advTitle: { ...Type.body, fontWeight: '600', color: c.text },
+  advTitle: { ...Type.body, fontWeight: '600', color: c.text, flexShrink: 1 },
   advRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   advSummary: { fontSize: 12, color: c.textSecondary, flexShrink: 1 },
   advBody: {

@@ -1,5 +1,8 @@
 import { createHash } from 'crypto';
+import { Resvg } from '@resvg/resvg-js';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+
+import { lengthToMm, mmPerSvgUnit } from './svg-size';
 
 // The app's own parser: what it can draw is what we validate against (see unsupportedForApp).
 import { parseSvgDrawOps } from '../../../../src/lib/clipart/parse-svg';
@@ -28,6 +31,10 @@ export type SanitizeSuccess = {
   unsupportedForApp: string[];
 };
 export type SanitizeResult = SanitizeSuccess | SanitizeFailure;
+export type SanitizeOptions = {
+  /** Templates: drop faint or dashed guides and crop the viewBox to the shape that is left. */
+  trimToMainShape?: boolean;
+};
 
 const ALLOWED_ELEMENTS = new Set([
   'svg', 'g', 'defs', 'path', 'circle', 'rect', 'ellipse', 'line', 'polygon', 'polyline',
@@ -97,18 +104,69 @@ function cleanStyle(value: string): string | null {
   return kept.length ? kept.join(';') : null;
 }
 
-/** Parses "50mm", "2in", "100px", "12" into millimetres (unitless and px = 96 per inch). */
-export function lengthToMm(raw: string | undefined | null): number | null {
-  const m = /^\s*([0-9]*\.?[0-9]+(?:e[+-]?\d+)?)\s*(mm|cm|in|px|pt|pc|q)?\s*$/i.exec(raw ?? '');
-  if (!m) return null;
-  const n = Number(m[1]);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  const unit = (m[2] ?? 'px').toLowerCase();
-  const perUnit: Record<string, number> = { mm: 1, cm: 10, in: 25.4, px: 25.4 / 96, pt: 25.4 / 72, pc: 25.4 / 6, q: 0.25 };
-  return Math.round(n * perUnit[unit] * 100) / 100;
+type ClassRule = { classes: string[]; decls: [string, string][] };
+
+/** Text inside a <style> element, whether plain or wrapped in CDATA. */
+function styleText(children: Node[]): string {
+  return children
+    .map((c) => {
+      if ('#text' in c) return String(c['#text']);
+      if ('#cdata' in c) return ((c['#cdata'] as Node[]) ?? []).map((t) => String(t['#text'] ?? '')).join('');
+      return '';
+    })
+    .join('');
 }
 
-export function sanitizeSvg(input: Buffer | string): SanitizeResult {
+/**
+ * Class rules from every <style> block, in source order, e.g. Illustrator's `.cls-1, .cls-2 { fill: none }`.
+ * Only plain class selectors are read; `skipped` counts the rules that are anything else.
+ */
+function readClassRules(list: Node[]): { rules: ClassRule[]; skipped: number } {
+  const rules: ClassRule[] = [];
+  let skipped = 0;
+  const walk = (nodes: Node[]) => {
+    for (const node of nodes) {
+      const el = Object.keys(node).find((k) => k !== ':@');
+      if (!el || el.startsWith('#')) continue;
+      const children = (node[el] as Node[]) ?? [];
+      if (el !== 'style') {
+        walk(children);
+        continue;
+      }
+      const css = styleText(children).replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selectors = selector.split(',').map((s) => s.trim());
+        if (!selectors.every((s) => /^\.[\w-]+$/.test(s))) {
+          skipped += 1;
+          continue;
+        }
+        const decls = body
+          .split(';')
+          .map((d) => d.split(':'))
+          .filter((d) => d.length >= 2)
+          .map(([p, ...v]) => [p.trim().toLowerCase(), v.join(':').trim()] as [string, string])
+          .filter(([p, v]) => p && v);
+        rules.push({ classes: selectors.map((s) => s.slice(1)), decls });
+      }
+    }
+  };
+  walk(list);
+  return { rules, skipped };
+}
+
+/** Faint (opacity below 1) or dashed: a guide such as a fold or cut line, not the label shape. */
+function isGuide(attrs: Record<string, string> | undefined): boolean {
+  if (!attrs) return false;
+  const style = attrs['@_style'] ?? '';
+  const read = (prop: string) => attrs['@_' + prop] ?? new RegExp(`(?:^|;)${prop}:([^;]+)`).exec(style)?.[1];
+  const opacity = Number(read('opacity'));
+  const dash = read('stroke-dasharray')?.trim();
+  return (Number.isFinite(opacity) && opacity < 1) || (!!dash && dash !== 'none');
+}
+
+export { lengthToMm } from './svg-size';
+
+export function sanitizeSvg(input: Buffer | string, options: SanitizeOptions = {}): SanitizeResult {
   const bytes = typeof input === 'string' ? Buffer.byteLength(input) : input.length;
   if (bytes === 0) return fail('EMPTY_FILE', 'The file is empty.');
   if (bytes > MAX_SVG_BYTES) return fail('TOO_LARGE', `The file is larger than ${MAX_SVG_BYTES / 1024} KB.`);
@@ -135,6 +193,25 @@ export function sanitizeSvg(input: Buffer | string): SanitizeResult {
   let nodes = 0;
   let tooDeep = false;
   let tooMany = false;
+  const css = readClassRules(tree);
+
+  /**
+   * Copies <style> class rules onto the element as attributes, since the <style> block itself is removed.
+   * Rules apply in source order, so a later rule wins, as in CSS. An existing style="" still wins.
+   */
+  function applyClassRules(attrs: Record<string, string> | undefined): Record<string, string> | undefined {
+    const classAttr = attrs?.['@_class'];
+    if (!attrs || classAttr === undefined) return attrs;
+    const { '@_class': _class, ...out } = attrs;
+    const classes = String(classAttr).split(/\s+/).filter(Boolean);
+    for (const rule of css.rules) {
+      if (!rule.classes.some((c) => classes.includes(c))) continue;
+      for (const [prop, value] of rule.decls) {
+        if (ALLOWED_ATTRIBUTES.has(prop)) out['@_' + prop] = value.replace(/^(-?[0-9.]+(?:e[+-]?\d+)?)px$/i, '$1');
+      }
+    }
+    return out;
+  }
 
   function cleanAttributes(el: string, attrs: Record<string, string> | undefined): Record<string, string> | undefined {
     if (!attrs) return undefined;
@@ -208,7 +285,7 @@ export function sanitizeSvg(input: Buffer | string): SanitizeResult {
       }
       const el = Object.keys(node).find((k) => k !== ':@');
       if (!el) continue;
-      const attrs = node[':@'] as Record<string, string> | undefined;
+      const attrs = applyClassRules(node[':@'] as Record<string, string> | undefined);
       const children = (node[el] as Node[]) ?? [];
 
       if (UNWRAP_ELEMENTS.has(el)) {
@@ -218,7 +295,9 @@ export function sanitizeSvg(input: Buffer | string): SanitizeResult {
       }
       if (!ALLOWED_ELEMENTS.has(el)) {
         note(el.includes(':') ? `foreign element (<${el.split(':')[0]}:>)` : `<${el}>`);
-        if (el === 'style') warnings.push('A <style> block was removed; use fill/stroke attributes instead.');
+        if (el === 'style' && css.skipped) {
+          warnings.push('Some <style> rules could not be copied onto the shapes; use fill/stroke attributes instead.');
+        }
         continue;
       }
       const cleaned = cleanAttributes(el, attrs);
@@ -238,9 +317,9 @@ export function sanitizeSvg(input: Buffer | string): SanitizeResult {
     return result;
   }
 
-  const rootAttrs = rootNode[':@'] as Record<string, string> | undefined;
+  const rootAttrs = applyClassRules(rootNode[':@'] as Record<string, string> | undefined);
   const cleanedRootAttrs: Record<string, string> = { ...(cleanAttributes('svg', rootAttrs) ?? {}), '@_xmlns': 'http://www.w3.org/2000/svg' };
-  const cleanedRoot: Node = { svg: cleanNodes((rootNode.svg as Node[]) ?? [], 1), ':@': cleanedRootAttrs };
+  let cleanedRoot: Node = { svg: cleanNodes((rootNode.svg as Node[]) ?? [], 1), ':@': cleanedRootAttrs };
   if (tooMany) return fail('TOO_COMPLEX', `The file has more than ${MAX_NODES} elements.`);
   if (tooDeep) return fail('TOO_DEEP', `Elements are nested more than ${MAX_DEPTH} levels deep.`);
 
@@ -248,12 +327,50 @@ export function sanitizeSvg(input: Buffer | string): SanitizeResult {
   const viewBoxRaw = cleanedRootAttrs['@_viewBox'];
   const vb = viewBoxRaw?.trim().split(/[\s,]+/).map(Number);
   const hasViewBox = !!vb && vb.length === 4 && vb.every(Number.isFinite) && vb[2] > 0 && vb[3] > 0;
-  const wMm = lengthToMm(cleanedRootAttrs['@_width']);
-  const hMm = lengthToMm(cleanedRootAttrs['@_height']);
+  // Illustrator works in points, so its px and bare viewBox units are 72 per inch, not 96.
+  const pxMm = mmPerSvgUnit(text);
+  const wMm = lengthToMm(cleanedRootAttrs['@_width'], pxMm);
+  const hMm = lengthToMm(cleanedRootAttrs['@_height'], pxMm);
   if (!hasViewBox && !(wMm && hMm)) return fail('NO_SIZE', 'The SVG needs a viewBox or a width and height.');
-  const widthMm = wMm ?? (hasViewBox ? Math.round(vb![2] * (25.4 / 96) * 100) / 100 : null);
-  const heightMm = hMm ?? (hasViewBox ? Math.round(vb![3] * (25.4 / 96) * 100) / 100 : null);
+  let widthMm = wMm ?? (hasViewBox ? Math.round(vb![2] * pxMm * 100) / 100 : null);
+  let heightMm = hMm ?? (hasViewBox ? Math.round(vb![3] * pxMm * 100) / 100 : null);
   if (widthMm && heightMm && (widthMm > 5000 || heightMm > 5000)) return fail('BAD_SIZE', 'The SVG size is unreasonably large.');
+  let viewBox = hasViewBox ? vb!.join(' ') : null;
+
+  if (options.trimToMainShape) {
+    // Guides out, unless that would leave nothing for the app to draw.
+    let guides = 0;
+    const stripGuides = (list: Node[]): Node[] =>
+      list.flatMap((node) => {
+        const el = Object.keys(node).find((k) => k !== ':@');
+        if (!el || el.startsWith('#') || el === 'defs') return [node];
+        if (isGuide(node[':@'] as Record<string, string> | undefined)) {
+          guides += 1;
+          return [];
+        }
+        return [{ ...node, [el]: stripGuides((node[el] as Node[]) ?? []) }];
+      });
+    const main: Node = { ...cleanedRoot, svg: stripGuides(cleanedRoot.svg as Node[]) };
+    if (guides && parseSvgDrawOps(builder.build([main]) as string).length) {
+      cleanedRoot = main;
+      removed.set('faint or dashed guide', guides);
+    }
+
+    // Crop to what is drawn, stroke included, so the outline lines up with the label edge and is not clipped.
+    const box = new Resvg(builder.build([cleanedRoot]) as string, { font: { loadSystemFonts: false } }).getBBox();
+    if (box && box.width > 0 && box.height > 0) {
+      const mmPerUnit = hasViewBox && widthMm && heightMm ? { x: widthMm / vb![2], y: heightMm / vb![3] } : { x: pxMm, y: pxMm };
+      const before = hasViewBox ? { w: vb![2], h: vb![3] } : { w: (widthMm ?? 0) / mmPerUnit.x, h: (heightMm ?? 0) / mmPerUnit.y };
+      if (box.width < before.w * 0.995 || box.height < before.h * 0.995) removed.set('space around the main shape', 1);
+      const r = (n: number) => Math.round(n * 1000) / 1000;
+      viewBox = [box.x, box.y, box.width, box.height].map(r).join(' ');
+      widthMm = Math.round(box.width * mmPerUnit.x * 100) / 100;
+      heightMm = Math.round(box.height * mmPerUnit.y * 100) / 100;
+      // The size goes into the file in mm, so it stays readable once Illustrator's marks are cleaned out.
+      const attrs = cleanedRoot[':@'] as Record<string, string>;
+      cleanedRoot = { ...cleanedRoot, ':@': { ...attrs, '@_viewBox': viewBox, '@_width': `${widthMm}mm`, '@_height': `${heightMm}mm` } };
+    }
+  }
 
   const svg = builder.build([cleanedRoot]) as string;
   const out = Buffer.from(svg, 'utf8');
@@ -275,7 +392,7 @@ export function sanitizeSvg(input: Buffer | string): SanitizeResult {
     svg,
     bytes: out.length,
     hash: createHash('sha256').update(out).digest('hex'),
-    viewBox: hasViewBox ? vb!.join(' ') : null,
+    viewBox,
     widthMm,
     heightMm,
     removed: [...removed].map(([what, count]) => ({ what, count })),

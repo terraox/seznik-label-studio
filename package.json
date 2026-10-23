@@ -137,6 +137,9 @@
     "test:label-share": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/label-share/__tests__/*.test.ts",
     "test:across": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/__tests__/across.test.ts",
     "test:new-label": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/__tests__/new-label-form.test.ts",
+    "test:layout": "npx --yes tsx --tsconfig tsconfig.json --test src/theme/__tests__/layout-risks.test.ts src/theme/__tests__/font-scale.test.ts src/lib/layout/__tests__/screen-sizes.test.ts",
+    "layout:report": "npx --yes tsx --tsconfig tsconfig.json scripts/layout-risks.ts",
+    "layout:baseline": "npx --yes tsx --tsconfig tsconfig.json scripts/layout-risks.ts --update",
     "print:calibration": "npx --yes tsx --tsconfig tsconfig.json scripts/print-calibration-box.ts",
     "print:phase1": "npx --yes tsx --tsconfig tsconfig.json scripts/print-phase1-demo.ts",
     "print:phase2": "npx --yes tsx --tsconfig tsconfig.json scripts/print-phase2-demo.ts",
@@ -151,7 +154,9 @@
     "print:phase7": "npx --yes tsx --tsconfig tsconfig.json scripts/print-phase7-demo.ts",
     "print:phase8": "npx --yes tsx --tsconfig tsconfig.json scripts/print-phase8-demo.ts",
     "print:phase9": "npx --yes tsx --tsconfig tsconfig.json scripts/print-phase9-demo.ts",
+    "prebuild:android": "npm run -s test:layout",
     "build:android": "node ./scripts/eas-build.js android preview",
+    "prebuild:android:dev": "npm run -s test:layout",
     "build:android:dev": "node ./scripts/eas-build.js android development"
   },
   "expo": {

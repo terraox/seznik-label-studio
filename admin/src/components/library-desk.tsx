@@ -1,11 +1,12 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { LayoutGrid, List, Pencil, Plus, Power, PowerOff, Search, Shapes, Trash2, Upload, X } from 'lucide-react';
+import { Copy, Download, Eye, LayoutGrid, List, PenTool, Pencil, Plus, Power, PowerOff, RotateCcw, RotateCw, Search, Shapes, Trash2, Upload, X } from 'lucide-react';
 
 import { useDesk, useToast } from '@/components/desk';
 import { PageHeader } from '@/components/ui';
-import { SampleDesigner } from '@/components/sample-designer';
+import { SampleDesigner, SamplePreview } from '@/components/sample-designer';
+import { detectSvgSizeMm, type SvgSize } from '@/lib/catalog/svg-size';
 import { api } from '@/lib/client';
 import { ago } from '@/lib/format';
 import { can } from '@/lib/permissions';
@@ -40,6 +41,138 @@ function preview(svg: string) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(padded)}`;
 }
 const fileName = (name: string) => name.replace(/\.svg$/i, '').replace(/[_-]+/g, ' ').trim();
+const mm = (n: number) => Math.round(n * 10) / 10;
+const hasSample = (item: Item) => Array.isArray(item.sampleLayout) && item.sampleLayout.length > 0;
+
+/** The template drawn blank or with its sample content. */
+function ItemPicture({ item, withSample, lazy }: { item: Item; withSample: boolean; lazy?: boolean }) {
+  return withSample && hasSample(item)
+    ? <SamplePreview svgCode={item.svgCode} widthMm={item.widthMm} heightMm={item.heightMm} layout={item.sampleLayout} />
+    : <img src={preview(item.svgCode)} alt={item.name} loading={lazy ? 'lazy' : undefined} />;
+}
+
+/** Design / Blank switch over a picture. Shown only when there is a sample to switch. */
+function SampleToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className="seg lib-sample-toggle" role="group" aria-label="Sample content" onClick={(e) => e.stopPropagation()}>
+      <button type="button" className={on ? 'on' : ''} onClick={() => onChange(true)}>Design</button>
+      <button type="button" className={on ? '' : 'on'} onClick={() => onChange(false)}>Blank</button>
+    </div>
+  );
+}
+
+/** The SVG's own viewBox as numbers, or null when it has none. */
+function viewBoxOf(svg: string): [number, number, number, number] | null {
+  const raw = /<svg\b[^>]*?\sviewBox="([^"]+)"/i.exec(svg)?.[1];
+  const box = raw?.trim().split(/[\s,]+/).map(Number);
+  return box && box.length === 4 && box.every(Number.isFinite) && box[2] > 0 && box[3] > 0 ? (box as [number, number, number, number]) : null;
+}
+
+/**
+ * Turns the SVG a quarter turn. The drawing is wrapped in a rotate, and the viewBox and any width/height swap.
+ * Templates only: the app draws template outlines with full SVG, but its clipart reader ignores transforms.
+ */
+function rotateSvg(svg: string, clockwise: boolean): string | null {
+  const box = viewBoxOf(svg);
+  const root = /<svg\b[^>]*>/i.exec(svg);
+  const end = svg.lastIndexOf('</svg>');
+  if (!box || !root || end < root.index) return null;
+  const [x, y, w, h] = box;
+  const turn = clockwise ? `translate(${h} 0) rotate(90)` : `translate(0 ${w}) rotate(-90)`;
+  const attr = (name: string) => new RegExp(`\\s${name}="([^"]*)"`).exec(root[0])?.[1];
+  const width = attr('width');
+  const height = attr('height');
+  let head = root[0].replace(/\sviewBox="[^"]*"/i, ` viewBox="0 0 ${h} ${w}"`);
+  if (width && height) head = head.replace(/\swidth="[^"]*"/, ` width="${height}"`).replace(/\sheight="[^"]*"/, ` height="${width}"`);
+  const body = svg.slice(root.index + root[0].length, end);
+  return `${head}<g transform="${turn} translate(${-x} ${-y})">${body}</g></svg>`;
+}
+
+/** Full-size look at one item: the SVG on the left, everything known about it on the right. */
+function ItemViewer({ item, noun, category, canEdit, paused, onEdit, onDesign, onClose }: {
+  item: Item; noun: string; category: string; canEdit: boolean; paused: boolean; onEdit: () => void; onDesign: () => void; onClose: () => void;
+}) {
+  const toast = useToast();
+  const [withSample, setWithSample] = useState(true);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !paused) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, paused]);
+
+  const box = viewBoxOf(item.svgCode);
+  const fileSize = detectSvgSizeMm(item.svgCode);
+  const bytes = new Blob([item.svgCode]).size;
+  const shapes = (item.svgCode.match(/<(path|circle|rect|ellipse|line|polygon|polyline)\b/gi) ?? []).length;
+  // The app stretches the SVG to the label size, so a different shape here means a squashed outline.
+  const sized = item.widthMm && item.heightMm ? { w: item.widthMm, h: item.heightMm } : null;
+  const off = box && sized ? (box[2] / box[3]) / (sized.w / sized.h) : 1;
+  const stretched = Math.abs(off - 1) > 0.02;
+
+  function download() {
+    const url = URL.createObjectURL(new Blob([item.svgCode], { type: 'image/svg+xml' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${item.name.replace(/[\\/:*?"<>|]+/g, ' ').trim() || noun}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <>
+      <button className="drawer-back designer-back" aria-label="Close" onClick={onClose} />
+      <div className="designer lib-view" role="dialog" aria-modal="true" aria-label={item.name}>
+        <div className="designer-head">
+          <div><h2>{item.name}</h2><p>{category}</p></div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close"><X size={16} /></button>
+        </div>
+        <div className="designer-body">
+          <div className="lib-view-stage">
+            {withSample && hasSample(item)
+              ? <SamplePreview svgCode={item.svgCode} widthMm={item.widthMm} heightMm={item.heightMm} layout={item.sampleLayout} dim={item.status === 'disabled'} />
+              : <img src={preview(item.svgCode)} alt={item.name} className={item.status === 'disabled' ? 'dim' : undefined} />}
+            {hasSample(item) ? <SampleToggle on={withSample} onChange={setWithSample} /> : null}
+          </div>
+          <aside className="designer-side lib-view-side">
+            <dl className="lib-view-facts">
+              <dt>Status</dt>
+              <dd><span className={item.status === 'published' ? 'badge shipped' : item.status === 'disabled' ? 'badge rejected' : 'badge draft'}>{item.status}</span></dd>
+              <dt>Category</dt><dd>{category || '—'}</dd>
+              <dt>Label size</dt><dd className="u-mono">{sized ? `${mm(sized.w)} × ${mm(sized.h)} mm` : '—'}</dd>
+              <dt>Size in the SVG</dt>
+              <dd>{fileSize ? <><span className="u-mono">{mm(fileSize.widthMm)} × {mm(fileSize.heightMm)} mm</span><small className="lib-view-from">from the {fileSize.from}</small></> : '—'}</dd>
+              <dt>SVG viewBox</dt><dd className="u-mono">{box ? box.map((n) => Math.round(n * 100) / 100).join(' ') : 'none'}</dd>
+              {box && sized ? (
+                <>
+                  <dt>Proportions</dt>
+                  <dd>{stretched
+                    ? <span className="lib-view-warn">The SVG is {off > 1 ? 'wider' : 'taller'} than the label size, so the app stretches it. A {mm(sized.w)} mm wide label would be {mm(sized.w * box[3] / box[2])} mm tall.</span>
+                    : 'Matches the label size'}</dd>
+                </>
+              ) : null}
+              <dt>Shapes</dt><dd>{shapes}</dd>
+              <dt>File size</dt><dd>{bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 102.4) / 10} KB`}</dd>
+              {noun === 'template' ? <><dt>Sample</dt><dd>{hasSample(item) ? 'Designed' : 'None yet'}</dd></> : null}
+              <dt>Updated</dt><dd title={new Date(item.updatedAt).toLocaleString()}>{ago(item.updatedAt)}</dd>
+              <dt>ID</dt><dd className="u-mono lib-view-id">{item.id}</dd>
+            </dl>
+            <div className="designer-actions">
+              <button className="btn small" onClick={download}><Download size={13} /> Download SVG</button>
+              <button className="btn small" onClick={() => { void navigator.clipboard.writeText(item.svgCode).then(() => toast('SVG code copied'), () => toast('Could not copy', 'bad')); }}><Copy size={13} /> Copy code</button>
+            </div>
+          </aside>
+        </div>
+        {canEdit ? (
+          <div className="designer-foot">
+            <span style={{ flex: 1 }} />
+            {noun === 'template' ? <button className="btn" onClick={onDesign}><PenTool size={13} /> {hasSample(item) ? 'Edit design' : 'Design sample'}</button> : null}
+            <button className="btn primary" onClick={onEdit}><Pencil size={13} /> Edit</button>
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}
 
 export function LibraryDesk({ kind }: { kind: Kind }) {
   const copy = COPY[kind];
@@ -59,9 +192,18 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [layout, setLayout] = useState<'tiles' | 'list'>('tiles');
+  const [showSample, setShowSample] = useState(true);
+  const [modalSample, setModalSample] = useState(true);
   useEffect(() => {
-    try { if (localStorage.getItem('sez-admin-lib-layout') === 'list') setLayout('list'); } catch { /* default */ }
+    try {
+      if (localStorage.getItem('sez-admin-lib-layout') === 'list') setLayout('list');
+      if (localStorage.getItem('sez-admin-lib-sample') === 'blank') setShowSample(false);
+    } catch { /* default */ }
   }, []);
+  const chooseSample = (value: boolean) => {
+    setShowSample(value);
+    try { localStorage.setItem('sez-admin-lib-sample', value ? 'design' : 'blank'); } catch { /* ignore */ }
+  };
   const chooseLayout = (value: 'tiles' | 'list') => {
     setLayout(value);
     try { localStorage.setItem('sez-admin-lib-layout', value); } catch { /* ignore */ }
@@ -71,8 +213,10 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   const [form, setForm] = useState({ name: '', categoryId: '', widthMm: '', heightMm: '', status: 'published' });
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState('');
+  const [fileSize, setFileSize] = useState<SvgSize | null>(null);
 
   const [open, setOpen] = useState<Item | null>(null);
+  const [viewing, setViewing] = useState<Item | null>(null);
   const [designing, setDesigning] = useState<Item | null>(null);
   const [edit, setEdit] = useState({ name: '', categoryId: '', widthMm: '', heightMm: '', status: 'published' });
 
@@ -103,9 +247,10 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   function pickFile(f: File | null) {
     setFile(f);
     setFilePreview('');
+    setFileSize(null);
     if (!f) return;
     setForm((cur) => ({ ...cur, name: cur.name || fileName(f.name) }));
-    void f.text().then((text) => setFilePreview(preview(text))).catch(() => {});
+    void f.text().then((text) => { setFilePreview(preview(text)); setFileSize(detectSvgSizeMm(text)); }).catch(() => {});
   }
 
   async function addCategory() {
@@ -148,7 +293,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
       const saved = await send(`${base}/items`, 'POST', body);
       const removed = saved.removed.length ? ` (removed for safety: ${saved.removed.map((r) => r.what).join(', ')})` : '';
       toast(`${form.status === 'published' ? 'Published' : 'Saved as draft'}${removed}`);
-      setFile(null); setFilePreview('');
+      setFile(null); setFilePreview(''); setFileSize(null);
       setShowForm(false);
       if (fileInput.current) fileInput.current.value = '';
       setForm((cur) => ({ ...cur, name: '', widthMm: '', heightMm: '' }));
@@ -162,19 +307,31 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
     setEdit({ name: item.name, categoryId: item.categoryId, widthMm: item.widthMm?.toString() ?? '', heightMm: item.heightMm?.toString() ?? '', status: item.status });
   }
 
-  async function saveItem(replacement?: File) {
+  async function saveItem(replacement?: File, fields = edit, done = replacement ? 'Picture replaced' : 'Saved') {
     if (!open) return;
     setBusy(true);
     try {
       const body = new FormData();
-      Object.entries(edit).forEach(([k, v]) => body.set(k, v));
+      Object.entries(fields).forEach(([k, v]) => body.set(k, v));
       if (replacement) body.set('file', replacement);
       const saved = await send(`${base}/items/${open.id}`, 'PATCH', body);
-      toast(replacement ? 'Picture replaced' : 'Saved');
+      toast(done);
       setOpen(saved.item);
       loadItems(); loadCategories();
     } catch (e) { toast(e instanceof Error ? e.message : 'Could not save', 'bad'); }
     finally { setBusy(false); }
+  }
+
+  /** Turns the template a quarter turn and saves it; width and height swap with it. */
+  async function rotate(clockwise: boolean) {
+    if (!open) return;
+    const turned = rotateSvg(open.svgCode, clockwise);
+    if (!turned) return toast('This SVG has no viewBox, so it cannot be turned', 'bad');
+    const hasSample = Array.isArray(open.sampleLayout) && open.sampleLayout.length > 0;
+    if (hasSample && !window.confirm('The designed sample does not turn with it. Check it afterwards. Turn anyway?')) return;
+    const fields = { ...edit, widthMm: edit.heightMm, heightMm: edit.widthMm };
+    setEdit(fields);
+    await saveItem(new File([turned], 'turned.svg', { type: 'image/svg+xml' }), fields, clockwise ? 'Turned right' : 'Turned left');
   }
 
   /** Switches the template off (kept, but hidden from the app) or back on. */
@@ -261,9 +418,15 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                     </select>
                   </label>
                   <div className="lib-size">
-                    <label>Width (mm)<input inputMode="decimal" value={form.widthMm} onChange={(e) => setForm({ ...form, widthMm: e.target.value })} placeholder={kind === 'template' ? 'From the file' : 'Optional'} /></label>
-                    <label>Height (mm)<input inputMode="decimal" value={form.heightMm} onChange={(e) => setForm({ ...form, heightMm: e.target.value })} placeholder={kind === 'template' ? 'From the file' : 'Optional'} /></label>
+                    <label>Width (mm)<input inputMode="decimal" value={form.widthMm} onChange={(e) => setForm({ ...form, widthMm: e.target.value })} placeholder={fileSize ? `${mm(fileSize.widthMm)} from the file` : kind === 'template' ? 'From the file' : 'Optional'} /></label>
+                    <label>Height (mm)<input inputMode="decimal" value={form.heightMm} onChange={(e) => setForm({ ...form, heightMm: e.target.value })} placeholder={fileSize ? `${mm(fileSize.heightMm)} from the file` : kind === 'template' ? 'From the file' : 'Optional'} /></label>
                   </div>
+                  {fileSize ? (
+                    <p className="lib-file-size">
+                      The file is <b>{mm(fileSize.widthMm)} × {mm(fileSize.heightMm)} mm</b> (from its {fileSize.from}). Leave the size blank to use it.
+                      {' '}<button type="button" className="u-link" onClick={() => setForm({ ...form, widthMm: String(mm(fileSize.widthMm)), heightMm: String(mm(fileSize.heightMm)) })}>Fill in</button>
+                    </p>
+                  ) : null}
                   <div className="seg" role="group" aria-label="Status">
                     <button type="button" className={form.status === 'published' ? 'on' : ''} onClick={() => setForm({ ...form, status: 'published' })}>Publish</button>
                     <button type="button" className={form.status === 'draft' ? 'on' : ''} onClick={() => setForm({ ...form, status: 'draft' })}>Draft</button>
@@ -286,6 +449,12 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                     <button key={v} type="button" className={statusFilter === v ? 'on' : ''} onClick={() => setStatusFilter(v)}>{v === 'all' ? 'All' : v[0].toUpperCase() + v.slice(1)}</button>
                   ))}
                 </div>
+                {kind === 'template' ? (
+                  <div className="seg" role="group" aria-label="Show sample content">
+                    <button type="button" className={showSample ? 'on' : ''} onClick={() => chooseSample(true)} title="Show each template with its sample design">Design</button>
+                    <button type="button" className={showSample ? '' : 'on'} onClick={() => chooseSample(false)} title="Show the blank templates">Blank</button>
+                  </div>
+                ) : null}
                 <div className="seg" role="group" aria-label="Layout">
                   <button type="button" className={layout === 'tiles' ? 'on' : ''} onClick={() => chooseLayout('tiles')} aria-label="Tiles" title="Tiles"><LayoutGrid size={14} /></button>
                   <button type="button" className={layout === 'list' ? 'on' : ''} onClick={() => chooseLayout('list')} aria-label="List" title="List"><List size={14} /></button>
@@ -297,17 +466,26 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
               {shown.map((item) => (
                 <button key={item.id} type="button" className="lib-card" onClick={() => openItem(item)}>
                   <div className={item.status === 'disabled' ? 'lib-thumb dim' : 'lib-thumb'}>
-                    <img src={preview(item.svgCode)} alt={item.name} loading="lazy" />
-                    {canEdit ? (
-                      <span className="lib-acts">
+                    <ItemPicture item={item} withSample={kind === 'template' && showSample} lazy />
+                    {kind === 'template' && hasSample(item) && !showSample ? <span className="lib-design-badge">Has design</span> : null}
+                    <span className="lib-acts">
+                      <span role="button" tabIndex={0} className="lib-act" title="View" aria-label={`View ${item.name}`}
+                        onClick={(e) => { e.stopPropagation(); setViewing(item); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setViewing(item); } }}><Eye size={13} /></span>
+                      {canEdit && kind === 'template' ? (
+                        <span role="button" tabIndex={0} className="lib-act" title={hasSample(item) ? 'Edit design' : 'Design sample'} aria-label={`Design ${item.name}`}
+                          onClick={(e) => { e.stopPropagation(); setDesigning(item); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setDesigning(item); } }}><PenTool size={13} /></span>
+                      ) : null}
+                      {canEdit ? (<>
                         <span role="button" tabIndex={0} className="lib-act" title={item.status === 'disabled' ? 'Enable' : 'Disable'} aria-label={`${item.status === 'disabled' ? 'Enable' : 'Disable'} ${item.name}`}
                           onClick={(e) => { e.stopPropagation(); void toggleDisabled(item); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void toggleDisabled(item); } }}>{item.status === 'disabled' ? <Power size={13} /> : <PowerOff size={13} />}</span>
                         <span role="button" tabIndex={0} className="lib-act del" title="Delete" aria-label={`Delete ${item.name}`}
                           onClick={(e) => { e.stopPropagation(); void deleteItem(item); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void deleteItem(item); } }}><Trash2 size={13} /></span>
-                      </span>
-                    ) : null}
+                      </>) : null}
+                    </span>
                     <span className={item.status === 'published' ? 'lib-pill live' : item.status === 'disabled' ? 'lib-pill off' : 'lib-pill'}>{item.status === 'published' ? 'Published' : item.status === 'disabled' ? 'Disabled' : 'Draft'}</span>
                   </div>
                   <div className="lib-info">
@@ -322,13 +500,13 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
             </div> : (
               <div className="u-scroll lib-list">
                 <table className="table u-table" style={{ minWidth: 0 }}>
-                  <thead><tr><th>Template</th><th>Category</th><th>Size</th><th>Sample</th><th>Status</th><th>Updated</th>{canEdit ? <th className="num" /> : null}</tr></thead>
+                  <thead><tr><th>Template</th><th>Category</th><th>Size</th><th>Sample</th><th>Status</th><th>Updated</th><th className="num" /></tr></thead>
                   <tbody>
                     {shown.map((item) => (
                       <tr key={item.id} className="u-row" onClick={() => openItem(item)}>
                         <td>
                           <div className="lib-row-name">
-                            <span className="lib-mini"><img src={preview(item.svgCode)} alt="" loading="lazy" /></span>
+                            <span className="lib-mini"><ItemPicture item={item} withSample={kind === 'template' && showSample} lazy /></span>
                             <b>{item.name}</b>
                           </div>
                         </td>
@@ -337,10 +515,13 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                         <td>{Array.isArray(item.sampleLayout) && item.sampleLayout.length ? <span className="lib-has-sample">Sample</span> : <span className="u-muted">—</span>}</td>
                         <td><span className={item.status === 'published' ? 'badge shipped' : item.status === 'disabled' ? 'badge rejected' : 'badge draft'}>{item.status}</span></td>
                         <td>{ago(item.updatedAt)}</td>
-                        {canEdit ? <td className="num lib-row-acts" onClick={(e) => e.stopPropagation()}>
-                          <button className="btn small" disabled={busy} onClick={() => toggleDisabled(item)}>{item.status === 'disabled' ? <><Power size={12} /> Enable</> : <><PowerOff size={12} /> Disable</>}</button>
-                          <button className="btn small danger" onClick={() => deleteItem(item)}><Trash2 size={12} /> Delete</button>
-                        </td> : null}
+                        <td className="num lib-row-acts" onClick={(e) => e.stopPropagation()}>
+                          <button className="btn small" onClick={() => setViewing(item)} aria-label={`View ${item.name}`} title="View"><Eye size={12} /></button>
+                          {canEdit ? <>
+                            <button className="btn small" disabled={busy} onClick={() => toggleDisabled(item)}>{item.status === 'disabled' ? <><Power size={12} /> Enable</> : <><PowerOff size={12} /> Disable</>}</button>
+                            <button className="btn small danger" onClick={() => deleteItem(item)}><Trash2 size={12} /> Delete</button>
+                          </> : null}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -361,13 +542,22 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
       {open ? (
         <>
           <button className="drawer-back" aria-label="Close" onClick={() => setOpen(null)} />
-          <div className="modal" role="dialog" aria-modal="true" aria-label={open.name}>
+          <div className="modal lib-modal" role="dialog" aria-modal="true" aria-label={open.name}>
             <div className="modal-head">
               <div><h2>{open.name}</h2><p>{categoryName(open.categoryId)}</p></div>
               <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="Close"><X size={16} /></button>
             </div>
             <div className="modal-body">
-              <div className="lib-thumb big"><img src={preview(open.svgCode)} alt={open.name} /></div>
+              <div className="lib-thumb big">
+                <ItemPicture item={open} withSample={modalSample} />
+                {kind === 'template' && hasSample(open) ? <SampleToggle on={modalSample} onChange={setModalSample} /> : null}
+                {canEdit && kind === 'template' ? (
+                  <span className="lib-rotate">
+                    <button type="button" className="lib-act" disabled={busy} onClick={() => rotate(false)} title="Turn left 90°" aria-label="Turn left 90°"><RotateCcw size={14} /></button>
+                    <button type="button" className="lib-act" disabled={busy} onClick={() => rotate(true)} title="Turn right 90°" aria-label="Turn right 90°"><RotateCw size={14} /></button>
+                  </span>
+                ) : null}
+              </div>
               {canEdit ? (
                 <>
                   <label className="lib-label">Name<input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></label>
@@ -398,7 +588,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                 <span style={{ flex: 1 }} />
                 {kind === 'template' ? (
                   <button className="btn" onClick={() => setDesigning(open)}>
-                    {Array.isArray(open.sampleLayout) && open.sampleLayout.length ? 'Edit sample' : 'Design sample'}
+                    {hasSample(open) ? 'Edit design' : 'Design sample'}
                   </button>
                 ) : null}
                 <button className="btn" onClick={() => replaceInput.current?.click()}>Replace SVG</button>
@@ -408,6 +598,18 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
           </div>
         </>
       ) : null}
+      {viewing ? (
+        <ItemViewer
+          item={viewing}
+          noun={copy.noun}
+          category={categoryName(viewing.categoryId)}
+          canEdit={canEdit}
+          paused={!!designing}
+          onEdit={() => { openItem(viewing); setViewing(null); }}
+          onDesign={() => setDesigning(viewing)}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
       {designing ? (
         <SampleDesigner
           template={designing}
@@ -416,6 +618,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
             const next = { ...designing, sampleLayout: layout.length ? layout : null };
             setDesigning(next);
             setOpen((cur) => (cur && cur.id === next.id ? next : cur));
+            setViewing((cur) => (cur && cur.id === next.id ? next : cur));
             loadItems();
           }}
         />

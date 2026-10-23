@@ -52,6 +52,6 @@ const styles = themedStyles((c) => ({
     maxWidth: 220,
   },
   pillOn: { backgroundColor: c.successFill },
-  text: { color: c.onAccent, ...Type.badge },
+  text: { color: c.onAccent, ...Type.badge, flexShrink: 1 },
   pressed: { opacity: 0.65 },
 }));

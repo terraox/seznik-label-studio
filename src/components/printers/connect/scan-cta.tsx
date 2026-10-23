@@ -84,7 +84,7 @@ const styles = themedStyles((c) => ({
     justifyContent: 'center',
     gap: 10,
   },
-  buttonText: { color: c.onAccent, fontSize: 15, fontWeight: '700' },
+  buttonText: { color: c.onAccent, fontSize: 15, fontWeight: '700', flexShrink: 1 },
   secondary: { minHeight: 40, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: c.accent, fontSize: 14, fontWeight: '700' },
   warn: { color: c.warning, fontSize: 13, lineHeight: 18 },

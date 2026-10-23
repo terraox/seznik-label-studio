@@ -169,6 +169,7 @@ const styles = themedStyles((c) => ({
     fontSize: 15,
     fontWeight: '600',
     color: c.accent,
+    flexShrink: 1,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -193,6 +194,7 @@ const styles = themedStyles((c) => ({
   rangeText: {
     fontSize: 12,
     color: c.textMuted,
+    flexShrink: 1,
   },
   sliderHit: {
     marginTop: 6,

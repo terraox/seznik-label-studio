@@ -94,7 +94,7 @@ const categoryFor = async (name: string) =>
 
 for (const file of files) {
   const { name, widthMm, heightMm } = parse(file);
-  const result = sanitizeSvg(clean(readFileSync(path.join(dir, file), 'utf8')));
+  const result = sanitizeSvg(clean(readFileSync(path.join(dir, file), 'utf8')), { trimToMainShape: true });
   if (!result.ok) {
     console.log(`SKIP  ${file}: ${result.message}`);
     continue;

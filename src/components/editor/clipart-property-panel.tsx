@@ -474,6 +474,7 @@ const styles = themedStyles((c) => ({
     lineHeight: 20,
     includeFontPadding: false,
     ...Platform.select({ android: { textAlignVertical: 'center' as const }, default: {} }),
+    flexShrink: 1,
   },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 16 },
   segmentRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
@@ -512,7 +513,7 @@ const styles = themedStyles((c) => ({
   stepperCircleActive: { borderColor: c.accent, backgroundColor: c.accent },
   stepperSymbol: { fontSize: 18, lineHeight: 20, color: c.accent, fontWeight: '500' },
   stepperSymbolActive: { color: c.onAccent },
-  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: c.accent },
+  stepperValue: { minWidth: 72, textAlign: 'center', fontSize: 14, fontWeight: '600', color: c.accent, flexShrink: 1 },
   toggleRow: {
     minHeight: 52,
     paddingHorizontal: 16,
@@ -550,8 +551,10 @@ const styles = themedStyles((c) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    alignContent: 'center',
   },
-  colorGroup: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  colorGroup: { flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap', flexShrink: 1, marginLeft: 'auto' },
   colorOuter: {
     width: 32,
     height: 32,
@@ -586,6 +589,7 @@ const styles = themedStyles((c) => ({
     fontSize: 15,
     fontWeight: '600',
     color: c.textSecondary,
+    flexShrink: 1,
   },
   sliderBlock: {
     position: 'relative',

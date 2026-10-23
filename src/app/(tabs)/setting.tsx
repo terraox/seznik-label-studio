@@ -53,7 +53,7 @@ function FontSettingIcon() {
   const styles = useStyles();
   return (
     <View style={styles.fontIconBox}>
-      <Text style={styles.fontIconText}>A</Text>
+      <Text allowFontScaling={false} style={styles.fontIconText}>A</Text>
     </View>
   );
 }
@@ -457,6 +457,7 @@ const useStyles = makeStyles((c, scheme) => ({
     fontSize: 14,
     color: c.textMuted,
     marginRight: Spacing.two,
+    flexShrink: 1,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -550,6 +551,7 @@ const useStyles = makeStyles((c, scheme) => ({
     color: c.textSecondary,
     fontVariant: ['tabular-nums'],
     letterSpacing: 0.6,
+    flexShrink: 1,
   },
   fontIconBox: {
     width: 22,

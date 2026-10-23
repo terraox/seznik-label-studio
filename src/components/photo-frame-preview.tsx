@@ -83,10 +83,10 @@ export function PhotoFramePreview({ frame, photos = [], width, style }: Props) {
   if (frame.style === 'cartoon') {
     return (
       <View style={[{ width, height }, styles.cartoon, style]}>
-        <Text style={styles.cartoonTitle}>But cute</Text>
-        <Text style={styles.cartoonDot}>✿</Text>
+        <Text allowFontScaling={false} style={styles.cartoonTitle}>But cute</Text>
+        <Text allowFontScaling={false} style={styles.cartoonDot}>✿</Text>
         {slots}
-        <Text style={styles.cartoonFooter}>Record every day of your</Text>
+        <Text allowFontScaling={false} style={styles.cartoonFooter}>Record every day of your</Text>
       </View>
     );
   }
@@ -96,13 +96,13 @@ export function PhotoFramePreview({ frame, photos = [], width, style }: Props) {
       <View style={[{ width, height }, styles.filmDark, style]}>
         <Sprockets height={height} side="left" />
         <Sprockets height={height} side="right" />
-        <Text style={styles.filmTitle}>LOVELY BARBIE</Text>
+        <Text allowFontScaling={false} style={styles.filmTitle}>LOVELY BARBIE</Text>
         <View style={styles.filmMetaRow}>
-          <Text style={styles.filmMeta}>📷 PHOTOGRAPH</Text>
-          <Text style={styles.filmMeta}>🔍</Text>
+          <Text allowFontScaling={false} style={styles.filmMeta}>📷 PHOTOGRAPH</Text>
+          <Text allowFontScaling={false} style={styles.filmMeta}>🔍</Text>
         </View>
         {slots}
-        <Text style={styles.filmScript}>Record every day of your</Text>
+        <Text allowFontScaling={false} style={styles.filmScript}>Record every day of your</Text>
       </View>
     );
   }
@@ -111,19 +111,19 @@ export function PhotoFramePreview({ frame, photos = [], width, style }: Props) {
     return (
       <View style={[{ width, height }, styles.post, style]}>
         <View style={styles.postTop}>
-          <Text style={styles.postIcon}>📷</Text>
-          <Text style={styles.postIcon}>➤</Text>
+          <Text allowFontScaling={false} style={styles.postIcon}>📷</Text>
+          <Text allowFontScaling={false} style={styles.postIcon}>➤</Text>
         </View>
         {slots}
         <View style={styles.postActions}>
-          <Text style={styles.heart}>❤</Text>
-          <Text style={styles.postIconSm}>💬</Text>
-          <Text style={styles.postIconSm}>🔖</Text>
-          <Text style={[styles.postIconSm, { marginLeft: 'auto' }]}>···</Text>
+          <Text allowFontScaling={false} style={styles.heart}>❤</Text>
+          <Text allowFontScaling={false} style={styles.postIconSm}>💬</Text>
+          <Text allowFontScaling={false} style={styles.postIconSm}>🔖</Text>
+          <Text allowFontScaling={false} style={[styles.postIconSm, { marginLeft: 'auto' }]}>···</Text>
         </View>
-        <Text style={styles.postLikes}>❤ 6988 Likes</Text>
-        <Text style={styles.postCaption}>Memorial : Nice to meet U</Text>
-        <Text style={styles.postTags}>#Fashion# #Love# #Unique art#</Text>
+        <Text allowFontScaling={false} style={styles.postLikes}>❤ 6988 Likes</Text>
+        <Text allowFontScaling={false} style={styles.postCaption}>Memorial : Nice to meet U</Text>
+        <Text allowFontScaling={false} style={styles.postTags}>#Fashion# #Love# #Unique art#</Text>
       </View>
     );
   }
@@ -133,9 +133,10 @@ export function PhotoFramePreview({ frame, photos = [], width, style }: Props) {
       <View style={[{ width, height }, styles.filmClassic, style]}>
         <Sprockets height={height} side="left" />
         <Sprockets height={height} side="right" />
-        <Text style={styles.enjoy}>
+        <Text allowFontScaling={false} style={styles.enjoy}>
           {'ENJOY YOUR DAY'.split('').map((ch, i) => (
             <Text
+              allowFontScaling={false}
               key={i}
               style={{
                 color: ['#F472B6', '#34D399', '#60A5FA', '#A78BFA', '#FB923C', '#F87171'][i % 6],
@@ -145,16 +146,16 @@ export function PhotoFramePreview({ frame, photos = [], width, style }: Props) {
           ))}
         </Text>
         <View style={styles.filmHud}>
-          <Text style={styles.filmHudText}>100  AI/01</Text>
-          <Text style={styles.filmHudText}>4 : 3</Text>
+          <Text allowFontScaling={false} style={styles.filmHudText}>100  AI/01</Text>
+          <Text allowFontScaling={false} style={styles.filmHudText}>4 : 3</Text>
         </View>
         {slots}
         <View style={styles.filmBottom}>
           <View>
-            <Text style={styles.filmNum}>150800</Text>
-            <Text style={styles.filmNum}>1000/0520</Text>
+            <Text allowFontScaling={false} style={styles.filmNum}>150800</Text>
+            <Text allowFontScaling={false} style={styles.filmNum}>1000/0520</Text>
           </View>
-          <Text style={styles.sweet}>SWEET MEMORIES</Text>
+          <Text allowFontScaling={false} style={styles.sweet}>SWEET MEMORIES</Text>
         </View>
       </View>
     );
