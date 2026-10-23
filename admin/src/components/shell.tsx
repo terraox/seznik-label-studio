@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Library,
+  Inbox,
   MessageSquare,
   Users,
   Printer,
@@ -29,6 +30,7 @@ const NAV = [
   { href: '/printers', label: 'Printers', shortLabel: 'Printers', icon: Printer },
   { href: '/shop', label: 'Shop clicks', shortLabel: 'Shop', icon: ShoppingBag },
   { href: '/templates', label: 'Templates', shortLabel: 'Templates', icon: Library },
+  { href: '/template-requests', label: 'Requests', shortLabel: 'Requests', icon: Inbox },
   { href: '/clipart', label: 'Clipart', shortLabel: 'Clipart', icon: Shapes },
   { href: '/feedback', label: 'Feedback', shortLabel: 'Feedback', icon: MessageSquare },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings },

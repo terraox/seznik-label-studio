@@ -39,6 +39,7 @@ export const PRINT_SOURCES = ['manual_size', 'template', 'excel_bulk', 'pdf', 'p
 const TRANSPORTS = ['bt_spp', 'ble', 'wifi'];
 const FEEDBACK_CATEGORIES = ['suggestion', 'bug', 'other'];
 const SHOP_CATEGORIES = ['labels', 'printers'];
+const REQUEST_SHAPES = ['rectangle', 'rounded', 'circle', 'other'];
 
 export type EventResult = {
   eventId: string;
@@ -209,6 +210,42 @@ async function applyOne(user: User, raw: Raw, eventId: string, occurredAt: Date,
       try {
         await prisma.feedback.create({
           data: { eventId, userId: user.id, rating, category, message, appVersion, platform: str(raw.platform, 20) || null, createdAt: occurredAt },
+        });
+        return ok(true);
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return ok(false);
+        throw err;
+      }
+    }
+
+    case 'template_request': {
+      const description = cleanText(str(raw.description, 500));
+      if (description.length < 3) return reject('BAD_DESCRIPTION');
+      const shape = str(raw.shape, 20) || null;
+      if (shape && !REQUEST_SHAPES.includes(shape)) return reject('BAD_SHAPE');
+      // Size is optional, but when given it must be a real label size.
+      const size = (v: unknown) => {
+        const n = num(v);
+        return Number.isFinite(n) && n >= 5 && n <= 300 ? round1(n) : null;
+      };
+      const already = await prisma.templateRequest.findUnique({ where: { eventId }, select: { id: true } });
+      if (already) return ok(false);
+      const slot = await hit(`template_request:${user.id}`, 10, 24 * 60 * 60 * 1000);
+      if (!slot.allowed) return reject('RATE_LIMITED');
+      try {
+        await prisma.templateRequest.create({
+          data: {
+            eventId,
+            userId: user.id,
+            description,
+            widthMm: size(raw.widthMm),
+            heightMm: size(raw.heightMm),
+            shape,
+            searchText: cleanText(str(raw.searchText, 120)) || null,
+            appVersion,
+            platform: str(raw.platform, 20) || null,
+            createdAt: occurredAt,
+          },
         });
         return ok(true);
       } catch (err) {
