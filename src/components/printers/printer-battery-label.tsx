@@ -37,11 +37,12 @@ export function PrinterBatteryLabel({
     const lit = bars == null ? 0 : Math.max(1, Math.min(4, Math.round(bars)));
     const fill = onDark ? C.onAccent : bars != null && bars <= 1 ? C.danger : C.success;
     // Battery shape: outlined body with a nub on the right and 4 segments inside.
-    const bodyH = Math.round(size * 0.72);
-    const bodyW = Math.round(size * 1.8);
+    const bodyH = Math.max(10, Math.round(size * 0.72));
     const gap = 2;
     // Inside: 1.5 border each side + 2 padding each side; four solid bars share the rest.
-    const seg = Math.max(3, Math.floor((bodyW - 3 - 4 - gap * 3) / 4));
+    // The body is sized from the bars so they never overflow it at small sizes.
+    const seg = Math.max(3, Math.floor((Math.round(size * 1.8) - 3 - 4 - gap * 3) / 4));
+    const bodyW = 3 + 4 + seg * 4 + gap * 3;
     return (
       <View
         style={styles.row}

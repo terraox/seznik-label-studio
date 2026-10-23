@@ -15,6 +15,7 @@ import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { PrinterSupportNotice } from '@/components/home/printer-support-notice';
 import { SampleContinueCard } from '@/components/home/sample-continue-card';
+import { SectionFlash } from '@/components/home/section-flash';
 import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -44,6 +45,14 @@ export default function HomeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const startWalkthrough = useWalkthroughStore((s) => s.start);
+
+  // "Print any file format" banner: scroll to the Print from file tiles and blink an outline round them.
+  const fromFileY = useRef(0);
+  const [fromFileFlash, setFromFileFlash] = useState(0);
+  const highlightFromFile = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: Math.max(0, HomeLayout.contentPadTop + fromFileY.current - 12), animated: true });
+    setFromFileFlash((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     setWalkthroughScroller((dy) =>
@@ -104,7 +113,7 @@ export default function HomeScreen() {
         onLayout={(e) => setViewportH(e.nativeEvent.layout.height)}
         onContentSizeChange={(_w, h) => setContentH(h)}>
         <View style={styles.inner}>
-          <FeatureBanners />
+          <FeatureBanners onHighlightFromFile={highlightFromFile} />
 
           <WalkthroughTarget id="home.newLabel">
             <HeroCard />
@@ -131,7 +140,12 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          <View style={styles.section}>
+          <View
+            style={styles.section}
+            onLayout={(e) => {
+              fromFileY.current = e.nativeEvent.layout.y;
+            }}>
+            <SectionFlash flashKey={fromFileFlash} />
             <SectionHeading>Print from file</SectionHeading>
             <WalkthroughTarget id="home.fromFile">
               <ToolGrid ids={FILE_TOOLS} columns={3} />

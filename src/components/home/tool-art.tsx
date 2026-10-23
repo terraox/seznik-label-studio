@@ -13,12 +13,12 @@ const EXCEL_GREEN = '#1E8E4F'; // theme-fixed: Excel file mark
 const PDF_RED = '#D9412B'; // theme-fixed: PDF file mark
 const SUN = '#F2A93B'; // theme-fixed: photo sun
 const TAG_TEXT = '#FFFFFF'; // theme-fixed: lines on the cyan tag
-const LOGO_CYAN = '#31C3F2'; // theme-fixed: top of the Seznik logo swoosh
-const LOGO_BLUE = '#2C7AB9'; // theme-fixed: middle of the Seznik logo swoosh
-const LOGO_NAVY = '#2F2E7E'; // theme-fixed: tail of the Seznik logo swoosh
+export const LOGO_CYAN = '#31C3F2'; // theme-fixed: top of the Seznik logo swoosh
+export const LOGO_BLUE = '#2C7AB9'; // theme-fixed: middle of the Seznik logo swoosh
+export const LOGO_NAVY = '#2F2E7E'; // theme-fixed: tail of the Seznik logo swoosh
 
 /** The swoosh from the Seznik logo (admin/public/seznik_logo.png), traced into a 28.3 × 24 box. */
-const LOGO_SWOOSH =
+export const LOGO_SWOOSH =
   'M8 0C8 0 7.9 0.6 7.8 1.2C7.7 1.8 7.4 2.7 7.3 3.5C7.2 4.3 7.1 5.1 7 5.8C6.9 6.5 6.9 7.1 6.9 7.7C6.9 8.3 6.9 8.9 7 9.6C7.1 10.3 7.1 11.1 7.3 11.9C7.5 12.6 7.8 13.4 8.2 14.2C8.6 14.9 9 15.7 9.6 16.5C10.2 17.2 11.1 18.1 11.8 18.7C12.5 19.4 13 19.8 13.9 20.3C14.8 20.8 16.1 21.4 17.1 21.8C18.2 22.2 19.2 22.4 20.3 22.7C21.5 23 22.8 23.3 24.1 23.5C25.4 23.7 28.3 24 28.3 24C28.3 24 25.5 23.9 24.1 23.8C22.6 23.8 21.2 23.8 19.7 23.6C18.1 23.4 16.2 23 14.9 22.7C13.7 22.4 13.2 22.2 12.2 21.8C11.2 21.4 9.8 20.8 8.8 20.3C7.9 19.8 7.4 19.4 6.6 18.7C5.8 18.1 4.7 17.2 4 16.5C3.3 15.7 2.8 14.9 2.4 14.2C1.9 13.4 1.6 12.5 1.3 11.9C1 11.3 0.9 10.8 0.8 10.4C0.6 9.9 0.5 9.3 0.5 9C0.4 8.6 0.3 8.5 0.2 8.2C0.2 8 0 7.4 0 7.4C0 7.4 0.3 7.8 0.6 8C0.9 8.2 1.3 8.4 1.6 8.5C1.9 8.5 2.3 8.2 2.6 8.1C2.9 7.9 3.1 7.8 3.3 7.6C3.5 7.5 3.5 7.4 3.7 7.2C3.9 6.9 4.2 6.6 4.4 6.2C4.6 5.9 4.7 5.8 5 5.3C5.3 4.9 5.8 4 6.1 3.5C6.4 3 6.6 2.5 6.9 2.1C7.1 1.7 7.3 1.4 7.5 1.1C7.7 0.7 8 0 8 0Z';
 
 type Palette = { ink: string; paper: string; soft: string; tag: string };

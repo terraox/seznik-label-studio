@@ -169,7 +169,7 @@ export function HeroCard() {
       onPress={() => router.push(HOME_TOOLS.newLabel.href as any)}
       onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
       accessibilityRole="button"
-      accessibilityLabel="New label: start with a blank label, any size. Start designing."
+      accessibilityLabel="New label: start with a blank label, any size. Create label."
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       {box.w ? (
         <HeroBackground w={box.w} h={box.h} glowX={artLeft + 110 * scale} glowY={artTop + 90 * scale} glowScale={scale} cyan={C.accent} />
@@ -191,7 +191,7 @@ export function HeroCard() {
       {/* The whole card is the button; this pill only shows what tapping does. */}
       <View style={styles.cta}>
         <Text numberOfLines={1} maxFontSizeMultiplier={HomeLayout.labelMaxFontScale} style={styles.ctaText}>
-          Start designing
+          Create label
         </Text>
       </View>
     </Pressable>
@@ -238,14 +238,14 @@ const styles = themedStyles((c, scheme) => ({
   },
   cta: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 20,
-    paddingVertical: 9,
-    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 22,
     backgroundColor: WHITE,
   },
   ctaText: {
     color: INK,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
   },
   pressed: {
