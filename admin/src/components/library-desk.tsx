@@ -468,24 +468,6 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                   <div className={item.status === 'disabled' ? 'lib-thumb dim' : 'lib-thumb'}>
                     <ItemPicture item={item} withSample={kind === 'template' && showSample} lazy />
                     {kind === 'template' && hasSample(item) && !showSample ? <span className="lib-design-badge">Has design</span> : null}
-                    <span className="lib-acts">
-                      <span role="button" tabIndex={0} className="lib-act" title="View" aria-label={`View ${item.name}`}
-                        onClick={(e) => { e.stopPropagation(); setViewing(item); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setViewing(item); } }}><Eye size={13} /></span>
-                      {canEdit && kind === 'template' ? (
-                        <span role="button" tabIndex={0} className="lib-act" title={hasSample(item) ? 'Edit design' : 'Design sample'} aria-label={`Design ${item.name}`}
-                          onClick={(e) => { e.stopPropagation(); setDesigning(item); }}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setDesigning(item); } }}><PenTool size={13} /></span>
-                      ) : null}
-                      {canEdit ? (<>
-                        <span role="button" tabIndex={0} className="lib-act" title={item.status === 'disabled' ? 'Enable' : 'Disable'} aria-label={`${item.status === 'disabled' ? 'Enable' : 'Disable'} ${item.name}`}
-                          onClick={(e) => { e.stopPropagation(); void toggleDisabled(item); }}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void toggleDisabled(item); } }}>{item.status === 'disabled' ? <Power size={13} /> : <PowerOff size={13} />}</span>
-                        <span role="button" tabIndex={0} className="lib-act del" title="Delete" aria-label={`Delete ${item.name}`}
-                          onClick={(e) => { e.stopPropagation(); void deleteItem(item); }}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void deleteItem(item); } }}><Trash2 size={13} /></span>
-                      </>) : null}
-                    </span>
                     <span className={item.status === 'published' ? 'lib-pill live' : item.status === 'disabled' ? 'lib-pill off' : 'lib-pill'}>{item.status === 'published' ? 'Published' : item.status === 'disabled' ? 'Disabled' : 'Draft'}</span>
                   </div>
                   <div className="lib-info">
@@ -494,6 +476,24 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                       {item.widthMm && item.heightMm ? <span className="lib-size-tag">{Math.round(item.widthMm * 10) / 10} × {Math.round(item.heightMm * 10) / 10} mm</span> : null}
                       <span className="lib-cat-chip">{categoryName(item.categoryId)}</span>
                     </small>
+                    <span className="lib-acts" onClick={(e) => e.stopPropagation()}>
+                      <span role="button" tabIndex={0} className="lib-act view" title="View" aria-label={`View ${item.name}`}
+                        onClick={(e) => { e.stopPropagation(); setViewing(item); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setViewing(item); } }}><Eye size={13} /></span>
+                      {canEdit && kind === 'template' ? (
+                        <span role="button" tabIndex={0} className="lib-act design" title={hasSample(item) ? 'Edit design' : 'Design sample'} aria-label={`Design ${item.name}`}
+                          onClick={(e) => { e.stopPropagation(); setDesigning(item); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setDesigning(item); } }}><PenTool size={13} /></span>
+                      ) : null}
+                      {canEdit ? (<>
+                        <span role="button" tabIndex={0} className={`lib-act ${item.status === 'disabled' ? 'enable' : 'disable'}`} title={item.status === 'disabled' ? 'Enable' : 'Disable'} aria-label={`${item.status === 'disabled' ? 'Enable' : 'Disable'} ${item.name}`}
+                          onClick={(e) => { e.stopPropagation(); void toggleDisabled(item); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void toggleDisabled(item); } }}>{item.status === 'disabled' ? <Power size={13} /> : <PowerOff size={13} />}</span>
+                        <span role="button" tabIndex={0} className="lib-act del" title="Delete" aria-label={`Delete ${item.name}`}
+                          onClick={(e) => { e.stopPropagation(); void deleteItem(item); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void deleteItem(item); } }}><Trash2 size={13} /></span>
+                      </>) : null}
+                    </span>
                   </div>
                 </button>
               ))}

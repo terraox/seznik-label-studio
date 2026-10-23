@@ -531,7 +531,8 @@ html.dark .ptag.web { color: #a5b4fc; }
 .lib-modal .modal-body { flex: 1; min-height: 0; overflow-y: auto; }
 .lib-modal .modal-foot { flex: none; border-top: 1px solid var(--line); }
 .lib-rotate { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
-.lib-rotate .lib-act { border: 0; cursor: pointer; }
+.lib-rotate .lib-act { border: 0; background: rgba(15, 23, 42, 0.8); color: #fff; cursor: pointer; }
+.lib-rotate .lib-act:hover { background: var(--brand); color: #fff; }
 .lib-rotate .lib-act:disabled { opacity: 0.5; cursor: default; }
 
 /* The EvilCharts components are written with Tailwind utilities, which this app does not ship. */
@@ -602,11 +603,18 @@ html.dark .ptag.web { color: #a5b4fc; }
 .lib-pill.off { background: rgba(239, 68, 68, 0.9); }
 .lib-thumb.dim > img, .lib-thumb.dim .sd-preview { opacity: 0.35; filter: grayscale(1); }
 .lib-cat-chip { padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); background: var(--paper-2); color: var(--text-main); font-weight: 600; }
-.lib-acts { position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
-.lib-card:hover .lib-acts, .lib-acts:focus-within { opacity: 1; }
-.lib-act { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(15, 23, 42, 0.8); color: #fff; }
-.lib-act:hover { background: var(--brand); }
-.lib-act.del:hover { background: rgba(239, 68, 68, 0.95); }
+.lib-acts { display: flex; gap: 4px; flex-shrink: 0; }
+.lib-act { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; border: 1px solid transparent; }
+.lib-act.view { background: rgba(59, 130, 246, 0.18); color: #60a5fa; border-color: rgba(59, 130, 246, 0.35); }
+.lib-act.view:hover { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+.lib-act.design { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; border-color: rgba(99, 102, 241, 0.35); }
+.lib-act.design:hover { background: #6366f1; color: #fff; border-color: #6366f1; }
+.lib-act.disable { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border-color: rgba(245, 158, 11, 0.35); }
+.lib-act.disable:hover { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+.lib-act.enable { background: rgba(16, 185, 129, 0.18); color: #34d399; border-color: rgba(16, 185, 129, 0.35); }
+.lib-act.enable:hover { background: #10b981; color: #fff; border-color: #10b981; }
+.lib-act.del { background: rgba(239, 68, 68, 0.18); color: #f87171; border-color: rgba(239, 68, 68, 0.35); }
+.lib-act.del:hover { background: #ef4444; color: #fff; border-color: #ef4444; }
 .lib-row-acts { display: flex; justify-content: flex-end; gap: 8px; }
 .lib-clip .lib-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .lib-clip .lib-thumb { aspect-ratio: 1; }
