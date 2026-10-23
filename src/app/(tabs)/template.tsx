@@ -320,10 +320,10 @@ export default function TemplateScreen() {
         (t) =>
           t.name.toLowerCase().includes(q) ||
           `${t.widthMm} x ${t.heightMm}`.includes(q) ||
-          (categoryNames.get(t.categoryId ?? '') ?? '').toLowerCase().includes(q),
+          t.categoryIds.some((id) => (categoryNames.get(id) ?? '').toLowerCase().includes(q)),
       );
     }
-    return catalogTemplates.filter((t) => t.categoryId === activeCategoryId);
+    return catalogTemplates.filter((t) => t.categoryIds.includes(activeCategoryId));
   }, [searchQuery, activeCategoryId, catalogTemplates, categoryNames]);
 
   const [choiceFor, setChoiceFor] = useState<{ template: CatalogTemplate; mode: AcrossMode } | null>(null);
@@ -370,7 +370,7 @@ export default function TemplateScreen() {
         openSeparate(template, withSample);
         return;
       }
-      const category = categoryNames.get(template.categoryId ?? '') ?? '';
+      const category = categoryNames.get(template.categoryIds[0] ?? '') ?? '';
       const isJewellery = isJewellerySheetTemplate(template);
       const singleCircle = /circle/i.test(template.name) && !/2up|two up/i.test(template.name);
       const doc = isJewellery
@@ -782,7 +782,10 @@ export default function TemplateScreen() {
               <IndustryTemplateCard
                 key={item.id}
                 item={item}
-                category={categoryNames.get(item.categoryId ?? '') ?? ''}
+                category={item.categoryIds
+                  .map((id) => categoryNames.get(id))
+                  .filter(Boolean)
+                  .join(', ')}
                 showCategory={!!searchQuery.trim()}
                 cardMaxWidth={templateCardMaxWidth}
                 onPress={handleSelectTemplate}

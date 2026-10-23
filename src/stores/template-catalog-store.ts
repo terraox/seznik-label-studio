@@ -10,8 +10,8 @@ export type CatalogCategory = { id: string; name: string };
 export type CatalogTemplate = {
   id: string;
   name: string;
-  /** Null when the admin deleted its category; it then shows only in search. */
-  categoryId: string | null;
+  /** Every category it sits in; empty when it has none, then it shows only in search. */
+  categoryIds: string[];
   widthMm: number;
   heightMm: number;
   svgCode: string;
@@ -45,16 +45,24 @@ export const useTemplateCatalogStore = create<CatalogState>()(
           if (!res.ok) return;
           const data = (await res.json()) as {
             categories: CatalogCategory[];
-            items: (Omit<CatalogTemplate, 'widthMm' | 'heightMm'> & {
+            items: (Omit<CatalogTemplate, 'widthMm' | 'heightMm' | 'categoryIds'> & {
               widthMm: number | null;
               heightMm: number | null;
+              categoryIds?: string[];
+              categoryId?: string | null;
             })[];
           };
           set({
             categories: data.categories,
             templates: data.items
               .filter((i) => i.widthMm && i.heightMm && i.svgCode)
-              .map((i) => ({ ...i, widthMm: i.widthMm as number, heightMm: i.heightMm as number })),
+              .map(({ categoryId, categoryIds, ...i }) => ({
+                ...i,
+                // Servers from before multi-category send a single categoryId.
+                categoryIds: categoryIds ?? (categoryId ? [categoryId] : []),
+                widthMm: i.widthMm as number,
+                heightMm: i.heightMm as number,
+              })),
           });
         } catch {
           // offline: keep the copy already on the phone
@@ -67,6 +75,18 @@ export const useTemplateCatalogStore = create<CatalogState>()(
       name: 'sez-template-catalog-v1',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ categories: s.categories, templates: s.templates }),
+      // v0 saved a single categoryId per template; v1 keeps a list.
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as { categories?: CatalogCategory[]; templates?: (CatalogTemplate & { categoryId?: string | null })[] };
+        if (version < 1 && state.templates) {
+          state.templates = state.templates.map(({ categoryId, ...t }) => ({
+            ...t,
+            categoryIds: t.categoryIds ?? (categoryId ? [categoryId] : []),
+          }));
+        }
+        return state as CatalogState;
+      },
     },
   ),
 );

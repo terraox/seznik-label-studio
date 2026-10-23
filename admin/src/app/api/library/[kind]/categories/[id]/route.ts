@@ -1,6 +1,6 @@
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
-import { asKind, cleanName, tables } from '@/lib/library';
+import { asKind, cleanName, itemDto, tables, withCategories } from '@/lib/library';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,13 +24,34 @@ export async function PATCH(request: Request, ctx: Ctx) {
   }
 }
 
+/** Adds an item to this category (dragged onto it in the admin); already there is fine. */
+export async function POST(request: Request, ctx: Ctx) {
+  try {
+    await requirePermission('catalog.edit');
+    const { kind, id } = await ctx.params;
+    const t = tables(asKind(kind));
+    const itemId = String(((await request.json().catch(() => ({}))) as { itemId?: string }).itemId ?? '');
+    if (!(await t.category.findUnique({ where: { id } }))) throw new HttpError(404, 'That category does not exist.');
+    if (!(await t.item.findUnique({ where: { id: itemId } }))) throw new HttpError(404, 'That item does not exist.');
+    const saved = await t.item.update({
+      where: { id: itemId },
+      data: { updatedAt: new Date(), categories: { connectOrCreate: { where: { itemId_categoryId: { itemId, categoryId: id } }, create: { categoryId: id } } } },
+      include: withCategories,
+    });
+    return json({ item: itemDto(saved) });
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function DELETE(_request: Request, ctx: Ctx) {
   try {
     await requirePermission('catalog.edit');
     const { kind, id } = await ctx.params;
     const t = tables(asKind(kind));
     if (!(await t.category.findUnique({ where: { id } }))) throw new HttpError(404, 'That category does not exist.');
-    // Its items stay: the database clears their categoryId and they show under All.
+    // Its items stay: only their links to this category go, and they still show under All.
+    await t.item.updateMany({ where: { categories: { some: { categoryId: id } } }, data: { updatedAt: new Date() } });
     await t.category.delete({ where: { id } });
     return json({ ok: true });
   } catch (error) {

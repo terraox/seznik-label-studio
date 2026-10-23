@@ -603,6 +603,19 @@ html.dark .ptag.web { color: #a5b4fc; }
 .lib-pill.off { background: rgba(239, 68, 68, 0.9); }
 .lib-thumb.dim > img, .lib-thumb.dim .sd-preview { opacity: 0.35; filter: grayscale(1); }
 .lib-cat-chip { padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); background: var(--paper-2); color: var(--text-main); font-weight: 600; }
+.lib-cat-chip.none { color: var(--muted); font-weight: 500; border-style: dashed; }
+.lib-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+/* Categories as toggle chips: an item can sit in any number of them. */
+.lib-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.lib-pick button { padding: 5px 11px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--text-main); font-size: 0.8rem; font-weight: 500; }
+.lib-pick button:hover { border-color: var(--brand); }
+.lib-pick button.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); font-weight: 700; }
+/* Dragging a card onto a category in the sidebar. */
+.lib-drag-hint { margin: 0 0 6px; color: var(--muted); font-size: 0.74rem; }
+.lib-cat.drop { border-style: dashed; border-color: var(--line); }
+.lib-cat.over { background: var(--brand-soft); border-color: var(--brand); border-style: solid; color: var(--brand); }
+.lib-card[draggable='true'], .u-row[draggable='true'] { cursor: grab; }
+.lib-card.lifted, .u-row.lifted { opacity: 0.45; }
 .lib-acts { display: flex; gap: 4px; flex-shrink: 0; }
 .lib-act { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; border: 1px solid transparent; }
 .lib-act.view { background: rgba(59, 130, 246, 0.18); color: #60a5fa; border-color: rgba(59, 130, 246, 0.35); }

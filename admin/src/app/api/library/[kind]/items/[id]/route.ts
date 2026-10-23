@@ -1,6 +1,6 @@
 import { requirePermission } from '@/lib/guard';
 import { fail, HttpError, json } from '@/lib/http';
-import { asKind, cleanName, itemDto, tables } from '@/lib/library';
+import { asKind, cleanName, itemDto, pickCategories, tables, withCategories } from '@/lib/library';
 
 import { readSvg, sizeFrom } from '@/lib/library-form';
 
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 type Ctx = { params: Promise<{ kind: string; id: string }> };
 
-/** Edits name, category, size or status, and optionally replaces the SVG (sent as a form). */
+/** Edits name, categories, size or status, and optionally replaces the SVG (sent as a form). */
 export async function PATCH(request: Request, ctx: Ctx) {
   try {
     await requirePermission('catalog.edit');
@@ -27,12 +27,11 @@ export async function PATCH(request: Request, ctx: Ctx) {
       if (!name) throw new HttpError(400, 'Give it a name.');
       data.name = name;
     }
-    if (form.has('categoryId')) {
-      // Empty means "no category", the state an item is left in when its category is deleted.
-      const wanted = String(form.get('categoryId'));
-      const category = wanted ? await t.category.findUnique({ where: { id: wanted } }) : null;
-      if (wanted && !category) throw new HttpError(400, 'Choose a category.');
-      data.categoryId = category?.id ?? null;
+    if (form.has('categoryIds')) {
+      // Replaces the whole set; an empty list leaves it under All only.
+      const ids = await pickCategories(t, form.get('categoryIds'));
+      data.categories = { deleteMany: {}, create: ids.map((categoryId) => ({ categoryId })) };
+      data.updatedAt = new Date(); // a links-only change must still reach the app's ?since sync
     }
     if (form.has('status')) data.status = ['published', 'disabled'].includes(String(form.get('status'))) ? String(form.get('status')) : 'draft';
     const clean = await readSvg(form.get('file'), kind);
@@ -46,7 +45,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
       );
       Object.assign(data, size);
     }
-    const saved = await t.item.update({ where: { id }, data });
+    const saved = await t.item.update({ where: { id }, data, include: withCategories });
     return json({ item: itemDto(saved), removed: clean?.removed ?? [] });
   } catch (error) {
     return fail(error);

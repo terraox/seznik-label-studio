@@ -14,7 +14,7 @@ import { can } from '@/lib/permissions';
 type Kind = 'template' | 'clipart';
 type Category = { id: string; name: string; items: number };
 type Item = {
-  id: string; name: string; categoryId: string | null; widthMm: number | null; heightMm: number | null;
+  id: string; name: string; categoryIds: string[]; widthMm: number | null; heightMm: number | null;
   status: 'draft' | 'published' | 'disabled'; svgCode: string; updatedAt: string; sampleLayout?: unknown;
 };
 type SaveResult = { item: Item; removed: { what: string; count: number }[]; warnings?: string[] };
@@ -89,6 +89,24 @@ function rotateSvg(svg: string, clockwise: boolean): string | null {
 }
 
 /** Full-size look at one item: the SVG on the left, everything known about it on the right. */
+/** Toggle chips for choosing any number of categories; none leaves the item under All only. */
+function CategoryPicker({ categories, value, onChange }: { categories: Category[]; value: string[]; onChange: (ids: string[]) => void }) {
+  if (!categories.length) return <p className="u-muted">Create a category first, or save it without one.</p>;
+  return (
+    <div className="lib-pick" role="group" aria-label="Categories">
+      {categories.map((c) => {
+        const on = value.includes(c.id);
+        return (
+          <button key={c.id} type="button" className={on ? 'on' : ''} aria-pressed={on}
+            onClick={() => onChange(on ? value.filter((id) => id !== c.id) : [...value, c.id])}>
+            {c.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ItemViewer({ item, noun, category, canEdit, paused, onEdit, onDesign, onClose }: {
   item: Item; noun: string; category: string; canEdit: boolean; paused: boolean; onEdit: () => void; onDesign: () => void; onClose: () => void;
 }) {
@@ -211,7 +229,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   };
   const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'disabled'>('all');
 
-  const [form, setForm] = useState({ name: '', categoryId: '', widthMm: '', heightMm: '', status: 'published' });
+  const [form, setForm] = useState({ name: '', categoryIds: [] as string[], widthMm: '', heightMm: '', status: 'published' });
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState('');
   const [fileSize, setFileSize] = useState<SvgSize | null>(null);
@@ -219,7 +237,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   const [open, setOpen] = useState<Item | null>(null);
   const [viewing, setViewing] = useState<Item | null>(null);
   const [designing, setDesigning] = useState<Item | null>(null);
-  const [edit, setEdit] = useState({ name: '', categoryId: '', widthMm: '', heightMm: '', status: 'published' });
+  const [edit, setEdit] = useState({ name: '', categoryIds: [] as string[], widthMm: '', heightMm: '', status: 'published' });
 
   const loadCategories = useCallback(() => {
     api<{ categories: Category[]; all: number }>(`${base}/categories`).then((r) => { setCategories(r.categories); setAllCount(r.all); }).catch((e: Error) => toast(e.message, 'bad'));
@@ -271,14 +289,14 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   }
 
   async function deleteCategory(c: Category) {
-    const what = c.items === 1 ? `Its 1 ${copy.noun} stays` : `Its ${c.items} ${copy.title.toLowerCase()} stay`;
+    const what = c.items === 1 ? `Its 1 ${copy.noun} is kept` : `Its ${c.items} ${copy.title.toLowerCase()} are kept`;
     const ask = c.items > 0
-      ? `Delete the category “${c.name}”? ${what} under All ${copy.title.toLowerCase()}, without a category.`
+      ? `Delete the category “${c.name}”? ${what}, under All ${copy.title.toLowerCase()} and any other category they are in.`
       : `Delete the category “${c.name}”?`;
     if (!window.confirm(ask)) return;
     // Show the result straight away: the category goes, its items lose the category; the reload confirms it.
     setCategories((cur) => cur.filter((x) => x.id !== c.id));
-    setItems((cur) => cur.map((i) => (i.categoryId === c.id ? { ...i, categoryId: null } : i)));
+    setItems((cur) => cur.map((i) => (i.categoryIds.includes(c.id) ? { ...i, categoryIds: i.categoryIds.filter((x) => x !== c.id) } : i)));
     if (categoryId === c.id) setCategoryId('');
     try {
       await api(`${base}/categories/${c.id}`, { method: 'DELETE' });
@@ -290,6 +308,35 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
     loadItems();
   }
 
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropOn, setDropOn] = useState<string | null>(null);
+
+  /** A card dropped on a category joins it; the categories it is already in stay. */
+  async function addToCategory(c: Category, itemId: string) {
+    setDragging(null); setDropOn(null);
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    if (item.categoryIds.includes(c.id)) return toast(`“${item.name}” is already in ${c.name}`);
+    setItems((cur) => cur.map((i) => (i.id === itemId ? { ...i, categoryIds: [...i.categoryIds, c.id] } : i)));
+    setCategories((cur) => cur.map((x) => (x.id === c.id ? { ...x, items: x.items + 1 } : x)));
+    try {
+      const saved = await api<{ item: Item }>(`${base}/categories/${c.id}`, { method: 'POST', body: JSON.stringify({ itemId }) });
+      setOpen((cur) => (cur?.id === itemId ? saved.item : cur));
+      if (open?.id === itemId) setEdit((cur) => ({ ...cur, categoryIds: saved.item.categoryIds }));
+      toast(`Added “${item.name}” to ${c.name}`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not add it', 'bad');
+    }
+    loadCategories();
+    loadItems();
+  }
+
+  const dragProps = (item: Item) => (canEdit ? {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.effectAllowed = 'copy'; setDragging(item.id); },
+    onDragEnd: () => { setDragging(null); setDropOn(null); },
+  } : {});
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!file) return toast('Choose an SVG file first', 'bad');
@@ -298,7 +345,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
       const body = new FormData();
       body.set('file', file);
       body.set('name', form.name);
-      body.set('categoryId', form.categoryId);
+      body.set('categoryIds', JSON.stringify(form.categoryIds));
       body.set('status', form.status);
       if (form.widthMm) body.set('widthMm', form.widthMm);
       if (form.heightMm) body.set('heightMm', form.heightMm);
@@ -316,7 +363,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
 
   function openItem(item: Item) {
     setOpen(item);
-    setEdit({ name: item.name, categoryId: item.categoryId ?? '', widthMm: item.widthMm?.toString() ?? '', heightMm: item.heightMm?.toString() ?? '', status: item.status });
+    setEdit({ name: item.name, categoryIds: item.categoryIds, widthMm: item.widthMm?.toString() ?? '', heightMm: item.heightMm?.toString() ?? '', status: item.status });
   }
 
   async function saveItem(replacement?: File, fields = edit, done = replacement ? 'Picture replaced' : 'Saved') {
@@ -324,7 +371,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
     setBusy(true);
     try {
       const body = new FormData();
-      Object.entries(fields).forEach(([k, v]) => body.set(k, v));
+      Object.entries(fields).forEach(([k, v]) => body.set(k, Array.isArray(v) ? JSON.stringify(v) : v));
       if (replacement) body.set('file', replacement);
       const saved = await send(`${base}/items/${open.id}`, 'PATCH', body);
       toast(done);
@@ -371,7 +418,14 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
   }
 
   const shown = items.filter((i) => statusFilter === 'all' || i.status === statusFilter);
-  const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? 'No category';
+  const categoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? '';
+  const categoryNames = (ids: string[]) => ids.map(categoryName).filter(Boolean);
+  const chips = (ids: string[]) => {
+    const names = categoryNames(ids);
+    return names.length
+      ? names.map((n) => <span key={n} className="lib-cat-chip">{n}</span>)
+      : <span className="lib-cat-chip none">No category</span>;
+  };
 
   return (
     <>
@@ -390,9 +444,15 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
           <button className={categoryId === '' ? 'lib-cat on' : 'lib-cat'} onClick={() => setCategoryId('')}>
             <span>All {copy.title.toLowerCase()}</span><small>{allCount}</small>
           </button>
+          {canEdit && categories.length ? <p className="lib-drag-hint">{dragging ? 'Drop on a category to add it there' : `Drag a ${copy.noun} onto a category to add it`}</p> : null}
           {categories.map((c) => (
             <div key={c.id} className="lib-cat-row">
-              <button className={categoryId === c.id ? 'lib-cat on' : 'lib-cat'} onClick={() => setCategoryId(c.id)}>
+              <button
+                className={`lib-cat${categoryId === c.id ? ' on' : ''}${dragging ? ' drop' : ''}${dropOn === c.id ? ' over' : ''}`}
+                onClick={() => setCategoryId(c.id)}
+                onDragOver={(e) => { if (!dragging) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (dropOn !== c.id) setDropOn(c.id); }}
+                onDragLeave={() => setDropOn((cur) => (cur === c.id ? null : cur))}
+                onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) void addToCategory(c, id); }}>
                 <span>{c.name}</span><small>{c.items}</small>
               </button>
               {canEdit ? (
@@ -423,12 +483,9 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                 <input ref={fileInput} type="file" accept=".svg,image/svg+xml" hidden onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
                 <div className="lib-fields">
                   <label>Name<input value={form.name} maxLength={80} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
-                  <label>Category
-                    <select value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })} required>
-                      <option value="">{categories.length ? 'Choose a category' : 'Create a category first'}</option>
-                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </label>
+                  <div className="lib-label">Categories <small className="u-muted">(pick any number)</small>
+                    <CategoryPicker categories={categories} value={form.categoryIds} onChange={(categoryIds) => setForm({ ...form, categoryIds })} />
+                  </div>
                   <div className="lib-size">
                     <label>Width (mm)<input inputMode="decimal" value={form.widthMm} onChange={(e) => setForm({ ...form, widthMm: e.target.value })} placeholder={fileSize ? `${mm(fileSize.widthMm)} from the file` : kind === 'template' ? 'From the file' : 'Optional'} /></label>
                     <label>Height (mm)<input inputMode="decimal" value={form.heightMm} onChange={(e) => setForm({ ...form, heightMm: e.target.value })} placeholder={fileSize ? `${mm(fileSize.heightMm)} from the file` : kind === 'template' ? 'From the file' : 'Optional'} /></label>
@@ -445,7 +502,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                   </div>
                 </div>
               </div>
-              <div className="form-actions"><button className="btn primary" type="submit" disabled={busy || !file || !form.categoryId}>{busy ? 'Saving…' : `Save ${copy.noun}`}</button></div>
+              <div className="form-actions"><button className="btn primary" type="submit" disabled={busy || !file}>{busy ? 'Saving…' : `Save ${copy.noun}`}</button></div>
             </form>
           ) : null}
 
@@ -476,7 +533,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
             </div>
             {layout === 'tiles' ? <div className="lib-grid">
               {shown.map((item) => (
-                <button key={item.id} type="button" className="lib-card" onClick={() => openItem(item)}>
+                <button key={item.id} type="button" className={dragging === item.id ? 'lib-card lifted' : 'lib-card'} onClick={() => openItem(item)} {...dragProps(item)}>
                   <div className={item.status === 'disabled' ? 'lib-thumb dim' : 'lib-thumb'}>
                     <ItemPicture item={item} withSample={kind === 'template' && showSample} lazy />
                     {kind === 'template' && hasSample(item) && !showSample ? <span className="lib-design-badge">Has design</span> : null}
@@ -486,7 +543,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
                     <b title={item.name}>{item.name}</b>
                     <small>
                       {item.widthMm && item.heightMm ? <span className="lib-size-tag">{Math.round(item.widthMm * 10) / 10} × {Math.round(item.heightMm * 10) / 10} mm</span> : null}
-                      <span className="lib-cat-chip">{categoryName(item.categoryId)}</span>
+                      {chips(item.categoryIds)}
                     </small>
                     <span className="lib-acts" onClick={(e) => e.stopPropagation()}>
                       <span role="button" tabIndex={0} className="lib-act view" title="View" aria-label={`View ${item.name}`}
@@ -512,17 +569,17 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
             </div> : (
               <div className="u-scroll lib-list">
                 <table className="table u-table" style={{ minWidth: 0 }}>
-                  <thead><tr><th>Template</th><th>Category</th><th>Size</th><th>Sample</th><th>Status</th><th>Updated</th><th className="num" /></tr></thead>
+                  <thead><tr><th>Template</th><th>Categories</th><th>Size</th><th>Sample</th><th>Status</th><th>Updated</th><th className="num" /></tr></thead>
                   <tbody>
                     {shown.map((item) => (
-                      <tr key={item.id} className="u-row" onClick={() => openItem(item)}>
+                      <tr key={item.id} className={dragging === item.id ? 'u-row lifted' : 'u-row'} onClick={() => openItem(item)} {...dragProps(item)}>
                         <td>
                           <div className="lib-row-name">
                             <span className="lib-mini"><ItemPicture item={item} withSample={kind === 'template' && showSample} lazy /></span>
                             <b>{item.name}</b>
                           </div>
                         </td>
-                        <td><span className="lib-cat-chip">{categoryName(item.categoryId)}</span></td>
+                        <td><span className="lib-chips">{chips(item.categoryIds)}</span></td>
                         <td className="u-mono">{item.widthMm && item.heightMm ? `${Math.round(item.widthMm * 10) / 10} × ${Math.round(item.heightMm * 10) / 10} mm` : '—'}</td>
                         <td>{Array.isArray(item.sampleLayout) && item.sampleLayout.length ? <span className="lib-has-sample">Sample</span> : <span className="u-muted">—</span>}</td>
                         <td><span className={item.status === 'published' ? 'badge shipped' : item.status === 'disabled' ? 'badge rejected' : 'badge draft'}>{item.status}</span></td>
@@ -556,7 +613,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
           <button className="drawer-back" aria-label="Close" onClick={() => setOpen(null)} />
           <div className="modal lib-modal" role="dialog" aria-modal="true" aria-label={open.name}>
             <div className="modal-head">
-              <div><h2>{open.name}</h2><p>{categoryName(open.categoryId)}</p></div>
+              <div><h2>{open.name}</h2><p>{categoryNames(open.categoryIds).join(', ') || 'No category'}</p></div>
               <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="Close"><X size={16} /></button>
             </div>
             <div className="modal-body">
@@ -573,12 +630,9 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
               {canEdit ? (
                 <>
                   <label className="lib-label">Name<input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></label>
-                  <label className="lib-label">Category
-                    <select value={edit.categoryId} onChange={(e) => setEdit({ ...edit, categoryId: e.target.value })}>
-                      {edit.categoryId ? null : <option value="">No category</option>}
-                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </label>
+                  <div className="lib-label">Categories
+                    <CategoryPicker categories={categories} value={edit.categoryIds} onChange={(categoryIds) => setEdit({ ...edit, categoryIds })} />
+                  </div>
                   <div className="lib-size">
                     <label className="lib-label">Width (mm)<input inputMode="decimal" value={edit.widthMm} onChange={(e) => setEdit({ ...edit, widthMm: e.target.value })} /></label>
                     <label className="lib-label">Height (mm)<input inputMode="decimal" value={edit.heightMm} onChange={(e) => setEdit({ ...edit, heightMm: e.target.value })} /></label>
@@ -615,7 +669,7 @@ export function LibraryDesk({ kind }: { kind: Kind }) {
         <ItemViewer
           item={viewing}
           noun={copy.noun}
-          category={categoryName(viewing.categoryId)}
+          category={categoryNames(viewing.categoryIds).join(', ')}
           canEdit={canEdit}
           paused={!!designing}
           onEdit={() => { openItem(viewing); setViewing(null); }}

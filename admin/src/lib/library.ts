@@ -17,6 +17,7 @@ type Delegate = {
   findUnique(args?: any): Promise<any | null>;
   create(args: any): Promise<any>;
   update(args: any): Promise<any>;
+  updateMany(args: any): Promise<any>;
   delete(args: any): Promise<any>;
   count(args?: any): Promise<number>;
   aggregate(args: any): Promise<any>;
@@ -28,13 +29,28 @@ export function tables(kind: LibraryKind): { category: Delegate; item: Delegate;
     : { category: prisma.clipartCategory as unknown as Delegate, item: prisma.clipart as unknown as Delegate, itemRelation: 'clipart' };
 }
 
+/** Load an item with this so itemDto can list its categories. */
+export const withCategories = { categories: { select: { categoryId: true } } } as const;
+
+/** Keeps only ids of categories that exist, for a form field holding a JSON list of category ids. */
+export async function pickCategories(t: ReturnType<typeof tables>, raw: FormDataEntryValue | null): Promise<string[]> {
+  let wanted: unknown;
+  try { wanted = JSON.parse(String(raw ?? '[]')); } catch { throw new HttpError(400, 'Categories were not sent as a list.'); }
+  if (!Array.isArray(wanted)) throw new HttpError(400, 'Categories were not sent as a list.');
+  const ids = [...new Set(wanted.map(String))];
+  if (!ids.length) return [];
+  const found = await t.category.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  if (found.length !== ids.length) throw new HttpError(400, 'One of those categories no longer exists. Refresh and try again.');
+  return ids;
+}
+
 export const cleanName = (v: unknown) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
 
 export function itemDto(item: any) {
   return {
     id: item.id as string,
     name: item.name as string,
-    categoryId: (item.categoryId ?? null) as string | null,
+    categoryIds: ((item.categories ?? []) as { categoryId: string }[]).map((l) => l.categoryId),
     widthMm: (item.widthMm ?? null) as number | null,
     heightMm: (item.heightMm ?? null) as number | null,
     viewBox: (item.viewBox ?? null) as string | null,

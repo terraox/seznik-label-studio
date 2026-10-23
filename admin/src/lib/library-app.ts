@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { authenticateApp } from './app-auth';
 import { withCors } from './cors';
-import { tables, type LibraryKind } from './library';
+import { tables, withCategories, type LibraryKind } from './library';
 
 /**
  * What the app downloads: the categories plus every published item. `?since=<ISO time>` returns only
@@ -17,7 +17,7 @@ export async function appLibrary(request: Request, kind: LibraryKind) {
   const where = { status: 'published', ...(since && !Number.isNaN(since.getTime()) ? { updatedAt: { gt: since } } : {}) };
   const [categories, items, ids] = await Promise.all([
     t.category.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], select: { id: true, name: true } }),
-    t.item.findMany({ where, orderBy: { updatedAt: 'asc' } }),
+    t.item.findMany({ where, include: withCategories, orderBy: { updatedAt: 'asc' } }),
     t.item.findMany({ where: { status: 'published' }, select: { id: true } }),
   ]);
   const res = NextResponse.json({
@@ -25,7 +25,9 @@ export async function appLibrary(request: Request, kind: LibraryKind) {
     categories,
     ids: ids.map((i) => i.id),
     items: items.map((i) => ({
-      id: i.id, name: i.name, categoryId: i.categoryId, widthMm: i.widthMm ?? null, heightMm: i.heightMm ?? null,
+      // categoryId (the first one, or null) is kept for app builds from before multi-category.
+      id: i.id, name: i.name, categoryIds: i.categories.map((l: { categoryId: string }) => l.categoryId),
+      categoryId: i.categories[0]?.categoryId ?? null, widthMm: i.widthMm ?? null, heightMm: i.heightMm ?? null,
       viewBox: i.viewBox ?? null, sampleLayout: i.sampleLayout ?? null, contentHash: i.contentHash, updatedAt: (i.updatedAt as Date).toISOString(), svgCode: i.svgCode,
     })),
   });

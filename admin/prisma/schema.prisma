@@ -272,12 +272,11 @@ model TemplateCategory {
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
-  templates Template[]
+  templates TemplateCategoryLink[]
 }
 
 model Template {
   id           String   @id @default(cuid())
-  categoryId   String?
   name         String
   /// The sanitised SVG code itself.
   svgCode      String
@@ -293,11 +292,23 @@ model Template {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  /// Null once its category is deleted; it then shows only under All.
-  category TemplateCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /// A template can sit in several categories, or none (then it shows only under All).
+  categories TemplateCategoryLink[]
 
-  @@index([categoryId])
   @@index([status, updatedAt])
+}
+
+/// Which categories a template sits in. Deleting either side removes the link, never the other side.
+model TemplateCategoryLink {
+  itemId     String
+  categoryId String
+  createdAt  DateTime @default(now())
+
+  item     Template         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  category TemplateCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, categoryId])
+  @@index([categoryId])
 }
 
 /// Clipart the admin adds on top of the clipart that ships inside the app.
@@ -307,12 +318,11 @@ model ClipartCategory {
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
-  clipart Clipart[]
+  clipart ClipartCategoryLink[]
 }
 
 model Clipart {
   id          String   @id @default(cuid())
-  categoryId  String?
   name        String
   /// The sanitised SVG code itself.
   svgCode     String
@@ -325,11 +335,23 @@ model Clipart {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  /// Null once its category is deleted; it then shows only under All.
-  category ClipartCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /// Clipart can sit in several categories, or none (then it shows only under All).
+  categories ClipartCategoryLink[]
 
-  @@index([categoryId])
   @@index([status, updatedAt])
+}
+
+/// Which categories a clipart sits in. Deleting either side removes the link, never the other side.
+model ClipartCategoryLink {
+  itemId     String
+  categoryId String
+  createdAt  DateTime @default(now())
+
+  item     Clipart         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  category ClipartCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, categoryId])
+  @@index([categoryId])
 }
 
 // ───────────────────────── Platform ─────────────────────────

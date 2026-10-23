@@ -132,7 +132,6 @@ Table TemplateCategory {
 
 Table Template {
   id varchar [pk]
-  categoryId varchar [note: 'Null once its category is deleted']
   name varchar [not null]
   svgCode text [not null, note: 'The sanitised SVG code']
   widthMm float [not null]
@@ -156,7 +155,6 @@ Table ClipartCategory {
 
 Table Clipart {
   id varchar [pk]
-  categoryId varchar [note: 'Null once its category is deleted']
   name varchar [not null]
   svgCode text [not null, note: 'The sanitised SVG code']
   widthMm float
@@ -169,8 +167,32 @@ Table Clipart {
   Note: '[READY] Clipart added by the admin, on top of the clipart bundled in the app.'
 }
 
-Ref: Template.categoryId > TemplateCategory.id [delete: set null]
-Ref: Clipart.categoryId > ClipartCategory.id [delete: set null]
+Table TemplateCategoryLink {
+  itemId varchar [not null]
+  categoryId varchar [not null]
+  createdAt timestamp [not null]
+  indexes {
+    (itemId, categoryId) [pk]
+    categoryId
+  }
+  Note: '[READY] Which categories a template sits in; several or none. Deleting either side drops only the link.'
+}
+
+Table ClipartCategoryLink {
+  itemId varchar [not null]
+  categoryId varchar [not null]
+  createdAt timestamp [not null]
+  indexes {
+    (itemId, categoryId) [pk]
+    categoryId
+  }
+  Note: '[READY] Which categories a clipart sits in; several or none. Deleting either side drops only the link.'
+}
+
+Ref: TemplateCategoryLink.itemId > Template.id [delete: cascade]
+Ref: TemplateCategoryLink.categoryId > TemplateCategory.id [delete: cascade]
+Ref: ClipartCategoryLink.itemId > Clipart.id [delete: cascade]
+Ref: ClipartCategoryLink.categoryId > ClipartCategory.id [delete: cascade]
 
 Table PrinterConnection {
   id varchar [pk]
