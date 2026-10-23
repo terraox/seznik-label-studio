@@ -1,4 +1,4 @@
-import { goBack } from '@/lib/go-back';
+import { goBack as leaveScreen } from '@/lib/go-back';
 import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -20,6 +21,7 @@ import { PdfCropTool, type PdfCropScreenNotice } from '@/components/pdf-editor/p
 import { PdfOutputSizeRow } from '@/components/pdf-editor/pdf-output-size-row';
 import { PdfPageNav } from '@/components/pdf-editor/pdf-page-nav';
 import { PdfPageViewer } from '@/components/pdf-editor/pdf-page-viewer';
+import { PdfPickOptions } from '@/components/pdf-editor/pdf-print-options';
 import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor/pdf-print-sheet';
 import { PrintPagesStrip, type PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
 import { PdfRotateTool } from '@/components/pdf-editor/pdf-rotate-tool';
@@ -344,9 +346,10 @@ export default function PdfEditorScreen() {
     }
     if (step === 'size') {
       setStep('pick');
+      resetSession();
       return;
     }
-    goBack();
+    leaveScreen();
   };
 
   const metaPageSize = session?.pageSizesPt[session.currentPageIndex] ?? { w: 612, h: 792 };
@@ -682,13 +685,19 @@ export default function PdfEditorScreen() {
       ) : null}
 
       {step === 'pick' || !session ? (
-        <View style={styles.empty}>
-          {loading ? <ActivityIndicator color={C.accent} /> : null}
-          <Text style={styles.emptyTitle}>Import a PDF</Text>
-          <Text style={styles.emptyBody}>
-            Choose a file from this device or Google Drive. You will set the label size next.
-          </Text>
-        </View>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.pickContent, { paddingBottom: Math.max(insets.bottom, 12) + 16 }]}
+          showsVerticalScrollIndicator={false}>
+          {loading ? <ActivityIndicator color={C.accent} style={styles.pickSpinner} /> : null}
+          <WalkthroughTarget id="pdf.import" style={styles.pickTarget}>
+            <PdfPickOptions
+              disabled={loading}
+              onShippingLabels={() => router.replace('/ecommerce-label' as any)}
+              onPrintPdf={() => void importPdf()}
+            />
+          </WalkthroughTarget>
+        </ScrollView>
       ) : step === 'size' ? (
         <FormScrollView
           ref={scrollRef}
@@ -882,9 +891,9 @@ export default function PdfEditorScreen() {
         </FormScrollView>
       )}
 
-      {(
+      {session && (step === 'print' || step === 'size' || step === 'edit') ? (
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 4) + 2 }]}>
-        {step === 'print' && session ? (
+        {step === 'print' ? (
           <View style={styles.printActions}>
             <WalkthroughTarget id="pdf.export" style={styles.exportSlot}>
             <Pressable
@@ -923,7 +932,7 @@ export default function PdfEditorScreen() {
             </Pressable>
             </WalkthroughTarget>
           </View>
-        ) : (step === 'size' || step === 'edit') && session ? (
+        ) : (
           <View style={styles.printActions}>
             <Pressable
               onPress={goBack}
@@ -938,24 +947,9 @@ export default function PdfEditorScreen() {
               </Pressable>
             </WalkthroughTarget>
           </View>
-        ) : (
-          <WalkthroughTarget id="pdf.import">
-          <Pressable
-            onPress={() => {
-              void importPdf();
-            }}
-            disabled={loading}
-            style={({ pressed }) => [styles.primaryBtn, loading && styles.btnOff, pressed && styles.pressed]}>
-            {loading ? (
-              <ActivityIndicator color={C.onAccent} size="small" />
-            ) : (
-              <Text style={styles.primaryText}>Import PDF</Text>
-            )}
-          </Pressable>
-          </WalkthroughTarget>
         )}
       </View>
-      )}
+      ) : null}
       {documentSourceSheet}
       <WalkthroughOverlay
         tour="pdf"
@@ -1048,9 +1042,17 @@ const styles = themedStyles((c, scheme) => ({
   printSettings: { paddingHorizontal: 12, paddingTop: 12 },
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24, gap: 12 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: c.text },
-  emptyBody: { fontSize: 14, color: c.textMuted, textAlign: 'center', lineHeight: 20 },
+  empty: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 0,
+    paddingVertical: 32,
+  },
+  pickContent: { paddingTop: 20 },
+  pickTarget: { width: '100%', alignSelf: 'center' },
+  pickSpinner: { marginBottom: 16 },
   fileRow: {
     flexDirection: 'row',
     alignItems: 'center',

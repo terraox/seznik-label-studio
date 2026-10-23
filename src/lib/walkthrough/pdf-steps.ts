@@ -16,8 +16,8 @@ export const PDF_WALKTHROUGHS: Record<PdfTourScreen, readonly WalkthroughStep[]>
     {
       id: 'import',
       target: 'pdf.import',
-      title: 'Choose your PDF',
-      body: 'Tap Import PDF to pick a file from this phone or Google Drive. Next you will set the label size.',
+      title: 'Choose what to print',
+      body: 'Shipping labels crop Amazon, Flipkart or Meesho PDFs for you. Print PDF opens any other file so you can set the size and crop yourself.',
     },
   ],
   size: [
