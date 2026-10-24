@@ -36,24 +36,19 @@ export function buildTestPrintDocument(): { doc: LabelDocument; lines: string[] 
   return { doc, lines };
 }
 
-/** Slowest speed the bridge accepts: a slower pass heats longer and prints darker. */
-export function slowestSpeedForBridge(
+/** Darkness and speed a normal Auto print uses. Undefined lets the pipeline pick that default. */
+export function testPrintQuality(
   activeTransport: Parameters<typeof resolveQualityBridge>[0]['activeTransport'],
-): number | undefined {
-  const state = usePrinterStore.getState();
-  const bridge = resolveQualityBridge({ activeTransport, storeTransport: state.transport, sdkId: state.sdkId });
-  const cap = qualityCapsFor(bridge).speed;
-  return cap === 'legacy' ? undefined : cap.min;
-}
-
-/** Highest darkness the connected printer's bridge accepts; undefined when it has no scale. */
-export function maxDarknessForBridge(activeTransport: Parameters<typeof resolveQualityBridge>[0]['activeTransport']): number | undefined {
+): { darkness: number | undefined; speed: number | undefined } {
   const state = usePrinterStore.getState();
   const bridge = resolveQualityBridge({
     activeTransport,
     storeTransport: state.transport,
     sdkId: state.sdkId,
   });
-  const cap = qualityCapsFor(bridge).density;
-  return cap === 'legacy' ? undefined : cap.max;
+  const caps = qualityCapsFor(bridge);
+  return {
+    darkness: caps.density === 'legacy' ? undefined : caps.density.default,
+    speed: caps.speed === 'legacy' ? undefined : caps.speed.default,
+  };
 }

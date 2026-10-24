@@ -38,7 +38,7 @@ import {
   shouldUseTsplCommandSet,
   getAmbiguousModelCandidates,
 } from '@/lib/printer/printer-heuristics';
-import { buildTestPrintDocument, maxDarknessForBridge, slowestSpeedForBridge } from '@/lib/printer/test-print';
+import { buildTestPrintDocument, testPrintQuality } from '@/lib/printer/test-print';
 import {
   printLabelDocumentMainPipeline,
 } from '@/lib/printer/main-pipeline-print';
@@ -3747,15 +3747,14 @@ class PrinterManager {
   }
 
   /**
-   * Test print through the connected printer's own bridge (the main print pipeline), at that
-   * bridge's maximum darkness.
+   * Test print through the connected printer's own bridge, at that bridge's normal
+   * Auto darkness and speed. Maximum heat made the TD-404 label come out too dark.
    */
   async printTestLabel(): Promise<void> {
     if (!this.isConnected) throw new Error('No printer connected.');
     const { doc, lines } = buildTestPrintDocument();
-    const darkness = maxDarknessForBridge(this.transport);
-    console.info(`[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=${darkness ?? 'auto'}: ${lines.join(' | ')}`);
-    const speed = slowestSpeedForBridge(this.transport);
+    const { darkness, speed } = testPrintQuality(this.transport);
+    console.info(`[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=${darkness ?? 'auto'} speed=${speed ?? 'auto'}: ${lines.join(' | ')}`);
     await printLabelDocumentMainPipeline(doc, { gapMm: 3, darkness, speed });
   }
 
