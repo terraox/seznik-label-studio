@@ -28,7 +28,6 @@ import { createIndustryTemplateDocument } from '@/constants/template-documents';
 import { JEWELRY_DIECUT_PREVIEW_SHEET } from '@/constants/jewelry-diecut';
 import { useTemplateCatalogStore, type CatalogTemplate } from '@/stores/template-catalog-store';
 import { sampleToElements } from '@/lib/template-sample-elements';
-import { starterSample } from '@/lib/template-sample-starter';
 import type { SampleElement } from '@/lib/template-sample';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLabelStore } from '@/stores/label-store';
@@ -121,8 +120,9 @@ function isJewellerySheetTemplate(t: CatalogTemplate): boolean {
 }
 
 function templateSampleLayout(t: CatalogTemplate): SampleElement[] {
+  // Only a design the admin saved with the template. No made-up starter content.
   if (Array.isArray(t.sampleLayout) && t.sampleLayout.length > 0) return t.sampleLayout as SampleElement[];
-  return starterSample(t.name, t.widthMm, t.heightMm) ?? [];
+  return [];
 }
 
 /** The template's own SVG with its sample content on top, drawn by the same renderer as the editor. */
