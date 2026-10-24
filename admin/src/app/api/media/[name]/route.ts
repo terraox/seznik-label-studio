@@ -14,7 +14,7 @@ export async function GET(_request: Request, ctx: Ctx) {
   if (!mime) return new Response('Not found', { status: 404 });
   try {
     const bytes = await fs.readFile(path.join(UPLOADS_DIR, name));
-    return new Response(bytes, {
+    return new Response(new Uint8Array(bytes), {
       headers: {
         'Content-Type': mime,
         'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",

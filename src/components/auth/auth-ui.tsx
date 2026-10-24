@@ -255,6 +255,8 @@ export function DevBypassButton({
   label?: string;
   onPress: () => void;
 }) {
+  // Release builds never offer a login that skips the server.
+  if (!__DEV__) return null;
   return (
     <Pressable
       onPress={onPress}

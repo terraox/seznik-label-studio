@@ -1,0 +1,20 @@
+[Unit]
+Description=sez-print admin and API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sez
+WorkingDirectory=/opt/sez-print/current/admin
+EnvironmentFile=/etc/sez-print/admin.env
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=3
+# One process only: the desk keeps state in memory and on disk.
+MemoryMax=2G
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/sez-print
+
+[Install]
+WantedBy=multi-user.target
