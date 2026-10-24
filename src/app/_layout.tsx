@@ -19,7 +19,7 @@ import { useIncomingSharedFile } from '@/lib/file-import/use-incoming-shared-fil
 import { startInstalledFontHydration } from '@/lib/fonts/runtime';
 import { hydrateUserClipartSvgs } from '@/lib/clipart/user-storage';
 import { migrateLegacyUserFiles } from '@/lib/user-files/migrate';
-import { flushNow, persistFeatureCounts } from '@/lib/telemetry/events';
+import { flushNow, flushOnBackground } from '@/lib/telemetry/events';
 import { useAuthStore } from '@/stores/auth-store';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
 import { usePrinterStore } from '@/stores/printer-store';
@@ -98,7 +98,7 @@ function AppRoot() {
     void flushNow();
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') void flushNow();
-      else void persistFeatureCounts();
+      else void flushOnBackground();
     });
     return () => sub.remove();
   }, []);

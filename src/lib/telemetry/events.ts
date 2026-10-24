@@ -116,6 +116,16 @@ export async function flushNow() {
   return flushEvents();
 }
 
+/**
+ * The app is going to the background: send the counted taps now. Waiting for the 10 minute timer loses
+ * the send when the phone suspends the app, so a short visit would never be counted.
+ */
+export async function flushOnBackground() {
+  await persistFeatureCounts();
+  await sealFeatureCounts(true).catch(() => undefined);
+  await flushEvents().catch(() => undefined);
+}
+
 /** Sends queued events. Stops quietly when signed out, offline or blocked; the queue is kept. */
 export async function flushEvents(): Promise<void> {
   if (flushing) return;
