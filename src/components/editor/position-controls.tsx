@@ -164,11 +164,13 @@ export function PositionControls({
     </Pressable>
   );
 
-  const layerBtn = (icon: ReactNode, onPress?: () => void) => (
+  const layerBtn = (icon: ReactNode, onPress: (() => void) | undefined, label: string) => (
     <Pressable
       disabled={!onPress}
       onPress={onPress}
       hitSlop={PRESS_HIT_SLOP}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => [styles.layerBtn, !onPress && styles.layerBtnDisabled, pressed && onPress && styles.pressed]}>
       {icon}
     </Pressable>
@@ -214,10 +216,10 @@ export function PositionControls({
       </View>
 
       <View style={styles.layerRow}>
-        {layerBtn(<SendToBackIcon />, layerActions?.onSendToBack)}
-        {layerBtn(<BringToFrontIcon />, layerActions?.onBringToFront)}
-        {layerBtn(<SendBackwardIcon />, layerActions?.onSendBackward)}
-        {layerBtn(<BringForwardIcon />, layerActions?.onBringForward)}
+        {layerBtn(<SendToBackIcon />, layerActions?.onSendToBack, 'Send to back')}
+        {layerBtn(<BringToFrontIcon />, layerActions?.onBringToFront, 'Bring to front')}
+        {layerBtn(<SendBackwardIcon />, layerActions?.onSendBackward, 'Send backward')}
+        {layerBtn(<BringForwardIcon />, layerActions?.onBringForward, 'Bring forward')}
       </View>
     </>
   );

@@ -465,6 +465,14 @@ function hasPropertyPanel(type: ElementType) {
   return PANEL_ELEMENT_TYPES.includes(type);
 }
 
+function createPanelSeeds(): Map<ElementType, LabelElement> {
+  const seeds = new Map<ElementType, LabelElement>();
+  for (const type of PANEL_ELEMENT_TYPES) {
+    seeds.set(type, panelWarmSeed(type));
+  }
+  return seeds;
+}
+
 /** Offline stub so a property panel can mount before that element type exists on the label. */
 function panelWarmSeed(type: ElementType): LabelElement {
   const id = `__panel_seed_${type}`;
@@ -1541,80 +1549,32 @@ export default function EditScreen() {
   }
   const displayElement = primaryElement ?? lastSelectedElementRef.current;
 
-  const panelSeedRef = useRef(new Map<ElementType, LabelElement>());
+  // All panel types stay keep-alive mounted from editor open so Add never cold-mounts a
+  // native property tree on the insert frame (that path was 300ms+).
+  const panelSeedRef = useRef<Map<ElementType, LabelElement> | null>(null);
+  if (panelSeedRef.current == null) panelSeedRef.current = createPanelSeeds();
   if (displayElement && hasPropertyPanel(displayElement.type)) {
     panelSeedRef.current.set(displayElement.type, displayElement);
   }
-  const [mountedPanelTypes, setMountedPanelTypes] = useState<ElementType[]>(() =>
-    displayElement && hasPropertyPanel(displayElement.type) ? [displayElement.type] : [],
+  const [mountedPanelTypes, setMountedPanelTypes] = useState<ElementType[]>(
+    () => [...PANEL_ELEMENT_TYPES],
   );
+  const mountedPanelTypesRef = useRef(mountedPanelTypes);
+  mountedPanelTypesRef.current = mountedPanelTypes;
   const activePanelType =
     displayElement && hasPropertyPanel(displayElement.type) ? displayElement.type : null;
-  if (activePanelType && !mountedPanelTypes.includes(activePanelType)) {
-    setMountedPanelTypes((prev) => (prev.includes(activePanelType) ? prev : [...prev, activePanelType]));
-  }
 
-  /** Mount one panel type on demand (add tool / first use). Do not warm-mount all 13 — that stalls drag. */
+  /** No-op when already warm (default). Safety net only. */
   const ensurePanelMounted = useCallback((type: ElementType) => {
     if (!hasPropertyPanel(type)) return;
     if (!panelSeedRef.current.has(type)) {
       panelSeedRef.current.set(type, panelWarmSeed(type));
     }
-    setMountedPanelTypes((prev) => (prev.includes(type) ? prev : [...prev, type]));
+    if (mountedPanelTypesRef.current.includes(type)) return;
+    const next = [...mountedPanelTypesRef.current, type];
+    mountedPanelTypesRef.current = next;
+    setMountedPanelTypes(next);
   }, []);
-
-  // Keep-alive only types already on the label (same as 47f5bfb). Mount one per frame after idle.
-  const docPanelTypesKey = useMemo(() => {
-    const types = new Set<ElementType>();
-    for (const el of doc.elements) {
-      if (hasPropertyPanel(el.type)) types.add(el.type);
-    }
-    return [...types].sort().join(',');
-  }, [doc.elements]);
-
-  useEffect(() => {
-    const liveTypes = docPanelTypesKey ? (docPanelTypesKey.split(',') as ElementType[]) : [];
-
-    setMountedPanelTypes((prev) => {
-      const liveSet = new Set(liveTypes);
-      const pruned = prev.filter((type) => liveSet.has(type));
-      return pruned.length === prev.length ? prev : pruned;
-    });
-
-    if (liveTypes.length === 0) return;
-
-    let cancelled = false;
-    let frame: number | null = null;
-    const mountNext = () => {
-      if (cancelled || !mountedRef.current) return;
-      if (transformingRef.current) {
-        frame = requestAnimationFrame(mountNext);
-        return;
-      }
-      let added = false;
-      setMountedPanelTypes((prev) => {
-        const liveSet = new Set(liveTypes);
-        const pruned = prev.filter((type) => liveSet.has(type));
-        const missing = liveTypes.find((type) => !pruned.includes(type));
-        if (!missing) {
-          return pruned.length === prev.length ? prev : pruned;
-        }
-        added = true;
-        return [...pruned, missing];
-      });
-      if (added) {
-        frame = requestAnimationFrame(mountNext);
-      }
-    };
-    const task = InteractionManager.runAfterInteractions(() => {
-      frame = requestAnimationFrame(mountNext);
-    });
-    return () => {
-      cancelled = true;
-      task.cancel();
-      if (frame !== null) cancelAnimationFrame(frame);
-    };
-  }, [docPanelTypesKey]);
 
   const selectedElements = useMemo(
     () => doc.elements.filter((el) => selectedIds.includes(el.id)),
@@ -2251,12 +2211,31 @@ export default function EditScreen() {
       }
       const maxZ = docRef.current.elements.reduce((max, el) => Math.max(max, el.zIndex ?? 0), 0);
       element.zIndex = maxZ + 1;
+      // Sync selection chrome before React commits so the new element + handles paint together.
+      selectedIdsRef.current = [element.id];
+      primaryIdRef.current = element.id;
+      lastSelectedElementRef.current = element;
+      activeSelectedIdSv.value = element.id;
+      topBarSelectionVisibleSv.value = 1;
+      bottomPanelVisibleSv.value = 1;
+      if (hasPropertyPanel(element.type)) {
+        panelSeedRef.current.set(element.type, element);
+      }
       setElements((items) => [...items, element], true);
       setSelectedIds([element.id]);
       setPrimaryId(element.id);
       return element;
     },
-    [defaults, pickerRows, pickerColumns, setElements, editorSettings.pictureAdsorption],
+    [
+      defaults,
+      pickerRows,
+      pickerColumns,
+      setElements,
+      editorSettings.pictureAdsorption,
+      activeSelectedIdSv,
+      topBarSelectionVisibleSv,
+      bottomPanelVisibleSv,
+    ],
   );
 
   const deleteSelected = useCallback(() => {
@@ -2270,29 +2249,50 @@ export default function EditScreen() {
     resizeStartSnapshotsRef.current = null;
     clearGroupPreview();
 
+    setQuickEditTarget(null);
+    setTextEditId(null);
+    textEditInputRef.current?.blur();
+    commitSelectedTableCell(null);
+
+    const remaining = docRef.current.elements.filter((el) => !ids.includes(el.id));
+    for (const type of PANEL_ELEMENT_TYPES) {
+      const live = remaining.find((el) => el.type === type);
+      if (live) panelSeedRef.current.set(type, live);
+      else if (!panelSeedRef.current.has(type)) panelSeedRef.current.set(type, panelWarmSeed(type));
+    }
+
+    setElements((elements) => elements.filter((el) => !ids.includes(el.id)), true);
+
+    // Prefer a remaining canvas-selectable element (not border / non-printing chrome).
+    const candidates = sortLayers(remaining).filter(
+      (el) => el.type !== 'border' && el.needPrinting !== false && isEditorVisible(el),
+    );
+    const next = candidates.length > 0 ? candidates[candidates.length - 1] : null;
+
+    if (next) {
+      selectedIdsRef.current = [next.id];
+      primaryIdRef.current = next.id;
+      lastSelectedElementRef.current = next;
+      activeSelectedIdSv.value = next.id;
+      topBarSelectionVisibleSv.value = 1;
+      bottomPanelVisibleSv.value = 1;
+      groupEligibleSv.value = 0;
+      setSelectedIds([next.id]);
+      setPrimaryId(next.id);
+      ensurePanelMounted(next.type);
+      setPanelOpen(true);
+      return;
+    }
+
     selectedIdsRef.current = [];
     primaryIdRef.current = null;
+    lastSelectedElementRef.current = null;
     activeSelectedIdSv.value = '';
     topBarSelectionVisibleSv.value = 0;
     bottomPanelVisibleSv.value = 0;
     groupEligibleSv.value = 0;
-
-    lastSelectedElementRef.current = null;
-    setQuickEditTarget(null);
-    setTextEditId(null);
-    textEditInputRef.current?.blur();
-
-    const remaining = docRef.current.elements.filter((el) => !ids.includes(el.id));
-    for (const [type] of panelSeedRef.current) {
-      if (!remaining.some((el) => el.type === type)) {
-        panelSeedRef.current.delete(type);
-      }
-    }
-
-    setElements((elements) => elements.filter((el) => !ids.includes(el.id)), true);
     setSelectedIds([]);
     setPrimaryId(null);
-    commitSelectedTableCell(null);
     setPanelOpen(false);
   }, [
     setElements,
@@ -2302,6 +2302,7 @@ export default function EditScreen() {
     topBarSelectionVisibleSv,
     bottomPanelVisibleSv,
     groupEligibleSv,
+    ensurePanelMounted,
   ]);
 
   const duplicateSelected = useCallback(() => {
@@ -2469,6 +2470,8 @@ export default function EditScreen() {
       const element = docRef.current.elements.find((el) => el.id === id);
       if (!element || element.needPrinting === false) return;
       if (!mountedRef.current) return;
+      // Borders are not canvas-selectable — only the Border menu may open their panel.
+      if (element.type === 'border' && source !== 'menu') return;
       if (referenceSelectedRef.current) {
         referenceSelectedRef.current = false;
         setReferenceSelected(false);
@@ -2477,6 +2480,7 @@ export default function EditScreen() {
       if (element.type === 'border') {
         selectedIdsRef.current = [id];
         primaryIdRef.current = id;
+        lastSelectedElementRef.current = element;
         setSelectedIds([id]);
         setPrimaryId(id);
         topBarSelectionVisibleSv.value = 1;
@@ -2566,7 +2570,7 @@ export default function EditScreen() {
 
   const openPropertyPanelFor = useCallback((id: string) => {
     const element = docRef.current.elements.find((el) => el.id === id);
-    if (!element) return;
+    if (!element || element.type === 'border') return;
     topBarSelectionVisibleSv.value = 1;
     bottomPanelVisibleSv.value = 1;
     setSelectedIds([id]);
@@ -2577,7 +2581,7 @@ export default function EditScreen() {
 
   const openPanelFor = useCallback((id: string) => {
     const element = docRef.current.elements.find((el) => el.id === id);
-    if (!element) return;
+    if (!element || element.type === 'border') return;
     topBarSelectionVisibleSv.value = 1;
     bottomPanelVisibleSv.value = 1;
     setSelectedIds([id]);
@@ -3969,57 +3973,49 @@ export default function EditScreen() {
   };
 
   const openAddedElementPanel = useCallback((label: string) => {
-    // Reveal chrome on the UI thread immediately — waiting for the panelOpen effect
-    // leaves the property sheet hidden after add (palette stays on top).
-    const panelType = TOOL_LABEL_TO_PANEL_TYPE[label];
-    if (panelType) ensurePanelMounted(panelType);
+    // Same tick as addElement — panels are already keep-alive mounted, so this is just
+    // shared-value chrome + tab reset + setPanelOpen (batched with the insert).
     topBarSelectionVisibleSv.value = 1;
     bottomPanelVisibleSv.value = 1;
     switch (label) {
       case 'Text':
         setTextTab('Regular');
-        setPanelOpen(true);
         break;
       case 'Barcode':
         setBarcodeTab('Regular');
-        setPanelOpen(true);
         break;
       case 'QRCode':
         setQrcodeTab('Regular');
-        setPanelOpen(true);
         break;
       case 'Line':
         setLineTab('Regular');
-        setPanelOpen(true);
         break;
       case 'Shapes':
         setShapeTab('Regular');
-        setPanelOpen(true);
         break;
       case 'Time':
         setTimeTab('Regular');
-        setPanelOpen(true);
         break;
       case 'ArcText':
         setArcTextTab('Regular');
-        setPanelOpen(true);
         break;
       case 'Degrees':
         setDegreesTab('Regular');
-        setPanelOpen(true);
         break;
       case 'Clipart':
         setClipartTab('Regular');
-        setPanelOpen(true);
         break;
       case 'Signature':
         setSignatureTab('Regular');
-        setPanelOpen(true);
+        break;
+      case 'Table':
+        setTableTab('Regular');
         break;
       default:
         break;
     }
-  }, [topBarSelectionVisibleSv, bottomPanelVisibleSv, ensurePanelMounted]);
+    setPanelOpen(true);
+  }, [topBarSelectionVisibleSv, bottomPanelVisibleSv]);
 
   const beginPaletteDrag = useCallback((
     type: ElementType,
@@ -4172,7 +4168,7 @@ export default function EditScreen() {
       {
         text: 'Edit settings',
         onPress: () => {
-          if (own) handleSelect(own.id);
+          if (own) handleSelect(own.id, 'menu');
           else if (sheet) toLibrary('unified', { style: sheet.borderStyle, edgeGap: String(sheet.edgeGapMm), hasBorder: '1' });
         },
       },
@@ -4183,10 +4179,7 @@ export default function EditScreen() {
 
   const handleToolPress = (label: string) => {
     setShowLabelMenu(false);
-    const panelType = TOOL_LABEL_TO_PANEL_TYPE[label];
-    // Mount (or reuse) the panel before inserting the element so the sheet can
-    // show on the same frame as selection instead of waiting on a cold mount.
-    if (panelType) ensurePanelMounted(panelType);
+    // Insert first — never mount a property panel before the element hits the canvas.
     switch (label) {
       case 'Text':
         addElement('text');
@@ -4251,8 +4244,9 @@ export default function EditScreen() {
         }
         const border = docRef.current.elements.find((el) => el.type === 'border');
         // An existing border opens its settings (thickness, gap, replace, cancel), not the gallery.
+        // Borders cannot be selected on the canvas — only via this menu entry.
         if (border) {
-          handleSelect(border.id);
+          handleSelect(border.id, 'menu');
           break;
         }
         router.push({
@@ -4303,11 +4297,7 @@ export default function EditScreen() {
       const size = Math.min(docRef.current.widthMm, docRef.current.heightMm) * 0.6;
       const added = addElement('signature', { strokes, width: size, height: size });
       if (added) {
-        ensurePanelMounted('signature');
-        setSignatureTab('Regular');
-        setPanelOpen(true);
-        topBarSelectionVisibleSv.value = 1;
-        bottomPanelVisibleSv.value = 1;
+        openAddedElementPanel('Signature');
       }
     }
     setShowSignatureBoard(false);
@@ -4315,16 +4305,12 @@ export default function EditScreen() {
 
   const handleTablePickerConfirm = () => {
     const tableState = createTableState(pickerRows, pickerColumns);
-    ensurePanelMounted('table');
     addElement('table', {
       rowCount: tableState.rowCount,
       columnCount: tableState.columnCount,
     });
-    setTableTab('Regular');
     setShowTablePicker(false);
-    topBarSelectionVisibleSv.value = 1;
-    bottomPanelVisibleSv.value = 1;
-    setPanelOpen(true);
+    openAddedElementPanel('Table');
   };
 
   const closePanel = () => {

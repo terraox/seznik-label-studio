@@ -1,7 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -78,7 +77,8 @@ export type TransformMovePayload = {
 export type TransformStartKind = 'move' | 'resize';
 
 /** 'touch' = touch-down (add-only in Multiple mode); 'toggle' = tap that may remove. */
-export type SelectSource = 'touch' | 'toggle';
+/** `menu` = Border tool / settings (borders are not canvas-selectable). */
+export type SelectSource = 'touch' | 'toggle' | 'menu';
 
 import { type ElementAnchorRect } from '@/lib/editor/quick-value';
 import { themedStyles, useThemeRefresh } from '@/theme';
@@ -320,6 +320,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const fontFamilySv = useSharedValue(textFontFamily);
 
   const isInteracting = useSharedValue(false);
+  /** Mirrored so layer reorder (Position bottom buttons) updates stacking on the UI thread. */
+  const layerZSv = useSharedValue(element.zIndex ?? 0);
+  useEffect(() => {
+    layerZSv.value = element.zIndex ?? 0;
+  }, [element.zIndex, layerZSv]);
   useVisibleTextRevision();
 
   // True from the first frame of a text width drag until the committed size is on screen.
@@ -1732,7 +1737,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     const liveLeft = originLeftSv.value + transX.value;
     const liveTop = originTopSv.value + transY.value;
     const isPrimaryTouch = activeSelectedIdSv?.value === element.id;
-    const zBoost = isPrimaryTouch ? 100 : selectedSv.value ? 50 : 0;
+    // Keep relative layer order while selected. A flat +50/+100 boost used to pin the
+    // selection above every other element, so Send back / Bring forward looked broken.
+    // Each layer owns a band of 10; selection only adds +1/+2 inside that band.
+    const layer = Math.round(layerZSv.value) + 1000;
+    const selectBump = isPrimaryTouch ? 2 : selectedSv.value ? 1 : 0;
 
     return {
       position: 'absolute' as const,
@@ -1742,7 +1751,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       height: liveH,
       overflow: 'visible' as const,
       opacity: (element.opacity ?? 1) * liftSv.value,
-      zIndex: zBoost + (element.zIndex ?? 1),
+      zIndex: layer * 10 + selectBump,
       // Whole box turns, so the outline and handles follow the content.
       transform: [{ rotate: `${animRot.value}deg` }],
     };
@@ -1815,21 +1824,19 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     };
   });
 
+  // Borders are display-only on the canvas: edit them via the Border tool in the menu.
+  // Non-printing chrome is also non-interactive.
   if (element.type === 'border' || element.needPrinting === false) {
-    const borderHit =
-      element.type === 'border' && element.needPrinting !== false
-        ? Math.max(22, Math.round((element.lineWidth || 0.5) * pxPerMMSafe) + 10)
-        : 0;
     return (
       <View
-        pointerEvents={borderHit > 0 ? 'box-none' : 'none'}
+        pointerEvents="none"
         style={{
           position: 'absolute',
           left: baseLeftPx,
           top: baseTopPx,
           width: baseWidthPx,
           height: baseHeightPx,
-          zIndex: borderHit > 0 ? 1000 : 0,
+          zIndex: 0,
           transform: [{ rotate: `${baseRotation}deg` }],
           opacity: element.opacity ?? 1,
         }}>
@@ -1844,44 +1851,16 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             tableSelectionColor={tableSelectionColor}
           />
         </View>
-        {borderHit > 0 ? (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Border"
-              onPress={() => onSelect(element.id)}
-              style={{ position: 'absolute', left: 0, right: 0, top: 0, height: borderHit }}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Border"
-              onPress={() => onSelect(element.id)}
-              style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: borderHit }}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Border"
-              onPress={() => onSelect(element.id)}
-              style={{ position: 'absolute', left: 0, top: borderHit, bottom: borderHit, width: borderHit }}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Border"
-              onPress={() => onSelect(element.id)}
-              style={{ position: 'absolute', right: 0, top: borderHit, bottom: borderHit, width: borderHit }}
-            />
-            {selected ? (
-              <View
-                pointerEvents="none"
-                style={{
-                  ...StyleSheet.absoluteFillObject,
-                  borderWidth: 1.5,
-                  borderStyle: 'dashed',
-                  borderColor: selectionColor || '#48C3C7', // theme-fixed: canvas selection chrome
-                }}
-              />
-            ) : null}
-          </>
+        {element.type === 'border' && selected ? (
+          <View
+            pointerEvents="none"
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              borderWidth: 1.5,
+              borderStyle: 'dashed',
+              borderColor: selectionColor || '#48C3C7', // theme-fixed: canvas selection chrome
+            }}
+          />
         ) : null}
       </View>
     );
