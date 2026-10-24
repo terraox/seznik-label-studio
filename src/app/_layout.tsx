@@ -187,6 +187,7 @@ function AppRoot() {
           <Stack.Screen name="drawing-color" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="cache-settings" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="app-permissions" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="help-topic" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="printing-history" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="printer-connect" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="printer-diagnostics" options={{ animation: 'slide_from_right' }} />

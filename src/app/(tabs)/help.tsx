@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,9 +7,16 @@ import { AppIcon } from '@/components/app-icon';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple } from '@/constants/ui';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
+import { HELP_TOPICS } from '@/lib/help/topics';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
-type HelpPane = 'tutorials' | 'guides';
+type HelpPane = 'tutorials' | 'features' | 'guides';
+
+const PANES: { id: HelpPane; label: string }[] = [
+  { id: 'tutorials', label: 'Tutorials' },
+  { id: 'features', label: 'Features' },
+  { id: 'guides', label: 'Guides' },
+];
 
 const TUTORIALS = [
   {
@@ -18,8 +26,8 @@ const TUTORIALS = [
     summary: 'From a blank canvas to a label in the printer.',
     icon: 'printer.fill' as const,
     steps: [
-      'On Home, tap New Label and pick a size.',
-      'Add text, then drag it into place. Pull a corner to resize.',
+      'On Home, tap New Label, choose Blank label and pick a size or a preset.',
+      'Tap Create Label, add text from the tool bar, then drag it into place. Pull a corner to resize.',
       'Tap Save, then Print. Set copies and tap Print.',
     ],
   },
@@ -27,12 +35,12 @@ const TUTORIALS = [
     id: 'connect',
     minutes: '3 min',
     title: 'Connect over Bluetooth',
-    summary: 'Pair a Seznik or ESC/POS printer from the phone.',
+    summary: 'Pair a Tejas, Rudra or Josh printer from the phone.',
     icon: 'antenna.radiowaves.left.and.right' as const,
     steps: [
       'Turn the printer on and keep it close.',
-      'Tap Unconnected on Home or Print, then scan.',
-      'Choose your printer. Bluetooth needs a development build, not Expo Go.',
+      'Tap the printer chip at the top of Home. Allow Bluetooth, Location and Nearby devices if the phone asks.',
+      'Choose your printer. Green means ready to print. The app reconnects to your last printer when it opens.',
     ],
   },
   {
@@ -54,9 +62,9 @@ const TUTORIALS = [
     summary: 'Import a sheet and print a stack automatically.',
     icon: 'tablecells' as const,
     steps: [
-      'Open Data File and import Excel or CSV.',
-      'Bind text, QR, or barcode fields to column names.',
-      'On Print, leave automatic pages on so each row is one label.',
+      'On Home, tap Excel, choose the label size, then pick your .xlsx or .csv file.',
+      'Choose the sheet and the columns to include, then tap Confirm.',
+      'In the editor, set text, QR or barcode fields to Data Source and pick the column. Each row prints as one label.',
     ],
   },
 ];
@@ -64,23 +72,35 @@ const TUTORIALS = [
 const GUIDES = [
   {
     title: 'Connect a printer',
-    body: 'Tap Unconnected on Home or Print, then scan for Bluetooth printers. Generic ESC/POS thermal printers are supported. A development build is required — Bluetooth is not available in Expo Go.',
+    body: 'Tap the printer chip at the top of Home and choose your printer from the list. Sez Print works with the Tejas, Rudra and Josh printers. Red means not connected and green means ready. Allow Bluetooth, Location and Nearby devices when the phone asks; you can check them in Settings > App Permissions.',
   },
   {
     title: 'Design a label',
-    body: 'Use New Label or a template, then add text, barcodes, QR codes, tables, and black-and-white stickers. Drag to move, pull the corner to resize, and use Undo/Redo if you miss a step. Save before leaving the editor.',
+    body: 'Use New Label or a template, then add text, barcodes, QR codes, images, tables, lines, shapes, borders, clipart and signatures. Drag to move, pull a corner to resize, and use Undo and Redo if you miss a step. Save before leaving the editor. Open the New Label page under Features for the full walk-through.',
   },
   {
     title: 'Print',
-    body: 'Open Print from the editor or Home. Set copies, darkness, orientation, and offsets, then tap Print. Data-bound labels print one page per Excel row when automatic pages is on.',
+    body: 'Open Print from the editor or Home. Set copies, print darkness, print speed, gap length, orientation and offsets, then tap Print. Labels bound to an Excel sheet print one label per row.',
+  },
+  {
+    title: 'Images: B & W and Halftone',
+    body: 'Select an image to choose its Color Mode. B & W is solid black and white, best for logos and text, and the Gray Threshold slider decides what turns black. Halftone makes the grays out of dots, best for photos. What you see on the canvas is what prints.',
   },
   {
     title: 'Stickers and clipart',
-    body: 'Stickers are black-and-white silhouettes so they print cleanly on thermal labels. Open Clipart from the editor and tap a sticker to place it.',
+    body: 'Stickers are black-and-white shapes so they print cleanly on thermal labels. Open Clipart from the editor and tap a sticker to place it.',
   },
   {
-    title: 'Scan, OCR, and voice',
-    body: 'Scan reads barcodes from the camera or a photo. OCR extracts text. ASR converts speech into label text. Full text recognition needs a development build.',
+    title: 'Scan and OCR',
+    body: 'Scan reads a barcode or QR code with the camera. OCR reads text from a photo so you do not have to type it. Both are in the editor tool bar.',
+  },
+  {
+    title: 'Templates',
+    body: 'The Templates tab has ready-made label shapes and sizes. Tap one to open it in the editor, then change the text and print.',
+  },
+  {
+    title: 'Settings and feedback',
+    body: 'Settings has your printer, language, fonts, clipart, borders, data files, print history, appearance and the walkthrough. To send a suggestion or report a problem, use Settings > Suggestions & Complaints.',
   },
 ];
 
@@ -104,7 +124,7 @@ export default function HelpScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: tabPad }]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.switcher}>
-          {(['tutorials', 'guides'] as const).map((id) => {
+          {PANES.map(({ id, label }) => {
             const active = pane === id;
             return (
               <Pressable
@@ -112,9 +132,7 @@ export default function HelpScreen() {
                 onPress={() => setPane(id)}
                 android_ripple={androidRipple}
                 style={[styles.switchItem, active && styles.switchItemActive]}>
-                <Text style={[styles.switchLabel, active && styles.switchLabelActive]}>
-                  {id === 'tutorials' ? 'Tutorials' : 'Guides'}
-                </Text>
+                <Text style={[styles.switchLabel, active && styles.switchLabelActive]}>{label}</Text>
               </Pressable>
             );
           })}
@@ -166,6 +184,30 @@ export default function HelpScreen() {
                 </Pressable>
               );
             })}
+          </View>
+        ) : pane === 'features' ? (
+          <View style={styles.stack}>
+            <Text style={styles.lead}>One page for each part of the app. Tap a feature to read how it works.</Text>
+            {HELP_TOPICS.map((topic) => (
+              <Pressable
+                key={topic.id}
+                onPress={() => router.push({ pathname: '/help-topic', params: { id: topic.id } })}
+                android_ripple={androidRipple}
+                accessibilityRole="button"
+                accessibilityLabel={`${topic.title}. ${topic.summary}`}
+                style={styles.lesson}>
+                <View style={styles.lessonTop}>
+                  <View style={styles.lessonIndex}>
+                    <AppIcon name={topic.icon} tintColor={C.onAccent} size={18} />
+                  </View>
+                  <View style={styles.lessonCopy}>
+                    <Text style={styles.lessonTitle}>{topic.title}</Text>
+                    <Text style={styles.lessonSummary}>{topic.summary}</Text>
+                  </View>
+                  <AppIcon name="chevron.right" tintColor={C.textMuted} size={14} />
+                </View>
+              </Pressable>
+            ))}
           </View>
         ) : (
           <View style={styles.stack}>
