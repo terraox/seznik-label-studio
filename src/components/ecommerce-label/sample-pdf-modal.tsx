@@ -8,6 +8,7 @@ import type { PlatformId } from '@/lib/ecommerce-label/platforms';
 import { platformName } from '@/lib/ecommerce-label/platforms';
 import { rasterPdfPageCached } from '@/lib/pdf-editor/raster';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 const SAMPLES: Record<PlatformId, number> = {
   amazon: require('../../../assets/samples/amazon.pdf'),
@@ -76,7 +77,7 @@ export function SamplePdfModal({
   const pageW = width - 32;
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal supportedOrientations={ALL_ORIENTATIONS} visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Text style={styles.title}>{platformName(platform)} sample label PDF</Text>

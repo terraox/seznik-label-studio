@@ -5,6 +5,7 @@ import { type SharedValue, useDerivedValue } from 'react-native-reanimated';
 import {
   AlphaType,
   Circle,
+  ColorMatrix,
   ColorType,
   DashPathEffect,
   Fill,
@@ -16,6 +17,8 @@ import {
   Path,
   Rect,
   RoundedRect,
+  RuntimeShader,
+  Shader,
   Skia,
   Text,
   TileMode,
@@ -56,7 +59,13 @@ import { clampStrokeScale } from '@/lib/clipart/stroke-scale';
 import { clipartOpToSvgPath, parseSvgDrawOps } from '@/lib/clipart/parse-svg';
 import { clipartImageUri, clipartSvgSource } from '@/lib/clipart/types';
 import { useUserClipartStore } from '@/stores/user-clipart-store';
-import { applyMonoToRgba, resolveEditorColorMode } from '@/lib/editor/image-mono';
+import {
+  applyMonoToRgba,
+  monoShaderModeValue,
+  resolveEditorColorMode,
+} from '@/lib/editor/image-mono';
+import { monoImageRuntimeEffect } from '@/lib/editor/mono-runtime-effect';
+import { CHROME_HANDLE_FILL, CHROME_HANDLE_RADIUS_PX } from '@/lib/editor/canvas-chrome';
 import {
   ptToMm,
   type BorderElementState,
@@ -579,52 +588,74 @@ export const SkiaImageElement = memo(function SkiaImageElement({
     );
   }, [modedView]);
   const mode = resolveEditorColorMode(colorMode);
-  const [processed, setProcessed] = useState(skiaImg);
+  const monoEffect = useMemo(() => monoImageRuntimeEffect(), []);
+  const needsMono = mode !== 'Original';
+  const [cpuProcessed, setCpuProcessed] = useState(skiaImg);
   useEffect(() => {
-    if (!skiaImg) {
-      setProcessed(null);
+    // GPU shader handles B&W / Halftone; only bake on the CPU when that shader is missing.
+    if (!skiaImg || monoEffect || (mode === 'Original' && !antiColor)) {
+      setCpuProcessed(skiaImg);
       return;
     }
-    if (mode === 'Original') {
-      setProcessed(skiaImg);
-      return;
-    }
-    const raster = skiaImg.makeNonTextureImage();
-    const width = raster.width();
-    const height = raster.height();
-    const pixels = raster.readPixels(0, 0, {
-      width,
-      height,
-      colorType: ColorType.RGBA_8888,
-      alphaType: AlphaType.Unpremul,
-    });
-    if (!pixels) {
-      setProcessed(skiaImg);
-      return;
-    }
-    const rgba = pixels instanceof Uint8Array ? new Uint8Array(pixels) : new Uint8Array(pixels as ArrayBuffer);
-    applyMonoToRgba(rgba, width, height, grayThreshold, mode);
-    const next = Skia.Image.MakeImage(
-      {
+    let cancelled = false;
+    try {
+      const raster = skiaImg.makeNonTextureImage();
+      const width = raster.width();
+      const height = raster.height();
+      const pixels = raster.readPixels(0, 0, {
         width,
         height,
         colorType: ColorType.RGBA_8888,
         alphaType: AlphaType.Unpremul,
-      },
-      Skia.Data.fromBytes(rgba),
-      width * 4,
-    );
-    setProcessed(next ?? skiaImg);
-  }, [skiaImg, mode, grayThreshold, uri]);
+      });
+      if (!pixels || cancelled || !(pixels instanceof Uint8Array)) {
+        setCpuProcessed(skiaImg);
+        return;
+      }
+      const needed = width * height * 4;
+      const rgba = new Uint8Array(needed);
+      rgba.set(pixels.subarray(0, Math.min(pixels.length, needed)));
+      applyMonoToRgba(rgba, width, height, grayThreshold, mode, antiColor);
+      const next = Skia.Image.MakeImage(
+        {
+          width,
+          height,
+          colorType: ColorType.RGBA_8888,
+          alphaType: AlphaType.Unpremul,
+        },
+        Skia.Data.fromBytes(rgba),
+        width * 4,
+      );
+      if (!cancelled) setCpuProcessed(next ?? skiaImg);
+    } catch {
+      if (!cancelled) setCpuProcessed(skiaImg);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [skiaImg, mode, grayThreshold, uri, antiColor, monoEffect]);
   const transforms = useMemo(() => {
     const list: { scaleX?: number; scaleY?: number; translateX?: number; translateY?: number }[] = [];
     if (flipH) list.push({ scaleX: -1 }, { translateX: -w });
     if (flipV) list.push({ scaleY: -1 }, { translateY: -h });
     return list;
   }, [flipH, flipV, w, h]);
-  const tileW = processed ? Math.max(8, processed.width()) : w;
-  const tileH = processed ? Math.max(8, processed.height()) : h;
-  const display = processed ?? skiaImg;
+  const useGpuMono = Boolean(monoEffect && needsMono && skiaImg);
+  const display = useGpuMono ? skiaImg : (cpuProcessed ?? skiaImg);
+  const tileW = display ? Math.max(8, display.width()) : w;
+  const tileH = display ? Math.max(8, display.height()) : h;
+  const monoUniforms = useMemo(
+    () => ({
+      threshold: grayThreshold,
+      mode: monoShaderModeValue(mode),
+      invert: antiColor ? 1 : 0,
+    }),
+    [grayThreshold, mode, antiColor],
+  );
+  const invertMatrix = useMemo(
+    () => [-1, 0, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, -1, 0, 1, 0, 0, 0, 1, 0],
+    [],
+  );
 
   if (element && usesModedPrint(element)) {
     if (!modedView || !modedImage) return null;
@@ -637,9 +668,30 @@ export const SkiaImageElement = memo(function SkiaImageElement({
     <Group transform={transforms.length > 0 ? transforms : undefined}>
       {antiColor && <Rect x={0} y={0} width={w} height={h} color="#111827" />}
       {display && !tile ? (
-        <Image image={display} x={0} y={0} width={w} height={h} fit={contentFit} />
+        <Image image={display} x={0} y={0} width={w} height={h} fit={contentFit}>
+          {useGpuMono && monoEffect ? (
+            <RuntimeShader source={monoEffect} uniforms={monoUniforms} />
+          ) : null}
+          {!useGpuMono && mode === 'Original' && antiColor ? (
+            <ColorMatrix matrix={invertMatrix} />
+          ) : null}
+        </Image>
       ) : null}
-      {display && tile ? (
+      {display && tile && useGpuMono && monoEffect ? (
+        <Fill>
+          <Shader source={monoEffect} uniforms={monoUniforms}>
+            <ImageShader
+              image={display}
+              tx={TileMode.Repeat}
+              ty={TileMode.Repeat}
+              fit="none"
+              width={tileW}
+              height={tileH}
+            />
+          </Shader>
+        </Fill>
+      ) : null}
+      {display && tile && !useGpuMono ? (
         <Fill>
           <ImageShader
             image={display}
@@ -924,19 +976,22 @@ export const SkiaElementView = memo(function SkiaElementView({
 
 /**
  * Native Skia vector Resize Handle per canvas.md §4.2 & Master Plan §1.2.
- * Teal circle (#54C8C8, 28px diameter) with native Skia vector Path arrows (↔ or ↕).
+ * Teal circle matching CHROME_HANDLE_* (screen-constant when the host counter-scales).
  * Supports both static numbers and Reanimated shared values without React re-renders.
  */
 export const SkiaResizeHandle = memo(function SkiaResizeHandle({
   cx,
   cy,
   direction,
+  viewScale,
 }: {
   cx: SharedValue<number> | number;
   cy: SharedValue<number> | number;
   direction: 'horizontal' | 'vertical';
+  /** Artboard zoom; handle draws at 1/viewScale so it stays screen-constant. */
+  viewScale?: SharedValue<number> | number;
 }) {
-  const RADIUS = 14; // 28px diameter
+  const RADIUS = CHROME_HANDLE_RADIUS_PX;
   const arrowPath =
     direction === 'horizontal'
       ? 'M -2 -4 L -6.5 0 L -2 4 Z M 2 -4 L 6.5 0 L 2 4 Z M -3 0 L 3 0'
@@ -947,17 +1002,24 @@ export const SkiaResizeHandle = memo(function SkiaResizeHandle({
   const transform = useDerivedValue(() => {
     const x = typeof cx === 'number' ? cx : cx.value;
     const y = typeof cy === 'number' ? cy : cy.value;
-    return [{ translateX: x }, { translateY: y }];
+    const z =
+      viewScale == null
+        ? 1
+        : typeof viewScale === 'number'
+          ? viewScale
+          : viewScale.value;
+    const s = 1 / (z > 0.05 ? z : 1);
+    return [{ translateX: x }, { translateY: y }, { scale: s }];
   });
 
   return (
     <Group transform={transform}>
-      <Circle cx={0} cy={0} r={RADIUS} color="#54C8C8" />
+      <Circle cx={0} cy={0} r={RADIUS} color={CHROME_HANDLE_FILL} />
       {skPath && (
         <Path
           path={skPath}
           color="#FFFFFF"
-          strokeWidth={2}
+          strokeWidth={1.6}
           strokeCap="round"
           strokeJoin="round"
         />

@@ -3,6 +3,7 @@ import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 
 import { Spacing } from '@/constants/theme';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 type BluetoothBlockersProps = {
   canScan: boolean;
@@ -66,7 +67,7 @@ export function BluetoothOffDialog({
 }: BluetoothOffDialogProps) {
   useThemeRefresh();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal supportedOrientations={ALL_ORIENTATIONS} visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={styles.dialog}>

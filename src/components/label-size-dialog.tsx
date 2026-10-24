@@ -16,6 +16,7 @@ import { IosAlertModal } from '@/components/ui/ios-alert-modal';
 import { clampLabelMm, validateLabelSize } from '@/lib/label-geometry';
 import { stockSizePromptCopy, type StockSizeHandling } from '@/lib/stock-size';
 import { themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 type LabelSizeDialogProps = {
   visible: boolean;
@@ -63,7 +64,7 @@ export function LabelSizeDialog({
 
   return (
     <>
-    <Modal visible={visible && !pending} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal supportedOrientations={ALL_ORIENTATIONS} visible={visible && !pending} transparent animationType="fade" onRequestClose={onCancel}>
       <KeyboardAvoidingView
         behavior="padding"
         style={styles.overlay}

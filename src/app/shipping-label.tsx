@@ -25,6 +25,7 @@ import {
   TEMPLATE_STANDARD_4X6,
 } from '@/lib/shipping-editor/types';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 export default function ShippingLabelScreen() {
   useThemeRefresh();
@@ -63,6 +64,7 @@ export default function ShippingLabelScreen() {
 
       {/* Template Switcher Modal */}
       <Modal
+        supportedOrientations={ALL_ORIENTATIONS}
         visible={templateMenuVisible}
         transparent
         animationType="slide"

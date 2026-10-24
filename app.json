@@ -3,7 +3,7 @@
     "name": "Seznik Label Studio",
     "slug": "sez-print",
     "version": "1.0.1",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": [
       "sezprint",

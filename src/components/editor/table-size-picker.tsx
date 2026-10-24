@@ -10,6 +10,7 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { TextInput } from '@/components/ui/text-input';
 import { themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 const GRID_SIZE = 8;
 const GRID_GAP = 4;
@@ -118,7 +119,7 @@ export function TableSizePicker({
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
+    <Modal supportedOrientations={ALL_ORIENTATIONS} visible transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
       <KeyboardAvoidingView behavior="padding" style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onCancel} />
         <View style={[styles.modal, { width: modalWidth }]}>

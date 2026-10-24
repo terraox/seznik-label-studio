@@ -28,7 +28,7 @@ import { cloneLabelFromImage } from '@/lib/label-clone';
 import { clampLabelMm } from '@/lib/label-geometry';
 import { isScanEmptyError, payloadFromBarcodeResult, SCAN_CODE_TYPES } from '@/lib/scan-codes';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
-import { scanFrameSize, scanTopMaskHeight } from '@/lib/layout/screen-sizes';
+import { scanFrameSize, scanTopMaskHeight, ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 import { useLabelStore } from '@/stores/label-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
@@ -72,7 +72,7 @@ export default function ScanScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const frameSize = scanFrameSize(windowWidth);
+  const frameSize = scanFrameSize(windowWidth, windowHeight);
   const params = useLocalSearchParams<{ from?: string | string[]; mode?: string | string[] }>();
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
   const modeParam = Array.isArray(params.mode) ? params.mode[0] : params.mode;
@@ -497,6 +497,7 @@ export default function ScanScreen() {
 
       {/* Scan Result Modal */}
       <Modal
+        supportedOrientations={ALL_ORIENTATIONS}
         visible={!!scannedResult}
         transparent
         animationType="slide"

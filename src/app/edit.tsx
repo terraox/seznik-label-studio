@@ -1,7 +1,7 @@
 import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
-import { PrintGridIcon, PrintRulerIcon, SafeModeIcon } from '@/components/editor/chrome-icons';
+import { PrintRulerIcon, SafeModeIcon } from '@/components/editor/chrome-icons';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -24,6 +24,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { TextInput } from '@/components/ui/text-input';
 import ViewShot from 'react-native-view-shot';
@@ -283,7 +284,7 @@ import { CANVAS_BOTTOM_CHIP_CLEARANCE_PX, EDITOR_STAGE_MARGIN_PX, clampLabelMm, 
 import { applyDocumentStockSize, type StockSizeHandling } from '@/lib/stock-size';
 import { sortLayers } from '@/lib/template-schema';
 import { useTranslation } from '@/lib/i18n';
-import { editorFallbackViewportPx } from '@/lib/layout/screen-sizes';
+import { editorFallbackViewportPx, ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 import {
   isJewelryDieCutDocument,
   JEWELRY_DIECUT,
@@ -2261,83 +2262,33 @@ export default function EditScreen() {
     setMultipleMode(turningOn);
   }, [multipleMode, topBarSelectionVisibleSv, bottomPanelVisibleSv]);
 
-  const flashChromeStatus = useCallback((message: string) => {
+  const flashChromeStatus = useCallback((message: string, durationMs = 1600) => {
     if (chromeStatusTimer.current) clearTimeout(chromeStatusTimer.current);
     setChromeStatus(message);
     chromeStatusTimer.current = setTimeout(() => {
       chromeStatusTimer.current = null;
       if (mountedRef.current) setChromeStatus(null);
-    }, 1600);
+    }, durationMs);
   }, []);
 
-  const printGridOn = doc.settings?.printGrid === true;
-  // A grid that is going to print is always shown on the canvas.
-  const gridShown = Boolean(editorSettings.editorGrid) || printGridOn;
+  const gridShown = Boolean(editorSettings.editorGrid);
 
   const toggleEditorGrid = useCallback(() => {
     const next = !gridShown;
     requestEditorGridToggle(next, patchEditor);
-    // A hidden grid cannot be printed: hiding it also clears the print flag.
-    if (!next && docRef.current.settings?.printGrid) {
-      setDoc((prev) => ({ ...prev, settings: { ...resolveLabelSettings(prev), printGrid: false } }));
-      setDirty(true);
-      flashChromeStatus('Grid hidden and no longer printed');
-      return;
+    if (next) {
+      flashChromeStatus('Grid enabled — long press to change grid size', 2400);
+    } else {
+      flashChromeStatus('Grid disabled');
     }
-    flashChromeStatus(next ? 'Grid enabled' : 'Grid disabled');
   }, [gridShown, patchEditor, flashChromeStatus]);
 
   const gridSpacingMm =
     editorSettings.editorGridSpacingMm ?? DEFAULT_EDITOR_SETTINGS.editorGridSpacingMm;
 
-  const printRulerOn = doc.settings?.printRuler === true;
-
-  const togglePrintGrid = useCallback(() => {
-    // Print grid only marks the grid on the canvas as "also print this", so it has to be shown.
-    if (!docRef.current.settings?.printGrid && !editorSettings.editorGrid) {
-      requestEditorGridToggle(true, patchEditor);
-    }
-    setDoc((prev) => {
-      const settings = resolveLabelSettings(prev);
-      const nextOn = !settings.printGrid;
-      return {
-        ...prev,
-        settings: {
-          ...settings,
-          printGrid: nextOn,
-          printGridSpacingMm: gridSpacingMm,
-          printRuler: nextOn ? false : settings.printRuler,
-        },
-      };
-    });
-    setDirty(true);
-  }, [gridSpacingMm, editorSettings.editorGrid, patchEditor]);
-
-  const togglePrintRuler = useCallback(() => {
-    setDoc((prev) => {
-      const settings = resolveLabelSettings(prev);
-      const nextOn = !settings.printRuler;
-      return {
-        ...prev,
-        settings: {
-          ...settings,
-          printRuler: nextOn,
-          printGrid: nextOn ? false : settings.printGrid,
-        },
-      };
-    });
-    setDirty(true);
-  }, []);
-
   const changeGridSpacing = useCallback(
     (mm: number) => {
       patchEditor({ editorGridSpacingMm: mm });
-      if (!docRef.current.settings?.printGrid) return;
-      setDoc((prev) => ({
-        ...prev,
-        settings: { ...resolveLabelSettings(prev), printGridSpacingMm: mm },
-      }));
-      setDirty(true);
     },
     [patchEditor],
   );
@@ -4972,36 +4923,13 @@ export default function EditScreen() {
               </Pressable>
 
               <Pressable
-                onPress={togglePrintGrid}
-                hitSlop={10}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: printGridOn }}
-                accessibilityLabel="Print grid"
-                accessibilityHint="Also prints the grid shown on the canvas. Cannot be on with Print scale."
-                style={({ pressed }) => [
-                  styles.printGridBtn,
-                  printGridOn && styles.canvasChromeBtnActive,
-                  pressed && styles.pressed,
-                ]}>
-                <PrintGridIcon
-                  active={printGridOn}
-                  color={printGridOn ? C.accent : C.textMuted}
-                  size={16}
-                />
-              </Pressable>
-
-              <Pressable
                 onPress={toggleEditorGrid}
                 onLongPress={() => setGridSpacingPopoverVisible(true)}
                 delayLongPress={280}
                 hitSlop={10}
                 accessibilityRole="button"
-                accessibilityLabel={
-                  gridShown
-                    ? 'Hide design grid'
-                    : 'Show design grid'
-                }
-                accessibilityHint="Long press to change grid spacing."
+                accessibilityLabel={gridShown ? 'Hide grid' : 'Show grid'}
+                accessibilityHint="Long press to change grid size."
                 style={({ pressed }) => [
                   styles.splitMaxBtn,
                   gridShown && styles.canvasChromeBtnActive,
@@ -5222,29 +5150,37 @@ export default function EditScreen() {
                 { marginTop: -Math.max(0, bottomInsetPx - 8) },
               ]}>
               <Animated.View style={[styles.staticPaletteContainer, staticPaletteAnimatedStyle]}>
-                <View
-                  ref={(node) => registerWalkthroughTarget('edit.tools', node)}
-                  collapsable={false}>
-                  <StaticToolPalette
-                    onToolPress={handleToolPress}
-                    onBeginDrag={beginPaletteDrag}
-                    onMoveDrag={movePaletteDrag}
-                    onEndDrag={endPaletteDrag}
-                  />
-                </View>
+                <GHScrollView
+                  style={styles.sheetScroll}
+                  contentContainerStyle={styles.paletteScrollContent}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled>
+                  <View
+                    ref={(node) => registerWalkthroughTarget('edit.tools', node)}
+                    collapsable={false}>
+                    <StaticToolPalette
+                      onToolPress={handleToolPress}
+                      onBeginDrag={beginPaletteDrag}
+                      onMoveDrag={movePaletteDrag}
+                      onEndDrag={endPaletteDrag}
+                    />
+                  </View>
+                </GHScrollView>
               </Animated.View>
 
               <Animated.View style={[StyleSheet.absoluteFillObject, propertyPanelAnimatedStyle]}>
                 {referenceSelected && doc.referenceImage ? (
                   <ReferenceImagePanel image={doc.referenceImage} onChange={patchReferenceImage} />
                 ) : (
-                  <FormScrollView
-                    style={styles.sheetScroll}
-                    contentContainerStyle={{ paddingBottom: Math.max(Spacing.two, insets.bottom) }}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled">
+                  <View
+                    style={[
+                      styles.sheetScroll,
+                      { paddingBottom: Math.max(Spacing.two, insets.bottom) },
+                    ]}>
                     {activePanelContent}
-                  </FormScrollView>
+                  </View>
                 )}
               </Animated.View>
             </Animated.View>
@@ -5366,6 +5302,7 @@ export default function EditScreen() {
       />
 
       <Modal
+        supportedOrientations={ALL_ORIENTATIONS}
         visible={showOpenModal}
         transparent
         animationType="fade"
@@ -5667,21 +5604,6 @@ const styles = themedStyles((c, scheme) => ({
   canvasChromeBtnActive: {
     backgroundColor: c.accentSoft,
   },
-  printGridBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 1,
-  },
-  printGridBtnText: {
-    color: c.textMuted,
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  printGridBtnTextOn: {
-    color: c.accent,
-  },
   dimText: {
     color: c.textMuted,
     ...Type.caption,
@@ -5883,12 +5805,15 @@ const styles = themedStyles((c, scheme) => ({
     backgroundColor: c.surface,
   },
   staticPaletteContainer: {
-    width: '100%',
-    height: 270,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: c.surface,
+  },
+  paletteScrollContent: {
+    flexGrow: 1,
   },
   sheetScroll: {
     flex: 1,
+    minHeight: 0,
   },
   panelHeader: {
     position: 'relative',

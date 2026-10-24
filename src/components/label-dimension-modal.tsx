@@ -22,6 +22,7 @@ import {
   type LabelUnit,
 } from '@/lib/label-geometry';
 import { themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 const KEYBOARD_GAP = 32;
 
@@ -159,6 +160,7 @@ export function LabelDimensionModal({
 
   return (
     <Modal
+      supportedOrientations={ALL_ORIENTATIONS}
       visible={visible}
       transparent
       animationType="fade"

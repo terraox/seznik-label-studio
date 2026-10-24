@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
-import { AppIcon, type AppIconName } from '@/components/app-icon';
+import { AppIcon } from '@/components/app-icon';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
+import { TextAlignButtons } from '@/components/editor/text-align-buttons';
 import {
   DRAWING_COLORS,
   applyTimeOffsets,
@@ -14,14 +15,12 @@ import {
   formatOffset,
   formatPt,
   normalizeRotation,
-  type TextAlign,
   type TimeElementState,
   type TimePropertyTab,
 } from '@/components/editor/types';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const TABS: TimePropertyTab[] = ['Regular', 'Position', 'Format', 'Font'];
-type IconName = AppIconName;
 
 function Divider() {
   useThemeRefresh();
@@ -208,26 +207,7 @@ function AlignButtons({
   state: TimeElementState;
   patch: (updates: Partial<TimeElementState>) => void;
 }) {
-  useThemeRefresh();
-  const icons: { icon: IconName; align: TextAlign }[] = [
-    { icon: 'text.alignleft', align: 'left' },
-    { icon: 'text.aligncenter', align: 'center' },
-    { icon: 'text.alignright', align: 'right' },
-    { icon: 'text.justify', align: 'justify' },
-    { icon: 'arrow.left.and.right', align: 'spacing' },
-  ];
-  return (
-    <View style={styles.alignRow}>
-      {icons.map(({ icon, align }) => (
-        <Pressable
-          key={align}
-          onPress={() => patch({ align })}
-          style={[styles.alignBtn, state.align === align && styles.alignBtnActive]}>
-          <AppIcon name={icon} tintColor={state.align === align ? C.onAccent : C.textSecondary} size={16} />
-        </Pressable>
-      ))}
-    </View>
-  );
+  return <TextAlignButtons align={state.align} onChange={(align) => patch({ align })} />;
 }
 
 function ColorRow({
@@ -595,19 +575,9 @@ const styles = themedStyles((c) => ({
   styleBtnText: { fontSize: 16, fontWeight: '600', color: c.textSecondary },
   styleBtnTextActive: { color: c.onAccent },
   boldGlyph: { fontWeight: '700' },
-  italicGlyph: { fontStyle: 'italic' },
+  italicGlyph: { transform: [{ skewX: '-14deg' }] },
   underlineGlyph: { textDecorationLine: 'underline' },
   strikeGlyph: { textDecorationLine: 'line-through' },
-  alignRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  alignBtn: {
-    flex: 1,
-    minHeight: 36,
-    borderRadius: 8,
-    backgroundColor: c.fillStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  alignBtnActive: { backgroundColor: c.accent },
   sliderBlock: { marginTop: 10, paddingBottom: 4 },
   sliderTrack: {
     height: 4,

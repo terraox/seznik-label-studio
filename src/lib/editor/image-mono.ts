@@ -34,10 +34,16 @@ export function isLocalImageUri(value: string): boolean {
   return looksLikeImageUri(v);
 }
 
+/**
+ * Preview shader. B & W (mode < 1.5) uses chroma-aware ink so yellow/cyan logos
+ * print black instead of washing out to white under plain luminance. Halftone
+ * keeps luminance + Bayer dither for photos.
+ */
 export const MONO_IMAGE_SKSL = `
 uniform shader image;
 uniform float threshold;
 uniform float mode;
+uniform float invert;
 
 half4 main(float2 xy) {
   half4 c = image.eval(xy);
@@ -45,7 +51,11 @@ half4 main(float2 xy) {
   float t = threshold / 255.0;
   float v;
   if (mode < 1.5) {
-    v = lum < t ? 0.0 : 1.0;
+    float mn = min(c.r, min(c.g, c.b));
+    float mx = max(c.r, max(c.g, c.b));
+    float chroma = mx - mn;
+    float ink = chroma > 0.16 ? min(lum, mn) : lum;
+    v = ink < t ? 0.0 : 1.0;
   } else {
     int ix = int(mod(floor(xy.x), 4.0));
     int iy = int(mod(floor(xy.y), 4.0));
@@ -70,9 +80,25 @@ half4 main(float2 xy) {
     float bias = ((b + 0.5) / 16.0 - 0.5) / 4.0;
     v = lum + bias < t ? 0.0 : 1.0;
   }
+  if (invert > 0.5) {
+    v = 1.0 - v;
+  }
   return half4(v, v, v, c.a);
 }
 `;
+
+/** B & W ink level 0–255. Saturated colours use the darkest channel so yellow logos stay black. */
+export function monoInkLevel(r: number, g: number, b: number): number {
+  const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+  const mn = Math.min(r, g, b);
+  const mx = Math.max(r, g, b);
+  return mx - mn > 40 ? Math.min(lum, mn) : lum;
+}
+
+/** Skia RuntimeShader mode uniform: 1 = B & W threshold, 2 = ordered dither. */
+export function monoShaderModeValue(mode: EditorColorMode): number {
+  return mode === 'Halftone' ? 2 : 1;
+}
 
 export function binarizeLuminanceBuffer(
   gray: Uint8Array,
@@ -113,13 +139,16 @@ export function applyMonoToRgba(
         rgba[i + 2] = 255 - rgba[i + 2];
         continue;
       }
-      const lum = Math.round(0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2]);
+      const r = rgba[i];
+      const g = rgba[i + 1];
+      const b = rgba[i + 2];
       let v: 0 | 255;
       if (mode === 'Halftone') {
+        const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
         const bias = ((BAYER_4[(y & 3) * 4 + (x & 3)] + 0.5) / 16 - 0.5) * 64;
         v = lum + bias < t ? 0 : 255;
       } else {
-        v = monoFromLuminance(lum, t);
+        v = monoFromLuminance(monoInkLevel(r, g, b), t);
       }
       if (invert) v = v === 0 ? 255 : 0;
       rgba[i] = v;

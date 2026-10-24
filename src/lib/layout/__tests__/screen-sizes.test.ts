@@ -110,3 +110,38 @@ test('editor fallback viewport never collapses on short screens', () => {
   assert.equal(editorFallbackViewportPx(400), 560 * 0.62);
   for (const { h } of PHONES) assert.ok(editorFallbackViewportPx(h) < h, `editor ${h}`);
 });
+
+/** The app rotates: every phone turned sideways, plus tablets both ways (dp). */
+const ROTATED = [
+  ...PHONES.map(({ w, h }) => ({ w: h, h: w })),
+  { w: 800, h: 1280 },
+  { w: 1280, h: 800 },
+  { w: 1024, h: 1366 },
+  { w: 1366, h: 1024 },
+];
+
+test('landscape and tablets: grids, previews and the camera fit', () => {
+  for (const { w, h } of ROTATED) {
+    const shop = shopCardWidth(w);
+    assert.ok(shop * 2 + ShopGrid.gap + ShopGrid.pad * 2 <= w && shop >= MIN_TAP, `shop ${w}×${h}`);
+    assert.ok(clipartTileWidth(w) >= MIN_TAP, `clipart ${w}×${h}`);
+    assert.ok(dataFileTileWidth(w) >= MIN_TAP, `data file ${w}×${h}`);
+    const { layoutWidth, cardMaxWidth } = templateLayout(w);
+    assert.ok(layoutWidth <= w && cardMaxWidth > 0 && cardMaxWidth <= layoutWidth, `template ${w}×${h}`);
+
+    const { baseCardWidth, maxPreviewHeight } = printPreviewBounds(w, h);
+    assert.ok(baseCardWidth > 0 && baseCardWidth <= w && maxPreviewHeight < h / 2, `print ${w}×${h}`);
+    const pdf = pdfModalPreviewSize(w, h, { widthMm: 100, heightMm: 150 });
+    assert.ok(pdf.width <= w - 64 && pdf.height <= h * 0.36 + 1, `pdf ${w}×${h}`);
+
+    assert.ok(ocrPreviewSize(w) <= Math.min(w - 32, h), `ocr ${w}×${h}`);
+    const frame = scanFrameSize(w, h);
+    // No status bar inset in landscape on most phones; 24 covers the rest.
+    assert.ok(scanTopMaskHeight(h, frame, 24) + frame < h - 60, `scan ${w}×${h}: frame ${frame}`);
+    assert.ok(editorFallbackViewportPx(h) < h, `editor ${w}×${h}`);
+  }
+});
+
+test('portrait phones keep the same scan frame when the height is passed', () => {
+  for (const { w, h } of PHONES) assert.equal(scanFrameSize(w, h), scanFrameSize(w), `${w}×${h}`);
+});

@@ -67,9 +67,12 @@ export function ocrPreviewSize(windowWidth: number) {
   return Math.min(Math.round(windowWidth * 0.62), 260);
 }
 
-/** Scan: square camera viewfinder. */
-export function scanFrameSize(windowWidth: number) {
-  return Math.min(Math.round(windowWidth * 0.72), 280);
+/**
+ * Scan: square camera viewfinder. Landscape also caps it by height (room for the header and
+ * the controls below); in portrait the height is never the limit, so phones are unchanged.
+ */
+export function scanFrameSize(windowWidth: number, windowHeight = Infinity) {
+  return Math.min(Math.round(Math.min(windowWidth, windowHeight - 180) * 0.72), 280);
 }
 
 /** Scan: dark band above the viewfinder, never under the header. */
@@ -79,5 +82,18 @@ export function scanTopMaskHeight(windowHeight: number, frameSize: number, inset
 
 /** Editor: canvas + panel height to assume before the split view has been measured. */
 export function editorFallbackViewportPx(windowHeight: number) {
-  return Math.max(windowHeight, 560) * 0.62;
+  // The 90 % cap only bites on a phone turned sideways (about 320-412 dp tall).
+  return Math.min(Math.max(windowHeight, 560) * 0.62, windowHeight * 0.9);
 }
+
+/**
+ * Pass to every <Modal supportedOrientations>. iOS shows a Modal in portrait only unless told
+ * otherwise, which would flip a rotated app back upright while the popup is open.
+ */
+export const ALL_ORIENTATIONS: ('portrait' | 'portrait-upside-down' | 'landscape' | 'landscape-left' | 'landscape-right')[] = [
+  'portrait',
+  'portrait-upside-down',
+  'landscape',
+  'landscape-left',
+  'landscape-right',
+];

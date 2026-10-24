@@ -8,6 +8,8 @@ import {
   binarizeLuminanceBuffer,
   looksLikeImageUri,
   monoFromLuminance,
+  monoInkLevel,
+  monoShaderModeValue,
   renderMonoPreview,
   resolveEditorColorMode,
 } from '../image-mono';
@@ -42,6 +44,20 @@ test('applyMonoToRgba thresholds a mid-gray pixel in place', () => {
   const rgba = Uint8Array.from([128, 128, 128, 255, 10, 10, 10, 255]);
   applyMonoToRgba(rgba, 2, 1, 128, 'B & W');
   assert.deepEqual([...rgba], [255, 255, 255, 255, 0, 0, 0, 255]);
+});
+
+test('B & W keeps saturated yellow as black ink at the default threshold', () => {
+  // McDonald's-gold yellow is bright by luminance (~198) but must still print.
+  assert.equal(monoInkLevel(255, 199, 44), 44);
+  const rgba = Uint8Array.from([255, 199, 44, 255]);
+  applyMonoToRgba(rgba, 1, 1, 128, 'B & W');
+  assert.deepEqual([...rgba], [0, 0, 0, 255]);
+});
+
+test('mono shader mode maps Halftone to dither and everything else to threshold', () => {
+  assert.equal(monoShaderModeValue('Halftone'), 2);
+  assert.equal(monoShaderModeValue('B & W'), 1);
+  assert.equal(monoShaderModeValue('Original'), 1);
 });
 
 test('anti-colour inverts the thresholded result', () => {

@@ -14,6 +14,7 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { TextInput } from '@/components/ui/text-input';
 
 import { makeStyles, useColors, useScheme } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 export type IosAlertButton = {
   text: string;
@@ -62,6 +63,7 @@ export function IosAlertModal({
 
   return (
     <Modal
+      supportedOrientations={ALL_ORIENTATIONS}
       visible={visible}
       transparent
       animationType="fade"

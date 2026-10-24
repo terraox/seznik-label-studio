@@ -87,6 +87,10 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
     ? `${cellSize} each\n${across} across · ${document.paperType}`
     : `${cellSize}\n${document.paperType}`;
 
+  const openEditor = () => {
+    router.push({ pathname: '/edit', params: { labelId: document.id } });
+  };
+
   const handleDelete = () => {
     Alert.alert('Delete Label', `Delete "${document.name}"?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -119,23 +123,22 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
       </View>
 
       {/* catalogStock uses HiFi paint-then-scale so QR/text stay visible at card size */}
-      <View style={styles.previewStage}>
+      <Pressable
+        onPress={openEditor}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${document.name}`}
+        android_ripple={androidRipple}
+        style={({ pressed }) => [styles.previewStage, pressed && styles.pressed]}>
         <LabelPreview
           document={previewDocument}
           catalogStock
           upsDividers={layout ? { columns: layout.columns, gapMm: layout.gapMm } : undefined}
           maxHeight={HomeLayout.continuePreviewMaxHeight}
         />
-      </View>
+      </Pressable>
 
       <View style={styles.actionRow}>
-        <ActionItem
-          icon="square.and.pencil"
-          label="Edit"
-          onPress={() =>
-            router.push({ pathname: '/edit', params: { labelId: document.id } })
-          }
-        />
+        <ActionItem icon="square.and.pencil" label="Edit" onPress={openEditor} />
         <ActionItem
           icon="printer"
           label="Print"

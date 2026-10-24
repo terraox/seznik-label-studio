@@ -14,6 +14,7 @@ import {
 import { Spacing } from '@/constants/theme';
 import { Type, androidRipple } from '@/constants/ui';
 import { themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 type GridSpacingPopoverProps = {
   visible: boolean;
@@ -54,6 +55,7 @@ export function GridSpacingPopover({
 
   return (
     <Modal
+      supportedOrientations={ALL_ORIENTATIONS}
       visible={visible}
       transparent
       animationType="fade"

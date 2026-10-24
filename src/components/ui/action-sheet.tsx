@@ -2,6 +2,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { makeStyles } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 export type ActionSheetItem = {
   label: string;
@@ -23,6 +24,7 @@ export function ActionSheet({ visible, onClose, items }: ActionSheetProps) {
 
   return (
     <Modal
+      supportedOrientations={ALL_ORIENTATIONS}
       visible={visible}
       transparent
       animationType="fade"

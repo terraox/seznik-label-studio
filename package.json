@@ -137,7 +137,7 @@
     "test:label-share": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/label-share/__tests__/*.test.ts",
     "test:across": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/__tests__/across.test.ts",
     "test:new-label": "npx --yes tsx --tsconfig tsconfig.json --test src/lib/__tests__/new-label-form.test.ts",
-    "test:layout": "npx --yes tsx --tsconfig tsconfig.json --test src/theme/__tests__/layout-risks.test.ts src/theme/__tests__/font-scale.test.ts src/lib/layout/__tests__/screen-sizes.test.ts",
+    "test:layout": "npx --yes tsx --tsconfig tsconfig.json --test src/theme/__tests__/layout-risks.test.ts src/theme/__tests__/font-scale.test.ts src/lib/layout/__tests__/screen-sizes.test.ts src/lib/layout/__tests__/modal-orientations.test.ts",
     "layout:report": "npx --yes tsx --tsconfig tsconfig.json scripts/layout-risks.ts",
     "layout:baseline": "npx --yes tsx --tsconfig tsconfig.json scripts/layout-risks.ts --update",
     "print:calibration": "npx --yes tsx --tsconfig tsconfig.json scripts/print-calibration-box.ts",

@@ -21,7 +21,7 @@ import { Spacing } from '@/constants/theme';
 import { Palette } from '@/constants/ui';
 import { loadAndRenderPdf, printPdfToThermal, type RenderedPdfPage } from '@/lib/pdf-printer';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
-import { pdfModalPreviewSize } from '@/lib/layout/screen-sizes';
+import { pdfModalPreviewSize, ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 import { formatPrintFailure } from '@/lib/printer/print-job';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
@@ -376,6 +376,7 @@ function PdfScreenContent() {
 
       {/* PDF Thermal Print In-Place Modal */}
       <Modal
+        supportedOrientations={ALL_ORIENTATIONS}
         visible={modalVisible}
         animationType="slide"
         transparent={true}

@@ -35,7 +35,10 @@ export function PaletteToolItem({
     const fireMove = (x: number, y: number) => callbacksRef.current.onDragMove(x, y);
     const fireEnd = (x: number, y: number) => callbacksRef.current.onDragEnd(x, y);
     const firePress = () => callbacksRef.current.onPress();
+    // Long-press before drag so a short vertical pan can scroll the tool menu when the
+    // sheet is shorter than the palette. Tap still adds a tool immediately.
     const pan = Gesture.Pan()
+      .activateAfterLongPress(160)
       .minDistance(DRAG_START_PX)
       .maxPointers(1)
       .shouldCancelWhenOutside(false)

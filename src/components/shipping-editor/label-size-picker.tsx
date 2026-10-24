@@ -24,6 +24,7 @@ import {
   STANDARD_LABEL_SIZES,
 } from '@/lib/shipping-editor/types';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 type LabelSizePickerProps = {
   selectedPreset: LabelSizePreset;
@@ -84,6 +85,7 @@ export function LabelSizePicker({
 
       {/* Selection Modal */}
       <Modal
+        supportedOrientations={ALL_ORIENTATIONS}
         visible={modalVisible}
         transparent
         animationType="slide"

@@ -5,6 +5,7 @@ import { CONSUMER_PRINTER_LIST } from '@/constants/printer-models';
 import { Spacing } from '@/constants/theme';
 import { androidRipple } from '@/constants/ui';
 import { themedStyles, useColors, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 // Small copies of the printer photos and logo: the full 1024px PNGs decode slowly for a ~100dp tile.
 const NOTICE_PHOTOS = {
@@ -19,7 +20,7 @@ export function PrinterSupportNotice({ visible, onClose }: { visible: boolean; o
   useThemeRefresh();
   const c = useColors();
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+    <Modal supportedOrientations={ALL_ORIENTATIONS} visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <View style={styles.band}>

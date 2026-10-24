@@ -9,6 +9,7 @@ import { useBuy } from '@/components/shop/use-buy';
 import { androidRipple } from '@/constants/ui';
 import { pickVariant, ROLL_COLOURS, rollColour, USE_CASES, type RollColour, type RollGroup } from '@/lib/shop/roll-groups';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 /** Product page for one roll: see the label to scale, pick colour and pack, then buy. */
 export function RollSheet({ group, onClose }: { group: RollGroup | null; onClose: () => void }) {
@@ -35,7 +36,7 @@ export function RollSheet({ group, onClose }: { group: RollGroup | null; onClose
   const swatchScale = sized ? Math.min(1.6, 120 / Math.max(group.widthMm!, group.heightMm!)) : 0;
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal supportedOrientations={ALL_ORIENTATIONS} visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>

@@ -582,7 +582,7 @@ const styles = themedStyles((c) => ({
   styleBtnText: { fontSize: 16, fontWeight: '600', color: c.textSecondary },
   styleBtnTextActive: { color: c.onAccent },
   boldGlyph: { fontWeight: '700' },
-  italicGlyph: { fontStyle: 'italic' },
+  italicGlyph: { transform: [{ skewX: '-14deg' }] },
   underlineGlyph: { textDecorationLine: 'underline' },
   strikeGlyph: { textDecorationLine: 'line-through' },
   sliderBlock: { marginTop: 10, paddingBottom: 4 },

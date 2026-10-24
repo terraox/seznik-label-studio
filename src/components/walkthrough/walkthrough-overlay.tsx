@@ -102,7 +102,8 @@ export function WalkthroughOverlay({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [visible, step, insets.top]);
+    // Window size too: after a rotation every target has moved.
+  }, [visible, step, insets.top, win.width, win.height]);
 
   if (!visible) return null;
 

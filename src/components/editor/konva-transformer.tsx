@@ -1961,10 +1961,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         {element.lockMovement ? null : (
           <>
             {handleGestures.e ? (
-              <EdgeResizeHandle position="e" gesture={handleGestures.e} />
+              <EdgeResizeHandle position="e" gesture={handleGestures.e} viewScaleSv={padZoomSv} />
             ) : null}
             {handleGestures.s ? (
-              <EdgeResizeHandle position="s" gesture={handleGestures.s} />
+              <EdgeResizeHandle position="s" gesture={handleGestures.s} viewScaleSv={padZoomSv} />
             ) : null}
           </>
         )}
@@ -2015,17 +2015,28 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 const EdgeResizeHandle = memo(function EdgeResizeHandle({
   position,
   gesture,
+  viewScaleSv,
 }: {
   position: HandlePosition;
   gesture: ReturnType<typeof Gesture.Pan>;
+  /** Artboard zoom (pinch × fit). Handles counter-scale so they stay screen-constant. */
+  viewScaleSv: SharedValue<number>;
 }) {
   useThemeRefresh();
+  const counterScaleStyle = useAnimatedStyle(() => {
+    const z = viewScaleSv.value > 0.05 ? viewScaleSv.value : 1;
+    return { transform: [{ scale: 1 / z }] };
+  });
   return (
     <GestureDetector gesture={gesture}>
-      <View
+      <Animated.View
         collapsable={false}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        style={[styles.handleCircle, position === 'e' ? styles.handleE : styles.handleS]}>
+        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+        style={[
+          styles.handleCircle,
+          position === 'e' ? styles.handleE : styles.handleS,
+          counterScaleStyle,
+        ]}>
         <View pointerEvents="none">
           {position === 'e' ? (
             <Svg width={CHROME_HANDLE_ICON_SIZE} height={CHROME_HANDLE_ICON_SIZE} viewBox="-10 -10 20 20">
@@ -2043,7 +2054,7 @@ const EdgeResizeHandle = memo(function EdgeResizeHandle({
             </Svg>
           )}
         </View>
-      </View>
+      </Animated.View>
     </GestureDetector>
   );
 });

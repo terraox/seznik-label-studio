@@ -5,6 +5,7 @@ import { TextInput } from '@/components/ui/text-input';
 import { Spacing } from '@/constants/theme';
 import { PRINTER_NICKNAME_MAX } from '@/stores/printer-store';
 import { cardElevation, themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 type NicknameDialogProps = {
   visible: boolean;
@@ -26,7 +27,7 @@ export function NicknameDialog({ visible, nickname, deviceName, onSave, onClose 
 
   const trimmed = value.trim();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal supportedOrientations={ALL_ORIENTATIONS} visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}>

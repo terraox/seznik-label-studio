@@ -3,9 +3,20 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import type { ComponentProps } from 'react';
 import { Platform, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { AlignGlyph } from '@/components/editor/text-align-buttons';
+import type { TextAlign } from '@/components/editor/types';
+
 export type AppIconName = string;
 
 type IoniconsName = ComponentProps<typeof Ionicons>['name'];
+
+/** Android has no SF Symbols; Ionicons `text` is "Aa". Use the SVG align glyphs instead. */
+const ALIGN_GLYPH: Record<string, TextAlign> = {
+  'text.alignleft': 'left',
+  'text.aligncenter': 'center',
+  'text.alignright': 'right',
+  'text.justify': 'justify',
+};
 
 const ION: Record<string, IoniconsName> = {
   bluetooth: 'bluetooth',
@@ -113,10 +124,6 @@ const ION: Record<string, IoniconsName> = {
   'tablecells.badge.ellipsis': 'grid-outline',
   tag: 'pricetag-outline',
   'tag.fill': 'pricetag',
-  'text.aligncenter': 'text',
-  'text.alignleft': 'text',
-  'text.alignright': 'text',
-  'text.justify': 'text',
   textformat: 'text-outline',
   'tray.and.arrow.down': 'download-outline',
   'tray.and.arrow.down.fill': 'download',
@@ -151,6 +158,17 @@ export function AppIcon({
         pointerEvents={pointerEvents}
         style={style}
       />
+    );
+  }
+
+  const alignKind = ALIGN_GLYPH[name];
+  if (alignKind) {
+    return (
+      <View
+        pointerEvents={pointerEvents ?? 'auto'}
+        style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
+        <AlignGlyph kind={alignKind} color={tintColor ?? '#6B7280'} size={size} />
+      </View>
     );
   }
 

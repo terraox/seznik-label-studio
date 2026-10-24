@@ -53,6 +53,7 @@ import {
 import { getPrinterManager, PrintTimingLogger } from '@/lib/printer/printer-manager';
 import { usePrinterStore } from '@/stores/printer-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 type LabelEditorProps = {
   initialTemplate?: ShippingTemplate;
@@ -574,6 +575,7 @@ export function LabelEditor({
 
       {/* Order Data Editor Modal */}
       <Modal
+        supportedOrientations={ALL_ORIENTATIONS}
         visible={dataModalVisible}
         transparent
         animationType="slide"

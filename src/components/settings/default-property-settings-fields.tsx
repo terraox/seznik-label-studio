@@ -20,6 +20,7 @@ import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { androidRipple } from '@/constants/ui';
 import { themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
 const WRAP_MODES = ['Close', 'Char', 'Word'] as const;
@@ -223,6 +224,7 @@ export function DefaultPropertySettingsFields() {
       />
 
       <Modal
+        supportedOrientations={ALL_ORIENTATIONS}
         visible={barcodePickerOpen}
         transparent
         animationType="fade"

@@ -1,5 +1,7 @@
-import { useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 const THUMB_SIZE = 20;
@@ -25,25 +27,72 @@ export function FontSlider({
 }) {
   useThemeRefresh();
   const trackWidth = useRef(1);
-  const clamped = clampFontSize(value, min, max, step);
-  const ratio = (clamped - min) / (max - min);
+  /** Page-X of the track's left edge, frozen for the active gesture. */
+  const originPageX = useRef(0);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const boundsRef = useRef({ min, max, step });
+  boundsRef.current = { min, max, step };
+  const lastSent = useRef(value);
+  const [dragging, setDragging] = useState(false);
+  const [dragValue, setDragValue] = useState(value);
+  if (!dragging) lastSent.current = value;
 
-  const setFromX = (x: number) => {
-    const nextRatio = Math.min(1, Math.max(0, x / trackWidth.current));
-    onChange(clampFontSize(min + nextRatio * (max - min), min, max, step));
+  const displayValue = dragging ? dragValue : value;
+  const clamped = clampFontSize(displayValue, min, max, step);
+  const ratio = max > min ? (clamped - min) / (max - min) : 0;
+
+  const applyAbsoluteX = (absoluteX: number) => {
+    const { min: lo, max: hi, step: st } = boundsRef.current;
+    const w = trackWidth.current || 1;
+    const nextRatio = Math.min(1, Math.max(0, (absoluteX - originPageX.current) / w));
+    const next = clampFontSize(lo + nextRatio * (hi - lo), lo, hi, st);
+    setDragValue(next);
+    if (next === lastSent.current) return;
+    lastSent.current = next;
+    onChangeRef.current(next);
   };
 
+  const beginDrag = (absoluteX: number, localX: number) => {
+    // absoluteX - localX is the detector view's left edge in window coords at gesture start.
+    // Freeze it so later panel/layout shifts cannot yank the value under the finger.
+    originPageX.current = absoluteX - localX;
+    setDragging(true);
+    applyAbsoluteX(absoluteX);
+  };
+
+  const endDrag = () => {
+    setDragging(false);
+  };
+
+  const gesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .activeOffsetX([-2, 2])
+      .failOffsetY([-16, 16])
+      .onBegin((e) => {
+        runOnJS(beginDrag)(e.absoluteX, e.x);
+      })
+      .onUpdate((e) => {
+        runOnJS(applyAbsoluteX)(e.absoluteX);
+      })
+      .onFinalize(() => {
+        runOnJS(endDrag)();
+      });
+    const tap = Gesture.Tap().onEnd((e) => {
+      runOnJS(beginDrag)(e.absoluteX, e.x);
+      runOnJS(endDrag)();
+    });
+    return Gesture.Exclusive(pan, tap);
+  }, []);
+
   return (
-    <View style={styles.sliderBlock}>
+    <GestureDetector gesture={gesture}>
       <View
-        style={styles.sliderHit}
+        style={styles.sliderBlock}
         onLayout={(event) => {
           trackWidth.current = event.nativeEvent.layout.width || 1;
         }}
-        onStartShouldSetResponder={() => true}
-        onMoveShouldSetResponder={() => true}
-        onResponderGrant={(event) => setFromX(event.nativeEvent.locationX)}
-        onResponderMove={(event) => setFromX(event.nativeEvent.locationX)}>
+        hitSlop={{ top: 12, bottom: 12 }}>
         <View style={styles.trackWrap}>
           <View style={styles.sliderTrack}>
             <View style={[styles.sliderFill, { width: `${ratio * 100}%` }]} />
@@ -56,7 +105,7 @@ export function FontSlider({
           />
         </View>
       </View>
-    </View>
+    </GestureDetector>
   );
 }
 
@@ -64,8 +113,6 @@ const styles = themedStyles((c) => ({
   sliderBlock: {
     marginTop: 10,
     paddingBottom: 4,
-  },
-  sliderHit: {
     minHeight: THUMB_SIZE,
     justifyContent: 'center',
   },

@@ -1,8 +1,8 @@
 /**
  * Statically pre-laid-out tool palette block.
  * Contains all 4 rows of tools (Text through Signature) at their natural fixed height.
- * Always fully rendered and mounted; visibility is clipped purely by the parent sheet container.
- * Wrapped in React.memo so sheet height changes never trigger re-renders or layout re-flexes.
+ * Always fully rendered and mounted; the parent sheet scrolls when its reveal height is shorter
+ * than this content. Wrapped in React.memo so sheet height changes never re-render the grid.
  */
 
 import React, { memo } from 'react';

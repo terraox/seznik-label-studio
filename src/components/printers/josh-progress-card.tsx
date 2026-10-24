@@ -6,6 +6,7 @@ import { AppIcon } from '@/components/app-icon';
 import { joshCurrentLabel, joshProgressFraction, joshProgressText } from '@/lib/printer/josh-status';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 /**
  * Josh print progress as a popup card: step text, a "2 / 3" count and a bar that moves as each
@@ -40,7 +41,7 @@ export function JoshProgressCard() {
   const close = () => useJoshProgressStore.getState().reset();
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={done || failed ? close : undefined}>
+    <Modal supportedOrientations={ALL_ORIENTATIONS} visible transparent animationType="fade" onRequestClose={done || failed ? close : undefined}>
       <View style={styles.overlay}>
         <View style={styles.card} accessibilityRole="alert">
           <Text style={styles.title}>Printer</Text>

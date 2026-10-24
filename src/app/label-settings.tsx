@@ -45,6 +45,7 @@ import { QualityControl } from '@/components/quality-control';
 import { clampToCap, qualityCapsFor, resolveQualityBridge } from '@/lib/printer/bridge-quality-caps';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { themedStyles, useThemeRefresh } from '@/theme';
+import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 const ORIENTATIONS = ['0°', '90°', '180°', '270°'] as const;
 const MIRROR_MODES = ['Close', 'Reverse', 'Syntropy'] as const;
@@ -522,7 +523,7 @@ export default function LabelSettingsScreen() {
         <IosAlertInput value={nameDraft} onChangeText={setNameDraft} placeholder="Label name" />
       </IosAlertModal>
 
-      <Modal visible={sizeModalVisible} transparent animationType="fade">
+      <Modal supportedOrientations={ALL_ORIENTATIONS} visible={sizeModalVisible} transparent animationType="fade">
         <KeyboardAvoidingView
           behavior="padding"
           style={styles.modalOverlay}>
