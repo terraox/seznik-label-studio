@@ -28,7 +28,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "preview"
+        "APP_VARIANT": "preview",
+        "EXPO_PUBLIC_API_URL": "https://api2.seznik.in"
       },
       "android": {
         "buildType": "apk"
@@ -39,6 +40,9 @@
     },
     "production": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api2.seznik.in"
+      },
       "android": {
         "buildType": "apk"
       }
