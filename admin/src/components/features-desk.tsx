@@ -5,16 +5,15 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import { PageHeader, Skeleton, SkeletonRows } from '@/components/ui';
 import { api } from '@/lib/client';
-import { ago } from '@/lib/format';
 
-type Feature = { key: string; label: string; group: string; clicks: number; share: number; last7Days: number; last30Days: number; lastClick: string | null };
+type Feature = { key: string; label: string; group: string; clicks: number; share: number; today: number; last7Days: number; last30Days: number; lastClick: string | null };
 type Data = {
   range: string; total: number; trackingSince: string | null;
   features: Feature[]; groups: { id: string; label: string; clicks: number }[];
   trend: { day: string; clicks: number }[];
 };
 
-const RANGES = [{ id: '7', label: '7 days' }, { id: '30', label: '30 days' }, { id: 'all', label: 'All time' }];
+const RANGES = [{ id: '1', label: 'Today' }, { id: '7', label: '7 days' }, { id: '30', label: '30 days' }];
 
 export function FeaturesDesk() {
   const [data, setData] = useState<Data | null>(null);
@@ -33,7 +32,6 @@ export function FeaturesDesk() {
 
   const rows = data?.features.filter((f) => group === 'all' || f.group === group) ?? [];
   const top = data?.features[0];
-  const max = Math.max(1, ...rows.map((f) => f.clicks));
   const selected = data?.features.find((f) => f.key === feature);
 
   return (
@@ -69,25 +67,18 @@ export function FeaturesDesk() {
 
         <div style={{ overflowX: 'auto' }}>
           <table className="table">
-            <thead><tr><th>#</th><th>Section</th><th>Group</th><th style={{ minWidth: 180 }}>Taps</th><th>Share</th><th>Last 7 days</th><th>Last 30 days</th><th>Last tap</th></tr></thead>
+            <thead><tr><th>#</th><th>Section</th><th>Group</th><th>Taps</th><th>Share</th><th>Today</th><th>Last 7 days</th><th>Last 30 days</th></tr></thead>
             <tbody>
               {rows.map((f, i) => (
                 <tr key={f.key} onClick={() => setFeature(feature === f.key ? '' : f.key)} style={{ cursor: 'pointer', fontWeight: feature === f.key ? 700 : 400 }}>
                   <td>{i + 1}</td>
                   <td>{f.label}</td>
                   <td>{data?.groups.find((g) => g.id === f.group)?.label}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--paper-2)' }}>
-                        <div style={{ width: `${(f.clicks / max) * 100}%`, height: '100%', borderRadius: 4, background: '#8B5CF6' }} />
-                      </div>
-                      <span style={{ minWidth: 40, textAlign: 'right' }}>{f.clicks.toLocaleString()}</span>
-                    </div>
-                  </td>
+                  <td>{f.clicks.toLocaleString()}</td>
                   <td>{Math.round(f.share * 100)}%</td>
+                  <td>{f.today.toLocaleString()}</td>
                   <td>{f.last7Days.toLocaleString()}</td>
                   <td>{f.last30Days.toLocaleString()}</td>
-                  <td>{f.lastClick ? ago(f.lastClick) : 'Never'}</td>
                 </tr>
               ))}
               {!data ? <SkeletonRows cols={8} /> : null}

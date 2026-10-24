@@ -8,14 +8,14 @@ import { prisma } from '@/lib/prisma';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-type Row = { key: string; clicks: bigint; c7: bigint; c30: bigint; last: Date | null };
+type Row = { key: string; clicks: bigint; c1: bigint; c7: bigint; c30: bigint; last: Date | null };
 type Day = { day: string; clicks: bigint };
 
-const RANGE_DAYS: Record<string, number | null> = { '7': 7, '30': 30, all: null };
+const RANGE_DAYS: Record<string, number | null> = { '1': 1, '7': 7, '30': 30, all: null };
 const TODAY_IST = Prisma.sql`(now() AT TIME ZONE 'Asia/Kolkata')::date`;
 
 /**
- * Most-clicked app sections, overall (counts are stored per day, without any user). ?range=7|30|all
+ * Most-clicked app sections, overall (counts are stored per day, without any user). ?range=1|7|30|all
  * picks the window for the ranking; ?feature=<key> narrows the daily chart (last 30 India-time days)
  * to one section. Sections nobody has tapped yet are listed with zero so the page always shows the full catalogue.
  */
@@ -26,13 +26,14 @@ export async function GET(request: Request) {
     const range = url.searchParams.get('range') ?? '30';
     const days = Object.hasOwn(RANGE_DAYS, range) ? RANGE_DAYS[range] : 30;
     const feature = url.searchParams.get('feature');
-    // "Last 7 days" = today and the 6 days before it, India time.
+    // "Today" = India time today; "Last 7 days" = today and the 6 days before it, India time.
     const since = days === null ? Prisma.sql`'1970-01-01'::date` : Prisma.sql`${TODAY_IST} - ${days - 1}::int`;
 
     const [rows, daily, first] = await Promise.all([
       prisma.$queryRaw<Row[]>(Prisma.sql`
         SELECT "featureKey" AS key,
           COALESCE(sum(clicks) FILTER (WHERE day >= ${since}), 0) AS clicks,
+          COALESCE(sum(clicks) FILTER (WHERE day >= ${TODAY_IST}), 0) AS c1,
           COALESCE(sum(clicks) FILTER (WHERE day >= ${TODAY_IST} - 6), 0) AS c7,
           COALESCE(sum(clicks) FILTER (WHERE day >= ${TODAY_IST} - 29), 0) AS c30,
           max(day)::timestamp AS last
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
       const r = byKey.get(key);
       return {
         key, label: meta.label, group: meta.group,
-        clicks: Number(r?.clicks ?? 0), last7Days: Number(r?.c7 ?? 0), last30Days: Number(r?.c30 ?? 0),
+        clicks: Number(r?.clicks ?? 0), today: Number(r?.c1 ?? 0), last7Days: Number(r?.c7 ?? 0), last30Days: Number(r?.c30 ?? 0),
         lastClick: r?.last?.toISOString() ?? null,
       };
     });

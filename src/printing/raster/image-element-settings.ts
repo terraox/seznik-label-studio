@@ -24,7 +24,10 @@ export function modedImageSettings(el: ImageEl): ImageSettings | null {
     if (el.colorMode === 'Halftone' && !el.tile) {
       return normalizeImageSettings({
         mode: 'ordered',
-        threshold: el.grayThreshold ?? DEFAULT_IMAGE_THRESHOLD,
+        threshold: DEFAULT_IMAGE_THRESHOLD,
+        // The ordered screen has no cutoff, so the Gray Threshold slider moves the tone instead:
+        // higher = darker, the same direction as B & W.
+        brightness: -((el.grayThreshold ?? DEFAULT_IMAGE_THRESHOLD) - DEFAULT_IMAGE_THRESHOLD) * (100 / 127),
         invert: el.antiColor === true,
       });
     }

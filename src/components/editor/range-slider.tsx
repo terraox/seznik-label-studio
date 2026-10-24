@@ -23,6 +23,8 @@ export type RangeSliderProps = {
   step?: number;
   /** Extra top margin — font rows use a bit more spacing than threshold rows. */
   compact?: boolean;
+  /** Minimum gap between live updates to the parent. For sliders that re-render the canvas. */
+  throttleMs?: number;
 };
 
 /**
@@ -38,6 +40,7 @@ export function RangeSlider({
   max = 1,
   step = 1,
   compact = false,
+  throttleMs = 0,
 }: RangeSliderProps) {
   useThemeRefresh();
   const trackWidth = useRef(1);
@@ -50,6 +53,8 @@ export function RangeSlider({
   const lastSent = useRef(value);
   const pendingRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFlushAt = useRef(0);
   const [dragging, setDragging] = useState(false);
   const [dragValue, setDragValue] = useState(value);
   if (!dragging) lastSent.current = value;
@@ -60,6 +65,8 @@ export function RangeSlider({
 
   const flushPending = () => {
     rafRef.current = null;
+    timerRef.current = null;
+    lastFlushAt.current = Date.now();
     const next = pendingRef.current;
     pendingRef.current = null;
     if (next == null || next === lastSent.current) return;
@@ -69,7 +76,12 @@ export function RangeSlider({
 
   const scheduleOnChange = (next: number) => {
     pendingRef.current = next;
-    if (rafRef.current != null) return;
+    if (rafRef.current != null || timerRef.current != null) return;
+    const wait = throttleMs - (Date.now() - lastFlushAt.current);
+    if (wait > 0) {
+      timerRef.current = setTimeout(flushPending, wait);
+      return;
+    }
     rafRef.current = requestAnimationFrame(flushPending);
   };
 
@@ -92,6 +104,10 @@ export function RangeSlider({
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
+    }
+    if (timerRef.current != null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
     flushPending();
     setDragging(false);

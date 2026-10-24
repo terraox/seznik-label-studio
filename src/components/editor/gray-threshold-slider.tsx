@@ -18,6 +18,6 @@ export function GrayThresholdSlider({
   step?: number;
 }) {
   return (
-    <RangeSlider value={value} onChange={onChange} min={min} max={max} step={step} compact />
+    <RangeSlider value={value} onChange={onChange} min={min} max={max} step={step} compact throttleMs={50} />
   );
 }

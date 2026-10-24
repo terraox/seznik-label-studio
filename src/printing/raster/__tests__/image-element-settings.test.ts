@@ -36,6 +36,10 @@ test('legacy Halftone runs as the Ordered dot screen, tiled stays old', () => {
   assert.equal(s.mode, 'ordered');
   assert.equal(s.invert, true);
   assert.equal(usesModedPrint(half), true);
+  // The Gray Threshold slider moves the tone: higher is darker.
+  const dark = modedImageSettings({ ...half, grayThreshold: 200 } as ImageEl)!;
+  const light = modedImageSettings({ ...half, grayThreshold: 60 } as ImageEl)!;
+  assert.ok(dark.brightness < 0 && light.brightness > 0);
   assert.equal(usesModedPrint({ ...half, tile: true } as ImageEl), false);
 });
 

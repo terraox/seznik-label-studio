@@ -303,7 +303,8 @@ const lastFeatureTap = new Map<string, number>();
  * database writes to a handful per person per day, however much they tap.
  */
 const FEATURE_COUNTS_KEY = 'sez-print/feature-counts';
-const FEATURE_SEND_MS = 10 * 60 * 1000;
+// Development builds send a few seconds after a tap, so the counts can be checked on the admin page right away.
+const FEATURE_SEND_MS = __DEV__ ? 5 * 1000 : 10 * 60 * 1000;
 const FEATURE_SEND_AT_TAPS = 200; // a very busy stretch is sent early
 const FEATURE_SAVE_MS = 5000;
 

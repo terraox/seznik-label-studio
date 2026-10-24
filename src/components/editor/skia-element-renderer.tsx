@@ -657,8 +657,8 @@ export const SkiaImageElement = memo(function SkiaImageElement({
     [],
   );
 
-  if (element && usesModedPrint(element)) {
-    if (!modedView || !modedImage) return null;
+  // While the dots are still being made, show the plain preview instead of an empty box.
+  if (element && usesModedPrint(element) && modedView && modedImage) {
     const dw = Math.max(1, (modedView.tile.width / modedView.boxWidthDots) * w);
     const dh = Math.max(1, (modedView.tile.height / modedView.boxHeightDots) * h);
     return <Image image={modedImage} x={(w - dw) / 2} y={(h - dh) / 2} width={dw} height={dh} fit="fill" />;

@@ -1645,7 +1645,7 @@ function ImageContent({
     }
   }
   const modedView = useModedTile(element, displayUri);
-  if (usesModedPrint(element)) {
+  if (usesModedPrint(element) && modedView) {
     return <ModedTileImage view={modedView} widthPx={widthPx} heightPx={heightPx} />;
   }
   return (

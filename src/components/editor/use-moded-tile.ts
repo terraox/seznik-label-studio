@@ -8,6 +8,10 @@ import { buildImageTile, imageBoxDots, loadImageSource } from '@/printing/raster
 
 type ImageEl = Extract<LabelElement, { type: 'image' }>;
 
+/** Draft tiles are made at this share of the printer's dpi; full dots follow after a pause. */
+const DRAFT_SCALE = 0.3;
+const FULL_DELAY_MS = 160;
+
 function previewDpi(): number {
   try {
     return getPrinterManager().getPrintDpi() || 304;
@@ -46,19 +50,24 @@ export function useModedTile(element: ImageEl | undefined, uri: string | undefin
       return;
     }
     let cancelled = false;
-    void (async () => {
+    // Live preview: a coarse draft is made at once so the picture follows the slider, then the
+    // full printer-resolution dots replace it when the changes pause.
+    const make = async (dpi: number) => {
       const src = await loadImageSource(uri!);
       if (cancelled || !src) return;
-      const dpi = previewDpi();
       const box = imageBoxDots(element!, dpi);
-      setTile({
-        tile: buildImageTile(element!, src, dpi, { rotation: 0 }),
-        boxWidthDots: box.w,
-        boxHeightDots: box.h,
-      });
-    })();
+      const built = buildImageTile(element!, src, dpi, { rotation: 0 });
+      if (cancelled) return;
+      setTile({ tile: built, boxWidthDots: box.w, boxHeightDots: box.h });
+    };
+    const fullDpi = previewDpi();
+    const draftDpi = Math.max(60, Math.round(fullDpi * DRAFT_SCALE));
+    const draftTimer = setTimeout(() => void make(draftDpi), 0);
+    const fullTimer = setTimeout(() => void make(fullDpi), FULL_DELAY_MS);
     return () => {
       cancelled = true;
+      clearTimeout(draftTimer);
+      clearTimeout(fullTimer);
     };
     // `key` carries every input that changes the dots.
     // eslint-disable-next-line react-hooks/exhaustive-deps
