@@ -11,7 +11,7 @@
       "item": [
         {
           "name": "Auth & OTP",
-          "description": "Register flow: Send OTP (register) → Verify OTP → Register.\nOTP login flow: Send OTP (login) → Verify OTP (purpose login) → Login with OTP.\nFor local testing set `OTP_DEV_BYPASS=9876543210:123456` in admin/.env so no SMS is sent.",
+          "description": "Register flow: Send OTP (register) → Verify OTP → Register.\nOTP login flow: Send OTP (login) → Verify OTP (purpose login) → Login with OTP.",
           "item": [
             {
               "name": "Send OTP — register",
