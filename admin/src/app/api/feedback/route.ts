@@ -43,7 +43,9 @@ export async function GET(request: Request) {
     if (q) {
       const digits = q.replace(/\D/g, '');
       where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
         { message: { contains: q, mode: 'insensitive' } },
+        { printerName: { contains: q, mode: 'insensitive' } },
         ...(seeUsers ? [{ user: { name: { contains: q, mode: 'insensitive' as const } } }] : []),
         ...(seePhones && digits.length >= 4 ? [{ user: { mobile: { contains: digits } } }] : []),
       ];
@@ -76,6 +78,8 @@ export async function GET(request: Request) {
         id: f.id,
         rating: f.rating,
         category: f.category,
+        title: f.title,
+        printerName: f.printerName,
         message: f.message,
         status: f.status,
         adminNote: f.adminNote,

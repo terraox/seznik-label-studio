@@ -10,16 +10,24 @@ import { ago } from '@/lib/format';
 import { can } from '@/lib/permissions';
 
 type Item = {
-  id: string; rating: number; category: string; message: string | null; status: string; adminNote: string | null;
-  appVersion: string | null; platform: string | null; createdAt: string; user: { name: string; mobile: string } | null;
+  id: string;
+  rating: number | null;
+  category: string;
+  title: string | null;
+  printerName: string | null;
+  message: string | null;
+  status: string;
+  adminNote: string | null;
+  appVersion: string | null;
+  platform: string | null;
+  createdAt: string;
+  user: { name: string; mobile: string } | null;
 };
 type Data = {
   total: number; page: number; pageSize: number;
   summary: { count: number; average: number | null; distribution: { rating: number; count: number }[] };
   items: Item[];
 };
-
-const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
 export function FeedbackDesk() {
   const desk = useDesk();
@@ -74,16 +82,17 @@ export function FeedbackDesk() {
   const from_ = data && data.total ? (page - 1) * data.pageSize + 1 : 0;
   const to_ = data ? Math.min(page * data.pageSize, data.total) : 0;
   const statusBadge = (st: string) => (st === 'resolved' ? 'badge shipped' : st === 'reviewed' ? 'badge reviewing' : 'badge');
-  const fill = (n: number) => <span className="fb-stars" aria-label={`${n} out of 5`}>{'★'.repeat(n)}<i>{'★'.repeat(5 - n)}</i></span>;
+  const fill = (n: number | null) =>
+    n == null ? <span className="u-muted">—</span> : <span className="fb-stars" aria-label={`${n} out of 5`}>{'★'.repeat(n)}<i>{'★'.repeat(5 - n)}</i></span>;
   const kpis = [
-    { title: 'Average rating', value: summary ? (summary.average ?? '—') : '…', sub: 'out of 5 stars', Icon: Star, color: '#F59E0B' },
-    { title: 'Ratings', value: summary ? summary.count.toLocaleString() : '…', sub: 'sent from the app', Icon: ThumbsUp, color: '#10B981' },
-    { title: 'With a written note', value: data ? data.items.filter((i) => i.message).length.toLocaleString() : '…', sub: 'on this page', Icon: MessageSquareText, color: '#3B82F6' },
+    { title: 'Average rating', value: summary ? (summary.average ?? '—') : '…', sub: 'when stars were given', Icon: Star, color: '#F59E0B' },
+    { title: 'Messages', value: summary ? summary.count.toLocaleString() : '…', sub: 'sent from the app', Icon: ThumbsUp, color: '#10B981' },
+    { title: 'With a written note', value: data ? data.items.filter((i) => i.message || i.title).length.toLocaleString() : '…', sub: 'on this page', Icon: MessageSquareText, color: '#3B82F6' },
   ];
 
   return (
     <>
-      <PageHeader kicker="Feedback" title="Ratings and suggestions" lede="What people send from the app: a 1-5 star rating, a category and an optional note.">
+      <PageHeader kicker="Feedback" title="Suggestions and feedback" lede="What people send from the app: suggestion or feedback, optional printer, a title and a note.">
         <button type="button" className="btn ghost" onClick={load}>Refresh</button>
       </PageHeader>
       {error ? <p className="err">{error}</p> : null}
@@ -126,10 +135,9 @@ export function FeedbackDesk() {
             ))}
           </div>
           <select className="u-select" value={category} onChange={(e) => reset(setCategory)(e.target.value)} aria-label="Category">
-            <option value="">All categories</option>
+            <option value="">All types</option>
             <option value="suggestion">Suggestion</option>
-            <option value="bug">Bug</option>
-            <option value="other">Other</option>
+            <option value="feedback">Feedback</option>
           </select>
           <select className="u-select" value={rating} onChange={(e) => reset(setRating)(e.target.value)} aria-label="Rating">
             <option value="">All ratings</option>
@@ -141,13 +149,17 @@ export function FeedbackDesk() {
 
         <div className="u-scroll">
           <table className="table u-table">
-            <thead><tr><th>Rating</th><th>Message</th><th>Category</th><th>From</th><th>Status</th><th>Received</th></tr></thead>
+            <thead><tr><th>Type</th><th>Title / message</th><th>Printer</th><th>From</th><th>Status</th><th>Received</th></tr></thead>
             <tbody>
               {data?.items.map((item) => (
                 <tr key={item.id} className="u-row" onClick={() => { setOpen(item); setNote(item.adminNote ?? ''); }}>
-                  <td>{fill(item.rating)}</td>
-                  <td className="fb-msg">{item.message ? <span>{item.message}</span> : <span className="u-muted">Rating only</span>}{item.adminNote ? <small className="u-id">Note: {item.adminNote}</small> : null}</td>
-                  <td><span className="badge draft">{item.category}</span></td>
+                  <td><span className="badge draft">{item.category}</span>{item.rating != null ? <small className="u-id">{fill(item.rating)}</small> : null}</td>
+                  <td className="fb-msg">
+                    {item.title ? <b>{item.title}</b> : null}
+                    {item.message ? <span>{item.message}</span> : !item.title ? <span className="u-muted">No message</span> : null}
+                    {item.adminNote ? <small className="u-id">Note: {item.adminNote}</small> : null}
+                  </td>
+                  <td>{item.printerName ? <span className="badge">{item.printerName}</span> : <span className="u-muted">—</span>}</td>
                   <td>{item.user ? <div className="u-printer"><b>{item.user.name}</b><small>{item.user.mobile}</small></div> : <span className="u-muted">Anonymous</span>}</td>
                   <td><span className={statusBadge(item.status)}>{item.status}</span></td>
                   <td>{ago(item.createdAt)}</td>
@@ -177,14 +189,19 @@ export function FeedbackDesk() {
           <div className="modal" role="dialog" aria-modal="true" aria-label="Feedback">
             <div className="modal-head">
               <div>
-                <h2>{fill(open.rating)}</h2>
+                <h2>{open.title || (open.category === 'suggestion' ? 'Suggestion' : 'Feedback')}</h2>
                 <p>{open.user ? `${open.user.name} · ${open.user.mobile}` : 'Anonymous'} · {ago(open.createdAt)}{open.appVersion ? ` · app ${open.appVersion}` : ''}{open.platform ? ` · ${open.platform}` : ''}</p>
               </div>
               <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="Close"><X size={16} /></button>
             </div>
             <div className="modal-body">
-              <div className="fb-tags"><span className="badge draft">{open.category}</span><span className={statusBadge(open.status)}>{open.status}</span></div>
-              <p className="fb-full">{open.message ?? <em className="u-muted">Rating only, no message.</em>}</p>
+              <div className="fb-tags">
+                <span className="badge draft">{open.category}</span>
+                {open.printerName ? <span className="badge">{open.printerName}</span> : null}
+                {open.rating != null ? fill(open.rating) : null}
+                <span className={statusBadge(open.status)}>{open.status}</span>
+              </div>
+              <p className="fb-full">{open.message ?? <em className="u-muted">No message body.</em>}</p>
               {canEdit ? (
                 <>
                   <label className="lib-label">Note for the team

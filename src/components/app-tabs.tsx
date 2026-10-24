@@ -4,11 +4,15 @@ import { type ComponentProps } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { trackFeatureClick, type FeatureKey } from '@/lib/telemetry/events';
 import { registerWalkthroughTarget } from '@/lib/walkthrough/registry';
 import { useTranslation } from '@/lib/i18n';
 import { makeStyles, useColors } from '@/theme';
 
 const ANDROID_BAR_HEIGHT = 60;
+
+/** Counts a press on a tab for the admin desk's "Most used" page. */
+const tabPressed = (key: FeatureKey) => ({ tabPress: () => trackFeatureClick(key) });
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -62,11 +66,11 @@ export default function AppTabs() {
           />
         ),
       }}>
-      <Tabs.Screen name="index" options={{ title: t('tab.home'), tabBarIcon: tabIcon('home') }} />
-      <Tabs.Screen name="template" options={{ title: t('tab.template'), tabBarIcon: tabIcon('grid') }} />
-      <Tabs.Screen name="shop" options={{ title: t('tab.shop'), tabBarIcon: tabIcon('bag-handle') }} />
-      <Tabs.Screen name="help" options={{ title: t('tab.help'), tabBarIcon: tabIcon('help-circle') }} />
-      <Tabs.Screen name="setting" options={{ title: t('tab.setting'), tabBarIcon: tabIcon('settings') }} />
+      <Tabs.Screen name="index" listeners={tabPressed('tab.home')} options={{ title: t('tab.home'), tabBarIcon: tabIcon('home') }} />
+      <Tabs.Screen name="template" listeners={tabPressed('tab.templates')} options={{ title: t('tab.template'), tabBarIcon: tabIcon('grid') }} />
+      <Tabs.Screen name="shop" listeners={tabPressed('tab.shop')} options={{ title: t('tab.shop'), tabBarIcon: tabIcon('bag-handle') }} />
+      <Tabs.Screen name="help" listeners={tabPressed('tab.help')} options={{ title: t('tab.help'), tabBarIcon: tabIcon('help-circle') }} />
+      <Tabs.Screen name="setting" listeners={tabPressed('tab.settings')} options={{ title: t('tab.setting'), tabBarIcon: tabIcon('settings') }} />
     </Tabs>
   );
 }

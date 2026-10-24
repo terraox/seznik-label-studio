@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { trackFeatureClick } from '@/lib/telemetry/events';
 import { useEffect, useMemo } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
@@ -78,7 +79,10 @@ export function BuyFromUsStrip() {
   return (
     <View style={styles.cardFrame}>
     <Pressable
-      onPress={() => router.push('/shop')}
+      onPress={() => {
+        trackFeatureClick('home.shop_strip');
+        router.push('/shop');
+      }}
       android_ripple={androidRipple}
       accessibilityRole="button"
       accessibilityLabel="Buy from us — Shop from Seznik"

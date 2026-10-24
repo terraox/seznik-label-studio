@@ -19,6 +19,7 @@ async function cleanup() {
   await prisma.printEvent.deleteMany({ where: { OR: [{ eventId: { startsWith: PREFIX } }, { userId: { in: ids } }] } });
   await prisma.printerConnection.deleteMany({ where: { OR: [{ eventId: { startsWith: PREFIX } }, { userId: { in: ids } }] } });
   await prisma.productClick.deleteMany({ where: { eventId: { startsWith: PREFIX } } });
+  await prisma.featureClickBatch.deleteMany({ where: { eventId: { startsWith: PREFIX } } });
   await prisma.feedback.deleteMany({ where: { eventId: { startsWith: PREFIX } } });
   await prisma.userPrinter.deleteMany({ where: { userId: { in: ids } } });
   await prisma.printer.deleteMany({ where: { nameRaw: { startsWith: 'FlowTest' } } });
@@ -139,6 +140,26 @@ const clickEv = { type: 'product_click', eventId: PREFIX + 's1', occurredAt: now
 const s1 = await post(tokenA, batch([clickEv]));
 const s2 = await post(tokenA, batch([clickEv]));
 check('shop click stored once (retry is a duplicate)', s1.body.results[0].status === 'accepted' && s2.body.results[0].status === 'duplicate' && (await prisma.productClick.count({ where: { eventId: PREFIX + 's1' } })) === 1);
+
+// feature taps: the app sends counts, the server adds them to the day's totals
+const dayRows = () => prisma.featureClickDaily.findMany({ where: { featureKey: { in: ['home.excel', 'home.pdf'] } } });
+const beforeRows = await dayRows();
+const was = (k: string) => beforeRows.reduce((t, r) => (r.featureKey === k ? t + r.clicks : t), 0);
+const fcEv = { type: 'feature_click', eventId: PREFIX + 'k1', occurredAt: nowIso(), counts: { 'home.excel': 3, 'home.pdf': 2, 'home.not_a_section': 9 } };
+const k1 = await post(tokenA, batch([fcEv]));
+const k2 = await post(tokenA, batch([fcEv]));
+const k3 = await post(tokenA, batch([{ ...fcEv, eventId: PREFIX + 'k3', counts: { 'home.not_a_section': 1 } }]));
+const k4 = await post(tokenA, batch([{ ...fcEv, eventId: PREFIX + 'k4', counts: 'many' }]));
+const afterRows = await dayRows();
+const now = (k: string) => afterRows.reduce((t, r) => (r.featureKey === k ? t + r.clicks : t), 0);
+check('tap summary added once (a retry is a duplicate), unknown sections skipped, bad shapes rejected',
+  k1.body.results[0].status === 'accepted' && k2.body.results[0].status === 'duplicate'
+  && now('home.excel') - was('home.excel') === 3 && now('home.pdf') - was('home.pdf') === 2
+  && k3.body.results[0].reason === 'UNKNOWN_FEATURE' && k4.body.results[0].reason === 'BAD_COUNTS'
+  && k1.body.printCountTotal === null);
+// undo the counts this test added, so the real totals stay clean
+await prisma.$executeRaw`UPDATE "FeatureClickDaily" SET clicks = GREATEST(0, clicks - 3) WHERE "featureKey" = 'home.excel' AND day = (now() AT TIME ZONE 'Asia/Kolkata')::date`;
+await prisma.$executeRaw`UPDATE "FeatureClickDaily" SET clicks = GREATEST(0, clicks - 2) WHERE "featureKey" = 'home.pdf' AND day = (now() AT TIME ZONE 'Asia/Kolkata')::date`;
 
 // feedback
 const fb = (i: number, extra: Record<string, unknown> = {}) => ({ type: 'feedback', eventId: PREFIX + 'f' + i, occurredAt: nowIso(), rating: 5, category: 'suggestion', ...extra });

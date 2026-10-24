@@ -24,9 +24,11 @@ import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { usePrintHistoryStore } from '@/stores/print-history-store';
 import { FeedbackFormModal } from '@/components/feedback-form';
+import type { FeedbackPayload } from '@/lib/telemetry/events';
 import { useFeedbackStore } from '@/stores/feedback-store';
 import { printCounts, selectLifetime, usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { trackFeatureClick } from '@/lib/telemetry/events';
 import {
   THEME_DARK_READY,
   cardElevation,
@@ -226,15 +228,19 @@ export default function SettingScreen() {
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const handleFeedback = () => setFeedbackOpen(true);
-  const sendFeedback = (rating: number, text: string) => {
+  const handleFeedback = () => {
+    trackFeatureClick('settings.feedback');
+    setFeedbackOpen(true);
+  };
+  const sendFeedback = (payload: FeedbackPayload) => {
     setFeedbackOpen(false);
     // Saved on the phone and sent to the admin desk's Feedback table with the next batch of events.
-    useFeedbackStore.getState().submit(rating, text, selectLifetime(usePrintStatsStore.getState()));
-    Alert.alert('Thank you', 'Your feedback has been sent.');
+    useFeedbackStore.getState().submit(payload, selectLifetime(usePrintStatsStore.getState()));
+    Alert.alert('Thank you', 'Your message has been sent.');
   };
 
   const handleAbout = () => {
+    trackFeatureClick('settings.about');
     const version = Constants.expoConfig?.version ?? '1.0.0';
     Alert.alert(
       'Sez Print',
@@ -269,7 +275,10 @@ export default function SettingScreen() {
             <SettingRow
               label={t('setting.connectBluetoothPrinter')}
               icon="printer"
-              onPress={() => router.push('/printer-connect')}
+              onPress={() => {
+                trackFeatureClick('settings.printer');
+                router.push('/printer-connect');
+              }}
             />
           </SettingGroup>
 
@@ -279,7 +288,10 @@ export default function SettingScreen() {
             <SettingRow
               label={t('setting.languageSwitch')}
               icon="globe"
-              onPress={() => router.push('/language-switch')}
+              onPress={() => {
+                trackFeatureClick('settings.language');
+                router.push('/language-switch');
+              }}
             />
           </SettingGroup>
 
@@ -287,31 +299,46 @@ export default function SettingScreen() {
             <SettingRow
               label={t('setting.font')}
               customIcon={<FontSettingIcon />}
-              onPress={() => router.push('/font-library')}
+              onPress={() => {
+                trackFeatureClick('settings.fonts');
+                router.push('/font-library');
+              }}
               showDivider
             />
             <SettingRow
               label={t('setting.clipart')}
               icon="square.grid.2x2"
-              onPress={() => router.push('/clipart')}
+              onPress={() => {
+                trackFeatureClick('settings.clipart');
+                router.push('/clipart');
+              }}
               showDivider
             />
             <SettingRow
               label={t('setting.border')}
               icon="rectangle.dashed"
-              onPress={() => router.push('/border-library')}
+              onPress={() => {
+                trackFeatureClick('settings.borders');
+                router.push('/border-library');
+              }}
               showDivider
             />
             <SettingRow
               label={t('setting.dataFile')}
               icon="tablecells"
-              onPress={() => router.push('/data-file?type=Excel')}
+              onPress={() => {
+                trackFeatureClick('settings.data_file');
+                router.push('/data-file?type=Excel');
+              }}
               showDivider
             />
             <SettingRow
               label={t('setting.printingHistory')}
               icon="clock.arrow.circlepath"
-              onPress={() => router.push('/printing-history')}
+              onPress={() => {
+                trackFeatureClick('settings.history');
+                router.push('/printing-history');
+              }}
             />
           </SettingGroup>
 
@@ -321,7 +348,10 @@ export default function SettingScreen() {
                 label={t('setting.appearance')}
                 icon="circle.lefthalf.filled"
                 value={t(appearanceKey)}
-                onPress={() => setAppearanceOpen(true)}
+                onPress={() => {
+                  trackFeatureClick('settings.appearance');
+                  setAppearanceOpen(true);
+                }}
               />
             </SettingGroup>
           ) : null}
@@ -330,7 +360,10 @@ export default function SettingScreen() {
             <SettingRow
               label={t('setting.advancedSettings')}
               icon="gearshape"
-              onPress={() => router.push('/advanced-settings')}
+              onPress={() => {
+                trackFeatureClick('settings.advanced');
+                router.push('/advanced-settings');
+              }}
             />
           </SettingGroup>
 
@@ -338,7 +371,10 @@ export default function SettingScreen() {
             <SettingRow
               label={t('setting.appPermissions')}
               icon="slider.horizontal.3"
-              onPress={() => router.push('/app-permissions')}
+              onPress={() => {
+                trackFeatureClick('settings.permissions');
+                router.push('/app-permissions');
+              }}
             />
           </SettingGroup>
 
@@ -347,6 +383,7 @@ export default function SettingScreen() {
               label={t('setting.walkthrough')}
               icon="questionmark.circle.fill"
               onPress={() => {
+                trackFeatureClick('settings.walkthrough');
                 router.navigate('/');
                 startWalkthrough('home');
               }}
@@ -383,8 +420,6 @@ export default function SettingScreen() {
 
       <FeedbackFormModal
         visible={feedbackOpen}
-        title="Evaluation & Feedback"
-        message="How would you rate Sez Print? Your review goes straight to our team."
         onCancel={() => setFeedbackOpen(false)}
         onSubmit={sendFeedback}
       />

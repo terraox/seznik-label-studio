@@ -54,7 +54,9 @@ export async function POST(request: Request) {
     request.headers.get('x-app-version')?.slice(0, 40) ?? null,
   );
   // The app shows this total plus whatever it still has queued, so both sides read the same number.
-  const total = await prisma.user.findUnique({ where: { id: auth.user.id }, select: { printCountTotal: true } });
+  // A batch of only tap summaries cannot change the count, so skip the extra read for it.
+  const onlyTaps = events.every((e) => e.type === 'feature_click');
+  const total = onlyTaps ? null : await prisma.user.findUnique({ where: { id: auth.user.id }, select: { printCountTotal: true } });
   const payload = { results, serverTime: new Date().toISOString(), printCountTotal: total?.printCountTotal ?? null };
   const onlyMissingPrinter = results.every((r) => r.status === 'rejected' && r.reason === 'PRINTER_REQUIRED');
   return reply(onlyMissingPrinter ? { ...payload, error: 'A printer is required.', code: 'PRINTER_REQUIRED' } : payload, onlyMissingPrinter ? 400 : 200);

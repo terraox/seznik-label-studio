@@ -203,10 +203,14 @@ model Feedback {
   id         String   @id @default(cuid())
   eventId    String   @unique
   userId     String
-  /// 1 to 5
-  rating     Int
-  /// suggestion | bug | other
+  /// 1 to 5 when the user rated; null for suggestion/feedback without stars
+  rating     Int?
+  /// suggestion | feedback
   category   String
+  /// Short headline from the app form
+  title      String?
+  /// Optional printer the note is about (Tejas, Rudra, Josh, …)
+  printerName String?
   message    String?
   appVersion String?
   platform   String?
@@ -218,6 +222,7 @@ model Feedback {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([rating])
+  @@index([category])
   @@index([status, createdAt])
 }
 
@@ -261,6 +266,28 @@ model ProductClick {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([productKey, occurredAt])
+}
+
+/// Taps on app sections, added up per day and section. The app sends counts (not single taps) and
+/// the server adds them here, so storage is one row per day per section whatever the traffic.
+/// There is no user column on purpose: nobody can be tied to a tap.
+model FeatureClickDaily {
+  /// India-time calendar day the counts were sent
+  day        DateTime @db.Date
+  /// Key from src/lib/features.ts, e.g. home.excel, tab.templates, settings.fonts
+  featureKey String
+  clicks     Int      @default(0)
+
+  @@id([day, featureKey])
+}
+
+/// Ids of the count summaries already added, so a retried send is not counted twice. Not linked to
+/// anyone; rows older than a few days are deleted as new ones arrive.
+model FeatureClickBatch {
+  eventId    String   @id
+  receivedAt DateTime @default(now())
+
+  @@index([receivedAt])
 }
 
 // ───────────────────────── Clipart and template library ─────────────────────────

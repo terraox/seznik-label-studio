@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { trackFeatureClick } from '@/lib/telemetry/events';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Svg, {
@@ -166,7 +167,10 @@ export function HeroCard() {
 
   return (
     <Pressable
-      onPress={() => router.push(HOME_TOOLS.newLabel.href as any)}
+      onPress={() => {
+        trackFeatureClick('home.new_label');
+        router.push(HOME_TOOLS.newLabel.href as any);
+      }}
       onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
       accessibilityRole="button"
       accessibilityLabel="New label: start with a blank label, any size. Create label."

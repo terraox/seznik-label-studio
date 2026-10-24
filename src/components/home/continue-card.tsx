@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { trackFeatureClick } from '@/lib/telemetry/events';
 import { useMemo, type ReactNode } from 'react';
 import {
   Alert,
@@ -88,6 +89,7 @@ export function ContinueCard({ document, onDelete }: ContinueCardProps) {
     : `${cellSize}\n${document.paperType}`;
 
   const openEditor = () => {
+    trackFeatureClick('home.continue');
     router.push({ pathname: '/edit', params: { labelId: document.id } });
   };
 

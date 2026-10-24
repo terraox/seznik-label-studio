@@ -105,12 +105,14 @@ function scheduleRetry() {
 }
 
 /** App came to the foreground (or the network is likely back): send now instead of waiting for the backoff. */
-export function flushNow() {
+export async function flushNow() {
   retryStep = 0;
   if (flushTimer) {
     clearTimeout(flushTimer);
     flushTimer = null;
   }
+  // Taps counted in an earlier session (or since the last send) go out with this flush once they are 10 minutes old.
+  await sealFeatureCounts().catch(() => undefined);
   return flushEvents();
 }
 
@@ -224,13 +226,32 @@ function familyFor(sdkId: string | null | undefined): string {
   }
 }
 
-/** Rating given in the in-app feedback prompt (1-5) with an optional note. */
-export function trackFeedback(rating: number, message: string) {
+export type FeedbackKind = 'suggestion' | 'feedback';
+
+export type FeedbackPayload = {
+  kind: FeedbackKind;
+  title: string;
+  message: string;
+  /** Optional printer the note is about (Tejas, Rudra, Josh, …). */
+  printerName?: string | null;
+  /** Optional 1–5 star rating when the user still rates. */
+  rating?: number | null;
+};
+
+/** Suggestion or feedback from Settings / the post-print prompt. */
+export function trackFeedback(payload: FeedbackPayload) {
+  const kind = payload.kind === 'suggestion' ? 'suggestion' : 'feedback';
+  const rating =
+    payload.rating != null && Number.isFinite(payload.rating)
+      ? Math.min(5, Math.max(1, Math.round(payload.rating)))
+      : undefined;
   void enqueue({
     type: 'feedback',
-    rating: Math.min(5, Math.max(1, Math.round(rating))),
-    category: 'other',
-    message: message.trim().slice(0, 1000),
+    category: kind,
+    title: payload.title.trim().slice(0, 120),
+    message: payload.message.trim().slice(0, 1000),
+    ...(payload.printerName?.trim() ? { printerName: payload.printerName.trim().slice(0, 80) } : {}),
+    ...(rating != null ? { rating } : {}),
     platform: appPlatform(),
   });
 }
@@ -259,4 +280,106 @@ export function trackTemplateRequest(request: {
 /** The user pressed Buy on a shop product. */
 export function trackProductClick(productKey: string, productName: string, category: 'labels' | 'printers') {
   void enqueue({ type: 'product_click', productKey, productName, category, source: 'shop_buy' });
+}
+
+/** Sections counted on the admin desk's "Most used" page. Keys must match admin/src/lib/features.ts. */
+export type FeatureKey =
+  | 'tab.home' | 'tab.templates' | 'tab.shop' | 'tab.help' | 'tab.settings'
+  | 'home.new_label' | 'home.upload_label' | 'home.serial_labels' | 'home.shipping_labels'
+  | 'home.excel' | 'home.pdf' | 'home.import' | 'home.banner' | 'home.shop_strip' | 'home.continue'
+  | 'templates.open' | 'templates.favourite' | 'templates.request'
+  | 'settings.printer' | 'settings.language' | 'settings.fonts' | 'settings.clipart' | 'settings.borders'
+  | 'settings.data_file' | 'settings.history' | 'settings.appearance' | 'settings.advanced'
+  | 'settings.permissions' | 'settings.walkthrough' | 'settings.feedback' | 'settings.about';
+
+// A double tap or a tab re-press within this window counts once.
+const FEATURE_DEDUPE_MS = 1000;
+const lastFeatureTap = new Map<string, number>();
+
+/**
+ * Taps are only counted on the phone. They are not sent one by one: they are added up per section,
+ * saved to storage a few seconds after the last tap, and sent as ONE small event (a count per
+ * section) about every 10 minutes of use, or when the app is next opened. That keeps requests and
+ * database writes to a handful per person per day, however much they tap.
+ */
+const FEATURE_COUNTS_KEY = 'sez-print/feature-counts';
+const FEATURE_SEND_MS = 10 * 60 * 1000;
+const FEATURE_SEND_AT_TAPS = 200; // a very busy stretch is sent early
+const FEATURE_SAVE_MS = 5000;
+
+type FeaturePending = { since: number; counts: Record<string, number> };
+let featurePending: FeaturePending | null = null;
+let featureLoading: Promise<FeaturePending> | null = null;
+let featureSendTimer: ReturnType<typeof setTimeout> | null = null;
+let featureSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function loadFeatureCounts(): Promise<FeaturePending> {
+  if (featurePending) return featurePending;
+  featureLoading ??= (async () => {
+    let loaded: FeaturePending = { since: 0, counts: {} };
+    try {
+      const raw = await AsyncStorage.getItem(FEATURE_COUNTS_KEY);
+      const parsed = raw ? (JSON.parse(raw) as Partial<FeaturePending>) : null;
+      if (parsed && typeof parsed.since === 'number' && parsed.counts && typeof parsed.counts === 'object') {
+        loaded = { since: parsed.since, counts: parsed.counts };
+      }
+    } catch {
+      // unreadable: start from zero
+    }
+    featurePending = loaded;
+    return loaded;
+  })();
+  return featureLoading;
+}
+
+/** Writes the running counts to storage now (the app is going to the background). */
+export async function persistFeatureCounts() {
+  if (featureSaveTimer) {
+    clearTimeout(featureSaveTimer);
+    featureSaveTimer = null;
+  }
+  if (!featurePending) return;
+  try {
+    await AsyncStorage.setItem(FEATURE_COUNTS_KEY, JSON.stringify(featurePending));
+  } catch {
+    // Storage unavailable: the counts stay in memory for this session.
+  }
+}
+
+const tapTotal = (counts: Record<string, number>) => Object.values(counts).reduce((t, n) => t + n, 0);
+
+/** Moves the counted taps into the send queue as one event. Does nothing until they are 10 minutes old (or `force`). */
+async function sealFeatureCounts(force = false) {
+  const pending = await loadFeatureCounts();
+  const total = tapTotal(pending.counts);
+  if (total === 0) return;
+  if (!force && Date.now() - pending.since < FEATURE_SEND_MS && total < FEATURE_SEND_AT_TAPS) return;
+  const counts = pending.counts;
+  // Emptied before queueing: if the app dies in between, a few taps are lost rather than counted twice.
+  featurePending = { since: 0, counts: {} };
+  if (featureSendTimer) {
+    clearTimeout(featureSendTimer);
+    featureSendTimer = null;
+  }
+  await persistFeatureCounts();
+  await enqueue({ type: 'feature_click', counts });
+}
+
+/** A tap on an app section. Counted overall on the server: the account is not stored with it. */
+export function trackFeatureClick(featureKey: FeatureKey) {
+  const now = Date.now();
+  if (now - (lastFeatureTap.get(featureKey) ?? 0) < FEATURE_DEDUPE_MS) return;
+  lastFeatureTap.set(featureKey, now);
+  void (async () => {
+    const pending = await loadFeatureCounts();
+    if (tapTotal(pending.counts) === 0) pending.since = now;
+    pending.counts[featureKey] = Math.min(10_000, (pending.counts[featureKey] ?? 0) + 1);
+    featureSaveTimer ??= setTimeout(() => void persistFeatureCounts(), FEATURE_SAVE_MS);
+    // While the app stays open, send what was counted about 10 minutes after the first tap.
+    featureSendTimer ??= setTimeout(() => {
+      featureSendTimer = null;
+      void sealFeatureCounts(true).catch(() => undefined);
+    }, FEATURE_SEND_MS);
+    if (tapTotal(pending.counts) >= FEATURE_SEND_AT_TAPS) void sealFeatureCounts().catch(() => undefined);
+  })();
 }

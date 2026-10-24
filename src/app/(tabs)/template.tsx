@@ -19,7 +19,7 @@ import Svg, { Defs, LinearGradient, Rect as SvgRect, Stop, SvgXml } from 'react-
 
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { TemplateRequestModal, type TemplateRequestDraft } from '@/components/template-request-form';
-import { trackTemplateRequest } from '@/lib/telemetry/events';
+import { trackFeatureClick, trackTemplateRequest } from '@/lib/telemetry/events';
 import { ShareNodeIcon } from '@/components/home-icons';
 import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -278,6 +278,14 @@ export default function TemplateScreen() {
   const toggleFavorite = useTemplateCatalogStore((s) => s.toggleFavorite);
   const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const hasFavorites = catalogTemplates.some((t) => favoriteSet.has(t.id));
+  // Only starring counts as a tap on the feature; un-starring is undoing it.
+  const onToggleFavorite = useCallback(
+    (id: string) => {
+      if (!useTemplateCatalogStore.getState().favoriteIds.includes(id)) trackFeatureClick('templates.favourite');
+      toggleFavorite(id);
+    },
+    [toggleFavorite],
+  );
 
   // The tab stays mounted, so fetch again every time it comes into view: templates published
   // in the admin since the last visit show up without restarting the app.
@@ -437,6 +445,7 @@ export default function TemplateScreen() {
   /** Templates with sample content (and jewellery, which has its own) ask: empty label or with data. */
   const handleSelectTemplate = useCallback(
     (template: CatalogTemplate) => {
+      trackFeatureClick('templates.open');
       if (isTwoUpTemplate(template)) {
         setArrangeFor(template);
         return;
@@ -821,7 +830,7 @@ export default function TemplateScreen() {
                 cardMaxWidth={templateCardMaxWidth}
                 isFavorite={favoriteSet.has(item.id)}
                 onPress={handleSelectTemplate}
-                onToggleFavorite={toggleFavorite}
+                onToggleFavorite={onToggleFavorite}
               />
             ))}
 
@@ -833,7 +842,10 @@ export default function TemplateScreen() {
 
             {!catalogLoading || catalogTemplates.length > 0 ? (
               <Pressable
-                onPress={() => setRequestOpen(true)}
+                onPress={() => {
+                  trackFeatureClick('templates.request');
+                  setRequestOpen(true);
+                }}
                 accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.requestCard,

@@ -7,7 +7,19 @@ import { ToolIcon } from '@/components/home/tool-icon';
 import { HOME_TOOLS, type HomeTool, type HomeToolId } from '@/components/home/home-tools';
 import { androidRipple, HomeLayout } from '@/constants/ui';
 import { useOpenLabelFile } from '@/lib/label-share/use-open-label-file';
+import { trackFeatureClick, type FeatureKey } from '@/lib/telemetry/events';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
+
+/** Which "Most used" section each Home tile counts toward. */
+const TILE_FEATURE: Record<HomeToolId, FeatureKey> = {
+  newLabel: 'home.new_label',
+  imageToLabel: 'home.upload_label',
+  serialLabels: 'home.serial_labels',
+  shippingLabels: 'home.shipping_labels',
+  excel: 'home.excel',
+  pdf: 'home.pdf',
+  importLabel: 'home.import',
+};
 
 export function ToolTile({ id, minHeight = HomeLayout.tileHeight }: { id: HomeToolId; minHeight?: number }) {
   const tool: HomeTool = HOME_TOOLS[id];
@@ -21,13 +33,32 @@ export function ToolTile({ id, minHeight = HomeLayout.tileHeight }: { id: HomeTo
 function LinkTile({ id, minHeight }: { id: HomeToolId; minHeight: number }) {
   const router = useRouter();
   const tool: HomeTool = HOME_TOOLS[id];
-  return <TileBody id={id} minHeight={minHeight} onPress={() => router.push(tool.href as any)} />;
+  return (
+    <TileBody
+      id={id}
+      minHeight={minHeight}
+      onPress={() => {
+        trackFeatureClick(TILE_FEATURE[id]);
+        router.push(tool.href as any);
+      }}
+    />
+  );
 }
 
 /** Import: picks a .seznik file and opens it on the canvas, like Import label in the New label sheet. */
 function OpenLabelFileTile({ id, minHeight }: { id: HomeToolId; minHeight: number }) {
   const { openLabelFile, documentSourceSheet } = useOpenLabelFile();
-  return <TileBody id={id} minHeight={minHeight} onPress={() => void openLabelFile()} extra={documentSourceSheet} />;
+  return (
+    <TileBody
+      id={id}
+      minHeight={minHeight}
+      onPress={() => {
+        trackFeatureClick(TILE_FEATURE[id]);
+        void openLabelFile();
+      }}
+      extra={documentSourceSheet}
+    />
+  );
 }
 
 function TileBody({

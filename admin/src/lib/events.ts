@@ -1,6 +1,7 @@
 import type { User } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 
+import { FEATURES } from './features';
 import { upsertPrinter } from './printer-registry';
 import { prisma } from './prisma';
 import { hit } from './rate-limit';
@@ -34,10 +35,14 @@ async function touchUserPrinter(
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const FUTURE_SLACK_MS = 5 * 60 * 1000;
 const CONNECT_DEDUPE_MS = 10 * 60 * 1000;
+const FEATURE_MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000;
+const FEATURE_BATCH_KEEP_MS = 3 * 24 * 60 * 60 * 1000;
+const MAX_FEATURE_KEYS = 60;
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 export const PRINT_SOURCES = ['manual_size', 'template', 'excel_bulk', 'pdf', 'photo', 'scan', 'serial', 'other'] as const;
 const TRANSPORTS = ['bt_spp', 'ble', 'wifi'];
-const FEEDBACK_CATEGORIES = ['suggestion', 'bug', 'other'];
+const FEEDBACK_CATEGORIES = ['suggestion', 'feedback'];
 const SHOP_CATEGORIES = ['labels', 'printers'];
 const REQUEST_SHAPES = ['rectangle', 'rounded', 'circle', 'other'];
 
@@ -197,19 +202,72 @@ async function applyOne(user: User, raw: Raw, eventId: string, occurredAt: Date,
       return ok(made.count === 1);
     }
 
+    case 'feature_click': {
+      // A summary the app built from many taps: { counts: { 'home.excel': 3, ... } }, added to the
+      // day's totals in ONE statement. The signed-in user is deliberately not stored with it.
+      if (!raw.counts || typeof raw.counts !== 'object' || Array.isArray(raw.counts)) return reject('BAD_COUNTS');
+      if (Date.now() - occurredAt.getTime() > FEATURE_MAX_AGE_MS) return reject('TOO_OLD');
+      const keys: string[] = [];
+      const counts: number[] = [];
+      for (const [key, value] of Object.entries(raw.counts as Raw).slice(0, MAX_FEATURE_KEYS)) {
+        const n = num(value);
+        // Unknown keys (a newer app) are skipped, not fatal.
+        if (!Object.hasOwn(FEATURES, key) || !Number.isInteger(n) || n < 1 || n > 10_000) continue;
+        keys.push(key);
+        counts.push(n);
+      }
+      if (keys.length === 0) return reject('UNKNOWN_FEATURE');
+      const day = new Date(occurredAt.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+      const added = await prisma.$transaction(async (tx) => {
+        const seen = await tx.featureClickBatch.createMany({ data: [{ eventId }], skipDuplicates: true });
+        if (seen.count === 0) return false;
+        await tx.$executeRaw`
+          INSERT INTO "FeatureClickDaily" ("day", "featureKey", "clicks")
+          SELECT ${day}::date, k, c FROM unnest(${keys}::text[], ${counts}::int[]) AS t(k, c)
+          ON CONFLICT ("day", "featureKey") DO UPDATE SET "clicks" = "FeatureClickDaily"."clicks" + EXCLUDED."clicks"`;
+        return true;
+      });
+      // Keep the dedupe table small: now and then drop ids older than any send could still be retried.
+      if (Math.random() < 0.02) {
+        void prisma.featureClickBatch
+          .deleteMany({ where: { receivedAt: { lt: new Date(Date.now() - FEATURE_BATCH_KEEP_MS) } } })
+          .catch(() => undefined);
+      }
+      return ok(added);
+    }
+
     case 'feedback': {
-      const rating = num(raw.rating);
-      const category = str(raw.category, 20) || 'other';
-      if (!Number.isInteger(rating) || rating < 1 || rating > 5) return reject('BAD_RATING');
+      const category = str(raw.category, 20) || 'feedback';
       if (!FEEDBACK_CATEGORIES.includes(category)) return reject('BAD_CATEGORY');
+      const title = cleanText(str(raw.title, 120));
+      const message = cleanText(str(raw.message, 1000));
+      if (title.length < 1 && message.length < 1) return reject('BAD_MESSAGE');
+      // Rating is optional (legacy events still send 1–5).
+      let rating: number | null = null;
+      if (raw.rating != null && raw.rating !== '') {
+        const n = num(raw.rating);
+        if (!Number.isInteger(n) || n < 1 || n > 5) return reject('BAD_RATING');
+        rating = n;
+      }
+      const printerName = cleanText(str(raw.printerName, 80)) || null;
       const already = await prisma.feedback.findUnique({ where: { eventId }, select: { id: true } });
       if (already) return ok(false);
       const slot = await hit(`feedback:${user.id}`, 5, 24 * 60 * 60 * 1000);
       if (!slot.allowed) return reject('RATE_LIMITED');
-      const message = cleanText(str(raw.message, 1000)) || null;
       try {
         await prisma.feedback.create({
-          data: { eventId, userId: user.id, rating, category, message, appVersion, platform: str(raw.platform, 20) || null, createdAt: occurredAt },
+          data: {
+            eventId,
+            userId: user.id,
+            rating,
+            category,
+            title: title || null,
+            printerName,
+            message: message || null,
+            appVersion,
+            platform: str(raw.platform, 20) || null,
+            createdAt: occurredAt,
+          },
         });
         return ok(true);
       } catch (err) {

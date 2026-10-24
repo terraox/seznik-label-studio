@@ -244,8 +244,10 @@ Table Feedback {
   id varchar [pk]
   eventId varchar [unique, not null]
   userId varchar [not null]
-  rating int [not null, note: '1 to 5']
-  category varchar [not null, note: 'suggestion | bug | other']
+  rating int [note: '1 to 5 when rated; null when the form has no stars']
+  category varchar [not null, note: 'suggestion | feedback']
+  title varchar [note: 'Short headline from the app form']
+  printerName varchar [note: 'Optional printer the note is about']
   message varchar
   appVersion varchar
   platform varchar
@@ -255,9 +257,10 @@ Table Feedback {
 
   indexes {
     rating
+    category
     (status, createdAt)
   }
-  Note: '[READY] Star ratings and suggestions from the app.'
+  Note: '[READY] Suggestions and feedback from the app.'
 }
 
 Table TemplateRequest {
@@ -295,6 +298,27 @@ Table ProductClick {
     (productKey, occurredAt)
   }
   Note: '[READY] A tap on a shop product.'
+}
+
+Table FeatureClickDaily {
+  day date [not null, note: 'India-time day the counts were sent']
+  featureKey varchar [not null, note: 'Section tapped, e.g. home.excel, tab.templates, settings.fonts']
+  clicks integer [not null, default: 0]
+
+  indexes {
+    (day, featureKey) [pk]
+  }
+  Note: '[READY] Taps per day per app section, added up from counts the app sends. No userId on purpose.'
+}
+
+Table FeatureClickBatch {
+  eventId varchar [pk, note: 'Count summary already added, so a retry is not counted twice']
+  receivedAt timestamp [not null]
+
+  indexes {
+    receivedAt
+  }
+  Note: '[READY] Dedupe ids for FeatureClickDaily. Not linked to anyone; pruned after a few days.'
 }
 
 // ─────────────── Clipart and template library [READY] ───────────────

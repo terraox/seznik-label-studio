@@ -266,7 +266,7 @@ check('viewer sees the detail with the number masked', udView.status === 200 && 
 // ───────── D6: feedback ─────────
 const fev = (user: any, id: string, rating: number, category: string, message?: string) =>
   ({ user, ev: { type: 'feedback', eventId: P + id, occurredAt: iso(1000), rating, category, ...(message ? { message } : {}) } });
-await send([fev(bob, 'fb-b1', 5, 'bug', 'Crash on print screen'), fev(bob, 'fb-b2', 2, 'other'), fev(qa, 'fb-q1', 1, 'bug', 'internal test note')]);
+await send([fev(bob, 'fb-b1', 5, 'feedback', 'Crash on print screen'), fev(bob, 'fb-b2', 2, 'feedback'), fev(qa, 'fb-q1', 1, 'suggestion', 'internal test note')]);
 const fbAll = await call('GET', '/api/feedback', { cookie: supp });
 const fbHide = await call('GET', '/api/feedback?internal=hide', { cookie: supp });
 // hand sums: alice 4, bob 5 and 2 are public; qa 1 internal
@@ -275,7 +275,7 @@ check('feedback summary: average, count and 1-5 distribution (internal hidden)',
   && JSON.stringify(fbHide.body.summary.distribution.map((d: any) => d.count)) === JSON.stringify([0, 1, 0, 1, 1]), JSON.stringify(fbHide.body.summary));
 check('feedback summary with internal included adds the 1-star', fbAll.body.summary.count === 4 && fbAll.body.summary.distribution[0].count === 1);
 const byRating = await call('GET', '/api/feedback?rating=5&internal=hide', { cookie: supp });
-const byCat = await call('GET', '/api/feedback?category=bug', { cookie: supp });
+const byCat = await call('GET', '/api/feedback?category=feedback', { cookie: supp });
 const byText = await call('GET', '/api/feedback?q=fonts', { cookie: supp });
 const byName = await call('GET', '/api/feedback?q=flowa%20bob&internal=hide', { cookie: supp });
 const byPhone = await call('GET', `/api/feedback?q=${NUMBERS[0]}`, { cookie: supp });

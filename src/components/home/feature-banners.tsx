@@ -1,5 +1,6 @@
 import { Image, type ImageRef } from 'expo-image';
 import { type Href, useRouter } from 'expo-router';
+import { trackFeatureClick } from '@/lib/telemetry/events';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type LayoutChangeEvent, Linking, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 
@@ -107,6 +108,7 @@ export function FeatureBanners({ onHighlightFromFile }: { onHighlightFromFile?: 
 
   const open = (action: BannerAction) => {
     pausedUntil.current = Date.now() + RESUME_MS;
+    trackFeatureClick('home.banner');
     if ('url' in action) void Linking.openURL(action.url).catch(() => {});
     else if ('href' in action) router.push(action.href);
     else onHighlightFromFile?.();

@@ -2,13 +2,14 @@ import { usePathname } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import { FeedbackFormModal } from '@/components/feedback-form';
+import type { FeedbackPayload } from '@/lib/telemetry/events';
 import { useFeedbackStore } from '@/stores/feedback-store';
 import { selectLifetime, usePrintStatsStore } from '@/stores/print-stats-store';
 
 /** Screens where a popup would interrupt work in progress. */
 const BUSY_PATHS = ['/print', '/print-photo', '/edit', '/excel-print', '/pdf-thermal', '/serial-label'];
 
-/** Asks for a star rating and a short review once the user has printed 100 labels. */
+/** Asks for a suggestion or feedback once the user has printed 100 labels. */
 export function FeedbackPrompt({ enabled }: { enabled: boolean }) {
   const pathname = usePathname();
   const lifetime = usePrintStatsStore(selectLifetime);
@@ -26,16 +27,16 @@ export function FeedbackPrompt({ enabled }: { enabled: boolean }) {
   return (
     <FeedbackFormModal
       visible={open}
-      title="Enjoying Sez Print?"
-      message={`You have printed ${lifetime} labels. How would you rate the app?`}
+      title="How are we doing?"
+      message={`You have printed ${lifetime} labels. Send a suggestion or feedback — we read every one.`}
       cancelLabel="Not now"
       onCancel={() => {
         setOpen(false);
         useFeedbackStore.getState().snooze(lifetime);
       }}
-      onSubmit={(rating, text) => {
+      onSubmit={(payload: FeedbackPayload) => {
         setOpen(false);
-        useFeedbackStore.getState().submit(rating, text, lifetime);
+        useFeedbackStore.getState().submit(payload, lifetime);
       }}
     />
   );

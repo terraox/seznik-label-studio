@@ -60,7 +60,16 @@ export async function GET(_request: Request, ctx: Ctx) {
         labels: e.labelsCount,
         jobs: e.jobs,
       })),
-      feedback: feedback.map((f) => ({ id: f.id, rating: f.rating, category: f.category, message: f.message, status: f.status, createdAt: f.createdAt.toISOString() })),
+      feedback: feedback.map((f) => ({
+        id: f.id,
+        rating: f.rating,
+        category: f.category,
+        title: f.title,
+        printerName: f.printerName,
+        message: f.message,
+        status: f.status,
+        createdAt: f.createdAt.toISOString(),
+      })),
       history: statusEvents.map((event) => ({
         id: event.id,
         action: event.action,

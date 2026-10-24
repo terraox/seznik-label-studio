@@ -25,7 +25,7 @@ type Extras = {
   moreConnections: boolean;
   shopClicks: { id: string; product: string; category: string; at: string }[];
   recentPrints: { at: string; printer: string; label: string; source: string; labels: number; jobs: number }[];
-  feedback: { id: string; rating: number; category: string; message: string | null; status: string; createdAt: string }[];
+  feedback: { id: string; rating: number | null; category: string; title: string | null; printerName: string | null; message: string | null; status: string; createdAt: string }[];
   labelsLast7Days: number;
 };
 
@@ -478,13 +478,21 @@ export function UsersDesk() {
                 <summary>
                   <h3>Feedback <small>{extras ? extras.feedback.length : ''}</small></h3>
                   {extras && extras.feedback[0] ? (
-                    <span className="fold-peek">{'★'.repeat(extras.feedback[0].rating)}{'☆'.repeat(5 - extras.feedback[0].rating)}{extras.feedback[0].message ? ` “${extras.feedback[0].message}”` : ''}</span>
+                    <span className="fold-peek">
+                      {extras.feedback[0].category}
+                      {extras.feedback[0].title ? ` · ${extras.feedback[0].title}` : ''}
+                      {extras.feedback[0].message ? ` “${extras.feedback[0].message}”` : ''}
+                    </span>
                   ) : null}
                 </summary>
                 {extras && extras.feedback.length > 0 ? (
                   <ul className="ucard-list">
                     {extras.feedback.map((f) => (
-                      <li key={f.id}>{'★'.repeat(f.rating)}{'☆'.repeat(5 - f.rating)} · {f.category} · {ago(f.createdAt)}{f.message ? <div>“{f.message}”</div> : null}</li>
+                      <li key={f.id}>
+                        {f.category}{f.printerName ? ` · ${f.printerName}` : ''} · {ago(f.createdAt)}
+                        {f.title ? <div><b>{f.title}</b></div> : null}
+                        {f.message ? <div>“{f.message}”</div> : null}
+                      </li>
                     ))}
                   </ul>
                 ) : extras ? <p className="u-muted">No feedback yet.</p> : <Loader compact label="Loading feedback" />}
