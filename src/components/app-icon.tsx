@@ -120,6 +120,8 @@ const ION: Record<string, IoniconsName> = {
   'square.on.circle': 'shapes-outline',
   'square.on.square': 'copy-outline',
   'square.stack.3d.up.fill': 'albums',
+  star: 'star-outline',
+  'star.fill': 'star',
   tablecells: 'grid-outline',
   'tablecells.badge.ellipsis': 'grid-outline',
   tag: 'pricetag-outline',

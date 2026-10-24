@@ -443,8 +443,123 @@ const PANEL_ELEMENT_TYPES: readonly ElementType[] = [
   'border',
 ];
 
+const TOOL_LABEL_TO_PANEL_TYPE: Record<string, ElementType> = {
+  Text: 'text',
+  Barcode: 'barcode',
+  QRCode: 'qrcode',
+  Line: 'line',
+  Shapes: 'shape',
+  Table: 'table',
+  Time: 'time',
+  ArcText: 'arctext',
+  Degrees: 'degrees',
+  Serial: 'degrees',
+  Counter: 'degrees',
+  Image: 'image',
+  Clipart: 'clipart',
+  Signature: 'signature',
+  Border: 'border',
+};
+
 function hasPropertyPanel(type: ElementType) {
   return PANEL_ELEMENT_TYPES.includes(type);
+}
+
+/** Offline stub so a property panel can mount before that element type exists on the label. */
+function panelWarmSeed(type: ElementType): LabelElement {
+  const id = `__panel_seed_${type}`;
+  switch (type) {
+    case 'text':
+      return { ...DEFAULT_ELEMENT_STATE, id, type: 'text', text: '' };
+    case 'barcode':
+      return { ...DEFAULT_BARCODE_STATE, id, type: 'barcode', content: '1234567890' };
+    case 'qrcode':
+      return { ...DEFAULT_QRCODE_STATE, id, type: 'qrcode', content: '' };
+    case 'line':
+      return { ...DEFAULT_LINE_STATE, id, type: 'line' };
+    case 'shape':
+      return { ...DEFAULT_SHAPE_STATE, id, type: 'shape' };
+    case 'table': {
+      const table = createTableState(2, 3);
+      return { ...table, id, type: 'table' };
+    }
+    case 'time':
+      return { ...DEFAULT_TIME_STATE, id, type: 'time' };
+    case 'arctext':
+      return { ...DEFAULT_ARCTEXT_STATE, id, type: 'arctext', text: 'Arc' };
+    case 'degrees':
+      return { ...DEFAULT_DEGREES_STATE, id, type: 'degrees', content: '1' };
+    case 'image':
+      return {
+        id,
+        type: 'image',
+        uri: '',
+        rotation: 0,
+        left: 0,
+        top: 0,
+        width: 20,
+        height: 20,
+        lockMovement: false,
+        needPrinting: true,
+        antiColor: false,
+        contentFit: 'contain',
+        colorMode: 'B & W',
+        grayThreshold: 128,
+        contentType: 'Local Image',
+      };
+    case 'clipart':
+      return {
+        id,
+        type: 'clipart',
+        clipartId: '',
+        rotation: 0,
+        left: 0,
+        top: 0,
+        width: 20,
+        height: 20,
+        lockMovement: false,
+        needPrinting: true,
+        drawingColorIndex: 0,
+        strokeScale: 1,
+      };
+    case 'signature':
+      return {
+        id,
+        type: 'signature',
+        strokes: [],
+        rotation: 0,
+        left: 0,
+        top: 0,
+        width: 20,
+        height: 20,
+        lockMovement: false,
+        needPrinting: true,
+        drawingColorIndex: 0,
+        colorMode: 'B & W',
+        grayThreshold: 128,
+      };
+    case 'border':
+      return {
+        id,
+        type: 'border',
+        borderStyle: 'solid-medium',
+        lineWidth: 0.55,
+        rotation: 0,
+        left: 2,
+        top: 2,
+        width: 36,
+        height: 26,
+        lockMovement: true,
+        needPrinting: true,
+        drawingColorIndex: 0,
+        geometryVersion: 1,
+        edgeGapMm: 1,
+      };
+    default: {
+      const _exhaustive: never = type;
+      return _exhaustive;
+    }
+  }
 }
 
 /**
@@ -1439,59 +1554,52 @@ export default function EditScreen() {
     setMountedPanelTypes((prev) => (prev.includes(activePanelType) ? prev : [...prev, activePanelType]));
   }
 
-  const docPanelTypesKey = useMemo(() => {
-    const types = new Set<ElementType>();
-    for (const el of doc.elements) {
-      if (hasPropertyPanel(el.type)) types.add(el.type);
+  const ensurePanelMounted = useCallback((type: ElementType) => {
+    if (!hasPropertyPanel(type)) return;
+    if (!panelSeedRef.current.has(type)) {
+      panelSeedRef.current.set(type, panelWarmSeed(type));
     }
-    return [...types].sort().join(',');
-  }, [doc.elements]);
+    setMountedPanelTypes((prev) => (prev.includes(type) ? prev : [...prev, type]));
+  }, []);
 
+  // Pre-mount every property panel in the background so the first add/select of a type
+  // only flips visibility. Previously we only mounted types already on the label and
+  // pruned the rest — each first add paid a multi-hundred-ms native mount cost.
   useEffect(() => {
-    const liveTypes = docPanelTypesKey
-      ? (docPanelTypesKey.split(',') as ElementType[])
-      : [];
-
-    setMountedPanelTypes((prev) => {
-      const liveSet = new Set(liveTypes);
-      const pruned = prev.filter((type) => liveSet.has(type));
-      return pruned.length === prev.length ? prev : pruned;
-    });
-
-    if (liveTypes.length === 0) return;
+    for (const type of PANEL_ELEMENT_TYPES) {
+      if (!panelSeedRef.current.has(type)) {
+        panelSeedRef.current.set(type, panelWarmSeed(type));
+      }
+    }
 
     let cancelled = false;
     let frame: number | null = null;
+    let index = 0;
+
     const mountNext = () => {
       if (cancelled || !mountedRef.current) return;
       if (transformingRef.current) {
         frame = requestAnimationFrame(mountNext);
         return;
       }
-      let added = false;
-      setMountedPanelTypes((prev) => {
-        const liveSet = new Set(liveTypes);
-        const pruned = prev.filter((type) => liveSet.has(type));
-        const missing = liveTypes.find((type) => !pruned.includes(type));
-        if (!missing) {
-          return pruned.length === prev.length ? prev : pruned;
-        }
-        added = true;
-        return [...pruned, missing];
-      });
-      if (added) {
-        frame = requestAnimationFrame(mountNext);
-      }
-    };
-    const task = InteractionManager.runAfterInteractions(() => {
+      if (index >= PANEL_ELEMENT_TYPES.length) return;
+      const type = PANEL_ELEMENT_TYPES[index++];
+      setMountedPanelTypes((prev) => (prev.includes(type) ? prev : [...prev, type]));
       frame = requestAnimationFrame(mountNext);
+    };
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      // One extra frame so the canvas's first paint wins over panel warm-up.
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(mountNext);
+      });
     });
     return () => {
       cancelled = true;
       task.cancel();
       if (frame !== null) cancelAnimationFrame(frame);
     };
-  }, [docPanelTypesKey]);
+  }, []);
 
   const selectedElements = useMemo(
     () => doc.elements.filter((el) => selectedIds.includes(el.id)),
@@ -2160,10 +2268,12 @@ export default function EditScreen() {
     textEditInputRef.current?.blur();
 
     const remaining = docRef.current.elements.filter((el) => !ids.includes(el.id));
-    for (const [type] of panelSeedRef.current) {
-      if (!remaining.some((el) => el.type === type)) {
-        panelSeedRef.current.delete(type);
-      }
+    for (const type of PANEL_ELEMENT_TYPES) {
+      const live = remaining.find((el) => el.type === type);
+      if (live) panelSeedRef.current.set(type, live);
+      else if (!panelSeedRef.current.has(type)) panelSeedRef.current.set(type, panelWarmSeed(type));
+      // Keep a warm seed when the last live element of a type is deleted so the
+      // keep-alive panel stays mounted and the next add stays instant.
     }
 
     setElements((elements) => elements.filter((el) => !ids.includes(el.id)), true);
@@ -2368,6 +2478,7 @@ export default function EditScreen() {
         topBarSelectionVisibleSv.value = 1;
         bottomPanelVisibleSv.value = 1;
         activeSelectedIdSv.value = id;
+        ensurePanelMounted('border');
         resetTabToRegularForElement('border');
         setPanelOpen(true);
         return;
@@ -2432,6 +2543,7 @@ export default function EditScreen() {
       lastSelectedElementRef.current =
         docRef.current.elements.find((el) => el.id === next.primaryId) ?? element;
 
+      ensurePanelMounted(element.type);
       resetTabToRegularForElement(element.type);
       setPanelOpen(true);
     },
@@ -2443,6 +2555,7 @@ export default function EditScreen() {
       panelOpen,
       commitSelectedTableCell,
       resetTabToRegularForElement,
+      ensurePanelMounted,
     ],
   );
 
@@ -3853,6 +3966,8 @@ export default function EditScreen() {
   const openAddedElementPanel = useCallback((label: string) => {
     // Reveal chrome on the UI thread immediately — waiting for the panelOpen effect
     // leaves the property sheet hidden after add (palette stays on top).
+    const panelType = TOOL_LABEL_TO_PANEL_TYPE[label];
+    if (panelType) ensurePanelMounted(panelType);
     topBarSelectionVisibleSv.value = 1;
     bottomPanelVisibleSv.value = 1;
     switch (label) {
@@ -3899,7 +4014,7 @@ export default function EditScreen() {
       default:
         break;
     }
-  }, [topBarSelectionVisibleSv, bottomPanelVisibleSv]);
+  }, [topBarSelectionVisibleSv, bottomPanelVisibleSv, ensurePanelMounted]);
 
   const beginPaletteDrag = useCallback((
     type: ElementType,
@@ -4063,6 +4178,10 @@ export default function EditScreen() {
 
   const handleToolPress = (label: string) => {
     setShowLabelMenu(false);
+    const panelType = TOOL_LABEL_TO_PANEL_TYPE[label];
+    // Mount (or reuse) the panel before inserting the element so the sheet can
+    // show on the same frame as selection instead of waiting on a cold mount.
+    if (panelType) ensurePanelMounted(panelType);
     switch (label) {
       case 'Text':
         addElement('text');
@@ -4179,6 +4298,7 @@ export default function EditScreen() {
       const size = Math.min(docRef.current.widthMm, docRef.current.heightMm) * 0.6;
       const added = addElement('signature', { strokes, width: size, height: size });
       if (added) {
+        ensurePanelMounted('signature');
         setSignatureTab('Regular');
         setPanelOpen(true);
         topBarSelectionVisibleSv.value = 1;
@@ -4190,6 +4310,7 @@ export default function EditScreen() {
 
   const handleTablePickerConfirm = () => {
     const tableState = createTableState(pickerRows, pickerColumns);
+    ensurePanelMounted('table');
     addElement('table', {
       rowCount: tableState.rowCount,
       columnCount: tableState.columnCount,

@@ -106,6 +106,8 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
 
 /** The Industry list's first entry: every published template, whatever its categories. */
 const ALL_CATEGORY = '__all__';
+/** Listed right under All, only while at least one template is starred. */
+const FAVORITES_CATEGORY = '__favorites__';
 
 /** The sample content stored for the template, or the built-in starter when none was stored yet. */
 /** Two-up catalogue sheets can be edited together on one canvas or one label at a time (cable and jewellery sheets keep their own layout). */
@@ -164,13 +166,17 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
   category,
   showCategory,
   cardMaxWidth,
+  isFavorite,
   onPress,
+  onToggleFavorite,
 }: {
   item: CatalogTemplate;
   category: string;
   showCategory: boolean;
   cardMaxWidth: number;
+  isFavorite: boolean;
   onPress: (item: CatalogTemplate) => void;
+  onToggleFavorite: (id: string) => void;
 }) {
   useThemeRefresh();
   return (
@@ -195,6 +201,14 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
           <AppIcon name="clock" tintColor={C.accent} size={17} />
         </View>
         <ShareNodeIcon color={C.accent} size={20} />
+        <Pressable
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
+          onPress={() => onToggleFavorite(item.id)}
+          style={({ pressed }) => [styles.footerFavorite, pressed && styles.cardPressed]}>
+          <AppIcon name={isFavorite ? 'star.fill' : 'star'} tintColor={isFavorite ? C.warning : C.textMuted} size={20} />
+        </Pressable>
       </View>
     </Pressable>
   );
@@ -260,6 +274,10 @@ export default function TemplateScreen() {
   const authToken = useAuthStore((s) => s.token);
 
   const catalogLoading = useTemplateCatalogStore((s) => s.loading);
+  const favoriteIds = useTemplateCatalogStore((s) => s.favoriteIds);
+  const toggleFavorite = useTemplateCatalogStore((s) => s.toggleFavorite);
+  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const hasFavorites = catalogTemplates.some((t) => favoriteSet.has(t.id));
 
   // The tab stays mounted, so fetch again every time it comes into view: templates published
   // in the admin since the last visit show up without restarting the app.
@@ -269,10 +287,13 @@ export default function TemplateScreen() {
     }, [refreshCatalog, authToken]),
   );
 
-  // "All" comes first and is the default; an admin category only while it still exists.
-  const activeCategoryId = catalogCategories.some((c) => c.id === selectedCategory)
-    ? selectedCategory
-    : ALL_CATEGORY;
+  // "All" comes first and is the default, then Favourites while any are starred; an admin
+  // category only while it still exists.
+  const activeCategoryId =
+    (selectedCategory === FAVORITES_CATEGORY && hasFavorites) ||
+    catalogCategories.some((c) => c.id === selectedCategory)
+      ? selectedCategory
+      : ALL_CATEGORY;
   const categoryNames = useMemo(
     () => new Map(catalogCategories.map((c) => [c.id, c.name])),
     [catalogCategories],
@@ -328,8 +349,9 @@ export default function TemplateScreen() {
       );
     }
     if (activeCategoryId === ALL_CATEGORY) return catalogTemplates;
+    if (activeCategoryId === FAVORITES_CATEGORY) return catalogTemplates.filter((t) => favoriteSet.has(t.id));
     return catalogTemplates.filter((t) => t.categoryIds.includes(activeCategoryId));
-  }, [searchQuery, activeCategoryId, catalogTemplates, categoryNames]);
+  }, [searchQuery, activeCategoryId, catalogTemplates, categoryNames, favoriteSet]);
 
   const [choiceFor, setChoiceFor] = useState<{ template: CatalogTemplate; mode: AcrossMode } | null>(null);
   const [arrangeFor, setArrangeFor] = useState<CatalogTemplate | null>(null);
@@ -683,7 +705,11 @@ export default function TemplateScreen() {
                 ))}
               </>
             ) : (
-            [{ id: ALL_CATEGORY, name: 'All' }, ...catalogCategories].map((cat) => {
+            [
+              { id: ALL_CATEGORY, name: 'All' },
+              ...(hasFavorites ? [{ id: FAVORITES_CATEGORY, name: 'Favourites' }] : []),
+              ...catalogCategories,
+            ].map((cat) => {
               const isSelected = activeCategoryId === cat.id;
               return (
                 <Pressable
@@ -793,7 +819,9 @@ export default function TemplateScreen() {
                   .join(', ')}
                 showCategory={!!searchQuery.trim()}
                 cardMaxWidth={templateCardMaxWidth}
+                isFavorite={favoriteSet.has(item.id)}
                 onPress={handleSelectTemplate}
+                onToggleFavorite={toggleFavorite}
               />
             ))}
 
@@ -1172,6 +1200,13 @@ const styles = themedStyles((c, scheme) => ({
   footerClock: {
     width: 24,
     height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerFavorite: {
+    marginLeft: 'auto',
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },

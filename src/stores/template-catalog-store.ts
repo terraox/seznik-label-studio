@@ -24,6 +24,9 @@ type CatalogState = {
   categories: CatalogCategory[];
   templates: CatalogTemplate[];
   loading: boolean;
+  /** Templates the user starred; listed under Favourites. Kept on the phone, not sent to the server. */
+  favoriteIds: string[];
+  toggleFavorite: (id: string) => void;
   /** Downloads the published templates; keeps what is on the phone when offline. */
   refresh: () => Promise<void>;
 };
@@ -34,6 +37,13 @@ export const useTemplateCatalogStore = create<CatalogState>()(
       categories: [],
       templates: [],
       loading: false,
+      favoriteIds: [],
+      toggleFavorite: (id) =>
+        set((s) => ({
+          favoriteIds: s.favoriteIds.includes(id)
+            ? s.favoriteIds.filter((f) => f !== id)
+            : [...s.favoriteIds, id],
+        })),
       refresh: async () => {
         const token = useAuthStore.getState().token;
         if (!token || get().loading) return;
@@ -74,7 +84,7 @@ export const useTemplateCatalogStore = create<CatalogState>()(
     {
       name: 'sez-template-catalog-v1',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (s) => ({ categories: s.categories, templates: s.templates }),
+      partialize: (s) => ({ categories: s.categories, templates: s.templates, favoriteIds: s.favoriteIds }),
       // v0 saved a single categoryId per template; v1 keeps a list.
       version: 1,
       migrate: (persisted, version) => {
