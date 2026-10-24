@@ -111,7 +111,7 @@ export async function flushNow() {
     clearTimeout(flushTimer);
     flushTimer = null;
   }
-  // Taps counted in an earlier session (or since the last send) go out with this flush once they are 10 minutes old.
+  // Taps counted in an earlier session (or since the last send) go out with this flush once they are 20 seconds old.
   await sealFeatureCounts().catch(() => undefined);
   return flushEvents();
 }
@@ -309,12 +309,12 @@ const lastFeatureTap = new Map<string, number>();
 /**
  * Taps are only counted on the phone. They are not sent one by one: they are added up per section,
  * saved to storage a few seconds after the last tap, and sent as ONE small event (a count per
- * section) about every 10 minutes of use, or when the app is next opened. That keeps requests and
+ * section) about every 20 seconds of use, or when the app is next opened. That keeps requests and
  * database writes to a handful per person per day, however much they tap.
  */
 const FEATURE_COUNTS_KEY = 'sez-print/feature-counts';
 // Development builds send a few seconds after a tap, so the counts can be checked on the admin page right away.
-const FEATURE_SEND_MS = __DEV__ ? 5 * 1000 : 10 * 60 * 1000;
+const FEATURE_SEND_MS = __DEV__ ? 5 * 1000 : 20 * 1000;
 const FEATURE_SEND_AT_TAPS = 200; // a very busy stretch is sent early
 const FEATURE_SAVE_MS = 5000;
 
@@ -359,7 +359,7 @@ export async function persistFeatureCounts() {
 
 const tapTotal = (counts: Record<string, number>) => Object.values(counts).reduce((t, n) => t + n, 0);
 
-/** Moves the counted taps into the send queue as one event. Does nothing until they are 10 minutes old (or `force`). */
+/** Moves the counted taps into the send queue as one event. Does nothing until they are 20 seconds old (or `force`). */
 async function sealFeatureCounts(force = false) {
   const pending = await loadFeatureCounts();
   const total = tapTotal(pending.counts);
@@ -386,7 +386,7 @@ export function trackFeatureClick(featureKey: FeatureKey) {
     if (tapTotal(pending.counts) === 0) pending.since = now;
     pending.counts[featureKey] = Math.min(10_000, (pending.counts[featureKey] ?? 0) + 1);
     featureSaveTimer ??= setTimeout(() => void persistFeatureCounts(), FEATURE_SAVE_MS);
-    // While the app stays open, send what was counted about 10 minutes after the first tap.
+    // While the app stays open, send what was counted about 20 seconds after the first tap.
     featureSendTimer ??= setTimeout(() => {
       featureSendTimer = null;
       void sealFeatureCounts(true).catch(() => undefined);
