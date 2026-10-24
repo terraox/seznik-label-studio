@@ -10,7 +10,7 @@ SHA=$(git rev-parse --short HEAD)
 [ -z "$(git status --porcelain)" ] || { echo "Commit or stash first: working tree is not clean."; exit 1; }
 REL=/opt/sez-print/releases/$SHA
 echo "== sending $SHA"
-git archive HEAD admin src/lib/clipart | $SSH "rm -rf $REL && mkdir -p $REL && tar -x -C $REL"
+git archive HEAD admin src | $SSH "rm -rf $REL && mkdir -p $REL && tar -x -C $REL"
 echo "== building on the droplet"
 # The env file has values with & and !, so it is loaded by name, never sourced by the shell.
 $SSH "REL=$REL sh -s" <<'REMOTE'
