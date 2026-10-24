@@ -1554,6 +1554,7 @@ export default function EditScreen() {
     setMountedPanelTypes((prev) => (prev.includes(activePanelType) ? prev : [...prev, activePanelType]));
   }
 
+  /** Mount one panel type on demand (add tool / first use). Do not warm-mount all 13 — that stalls drag. */
   const ensurePanelMounted = useCallback((type: ElementType) => {
     if (!hasPropertyPanel(type)) return;
     if (!panelSeedRef.current.has(type)) {
@@ -1562,44 +1563,58 @@ export default function EditScreen() {
     setMountedPanelTypes((prev) => (prev.includes(type) ? prev : [...prev, type]));
   }, []);
 
-  // Pre-mount every property panel in the background so the first add/select of a type
-  // only flips visibility. Previously we only mounted types already on the label and
-  // pruned the rest — each first add paid a multi-hundred-ms native mount cost.
-  useEffect(() => {
-    for (const type of PANEL_ELEMENT_TYPES) {
-      if (!panelSeedRef.current.has(type)) {
-        panelSeedRef.current.set(type, panelWarmSeed(type));
-      }
+  // Keep-alive only types already on the label (same as 47f5bfb). Mount one per frame after idle.
+  const docPanelTypesKey = useMemo(() => {
+    const types = new Set<ElementType>();
+    for (const el of doc.elements) {
+      if (hasPropertyPanel(el.type)) types.add(el.type);
     }
+    return [...types].sort().join(',');
+  }, [doc.elements]);
+
+  useEffect(() => {
+    const liveTypes = docPanelTypesKey ? (docPanelTypesKey.split(',') as ElementType[]) : [];
+
+    setMountedPanelTypes((prev) => {
+      const liveSet = new Set(liveTypes);
+      const pruned = prev.filter((type) => liveSet.has(type));
+      return pruned.length === prev.length ? prev : pruned;
+    });
+
+    if (liveTypes.length === 0) return;
 
     let cancelled = false;
     let frame: number | null = null;
-    let index = 0;
-
     const mountNext = () => {
       if (cancelled || !mountedRef.current) return;
       if (transformingRef.current) {
         frame = requestAnimationFrame(mountNext);
         return;
       }
-      if (index >= PANEL_ELEMENT_TYPES.length) return;
-      const type = PANEL_ELEMENT_TYPES[index++];
-      setMountedPanelTypes((prev) => (prev.includes(type) ? prev : [...prev, type]));
-      frame = requestAnimationFrame(mountNext);
-    };
-
-    const task = InteractionManager.runAfterInteractions(() => {
-      // One extra frame so the canvas's first paint wins over panel warm-up.
-      frame = requestAnimationFrame(() => {
-        frame = requestAnimationFrame(mountNext);
+      let added = false;
+      setMountedPanelTypes((prev) => {
+        const liveSet = new Set(liveTypes);
+        const pruned = prev.filter((type) => liveSet.has(type));
+        const missing = liveTypes.find((type) => !pruned.includes(type));
+        if (!missing) {
+          return pruned.length === prev.length ? prev : pruned;
+        }
+        added = true;
+        return [...pruned, missing];
       });
+      if (added) {
+        frame = requestAnimationFrame(mountNext);
+      }
+    };
+    const task = InteractionManager.runAfterInteractions(() => {
+      frame = requestAnimationFrame(mountNext);
     });
     return () => {
       cancelled = true;
       task.cancel();
       if (frame !== null) cancelAnimationFrame(frame);
     };
-  }, []);
+  }, [docPanelTypesKey]);
 
   const selectedElements = useMemo(
     () => doc.elements.filter((el) => selectedIds.includes(el.id)),
@@ -2268,12 +2283,10 @@ export default function EditScreen() {
     textEditInputRef.current?.blur();
 
     const remaining = docRef.current.elements.filter((el) => !ids.includes(el.id));
-    for (const type of PANEL_ELEMENT_TYPES) {
-      const live = remaining.find((el) => el.type === type);
-      if (live) panelSeedRef.current.set(type, live);
-      else if (!panelSeedRef.current.has(type)) panelSeedRef.current.set(type, panelWarmSeed(type));
-      // Keep a warm seed when the last live element of a type is deleted so the
-      // keep-alive panel stays mounted and the next add stays instant.
+    for (const [type] of panelSeedRef.current) {
+      if (!remaining.some((el) => el.type === type)) {
+        panelSeedRef.current.delete(type);
+      }
     }
 
     setElements((elements) => elements.filter((el) => !ids.includes(el.id)), true);
@@ -2400,19 +2413,10 @@ export default function EditScreen() {
 
   const gridSpacingMm =
     editorSettings.editorGridSpacingMm ?? DEFAULT_EDITOR_SETTINGS.editorGridSpacingMm;
-  const gridOverlay =
-    editorSettings.editorGridOverlay ?? DEFAULT_EDITOR_SETTINGS.editorGridOverlay;
 
   const changeGridSpacing = useCallback(
     (mm: number) => {
       patchEditor({ editorGridSpacingMm: mm });
-    },
-    [patchEditor],
-  );
-
-  const changeGridOverlay = useCallback(
-    (overlay: boolean) => {
-      patchEditor({ editorGridOverlay: overlay });
     },
     [patchEditor],
   );
@@ -2478,8 +2482,6 @@ export default function EditScreen() {
         topBarSelectionVisibleSv.value = 1;
         bottomPanelVisibleSv.value = 1;
         activeSelectedIdSv.value = id;
-        ensurePanelMounted('border');
-        resetTabToRegularForElement('border');
         setPanelOpen(true);
         return;
       }
@@ -2491,15 +2493,12 @@ export default function EditScreen() {
       // drag loses elements and the tap-end toggle flips it back (flicker).
       if (multipleMode && source === 'touch' && alreadySelected) {
         activeSelectedIdSv.value = id;
-        topBarSelectionVisibleSv.value = 1;
-        bottomPanelVisibleSv.value = 1;
-        if (!panelOpen) setPanelOpen(true);
         return;
       }
       // A deferred toggle whose element was already removed elsewhere is stale.
       if (multipleMode && source === 'toggle' && !alreadySelected) return;
 
-      // Same element already selected with panel open — keep chrome visible, skip React churn.
+      // Same element already selected with panel open — skip React churn on drag start.
       if (
         !multipleMode &&
         current.ids.length === 1 &&
@@ -2507,8 +2506,6 @@ export default function EditScreen() {
         panelOpen
       ) {
         activeSelectedIdSv.value = id;
-        topBarSelectionVisibleSv.value = 1;
-        bottomPanelVisibleSv.value = 1;
         return;
       }
 
@@ -2536,16 +2533,26 @@ export default function EditScreen() {
         commitSelectedTableCell(null);
       }
 
-      // Reveal property sheet on the UI thread immediately — do not wait for the panelOpen effect.
       topBarSelectionVisibleSv.value = 1;
       bottomPanelVisibleSv.value = 1;
       activeSelectedIdSv.value = next.primaryId ?? id;
       lastSelectedElementRef.current =
         docRef.current.elements.find((el) => el.id === next.primaryId) ?? element;
 
-      ensurePanelMounted(element.type);
-      resetTabToRegularForElement(element.type);
-      setPanelOpen(true);
+      // Lightweight open on touch-down — no ensurePanelMounted / full tab reset (those stall drag).
+      if (!multipleMode) {
+        if (element.type === 'image') {
+          setImageTab('Regular');
+          setPanelOpen(true);
+        } else if (element.type === 'clipart') {
+          setClipartTab('Regular');
+          setPanelOpen(true);
+        } else {
+          setPanelOpen(true);
+        }
+      } else {
+        setPanelOpen(true);
+      }
     },
     [
       multipleMode,
@@ -2554,8 +2561,6 @@ export default function EditScreen() {
       activeSelectedIdSv,
       panelOpen,
       commitSelectedTableCell,
-      resetTabToRegularForElement,
-      ensurePanelMounted,
     ],
   );
 
@@ -4612,7 +4617,6 @@ export default function EditScreen() {
                     selectionColor={selectionColor}
                     surfaceColor={artboardFill}
                     showGrid={gridShown}
-                    gridOverlay={gridOverlay}
                     gridSpacingMm={gridSpacingMm}
                     gridColor={editorSettings.editorGridColor}
                     liveBounds={liveRulerBounds}
@@ -5420,10 +5424,8 @@ export default function EditScreen() {
       <GridSpacingPopover
         visible={gridSpacingPopoverVisible}
         spacingMm={gridSpacingMm}
-        overlay={gridOverlay}
         onClose={() => setGridSpacingPopoverVisible(false)}
         onSpacingChange={changeGridSpacing}
-        onOverlayChange={changeGridOverlay}
       />
 
       <LabelSizeDialog

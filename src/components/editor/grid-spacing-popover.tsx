@@ -6,7 +6,6 @@ import { TextInput } from '@/components/ui/text-input';
 import { clampGridSpacingMm, GRID_SPACING_MAX_MM, GRID_SPACING_MIN_MM } from '@/lib/editor/canvas-grid';
 import {
   GRID_CUSTOM_LABEL,
-  GRID_OVERLAY_HELP,
   GRID_PRINT_DISCLAIMER,
   GRID_SPACING_OPTIONS,
   isPresetGridSpacing,
@@ -14,16 +13,14 @@ import {
 } from '@/lib/editor/grid-settings-ui';
 import { Spacing } from '@/constants/theme';
 import { Type, androidRipple } from '@/constants/ui';
-import { themedStyles, useThemeRefresh } from '@/theme';
 import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
+import { themedStyles, useThemeRefresh } from '@/theme';
 
 type GridSpacingPopoverProps = {
   visible: boolean;
   spacingMm: number;
-  overlay: boolean;
   onClose: () => void;
   onSpacingChange: (spacingMm: number) => void;
-  onOverlayChange: (overlay: boolean) => void;
 };
 
 function parseSpacingDraft(draft: string): number | null {
@@ -34,10 +31,8 @@ function parseSpacingDraft(draft: string): number | null {
 export function GridSpacingPopover({
   visible,
   spacingMm,
-  overlay,
   onClose,
   onSpacingChange,
-  onOverlayChange,
 }: GridSpacingPopoverProps) {
   useThemeRefresh();
   const [customOpen, setCustomOpen] = useState(false);
@@ -71,7 +66,7 @@ export function GridSpacingPopover({
         keyboardShouldPersistTaps="handled">
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" />
         <Pressable style={styles.panel} onPress={() => undefined}>
-          <Text style={styles.title}>Grid settings</Text>
+          <Text style={styles.title}>Grid spacing</Text>
           <Text style={styles.disclaimer}>{GRID_PRINT_DISCLAIMER}</Text>
 
           <View style={styles.chipRow}>
@@ -122,26 +117,6 @@ export function GridSpacingPopover({
               </Text>
             </View>
           ) : null}
-
-          <Pressable
-            onPress={() => onOverlayChange(!overlay)}
-            android_ripple={androidRipple}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: overlay }}
-            accessibilityLabel="Overlay grid on elements"
-            style={({ pressed }) => [
-              styles.overlayRow,
-              overlay && styles.overlayRowActive,
-              pressed && styles.pressed,
-            ]}>
-            <View style={styles.overlayTextCol}>
-              <Text style={[styles.overlayTitle, overlay && styles.overlayTitleActive]}>Overlay</Text>
-              <Text style={styles.overlayHelp}>{GRID_OVERLAY_HELP}</Text>
-            </View>
-            <View style={[styles.overlaySwitch, overlay && styles.overlaySwitchOn]}>
-              <View style={[styles.overlayKnob, overlay && styles.overlayKnobOn]} />
-            </View>
-          </Pressable>
 
           <Pressable
             onPress={() => {
@@ -240,59 +215,6 @@ const styles = themedStyles((c) => ({
   customHint: {
     ...Type.caption,
     color: c.textMuted,
-  },
-  overlayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: c.fill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: c.border,
-  },
-  overlayRowActive: {
-    backgroundColor: c.accentSoft,
-    borderColor: c.accent,
-  },
-  overlayTextCol: {
-    flex: 1,
-    gap: 2,
-    minWidth: 0,
-  },
-  overlayTitle: {
-    ...Type.caption,
-    fontWeight: '700',
-    color: c.text,
-  },
-  overlayTitleActive: {
-    color: c.accent,
-  },
-  overlayHelp: {
-    ...Type.caption,
-    color: c.textMuted,
-    lineHeight: 15,
-  },
-  overlaySwitch: {
-    width: 40,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: c.border,
-    padding: 2,
-    justifyContent: 'center',
-  },
-  overlaySwitchOn: {
-    backgroundColor: c.accent,
-  },
-  overlayKnob: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: c.surface,
-  },
-  overlayKnobOn: {
-    alignSelf: 'flex-end',
   },
   doneBtn: {
     alignSelf: 'flex-end',

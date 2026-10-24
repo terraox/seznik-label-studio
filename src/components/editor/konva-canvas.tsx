@@ -43,13 +43,8 @@ type KonvaCanvasProps = {
   selectionColor: string;
   /** Editor nested artboard fill. Print capture keeps document white. */
   surfaceColor?: string;
-  /** Editor-only design grid (not in print capture via LabelPreview). */
+  /** Editor-only design grid (not included in print capture via LabelPreview). */
   showGrid?: boolean;
-  /**
-   * When true, grid draws above elements. When false, elements cover the grid
-   * (white plates under each element, same as the pre-overlay behaviour).
-   */
-  gridOverlay?: boolean;
   gridSpacingMm?: number;
   gridColor?: string;
   liveBounds?: LiveRulerBounds;
@@ -213,17 +208,22 @@ const CanvasElementNodes = memo(function CanvasElementNodes({
   );
 }, (prev, next) => prev.chrome === next.chrome && idleElementRefsUnchanged(prev.elements, next.elements));
 
-/** Covers grid lines under the live element when overlay is off. */
+/**
+ * Covers grid lines under the live element. Size/position use transform from a
+ * 1×1 anchor so the view cannot stretch to fill the artboard on first drag.
+ */
 const GridLivePlate = memo(function GridLivePlate({
   liveBounds,
   showGridSv,
   pxPerMM,
   color,
+  rotationDeg,
 }: {
   liveBounds: LiveRulerBounds;
   showGridSv: SharedValue<number>;
   pxPerMM: number;
   color: string;
+  rotationDeg: number;
 }) {
   useThemeRefresh();
   const style = useAnimatedStyle(() => {
@@ -243,6 +243,7 @@ const GridLivePlate = memo(function GridLivePlate({
       transform: [
         { translateX: ready ? liveBounds.leftMm.value * pxPerMM : 0 },
         { translateY: ready ? liveBounds.topMm.value * pxPerMM : 0 },
+        { rotate: `${rotationDeg}deg` },
       ],
     };
   });
@@ -272,12 +273,14 @@ const GridStaticPlate = memo(function GridStaticPlate({
   widthPx,
   heightPx,
   color,
+  rotationDeg,
 }: {
   leftPx: number;
   topPx: number;
   widthPx: number;
   heightPx: number;
   color: string;
+  rotationDeg: number;
 }) {
   useThemeRefresh();
   return (
@@ -291,6 +294,7 @@ const GridStaticPlate = memo(function GridStaticPlate({
         width: widthPx,
         height: heightPx,
         backgroundColor: color,
+        transform: [{ rotate: `${rotationDeg}deg` }],
       }}
     />
   );
@@ -308,7 +312,6 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
     selectionColor,
     surfaceColor,
     showGrid = false,
-    gridOverlay = true,
     gridSpacingMm = DEFAULT_GRID_SPACING_MM,
     gridColor,
     liveBounds,
@@ -351,11 +354,10 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
   const h = Math.max(1, canvasHeightPx);
   const resolvedGridSpacingMm = gridSpacingMm ?? DEFAULT_GRID_SPACING_MM;
   const printRulerOn = printRulerEnabled(doc);
-  const underlayGrid = showGrid && !gridOverlay;
-  const showGridSv = useSharedValue(underlayGrid ? 1 : 0);
+  const showGridSv = useSharedValue(showGrid ? 1 : 0);
   useEffect(() => {
-    showGridSv.value = underlayGrid ? 1 : 0;
-  }, [underlayGrid, showGridSv]);
+    showGridSv.value = showGrid ? 1 : 0;
+  }, [showGrid, showGridSv]);
 
   const isCircle = doc.mediaShape === 'circle' || doc.mediaShape === 'ellipse';
   const cableFlag = isCableFlagDieCutDocument(doc);
@@ -502,6 +504,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
     : doc.heightMm;
 
   const sortedElements = useMemo(() => sortLayers(doc.elements), [doc.elements]);
+
   const gridLiveElementId = selectedIds.length === 1 ? selectedIds[0] : null;
 
   const chrome = useMemo<ElementChrome>(
@@ -683,17 +686,16 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
 
           {cableFlag || stockCut || isCircle ? null : <View style={styles.artboardBorder} />}
 
-          {underlayGrid ? (
-            <>
-              <CanvasGridOverlay
-                widthPx={w}
-                heightPx={h}
-                pxPerMM={pxPerMM}
-                spacingMm={resolvedGridSpacingMm}
-                visible
-                gridColor={gridColor}
-              />
-              {gridCoverRectsMm(sortedElements, { includeNonPrinting: true })
+          <CanvasGridOverlay
+            widthPx={w}
+            heightPx={h}
+            pxPerMM={pxPerMM}
+            spacingMm={resolvedGridSpacingMm}
+            visible={showGrid}
+            gridColor={gridColor}
+          />
+          {showGrid
+            ? gridCoverRectsMm(sortedElements, { includeNonPrinting: true })
                 .filter((item) => item.id !== gridLiveElementId)
                 .map((item, index) => (
                   <GridStaticPlate
@@ -703,17 +705,18 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
                     widthPx={Math.max(1, item.rect.width * pxPerMM)}
                     heightPx={Math.max(1, item.rect.height * pxPerMM)}
                     color={stickerFillColor}
+                    rotationDeg={0}
                   />
-                ))}
-              {liveBounds ? (
-                <GridLivePlate
-                  liveBounds={liveBounds}
-                  showGridSv={showGridSv}
-                  pxPerMM={pxPerMM}
-                  color={stickerFillColor}
-                />
-              ) : null}
-            </>
+                ))
+            : null}
+          {liveBounds ? (
+            <GridLivePlate
+              liveBounds={liveBounds}
+              showGridSv={showGridSv}
+              pxPerMM={pxPerMM}
+              color={stickerFillColor}
+              rotationDeg={0}
+            />
           ) : null}
         </View>
       </View>
@@ -738,18 +741,6 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
           ) : null}
         </View>
       </ViewShot>
-      {showGrid && gridOverlay ? (
-        <View pointerEvents="none" style={styles.gridLayer} collapsable={false}>
-          <CanvasGridOverlay
-            widthPx={w}
-            heightPx={h}
-            pxPerMM={pxPerMM}
-            spacingMm={resolvedGridSpacingMm}
-            visible
-            gridColor={gridColor}
-          />
-        </View>
-      ) : null}
       {mediaShapeGuide}
       {cableFlagOutline}
       {snapGuides.length > 0 ? (
@@ -812,10 +803,6 @@ const styles = themedStyles((c) => ({
     zIndex: 1,
     overflow: 'hidden',
     backgroundColor: 'transparent',
-  },
-  gridLayer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 2,
   },
   canvasPad: {
     overflow: 'hidden',

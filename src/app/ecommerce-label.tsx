@@ -107,7 +107,7 @@ export default function EcommerceLabelScreen() {
     clearPrintRasterCache();
   }, []);
 
-  const goBack = () => {
+  const handleBack = () => {
     if (busy) return;
     if (step === 'print') setStep('preview');
     else if (step === 'preview') setStep('setup');
@@ -208,7 +208,7 @@ export default function EcommerceLabelScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top, height: 48 + insets.top }]}>
-        <Pressable onPress={goBack} hitSlop={8} style={styles.headerBtn}>
+        <Pressable onPress={handleBack} hitSlop={8} style={styles.headerBtn}>
           <AppIcon name="chevron.left" size={22} tintColor={C.onAccent} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>
@@ -371,7 +371,7 @@ export default function EcommerceLabelScreen() {
               {platformName(platform!)} label.
             </Text>
           ) : null}
-          <BottomBar insetBottom={insets.bottom} onBack={goBack} nextLabel="Next" onNext={() => setStep('print')} />
+          <BottomBar insetBottom={insets.bottom} onBack={handleBack} nextLabel="Next" onNext={() => setStep('print')} />
         </View>
       ) : null}
 
@@ -396,7 +396,7 @@ export default function EcommerceLabelScreen() {
           </FormScrollView>
           <BottomBar
             insetBottom={insets.bottom}
-            onBack={goBack}
+            onBack={handleBack}
             backDisabled={printing}
             nextLabel={printerLive ? 'Print' : 'Connect printer'}
             nextBusy={printing}
