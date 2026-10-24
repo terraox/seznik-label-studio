@@ -31,11 +31,11 @@ export function FeaturesDesk() {
 
   useEffect(load, [load]);
 
-  // New taps arrive from phones all day: refresh every minute while this tab is open and visible.
+  // New taps arrive from phones all day: refresh every 30 seconds while this tab is open and visible.
   useEffect(() => {
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') load();
-    }, 60_000);
+    }, 30_000);
     return () => clearInterval(timer);
   }, [load]);
 
