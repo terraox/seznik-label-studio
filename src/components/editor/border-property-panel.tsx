@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/text-input';
 
+import { RangeSlider } from '@/components/editor/range-slider';
 import { BORDER_LIBRARY } from '@/constants/border-library';
 import { borderBoxForCenterGap } from '@/lib/border-geometry';
 import type { BorderElementState } from '@/lib/label-document';
@@ -20,6 +21,7 @@ import { themedStyles, useThemeRefresh } from '@/theme';
 
 const LINE_MIN = 0.1;
 const LINE_MAX = 1.5;
+const LINE_STEP = 0.01;
 
 type BorderPropertyPanelProps = {
   state: BorderElementState & { id: string };
@@ -45,7 +47,6 @@ export function BorderPropertyPanel({
   const clampGap = usesTd404 ? td404BorderGapMm : joshBorderGapMm;
   const gap = clampGap(state.edgeGapMm);
   const styleName = BORDER_LIBRARY.find((item) => item.id === state.borderStyle)?.name ?? 'Border';
-  const trackWidth = useRef(1);
   const [gapText, setGapText] = useState(String(gap));
   const [gapSource, setGapSource] = useState(gap);
   if (gapSource !== gap) {
@@ -54,7 +55,6 @@ export function BorderPropertyPanel({
   }
 
   const lineWidth = Math.min(LINE_MAX, Math.max(LINE_MIN, state.lineWidth || LINE_MIN));
-  const ratio = (lineWidth - LINE_MIN) / (LINE_MAX - LINE_MIN);
 
   const commit = (nextWidth: number, nextGap: number) => {
     const width = Math.round(Math.min(LINE_MAX, Math.max(LINE_MIN, nextWidth)) * 100) / 100;
@@ -65,11 +65,6 @@ export function BorderPropertyPanel({
       geometryVersion: 1,
       ...borderBoxForCenterGap(labelWidthMm, labelHeightMm, edgeGapMm, width),
     });
-  };
-
-  const setLineFromX = (x: number) => {
-    const nextRatio = Math.min(1, Math.max(0, x / trackWidth.current));
-    commit(LINE_MIN + nextRatio * (LINE_MAX - LINE_MIN), gap);
   };
 
   return (
@@ -92,20 +87,14 @@ export function BorderPropertyPanel({
           <Text style={styles.rangeText}>{LINE_MIN.toFixed(1)}</Text>
           <Text style={styles.rangeText}>{LINE_MAX.toFixed(1)}</Text>
         </View>
-        <View
-          style={styles.sliderHit}
-          onLayout={(event) => {
-            trackWidth.current = event.nativeEvent.layout.width || 1;
-          }}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-          onResponderGrant={(event) => setLineFromX(event.nativeEvent.locationX)}
-          onResponderMove={(event) => setLineFromX(event.nativeEvent.locationX)}>
-          <View style={styles.sliderTrack}>
-            <View style={[styles.sliderFill, { width: `${ratio * 100}%` }]} />
-          </View>
-          <View style={[styles.sliderThumb, { left: `${ratio * 100}%` }]} />
-        </View>
+        <RangeSlider
+          value={lineWidth}
+          min={LINE_MIN}
+          max={LINE_MAX}
+          step={LINE_STEP}
+          compact
+          onChange={(nextWidth) => commit(nextWidth, gap)}
+        />
       </View>
       <View style={styles.divider} />
       <View style={styles.gapRow}>
@@ -195,31 +184,6 @@ const styles = themedStyles((c) => ({
     fontSize: 12,
     color: c.textMuted,
     flexShrink: 1,
-  },
-  sliderHit: {
-    marginTop: 6,
-    height: 28,
-    justifyContent: 'center',
-  },
-  sliderTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: c.fillStrong,
-    overflow: 'hidden',
-  },
-  sliderFill: {
-    height: 4,
-    backgroundColor: c.accent,
-  },
-  sliderThumb: {
-    position: 'absolute',
-    width: 22,
-    height: 22,
-    marginLeft: -11,
-    borderRadius: 11,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.hairline,
   },
   gapRow: {
     minHeight: 52,

@@ -451,15 +451,18 @@ function hasPropertyPanel(type: ElementType) {
  * Keeps a property panel mounted after first use. Mounting a panel creates many native
  * views on the UI thread, which stalls an in-flight drag; toggling display does not.
  * Hidden slots skip re-rendering entirely.
+ * Visible slots must flex-fill the sheet: panels use flex:1 scroll bodies, and without
+ * a flex parent they collapse to zero height (looks like the bottom panel never opened).
  */
 const KeepAlivePanelSlot = memo(
   function KeepAlivePanelSlot({ visible, children }: { visible: boolean; children: ReactNode }) {
     useThemeRefresh();
-    return <View style={visible ? null : panelSlotHidden}>{children}</View>;
+    return <View style={visible ? panelSlotVisible : panelSlotHidden}>{children}</View>;
   },
   (prev, next) => !prev.visible && !next.visible,
 );
 
+const panelSlotVisible = { flex: 1, minHeight: 0 } as const;
 const panelSlotHidden = { display: 'none' } as const;
 
 function HeaderAction({
@@ -1799,9 +1802,11 @@ export default function EditScreen() {
         setTableTab('Regular');
         console.log(`[table-cell] clear-cell tableId=${tableId} panel=TablePropertyPanel`);
       }
+      topBarSelectionVisibleSv.value = 1;
+      bottomPanelVisibleSv.value = 1;
       setPanelOpen(true);
     },
-    [commitSelectedTableCell],
+    [commitSelectedTableCell, topBarSelectionVisibleSv, bottomPanelVisibleSv],
   );
 
   const handleTableCellQuickEdit = useCallback(
@@ -2285,10 +2290,19 @@ export default function EditScreen() {
 
   const gridSpacingMm =
     editorSettings.editorGridSpacingMm ?? DEFAULT_EDITOR_SETTINGS.editorGridSpacingMm;
+  const gridOverlay =
+    editorSettings.editorGridOverlay ?? DEFAULT_EDITOR_SETTINGS.editorGridOverlay;
 
   const changeGridSpacing = useCallback(
     (mm: number) => {
       patchEditor({ editorGridSpacingMm: mm });
+    },
+    [patchEditor],
+  );
+
+  const changeGridOverlay = useCallback(
+    (overlay: boolean) => {
+      patchEditor({ editorGridOverlay: overlay });
     },
     [patchEditor],
   );
@@ -2354,6 +2368,7 @@ export default function EditScreen() {
         topBarSelectionVisibleSv.value = 1;
         bottomPanelVisibleSv.value = 1;
         activeSelectedIdSv.value = id;
+        resetTabToRegularForElement('border');
         setPanelOpen(true);
         return;
       }
@@ -2365,12 +2380,15 @@ export default function EditScreen() {
       // drag loses elements and the tap-end toggle flips it back (flicker).
       if (multipleMode && source === 'touch' && alreadySelected) {
         activeSelectedIdSv.value = id;
+        topBarSelectionVisibleSv.value = 1;
+        bottomPanelVisibleSv.value = 1;
+        if (!panelOpen) setPanelOpen(true);
         return;
       }
       // A deferred toggle whose element was already removed elsewhere is stale.
       if (multipleMode && source === 'toggle' && !alreadySelected) return;
 
-      // e41f3aa: skip React work when the same element is already selected with panel open.
+      // Same element already selected with panel open — keep chrome visible, skip React churn.
       if (
         !multipleMode &&
         current.ids.length === 1 &&
@@ -2378,6 +2396,8 @@ export default function EditScreen() {
         panelOpen
       ) {
         activeSelectedIdSv.value = id;
+        topBarSelectionVisibleSv.value = 1;
+        bottomPanelVisibleSv.value = 1;
         return;
       }
 
@@ -2405,28 +2425,15 @@ export default function EditScreen() {
         commitSelectedTableCell(null);
       }
 
+      // Reveal property sheet on the UI thread immediately — do not wait for the panelOpen effect.
       topBarSelectionVisibleSv.value = 1;
       bottomPanelVisibleSv.value = 1;
       activeSelectedIdSv.value = next.primaryId ?? id;
       lastSelectedElementRef.current =
         docRef.current.elements.find((el) => el.id === next.primaryId) ?? element;
 
-      // e41f3aa: lightweight panel open — no tab resets or deferred transitions on touch-down.
-      if (!multipleMode) {
-        if (element.type === 'image') {
-          setImageTab('Regular');
-          setPanelOpen(true);
-        } else if (element.type === 'clipart') {
-          setClipartTab('Regular');
-          setPanelOpen(true);
-        } else {
-          setPanelOpen(true);
-        }
-      } else if (next.ids.length >= 2) {
-        setPanelOpen(true);
-      } else if (next.ids.length === 1) {
-        setPanelOpen(true);
-      }
+      resetTabToRegularForElement(element.type);
+      setPanelOpen(true);
     },
     [
       multipleMode,
@@ -2435,6 +2442,7 @@ export default function EditScreen() {
       activeSelectedIdSv,
       panelOpen,
       commitSelectedTableCell,
+      resetTabToRegularForElement,
     ],
   );
 
@@ -3843,6 +3851,10 @@ export default function EditScreen() {
   };
 
   const openAddedElementPanel = useCallback((label: string) => {
+    // Reveal chrome on the UI thread immediately — waiting for the panelOpen effect
+    // leaves the property sheet hidden after add (palette stays on top).
+    topBarSelectionVisibleSv.value = 1;
+    bottomPanelVisibleSv.value = 1;
     switch (label) {
       case 'Text':
         setTextTab('Regular');
@@ -3887,7 +3899,7 @@ export default function EditScreen() {
       default:
         break;
     }
-  }, []);
+  }, [topBarSelectionVisibleSv, bottomPanelVisibleSv]);
 
   const beginPaletteDrag = useCallback((
     type: ElementType,
@@ -4184,6 +4196,8 @@ export default function EditScreen() {
     });
     setTableTab('Regular');
     setShowTablePicker(false);
+    topBarSelectionVisibleSv.value = 1;
+    bottomPanelVisibleSv.value = 1;
     setPanelOpen(true);
   };
 
@@ -4477,6 +4491,7 @@ export default function EditScreen() {
                     selectionColor={selectionColor}
                     surfaceColor={artboardFill}
                     showGrid={gridShown}
+                    gridOverlay={gridOverlay}
                     gridSpacingMm={gridSpacingMm}
                     gridColor={editorSettings.editorGridColor}
                     liveBounds={liveRulerBounds}
@@ -5284,8 +5299,10 @@ export default function EditScreen() {
       <GridSpacingPopover
         visible={gridSpacingPopoverVisible}
         spacingMm={gridSpacingMm}
+        overlay={gridOverlay}
         onClose={() => setGridSpacingPopoverVisible(false)}
         onSpacingChange={changeGridSpacing}
+        onOverlayChange={changeGridOverlay}
       />
 
       <LabelSizeDialog

@@ -47,11 +47,11 @@ function HeaderBackdrop({ w, h }: { w: number; h: number }) {
   );
 }
 
-/** The logo swoosh on a white tile, like the app icon. */
+/** The logo swoosh on a white circle, like the app icon. */
 function BrandBadge() {
   return (
     <View style={styles.badge}>
-      <Svg width={26} height={22} viewBox={`0 0 ${SWOOSH_W} ${SWOOSH_H}`} accessibilityElementsHidden importantForAccessibility="no">
+      <Svg width={31} height={26} viewBox={`0 0 ${SWOOSH_W} ${SWOOSH_H}`} accessibilityElementsHidden importantForAccessibility="no">
         <Defs>
           <LinearGradient id="hdr-swoosh" x1="0.3" y1="0" x2="0.7" y2="1">
             <Stop offset="0" stopColor={LOGO_CYAN} />
@@ -110,9 +110,9 @@ const styles = themedStyles((c) => ({
   },
   brand: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
   badge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: WHITE,
     alignItems: 'center',
     justifyContent: 'center',

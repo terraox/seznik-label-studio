@@ -29,6 +29,11 @@ export type EditorSettings = {
   editorGridSpacingMm: number;
   /** Design grid line color (hex). */
   editorGridColor: string;
+  /**
+   * When true, grid lines draw above elements (visible across the label).
+   * When false, elements cover the grid (knockouts under each element).
+   */
+  editorGridOverlay: boolean;
   /** One-time alert shown when the user first enables the design grid. */
   editorGridDisclaimerSeen: boolean;
   /** Extra D-pad under the canvas. Off by default — use Editor Settings to show it. */
@@ -89,6 +94,7 @@ export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   editorGrid: false,
   editorGridSpacingMm: 5,
   editorGridColor: '#000000',
+  editorGridOverlay: true,
   editorGridDisclaimerSeen: false,
   showNudgePad: false,
   canvasSplitRatio: DEFAULT_CANVAS_SPLIT_RATIO,
@@ -212,8 +218,11 @@ export const useSettingsStore = create<SettingsStoreState>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<SettingsStoreState>;
         const merged = { ...current, ...saved };
+        if (saved.editor) {
+          merged.editor = { ...DEFAULT_EDITOR_SETTINGS, ...saved.editor };
+        }
         if (saved.defaults) {
-          merged.defaults = { ...saved.defaults, paperType: readPaperType(saved.defaults.paperType) };
+          merged.defaults = { ...DEFAULT_PROPERTY_SETTINGS, ...saved.defaults, paperType: readPaperType(saved.defaults.paperType) };
         }
         return merged;
       },

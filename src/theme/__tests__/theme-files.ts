@@ -86,6 +86,7 @@ export const CONVERTED_FILES: string[] = [
   'src/components/editor/position-icons.tsx',
   'src/components/editor/qrcode-property-panel.tsx',
   'src/components/editor/quick-value-modal.tsx',
+  'src/components/editor/range-slider.tsx',
   'src/components/editor/reference-image-panel.tsx',
   'src/components/editor/resize-size-hud.tsx',
   'src/components/editor/shape-property-panel.tsx',

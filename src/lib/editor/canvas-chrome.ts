@@ -21,14 +21,14 @@ export const CHROME_SELECTION_DASH = [6, 4];
 /**
  * Circular resize handle (#42BCC7 cyan-teal).
  * Screen-constant size: chrome counter-scales against pad zoom so these stay
- * ~22px on screen even when the artboard is zoomed or fit-scaled.
+ * ~28px on screen even when the artboard is zoomed or fit-scaled.
  */
 export const CHROME_HANDLE_FILL = '#42BCC7';
 export const CHROME_HANDLE_COLOR = '#42BCC7';
-export const CHROME_HANDLE_SIZE_PX = 22;
-export const CHROME_HANDLE_RADIUS_PX = 11;
+export const CHROME_HANDLE_SIZE_PX = 28;
+export const CHROME_HANDLE_RADIUS_PX = 14;
 export const CHROME_HANDLE_ICON_COLOR = '#FFFFFF';
-export const CHROME_HANDLE_ICON_SIZE = 12;
+export const CHROME_HANDLE_ICON_SIZE = 14;
 
 /** Task 6.1: no drop shadow on the transformer border or anchors. */
 export const CHROME_HAS_SHADOW = false;

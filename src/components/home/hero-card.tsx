@@ -238,14 +238,14 @@ const styles = themedStyles((c, scheme) => ({
   },
   cta: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 22,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 24,
     backgroundColor: WHITE,
   },
   ctaText: {
     color: INK,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
   },
   pressed: {

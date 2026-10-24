@@ -1,7 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -1809,21 +1808,18 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     };
   });
 
+  // Borders are not canvas-selectable (clicks pass through). Edit via the Border tool in the menu.
   if (element.type === 'border' || element.needPrinting === false) {
-    const borderHit =
-      element.type === 'border' && element.needPrinting !== false
-        ? Math.max(22, Math.round((element.lineWidth || 0.5) * pxPerMMSafe) + 10)
-        : 0;
     return (
       <View
-        pointerEvents={borderHit > 0 ? 'box-none' : 'none'}
+        pointerEvents="none"
         style={{
           position: 'absolute',
           left: baseLeftPx,
           top: baseTopPx,
           width: baseWidthPx,
           height: baseHeightPx,
-          zIndex: borderHit > 0 ? 1000 : 0,
+          zIndex: 0,
           transform: [{ rotate: `${baseRotation}deg` }],
           opacity: element.opacity ?? 1,
         }}>
@@ -1838,44 +1834,16 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             tableSelectionColor={tableSelectionColor}
           />
         </View>
-        {borderHit > 0 ? (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Border"
-              onPress={() => onSelect(element.id)}
-              style={{ position: 'absolute', left: 0, right: 0, top: 0, height: borderHit }}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Border"
-              onPress={() => onSelect(element.id)}
-              style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: borderHit }}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Border"
-              onPress={() => onSelect(element.id)}
-              style={{ position: 'absolute', left: 0, top: borderHit, bottom: borderHit, width: borderHit }}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Border"
-              onPress={() => onSelect(element.id)}
-              style={{ position: 'absolute', right: 0, top: borderHit, bottom: borderHit, width: borderHit }}
-            />
-            {selected ? (
-              <View
-                pointerEvents="none"
-                style={{
-                  ...StyleSheet.absoluteFillObject,
-                  borderWidth: 1.5,
-                  borderStyle: 'dashed',
-                  borderColor: selectionColor || '#48C3C7', // theme-fixed: canvas selection chrome
-                }}
-              />
-            ) : null}
-          </>
+        {element.type === 'border' && selected ? (
+          <View
+            pointerEvents="none"
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              borderWidth: 1.5,
+              borderStyle: 'dashed',
+              borderColor: selectionColor || '#48C3C7', // theme-fixed: canvas selection chrome
+            }}
+          />
         ) : null}
       </View>
     );
@@ -2031,7 +1999,7 @@ const EdgeResizeHandle = memo(function EdgeResizeHandle({
     <GestureDetector gesture={gesture}>
       <Animated.View
         collapsable={false}
-        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+        hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
         style={[
           styles.handleCircle,
           position === 'e' ? styles.handleE : styles.handleS,
