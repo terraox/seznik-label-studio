@@ -21,14 +21,23 @@ export function FeaturesDesk() {
   const [group, setGroup] = useState('all');
   const [feature, setFeature] = useState('');
   const [error, setError] = useState('');
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   const load = useCallback(() => {
     const params = new URLSearchParams({ range });
     if (feature) params.set('feature', feature);
-    api<Data>(`/api/stats/features?${params}`).then((d) => { setData(d); setError(''); }).catch((e: Error) => setError(e.message));
+    api<Data>(`/api/stats/features?${params}`).then((d) => { setData(d); setError(''); setUpdatedAt(new Date()); }).catch((e: Error) => setError(e.message));
   }, [range, feature]);
 
   useEffect(load, [load]);
+
+  // New taps arrive from phones all day: refresh every minute while this tab is open and visible.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [load]);
 
   const rows = data?.features.filter((f) => group === 'all' || f.group === group) ?? [];
   const top = data?.features[0];
@@ -42,6 +51,7 @@ export function FeaturesDesk() {
             <button key={r.id} type="button" className={range === r.id ? 'on' : ''} onClick={() => setRange(r.id)}>{r.label}</button>
           ))}
         </div>
+        {updatedAt ? <span className="u-muted">Updated {updatedAt.toLocaleTimeString('en-IN')}</span> : null}
         <button type="button" className="btn ghost" onClick={load}>Refresh</button>
       </PageHeader>
       {error ? <p className="err">{error}</p> : null}
