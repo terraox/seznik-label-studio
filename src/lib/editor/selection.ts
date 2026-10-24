@@ -129,6 +129,124 @@ export function alignGroupBounds(
   return patches;
 }
 
+export type MemberAlignKind = 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v';
+
+function movableSelected(elements: LabelElement[], ids: string[]): LabelElement[] {
+  return elements.filter(
+    (el) => ids.includes(el.id) && !el.lockMovement && el.type !== 'border' && el.needPrinting !== false,
+  );
+}
+
+/** Align selected members to each other (not to the label). Needs 2+ movable elements. */
+export function alignMembersToEachOther(
+  elements: LabelElement[],
+  ids: string[],
+  kind: MemberAlignKind,
+): Map<string, { left: number; top: number }> {
+  const selected = movableSelected(elements, ids);
+  const patches = new Map<string, { left: number; top: number }>();
+  if (selected.length < 2) return patches;
+
+  switch (kind) {
+    case 'left': {
+      const target = Math.min(...selected.map((el) => el.left));
+      for (const el of selected) patches.set(el.id, { left: target, top: el.top });
+      break;
+    }
+    case 'right': {
+      const target = Math.max(...selected.map((el) => el.left + boxOf(el).width));
+      for (const el of selected) {
+        patches.set(el.id, { left: target - boxOf(el).width, top: el.top });
+      }
+      break;
+    }
+    case 'top': {
+      const target = Math.min(...selected.map((el) => el.top));
+      for (const el of selected) patches.set(el.id, { left: el.left, top: target });
+      break;
+    }
+    case 'bottom': {
+      const target = Math.max(...selected.map((el) => el.top + boxOf(el).height));
+      for (const el of selected) {
+        patches.set(el.id, { left: el.left, top: target - boxOf(el).height });
+      }
+      break;
+    }
+    case 'center-h': {
+      const centers = selected.map((el) => el.left + boxOf(el).width / 2);
+      const target = centers.reduce((sum, c) => sum + c, 0) / centers.length;
+      for (const el of selected) {
+        patches.set(el.id, { left: target - boxOf(el).width / 2, top: el.top });
+      }
+      break;
+    }
+    case 'center-v': {
+      const centers = selected.map((el) => el.top + boxOf(el).height / 2);
+      const target = centers.reduce((sum, c) => sum + c, 0) / centers.length;
+      for (const el of selected) {
+        patches.set(el.id, { left: el.left, top: target - boxOf(el).height / 2 });
+      }
+      break;
+    }
+  }
+
+  return patches;
+}
+
+/** Evenly space selected members between the outer two along one axis. Needs 3+ for a visible gap change. */
+export function distributeMembers(
+  elements: LabelElement[],
+  ids: string[],
+  axis: 'h' | 'v',
+): Map<string, { left: number; top: number }> {
+  const selected = movableSelected(elements, ids);
+  const patches = new Map<string, { left: number; top: number }>();
+  if (selected.length < 2) return patches;
+
+  if (axis === 'h') {
+    const ordered = [...selected].sort(
+      (a, b) => a.left + boxOf(a).width / 2 - (b.left + boxOf(b).width / 2),
+    );
+    if (ordered.length === 2) {
+      // With two items, pin the left and push the right so centers are midpoint-spaced by gap 0 — no-op.
+      return patches;
+    }
+    const first = ordered[0];
+    const last = ordered[ordered.length - 1];
+    const firstCenter = first.left + boxOf(first).width / 2;
+    const lastCenter = last.left + boxOf(last).width / 2;
+    const step = (lastCenter - firstCenter) / (ordered.length - 1);
+    ordered.forEach((el, i) => {
+      if (i === 0 || i === ordered.length - 1) {
+        patches.set(el.id, { left: el.left, top: el.top });
+        return;
+      }
+      const center = firstCenter + step * i;
+      patches.set(el.id, { left: center - boxOf(el).width / 2, top: el.top });
+    });
+    return patches;
+  }
+
+  const ordered = [...selected].sort(
+    (a, b) => a.top + boxOf(a).height / 2 - (b.top + boxOf(b).height / 2),
+  );
+  if (ordered.length === 2) return patches;
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+  const firstCenter = first.top + boxOf(first).height / 2;
+  const lastCenter = last.top + boxOf(last).height / 2;
+  const step = (lastCenter - firstCenter) / (ordered.length - 1);
+  ordered.forEach((el, i) => {
+    if (i === 0 || i === ordered.length - 1) {
+      patches.set(el.id, { left: el.left, top: el.top });
+      return;
+    }
+    const center = firstCenter + step * i;
+    patches.set(el.id, { left: el.left, top: center - boxOf(el).height / 2 });
+  });
+  return patches;
+}
+
 export function elementContentValue(el: LabelElement): string {
   if (el.type === 'text' || el.type === 'arctext') {
     return el.text;

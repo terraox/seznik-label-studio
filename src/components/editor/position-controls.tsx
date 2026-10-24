@@ -10,30 +10,29 @@ import {
   AlignObjectRightIcon,
   AlignTopIcon,
   AlignVerticalCenterIcon,
-  BringForwardIcon,
-  BringToFrontIcon,
   CenterCheckIcon,
   FitToCanvasIcon,
   NudgeDownIcon,
   NudgeLeftIcon,
   NudgeRightIcon,
   NudgeUpIcon,
-  SendBackwardIcon,
-  SendToBackIcon,
   StretchHorizontalIcon,
   StretchVerticalIcon,
 } from '@/components/editor/position-icons';
 import type { TextAlign } from '@/components/editor/types';
+import type { MemberAlignKind } from '@/lib/editor/selection';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 const NUDGE_MM = 0.5;
 const PRESS_HIT_SLOP = 10;
 
 export type PositionLayerActions = {
-  onSendToBack?: () => void;
-  onBringToFront?: () => void;
-  onSendBackward?: () => void;
-  onBringForward?: () => void;
+  /** How many canvas elements are currently selected (gates multi-align). */
+  selectedCount?: number;
+  /** Align selected members to each other — only meaningful with 2+ selection. */
+  onAlignMembers?: (kind: MemberAlignKind) => void;
+  /** Distribute selected members along an axis — only meaningful with 2+ selection. */
+  onDistributeMembers?: (axis: 'h' | 'v') => void;
 };
 
 const PositionLayerActionsContext = createContext<PositionLayerActions | undefined>(undefined);
@@ -82,6 +81,8 @@ export function PositionControls({
   useThemeRefresh();
   const layerActionsFromContext = useContext(PositionLayerActionsContext);
   const layerActions = layerActionsProp ?? layerActionsFromContext;
+  const selectedCount = layerActions?.selectedCount ?? 1;
+  const multiAlignEnabled = selectedCount >= 2;
   const maxLeft = Math.max(0, labelWidthMm - width);
   const maxTop = Math.max(0, labelHeightMm - height);
 
@@ -92,51 +93,22 @@ export function PositionControls({
     });
   };
 
-  const alignTo = (kind: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v' | 'center') => {
-    switch (kind) {
-      case 'left':
-        onPatch({ left: 0, ...(textAlign !== undefined ? { align: 'left' as TextAlign } : {}) });
-        break;
-      case 'right':
-        onPatch({
-          left: maxLeft,
-          ...(textAlign !== undefined ? { align: 'right' as TextAlign } : {}),
-        });
-        break;
-      case 'top':
-        onPatch({ top: 0 });
-        break;
-      case 'bottom':
-        onPatch({ top: maxTop });
-        break;
-      case 'center-h':
-        onPatch({
-          left: clamp((labelWidthMm - width) / 2, 0, maxLeft),
-          ...(textAlign !== undefined ? { align: 'center' as TextAlign } : {}),
-        });
-        break;
-      case 'center-v':
-        onPatch({ top: clamp((labelHeightMm - height) / 2, 0, maxTop) });
-        break;
-      case 'center':
-        onPatch({
-          left: clamp((labelWidthMm - width) / 2, 0, maxLeft),
-          top: clamp((labelHeightMm - height) / 2, 0, maxTop),
-        });
-        break;
-    }
-  };
-
-  const stretchWidth = () => {
+  const centerOnLabel = () => {
     onPatch({
-      left: 0,
-      width: labelWidthMm,
-      ...(textAlign !== undefined ? { align: 'spacing' as TextAlign } : {}),
+      left: clamp((labelWidthMm - width) / 2, 0, maxLeft),
+      top: clamp((labelHeightMm - height) / 2, 0, maxTop),
     });
   };
 
-  const stretchHeight = () => {
-    onPatch({ top: 0, height: labelHeightMm });
+  const centerVerticalOnLabel = () => {
+    onPatch({ top: clamp((labelHeightMm - height) / 2, 0, maxTop) });
+  };
+
+  const centerHorizontalOnLabel = () => {
+    onPatch({
+      left: clamp((labelWidthMm - width) / 2, 0, maxLeft),
+      ...(textAlign !== undefined ? { align: 'center' as TextAlign } : {}),
+    });
   };
 
   const fitToCanvas = () => {
@@ -149,79 +121,125 @@ export function PositionControls({
     });
   };
 
-  const padBtn = (icon: ReactNode, onPress: () => void) => (
-    <Pressable onPress={onPress} hitSlop={PRESS_HIT_SLOP} style={({ pressed }) => [styles.padBtn, pressed && styles.pressed]}>
-      {icon}
-    </Pressable>
-  );
+  const alignMembers = (kind: MemberAlignKind) => {
+    if (!multiAlignEnabled) return;
+    layerActions?.onAlignMembers?.(kind);
+  };
 
-  const gridBtn = (icon: ReactNode, onPress: () => void) => (
-    <Pressable
-      onPress={onPress}
-      hitSlop={PRESS_HIT_SLOP}
-      style={({ pressed }) => [styles.gridBtn, pressed && styles.pressed]}>
-      {icon}
-    </Pressable>
-  );
+  const distribute = (axis: 'h' | 'v') => {
+    if (!multiAlignEnabled) return;
+    layerActions?.onDistributeMembers?.(axis);
+  };
 
-  const layerBtn = (icon: ReactNode, onPress: (() => void) | undefined, label: string) => (
+  const padBtn = (icon: ReactNode, onPress: () => void, label: string) => (
     <Pressable
-      disabled={!onPress}
       onPress={onPress}
       hitSlop={PRESS_HIT_SLOP}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [styles.layerBtn, !onPress && styles.layerBtnDisabled, pressed && onPress && styles.pressed]}>
+      style={({ pressed }) => [styles.padBtn, pressed && styles.pressed]}>
+      {icon}
+    </Pressable>
+  );
+
+  const gridBtn = (
+    icon: ReactNode,
+    onPress: (() => void) | undefined,
+    label: string,
+    enabled = true,
+  ) => (
+    <Pressable
+      disabled={!enabled || !onPress}
+      onPress={onPress}
+      hitSlop={PRESS_HIT_SLOP}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !enabled || !onPress }}
+      style={({ pressed }) => [
+        styles.gridBtn,
+        (!enabled || !onPress) && styles.btnDisabled,
+        pressed && enabled && onPress && styles.pressed,
+      ]}>
       {icon}
     </Pressable>
   );
 
   return (
-    <>
-      <View style={styles.positionWrap}>
-        <View style={styles.padColumn}>
-          {padBtn(<NudgeUpIcon />, () => nudge(0, -NUDGE_MM))}
-          <View style={styles.padMiddleRow}>
-            {padBtn(<NudgeLeftIcon />, () => nudge(-NUDGE_MM, 0))}
-            <Pressable
-              onPress={() => alignTo('center')}
-              hitSlop={PRESS_HIT_SLOP}
-              style={({ pressed }) => [styles.padBtn, styles.padCenter, pressed && styles.pressed]}>
-              <CenterCheckIcon />
-            </Pressable>
-            {padBtn(<NudgeRightIcon />, () => nudge(NUDGE_MM, 0))}
-          </View>
-          {padBtn(<NudgeDownIcon />, () => nudge(0, NUDGE_MM))}
+    <View style={styles.positionWrap}>
+      <View style={styles.padColumn}>
+        {padBtn(<NudgeUpIcon />, () => nudge(0, -NUDGE_MM), 'Nudge up')}
+        <View style={styles.padMiddleRow}>
+          {padBtn(<NudgeLeftIcon />, () => nudge(-NUDGE_MM, 0), 'Nudge left')}
+          <Pressable
+            onPress={centerOnLabel}
+            hitSlop={PRESS_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityLabel="Center on label"
+            style={({ pressed }) => [styles.padBtn, styles.padCenter, pressed && styles.pressed]}>
+            <CenterCheckIcon />
+          </Pressable>
+          {padBtn(<NudgeRightIcon />, () => nudge(NUDGE_MM, 0), 'Nudge right')}
         </View>
-
-        <View style={styles.alignGrid}>
-          <View style={styles.alignRow}>
-            {gridBtn(<AlignVerticalCenterIcon />, () => alignTo('center-v'))}
-            {gridBtn(<AlignHorizontalCenterIcon />, () => alignTo('center-h'))}
-            {gridBtn(<FitToCanvasIcon />, fitToCanvas)}
-          </View>
-          <View style={styles.alignRow}>
-            {gridBtn(<AlignObjectLeftIcon />, () => alignTo('left'))}
-            {gridBtn(<AlignObjectCenterHIcon />, () => alignTo('center-h'))}
-            {gridBtn(<AlignObjectRightIcon />, () => alignTo('right'))}
-            {gridBtn(<StretchHorizontalIcon />, stretchWidth)}
-          </View>
-          <View style={styles.alignRow}>
-            {gridBtn(<AlignTopIcon />, () => alignTo('top'))}
-            {gridBtn(<AlignVerticalCenterIcon />, () => alignTo('center-v'))}
-            {gridBtn(<AlignBottomIcon />, () => alignTo('bottom'))}
-            {gridBtn(<StretchVerticalIcon />, stretchHeight)}
-          </View>
-        </View>
+        {padBtn(<NudgeDownIcon />, () => nudge(0, NUDGE_MM), 'Nudge down')}
       </View>
 
-      <View style={styles.layerRow}>
-        {layerBtn(<SendToBackIcon />, layerActions?.onSendToBack, 'Send to back')}
-        {layerBtn(<BringToFrontIcon />, layerActions?.onBringToFront, 'Bring to front')}
-        {layerBtn(<SendBackwardIcon />, layerActions?.onSendBackward, 'Send backward')}
-        {layerBtn(<BringForwardIcon />, layerActions?.onBringForward, 'Bring forward')}
+      <View style={styles.alignGrid}>
+        {/* Row 1 — always: center on label / fit */}
+        <View style={styles.alignRow}>
+          {gridBtn(<AlignVerticalCenterIcon />, centerVerticalOnLabel, 'Center vertically on label')}
+          {gridBtn(<AlignHorizontalCenterIcon />, centerHorizontalOnLabel, 'Center horizontally on label')}
+          {gridBtn(<FitToCanvasIcon />, fitToCanvas, 'Fit to label')}
+        </View>
+        {/* Rows 2–3 — multi-select only: align / distribute members */}
+        <View style={styles.alignRow}>
+          {gridBtn(
+            <AlignObjectLeftIcon />,
+            () => alignMembers('left'),
+            'Align left edges',
+            multiAlignEnabled,
+          )}
+          {gridBtn(
+            <AlignObjectCenterHIcon />,
+            () => alignMembers('center-h'),
+            'Align horizontal centers',
+            multiAlignEnabled,
+          )}
+          {gridBtn(
+            <AlignObjectRightIcon />,
+            () => alignMembers('right'),
+            'Align right edges',
+            multiAlignEnabled,
+          )}
+          {gridBtn(
+            <StretchHorizontalIcon />,
+            () => distribute('h'),
+            'Distribute horizontally',
+            multiAlignEnabled,
+          )}
+        </View>
+        <View style={styles.alignRow}>
+          {gridBtn(<AlignTopIcon />, () => alignMembers('top'), 'Align top edges', multiAlignEnabled)}
+          {gridBtn(
+            <AlignVerticalCenterIcon />,
+            () => alignMembers('center-v'),
+            'Align vertical centers',
+            multiAlignEnabled,
+          )}
+          {gridBtn(
+            <AlignBottomIcon />,
+            () => alignMembers('bottom'),
+            'Align bottom edges',
+            multiAlignEnabled,
+          )}
+          {gridBtn(
+            <StretchVerticalIcon />,
+            () => distribute('v'),
+            'Distribute vertically',
+            multiAlignEnabled,
+          )}
+        </View>
       </View>
-    </>
+    </View>
   );
 }
 
@@ -237,7 +255,7 @@ const styles = themedStyles((c) => ({
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 12,
+    paddingBottom: 16,
     gap: 16,
   },
   padColumn: { alignItems: 'center', gap: BTN.gap },
@@ -261,19 +279,5 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  layerRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: BTN.gap,
-  },
-  layerBtn: {
-    flex: 1,
-    height: BTN.size,
-    borderRadius: BTN.radius,
-    backgroundColor: c.fillStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  layerBtnDisabled: { opacity: 0.4 },
+  btnDisabled: { opacity: 0.35 },
 }));

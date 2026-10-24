@@ -200,9 +200,12 @@ import {
 } from '@/lib/editor/quick-value';
 import {
   alignGroupBounds,
+  alignMembersToEachOther,
+  distributeMembers,
   reduceMultipleModeToggle,
   reduceTapSelect,
   selectionFromIds,
+  type MemberAlignKind,
 } from '@/lib/editor/selection';
 import {
   DEFAULT_ARCTEXT_STATE,
@@ -3260,14 +3263,47 @@ export default function EditScreen() {
     [selectedIds, setElements],
   );
 
+  const alignSelectedMembers = useCallback(
+    (kind: MemberAlignKind) => {
+      if (selectedIds.length < 2) return;
+      setElements(
+        (elements) => {
+          const patches = alignMembersToEachOther(elements, selectedIds, kind);
+          return elements.map((el) => {
+            const patch = patches.get(el.id);
+            return patch ? { ...el, ...patch } : el;
+          });
+        },
+        true,
+      );
+    },
+    [selectedIds, setElements],
+  );
+
+  const distributeSelectedMembers = useCallback(
+    (axis: 'h' | 'v') => {
+      if (selectedIds.length < 2) return;
+      setElements(
+        (elements) => {
+          const patches = distributeMembers(elements, selectedIds, axis);
+          return elements.map((el) => {
+            const patch = patches.get(el.id);
+            return patch ? { ...el, ...patch } : el;
+          });
+        },
+        true,
+      );
+    },
+    [selectedIds, setElements],
+  );
+
   const positionLayerActions = useMemo(
     () => ({
-      onSendToBack: () => reorderSelected('back'),
-      onBringToFront: () => reorderSelected('front'),
-      onSendBackward: () => reorderSelected('backward'),
-      onBringForward: () => reorderSelected('forward'),
+      selectedCount: selectedIds.length,
+      onAlignMembers: alignSelectedMembers,
+      onDistributeMembers: distributeSelectedMembers,
     }),
-    [reorderSelected],
+    [selectedIds.length, alignSelectedMembers, distributeSelectedMembers],
   );
 
   const toggleHideSelected = useCallback(() => {
