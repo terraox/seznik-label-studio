@@ -35,9 +35,8 @@ export function isLocalImageUri(value: string): boolean {
 }
 
 /**
- * Preview shader. B & W (mode < 1.5) uses chroma-aware ink so yellow/cyan logos
- * print black instead of washing out to white under plain luminance. Halftone
- * keeps luminance + Bayer dither for photos.
+ * Preview shader. B & W (mode < 1.5) is a plain luminance threshold, the same as print.
+ * Halftone uses luminance + Bayer dither for photos.
  */
 export const MONO_IMAGE_SKSL = `
 uniform shader image;
@@ -46,16 +45,14 @@ uniform float mode;
 uniform float invert;
 
 half4 main(float2 xy) {
-  half4 c = image.eval(xy);
-  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  half4 px = image.eval(xy);
+  // Transparent pixels count as paper, same as the print decode. px is premultiplied.
+  half3 c = px.rgb + (1.0 - px.a);
+  float lum = dot(c, vec3(0.299, 0.587, 0.114));
   float t = threshold / 255.0;
   float v;
   if (mode < 1.5) {
-    float mn = min(c.r, min(c.g, c.b));
-    float mx = max(c.r, max(c.g, c.b));
-    float chroma = mx - mn;
-    float ink = chroma > 0.16 ? min(lum, mn) : lum;
-    v = ink < t ? 0.0 : 1.0;
+    v = lum < t ? 0.0 : 1.0;
   } else {
     int ix = int(mod(floor(xy.x), 4.0));
     int iy = int(mod(floor(xy.y), 4.0));
@@ -83,16 +80,13 @@ half4 main(float2 xy) {
   if (invert > 0.5) {
     v = 1.0 - v;
   }
-  return half4(v, v, v, c.a);
+  return half4(v, v, v, 1.0);
 }
 `;
 
-/** B & W ink level 0–255. Saturated colours use the darkest channel so yellow logos stay black. */
+/** B & W ink level 0–255: plain luminance, the same value print thresholds. */
 export function monoInkLevel(r: number, g: number, b: number): number {
-  const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-  const mn = Math.min(r, g, b);
-  const mx = Math.max(r, g, b);
-  return mx - mn > 40 ? Math.min(lum, mn) : lum;
+  return Math.round(0.299 * r + 0.587 * g + 0.114 * b);
 }
 
 /** Skia RuntimeShader mode uniform: 1 = B & W threshold, 2 = ordered dither. */
@@ -139,9 +133,10 @@ export function applyMonoToRgba(
         rgba[i + 2] = 255 - rgba[i + 2];
         continue;
       }
-      const r = rgba[i];
-      const g = rgba[i + 1];
-      const b = rgba[i + 2];
+      const a = rgba[i + 3];
+      const r = a === 255 ? rgba[i] : Math.round((rgba[i] * a + 255 * (255 - a)) / 255);
+      const g = a === 255 ? rgba[i + 1] : Math.round((rgba[i + 1] * a + 255 * (255 - a)) / 255);
+      const b = a === 255 ? rgba[i + 2] : Math.round((rgba[i + 2] * a + 255 * (255 - a)) / 255);
       let v: 0 | 255;
       if (mode === 'Halftone') {
         const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
@@ -154,6 +149,7 @@ export function applyMonoToRgba(
       rgba[i] = v;
       rgba[i + 1] = v;
       rgba[i + 2] = v;
+      rgba[i + 3] = 255;
     }
   }
 }

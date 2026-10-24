@@ -230,10 +230,10 @@ export const ImageCropCanvas = forwardRef<ImageCropCanvasHandle, Props>(function
                   <View style={[styles.gridLine, styles.gridHorizontal, { top: '33.33%' }]} />
                   <View style={[styles.gridLine, styles.gridHorizontal, { top: '66.66%' }]} />
                 </View>
-                <View style={[styles.handle, styles.handleTL]} />
-                <View style={[styles.handle, styles.handleTR]} />
-                <View style={[styles.handle, styles.handleBL]} />
-                <View style={[styles.handle, styles.handleBR]} />
+                <View style={[styles.corner, styles.cornerTL]} />
+                <View style={[styles.corner, styles.cornerTR]} />
+                <View style={[styles.corner, styles.cornerBL]} />
+                <View style={[styles.corner, styles.cornerBR]} />
               </Animated.View>
             </View>
           </GestureDetector>
@@ -255,26 +255,23 @@ const styles = themedStyles((c) => ({
   cropFrame: { position: 'absolute' },
   cropBorder: {
     flex: 1,
-    borderWidth: 2,
-    borderColor: '#FFFFFF', // theme-fixed: crop overlay, same in both themes (cropBorder)
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)', // theme-fixed: crop overlay, same in both themes (cropBorder)
   },
   gridLine: {
     position: 'absolute',
-    backgroundColor: 'rgba(255,255,255,0.35)', // theme-fixed: crop overlay, same in both themes (gridLine)
+    backgroundColor: 'rgba(255,255,255,0.6)', // theme-fixed: crop overlay, same in both themes (gridLine)
   },
   gridVertical: { top: 0, bottom: 0, width: StyleSheet.hairlineWidth },
   gridHorizontal: { left: 0, right: 0, height: StyleSheet.hairlineWidth },
-  handle: {
+  corner: {
     position: 'absolute',
     width: HANDLE,
     height: HANDLE,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#2DAFE5', // theme-fixed: crop overlay, same in both themes (handle)
-    backgroundColor: '#FFFFFF', // theme-fixed: crop overlay, same in both themes (handle)
+    borderColor: '#FFFFFF', // theme-fixed: crop overlay, same in both themes (corner)
   },
-  handleTL: { left: -HANDLE / 2, top: -HANDLE / 2 },
-  handleTR: { right: -HANDLE / 2, top: -HANDLE / 2 },
-  handleBL: { left: -HANDLE / 2, bottom: -HANDLE / 2 },
-  handleBR: { right: -HANDLE / 2, bottom: -HANDLE / 2 },
+  cornerTL: { left: -3, top: -3, borderLeftWidth: 4, borderTopWidth: 4 },
+  cornerTR: { right: -3, top: -3, borderRightWidth: 4, borderTopWidth: 4 },
+  cornerBL: { left: -3, bottom: -3, borderLeftWidth: 4, borderBottomWidth: 4 },
+  cornerBR: { right: -3, bottom: -3, borderRightWidth: 4, borderBottomWidth: 4 },
 }));

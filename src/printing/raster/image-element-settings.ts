@@ -10,6 +10,7 @@ type ImageEl = Extract<LabelElement, { type: 'image' }>;
 /**
  * The image's new print settings, or null when none were ever set. Null means "print exactly as
  * before": the legacy colorMode / grayThreshold / antiColor path runs and nothing here touches it.
+ * The one exception is the legacy Halftone colour mode, which runs as the Ordered mode.
  */
 export function modedImageSettings(el: ImageEl): ImageSettings | null {
   const touched =
@@ -18,7 +19,17 @@ export function modedImageSettings(el: ImageEl): ImageSettings | null {
     el.brightness !== undefined ||
     el.contrast !== undefined ||
     el.invert !== undefined;
-  if (!touched) return null;
+  if (!touched) {
+    // Halftone is an ordered-dot screen made at printer dots, so the canvas and the print match.
+    if (el.colorMode === 'Halftone' && !el.tile) {
+      return normalizeImageSettings({
+        mode: 'ordered',
+        threshold: el.grayThreshold ?? DEFAULT_IMAGE_THRESHOLD,
+        invert: el.antiColor === true,
+      });
+    }
+    return null;
+  }
   return normalizeImageSettings({
     mode: el.imageMode,
     threshold: el.threshold ?? el.grayThreshold ?? DEFAULT_IMAGE_THRESHOLD,

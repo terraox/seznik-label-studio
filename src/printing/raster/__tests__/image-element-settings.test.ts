@@ -25,9 +25,18 @@ const base = {
 test('an image saved before this feature has no new settings and keeps the old path', () => {
   assert.equal(modedImageSettings(base), null);
   assert.equal(usesModedPrint(base), false);
-  const legacy = { ...base, colorMode: 'Halftone', grayThreshold: 90, antiColor: true } as ImageEl;
+  const legacy = { ...base, colorMode: 'B & W', grayThreshold: 90, antiColor: true } as ImageEl;
   assert.equal(modedImageSettings(legacy), null);
   assert.equal(usesModedPrint(legacy), false);
+});
+
+test('legacy Halftone runs as the Ordered dot screen, tiled stays old', () => {
+  const half = { ...base, colorMode: 'Halftone', antiColor: true } as ImageEl;
+  const s = modedImageSettings(half)!;
+  assert.equal(s.mode, 'ordered');
+  assert.equal(s.invert, true);
+  assert.equal(usesModedPrint(half), true);
+  assert.equal(usesModedPrint({ ...half, tile: true } as ImageEl), false);
 });
 
 test('new fields turn the mode on; a missing mode is Solid at the old threshold', () => {

@@ -122,7 +122,7 @@ test('dither modes really differ from solid on a photo', async () => {
 test('an image with no new fields still takes the old path and is not drawn headless', async () => {
   clearImageTiles();
   setImageTileDecoder(async () => ({ gray: photo(), width: SRC_W, height: SRC_H }));
-  const legacy = imageDoc({ colorMode: 'Halftone', grayThreshold: 140 });
+  const legacy = imageDoc({ colorMode: 'B & W', grayThreshold: 140 });
   await prepareImageTiles(legacy, DPI);
   assert.equal(canHeadlessRasterPrint(legacy), false);
   assert.throws(() => raster(legacy));

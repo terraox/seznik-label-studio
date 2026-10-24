@@ -46,12 +46,11 @@ test('applyMonoToRgba thresholds a mid-gray pixel in place', () => {
   assert.deepEqual([...rgba], [255, 255, 255, 255, 0, 0, 0, 255]);
 });
 
-test('B & W keeps saturated yellow as black ink at the default threshold', () => {
-  // McDonald's-gold yellow is bright by luminance (~198) but must still print.
-  assert.equal(monoInkLevel(255, 199, 44), 44);
-  const rgba = Uint8Array.from([255, 199, 44, 255]);
-  applyMonoToRgba(rgba, 1, 1, 128, 'B & W');
-  assert.deepEqual([...rgba], [0, 0, 0, 255]);
+test('B & W is a plain luminance threshold: yellow is light, dark gray is ink', () => {
+  assert.equal(monoInkLevel(255, 199, 44), 198);
+  const rgba = Uint8Array.from([255, 199, 44, 255, 40, 40, 40, 255, 0, 0, 0, 0]);
+  applyMonoToRgba(rgba, 3, 1, 128, 'B & W');
+  assert.deepEqual([...rgba], [255, 255, 255, 255, 0, 0, 0, 255, 255, 255, 255, 255]);
 });
 
 test('mono shader mode maps Halftone to dither and everything else to threshold', () => {

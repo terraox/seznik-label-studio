@@ -36,11 +36,15 @@ import { getClipartById } from "@/constants/clipart-library";
 import { clipartImageUri, clipartSvgSource } from "@/lib/clipart/types";
 import { useUserClipartStore } from "@/stores/user-clipart-store";
 import {
-  isIndicScriptFamily,
   needsComplexTextShaping,
   resolveEditorFontFamily,
   textContainsEmoji,
 } from "@/lib/fonts/text-font-family";
+import {
+  previewItalicWrapStyle,
+  previewSyntheticBoldStyle,
+  resolvePreviewFontStyle,
+} from "@/lib/fonts/preview-text-style";
 import { useInstalledFontStore } from "@/stores/installed-font-store";
 import { barcodeModulesForMode } from "@/lib/barcode-code128";
 import {
@@ -169,9 +173,11 @@ function textStyleFor(
   const decorations: string[] = [];
   if (state.underline) decorations.push("underline");
   if (state.strikethrough) decorations.push("line-through");
-  const indicFace = isIndicScriptFamily(resolvedFamily);
-  const fontFamily =
+  // Emoji uses the system emoji face; Indic/custom cuts are single-weight TTFs.
+  const requestedFamily =
     sampleText && textContainsEmoji(sampleText) ? undefined : resolvedFamily;
+  const preview = resolvePreviewFontStyle(requestedFamily, !!state.bold);
+  const color = state.antiColor ? "#FFFFFF" : inkColor(state.drawingColorIndex);
   const faceKey = resolvedFamily ?? state.fontFamily;
   return {
     fontSize: size,
@@ -179,14 +185,11 @@ function textStyleFor(
     paddingVertical: textVerticalPaddingMm(state.fontSize) * scale,
     paddingHorizontal: textHorizontalPaddingMm(state.fontSize) * scale,
     includeFontPadding: false,
-    fontFamily,
-    // Android may drop the bundled Indic face when fontWeight is set on a single-weight TTF.
-    fontWeight: indicFace
-      ? undefined
-      : state.bold
-        ? ("600" as const)
-        : ("400" as const),
-    fontStyle: state.italic ? ("italic" as const) : ("normal" as const),
+    fontFamily: preview.fontFamily,
+    // Named expo faces ignore fontWeight; system default still uses it.
+    // Italic is a wrapper skew (print ITALIC_SKEW) — fontStyle italic is a no-op on these cuts.
+    fontWeight: preview.fontWeight,
+    fontStyle: "normal" as const,
     textDecorationLine: (decorations.join(" ") || "none") as
       | "none"
       | "underline"
@@ -197,7 +200,8 @@ function textStyleFor(
       | "center"
       | "right"
       | "justify",
-    color: state.antiColor ? "#FFFFFF" : inkColor(state.drawingColorIndex),
+    color,
+    ...(preview.syntheticBold ? previewSyntheticBoldStyle(color, size) ?? {} : {}),
   };
 }
 
@@ -481,56 +485,61 @@ function TextContent({
         dataColumnHighlightStyle(element, highlightColumnName),
       ]}
     >
-      <RestingText
-        allowFontScaling={false}
-        style={[
-          style,
-          hasDecoration ? { textDecorationLine: "none" as const } : null,
-          styles.textFill,
-          { textAlign: align },
-          letterSpacingStyle(drawElement, raw, scale),
-          liveReflowSv ? swap.resting : null,
-        ]}
+      {/* Italic skew on a View — Text fontStyle is ignored for expo-font cuts (same as print). */}
+      <View
+        style={[styles.textFill, previewItalicWrapStyle(element.italic)]}
         onLayout={
           hasDecoration
             ? (e) => setTextOrigin({ x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y })
             : undefined
         }
-        numberOfLines={formatted.numberOfLines}
-        ellipsizeMode={
-          "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
-        }
-        onTextLayout={
-          layoutWidthMm != null && !hasDecoration
-            ? undefined
-            : (event) => {
-                if (hasDecoration) {
-                  setDecoLines(
-                    event.nativeEvent.lines.map((l) => ({
-                      x: l.x,
-                      y: l.y,
-                      width: l.width,
-                      height: l.height,
-                      ascender: l.ascender,
-                    })),
+      >
+        <RestingText
+          allowFontScaling={false}
+          style={[
+            style,
+            hasDecoration ? { textDecorationLine: "none" as const } : null,
+            { width: "100%" },
+            { textAlign: align },
+            letterSpacingStyle(drawElement, raw, scale),
+            liveReflowSv ? swap.resting : null,
+          ]}
+          numberOfLines={formatted.numberOfLines}
+          ellipsizeMode={
+            "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
+          }
+          onTextLayout={
+            layoutWidthMm != null && !hasDecoration
+              ? undefined
+              : (event) => {
+                  if (hasDecoration) {
+                    setDecoLines(
+                      event.nativeEvent.lines.map((l) => ({
+                        x: l.x,
+                        y: l.y,
+                        width: l.width,
+                        height: l.height,
+                        ascender: l.ascender,
+                      })),
+                    );
+                  }
+                  // Live width drag reflows every frame; caching those lines would thrash the
+                  // canvas and freeze a mid-drag wrap after release.
+                  if (liveReflowSv?.value) return;
+                  if (layoutWidthMm != null || !formatted.layoutKey) return;
+                  rememberWhenSettled(
+                    formatted.layoutKey,
+                    cleanNativeLines(
+                      event.nativeEvent.lines.map((line) => line.text),
+                      raw,
+                    ),
                   );
                 }
-                // Live width drag reflows every frame; caching those lines would thrash the
-                // canvas and freeze a mid-drag wrap after release.
-                if (liveReflowSv?.value) return;
-                if (layoutWidthMm != null || !formatted.layoutKey) return;
-                rememberWhenSettled(
-                  formatted.layoutKey,
-                  cleanNativeLines(
-                    event.nativeEvent.lines.map((line) => line.text),
-                    raw,
-                  ),
-                );
-              }
-        }
-      >
-        {formatted.text}
-      </RestingText>
+          }
+        >
+          {formatted.text}
+        </RestingText>
+      </View>
       {decoBars.map((bar) => (
         <View
           key={bar.key}
@@ -546,24 +555,29 @@ function TextContent({
         />
       ))}
       {liveReflowSv ? (
-        <Animated.Text
+        <View
           pointerEvents="none"
-          allowFontScaling={false}
-          style={[
-            textStyleFor(element, scale, resolvedFamily, raw),
-            styles.liveReflowText,
-            { textAlign: align },
-            letterSpacingStyle(element, raw, scale),
-            swap.live,
-          ]}
-          onLayout={(e) => {
-            if (!liveHeightSv) return;
-            const h = e.nativeEvent.layout.height;
-            if (h > 0) liveHeightSv.value = h;
-          }}
+          style={[styles.liveReflowText, previewItalicWrapStyle(element.italic)]}
         >
-          {raw}
-        </Animated.Text>
+          <Animated.Text
+            pointerEvents="none"
+            allowFontScaling={false}
+            style={[
+              textStyleFor(element, scale, resolvedFamily, raw),
+              { width: "100%" },
+              { textAlign: align },
+              letterSpacingStyle(element, raw, scale),
+              swap.live,
+            ]}
+            onLayout={(e) => {
+              if (!liveHeightSv) return;
+              const h = e.nativeEvent.layout.height;
+              if (h > 0) liveHeightSv.value = h;
+            }}
+          >
+            {raw}
+          </Animated.Text>
+        </View>
       ) : null}
     </View>
   );
@@ -641,56 +655,63 @@ function DegreesContent({
         dataColumnHighlightStyle(element, highlightColumnName),
       ]}
     >
-      <RestingText
-        allowFontScaling={false}
-        style={[
-          style,
-          styles.textFill,
-          { textAlign: align },
-          letterSpacingStyle(drawElement, raw, scale),
-          liveReflowSv ? swap.resting : null,
-        ]}
-        numberOfLines={formatted.numberOfLines}
-        ellipsizeMode={
-          "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
-        }
-        onTextLayout={
-          layoutWidthMm != null
-            ? undefined
-            : (event) => {
-                if (liveReflowSv?.value) return;
-                if (!formatted.layoutKey) return;
-                rememberWhenSettled(
-                  formatted.layoutKey,
-                  cleanNativeLines(
-                    event.nativeEvent.lines.map((line) => line.text),
-                    raw,
-                  ),
-                );
-              }
-        }
-      >
-        {formatted.text}
-      </RestingText>
-      {liveReflowSv ? (
-        <Animated.Text
-          pointerEvents="none"
+      <View style={[styles.textFill, previewItalicWrapStyle(element.italic)]}>
+        <RestingText
           allowFontScaling={false}
           style={[
-            textStyleFor(element, scale, resolvedFamily, raw),
-            styles.liveReflowText,
+            style,
+            { width: "100%" },
             { textAlign: align },
-            letterSpacingStyle(element, raw, scale),
-            swap.live,
+            letterSpacingStyle(drawElement, raw, scale),
+            liveReflowSv ? swap.resting : null,
           ]}
-          onLayout={(e) => {
-            if (!liveHeightSv) return;
-            const h = e.nativeEvent.layout.height;
-            if (h > 0) liveHeightSv.value = h;
-          }}
+          numberOfLines={formatted.numberOfLines}
+          ellipsizeMode={
+            "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
+          }
+          onTextLayout={
+            layoutWidthMm != null
+              ? undefined
+              : (event) => {
+                  if (liveReflowSv?.value) return;
+                  if (!formatted.layoutKey) return;
+                  rememberWhenSettled(
+                    formatted.layoutKey,
+                    cleanNativeLines(
+                      event.nativeEvent.lines.map((line) => line.text),
+                      raw,
+                    ),
+                  );
+                }
+          }
         >
-          {raw}
-        </Animated.Text>
+          {formatted.text}
+        </RestingText>
+      </View>
+      {liveReflowSv ? (
+        <View
+          pointerEvents="none"
+          style={[styles.liveReflowText, previewItalicWrapStyle(element.italic)]}
+        >
+          <Animated.Text
+            pointerEvents="none"
+            allowFontScaling={false}
+            style={[
+              textStyleFor(element, scale, resolvedFamily, raw),
+              { width: "100%" },
+              { textAlign: align },
+              letterSpacingStyle(element, raw, scale),
+              swap.live,
+            ]}
+            onLayout={(e) => {
+              if (!liveHeightSv) return;
+              const h = e.nativeEvent.layout.height;
+              if (h > 0) liveHeightSv.value = h;
+            }}
+          >
+            {raw}
+          </Animated.Text>
+        </View>
       ) : null}
     </View>
   );

@@ -17,13 +17,18 @@ export function hasPrintTypeface(family: string): boolean {
   return faces.has(family);
 }
 
-const INTER_REGULAR = 'Inter_400Regular';
-const INTER_SEMIBOLD = 'Inter_600SemiBold';
+/** Regular → heavier cut when both are loaded (matches editor preview). */
+const BOLD_FACE_BY_REGULAR: Readonly<Record<string, string>> = {
+  Inter_400Regular: 'Inter_600SemiBold',
+  Poppins_400Regular: 'Poppins_700Bold',
+};
 
 export function getPrintTypeface(family?: string, bold?: boolean): PrintFace | null {
   if (!family) return null;
-  const inter = family === INTER_REGULAR || family === INTER_SEMIBOLD;
-  if (bold && inter && faces.has(INTER_SEMIBOLD)) return faces.get(INTER_SEMIBOLD) ?? null;
+  if (bold) {
+    const heavy = BOLD_FACE_BY_REGULAR[family];
+    if (heavy && faces.has(heavy)) return faces.get(heavy) ?? null;
+  }
   return faces.get(family) ?? null;
 }
 

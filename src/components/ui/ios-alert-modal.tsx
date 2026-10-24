@@ -36,11 +36,12 @@ export type IosAlertModalProps = {
   dismissOnBackdrop?: boolean;
   cardMaxWidth?: number;
   /**
-   * Compact form mode for dialogs that hold a text field. The card sits near the top of the screen,
-   * sized to its content, with no keyboard avoidance: the keyboard can open without moving, stretching
-   * or covering it. (The keyboard-aware scroll view and a centred card stretch and hide the buttons on Android.)
+   * Compact form mode for dialogs that hold a text field. The card is sized to its content with no
+   * keyboard avoidance (avoids Android stretch that hides buttons). Use `cardAlign` for placement.
    */
   plainScroll?: boolean;
+  /** Where the card sits when `plainScroll` is on. Default `top` keeps the field above the keyboard. */
+  cardAlign?: 'center' | 'top';
 };
 
 export function IosAlertModal({
@@ -54,6 +55,7 @@ export function IosAlertModal({
   dismissOnBackdrop = true,
   cardMaxWidth = 280,
   plainScroll = false,
+  cardAlign = 'top',
 }: IosAlertModalProps) {
   const { height: windowHeight } = useWindowDimensions();
   const styles = useStyles();
@@ -71,7 +73,7 @@ export function IosAlertModal({
       onRequestClose={handleBack}>
       <Overlay
         {...(plainScroll ? {} : { behavior: 'padding' as const, keyboardVerticalOffset: Platform.OS === 'ios' ? 20 : 0 })}
-        style={[styles.overlay, plainScroll && styles.overlayTop]}>
+        style={[styles.overlay, plainScroll && cardAlign === 'top' && styles.overlayTop]}>
         <Pressable style={styles.backdrop} onPress={handleBackdrop} />
         <View style={[styles.card, { maxWidth: cardMaxWidth }, !plainScroll && { maxHeight: Math.round(windowHeight * 0.8) }]}>
           {plainScroll ? (
