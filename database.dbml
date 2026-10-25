@@ -356,6 +356,27 @@ Table AppConfig {
   Note: '[BUILT] Settings the app reads from GET /api/app/config.'
 }
 
+Table DeletedAccount {
+  id varchar [pk, note: 'cuid']
+  formerUserId varchar [not null, note: 'Original AppUser.id; live row is gone']
+  name varchar [not null]
+  mobile varchar [not null, note: 'Normalised 10-digit number at deletion']
+  printerName varchar [note: 'Purchased printer: tejas | rudra | josh']
+  labelsPrinted int [not null, default: 0, note: 'From AppUser.printCountTotal at deletion']
+  reason varchar [not null, note: 'Why the user deleted, in their words']
+  registeredAt timestamp [note: 'AppUser.createdAt snapshot']
+  deletedAt timestamp [not null]
+  isInternal boolean [not null, default: false]
+  appVersion varchar
+  platform varchar
+
+  indexes {
+    deletedAt
+    mobile
+  }
+  Note: '[BUILT] Archive when a user deletes their account. Personal rows are removed; phone claim stays so the number cannot register again.'
+}
+
 // ─────────────── Not in Postgres yet [FILE] ───────────────
 
 // ─────────────── Relationships ───────────────

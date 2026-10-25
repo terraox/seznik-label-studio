@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type { ConsumerPrinterId } from '@/constants/printer-models';
 import { isConsumerPrinterId } from '@/constants/printer-models';
 import {
+  deleteAccountRequest,
   fetchMe,
   loginUser,
   registerUser,
@@ -45,6 +46,8 @@ type AuthStoreState = {
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   refreshSession: () => Promise<void>;
   logout: () => void;
+  /** Archives the account server-side, then clears the local session. */
+  deleteAccount: (reason: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   bypassAuth: () => void;
 };
 
@@ -121,6 +124,25 @@ export const useAuthStore = create<AuthStoreState>()(
       },
 
       logout: () => set({ token: null, user: null, needsPrinter: false }),
+
+      deleteAccount: async (reason) => {
+        const token = get().token;
+        if (!token) return { ok: false, error: 'Please log in again.' };
+        if (token === 'dev-bypass-token') {
+          set({ token: null, user: null, needsPrinter: false });
+          return { ok: true };
+        }
+        try {
+          await deleteAccountRequest(token, reason);
+          set({ token: null, user: null, needsPrinter: false });
+          return { ok: true };
+        } catch (err) {
+          return {
+            ok: false,
+            error: err instanceof Error ? err.message : 'Could not delete your account.',
+          };
+        }
+      },
 
       bypassAuth: () => {
         const devUser: AuthUserDto = {

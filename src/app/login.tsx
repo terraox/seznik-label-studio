@@ -1,15 +1,18 @@
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import {
   AUTH_COLORS,
   AuthField,
   AuthScreen,
   DevBypassButton,
+  FieldToggle,
   OtpBoxes,
+  OtpFieldAction,
   PrimaryButton,
   Segmented,
+  showAuthAlert,
 } from '@/components/auth/auth-ui';
 import { useOtp } from '@/lib/auth/use-otp';
 import { usePhoneHint } from '@/lib/auth/use-phone-hint';
@@ -32,16 +35,23 @@ function LoginScreenContent() {
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [otpInvalid, setOtpInvalid] = useState(false);
 
   const phoneValid = isValidPhone(phone);
   const canSubmit = phoneValid && password.length > 0;
-  const resendOff = !phoneValid || otpFlow.busy || otpFlow.cooldown > 0;
+  const otpSendOff = !phoneValid;
+
+  useEffect(() => {
+    if (!otpFlow.error) return;
+    showAuthAlert('OTP', otpFlow.error);
+    setOtpInvalid(true);
+    otpFlow.setError(null);
+  }, [otpFlow.error, otpFlow.setError]);
 
   const finish = (result: Awaited<ReturnType<typeof login>>) => {
     if (!result.ok) {
-      setError(result.error);
+      showAuthAlert('Login failed', result.error);
       return;
     }
     router.replace(result.needsPrinter ? '/select-printer' : '/');
@@ -49,14 +59,13 @@ function LoginScreenContent() {
 
   const onPhoneFocus = usePhoneHint(phone, (picked) => {
     setPhone(picked);
-    setError(null);
     setOtp('');
+    setOtpInvalid(false);
     otpFlow.reset();
   });
 
   const submit = async () => {
     setSubmitting(true);
-    setError(null);
     finish(await login(phone, { password }));
     setSubmitting(false);
   };
@@ -68,16 +77,21 @@ function LoginScreenContent() {
       return;
     }
     setSubmitting(true);
-    setError(null);
     finish(await login(phone, { otpProof: proof }));
     setSubmitting(false);
   };
 
   const switchMode = (next: LoginMode) => {
     setMode(next);
-    setError(null);
     setOtp('');
+    setOtpInvalid(false);
     otpFlow.reset();
+  };
+
+  const sendOtp = () => {
+    setOtp('');
+    setOtpInvalid(false);
+    void otpFlow.send(phone);
   };
 
   const handleDevBypass = () => {
@@ -86,7 +100,7 @@ function LoginScreenContent() {
   };
 
   return (
-    <AuthScreen title="Welcome back" subtitle="Log in to continue to Seznik">
+    <AuthScreen title="Welcome back" subtitle="Log in to continue printing with Seznik">
       <Segmented
         value={mode}
         onChange={switchMode}
@@ -99,38 +113,30 @@ function LoginScreenContent() {
         label="Phone number"
         icon="phone.fill"
         prefix="+91"
-        placeholder="10-digit mobile number"
+        placeholder="10-digit mobile"
         keyboardType="number-pad"
         maxLength={10}
         value={phone}
         onFocus={onPhoneFocus}
         onChangeText={(v) => {
           setPhone(digitsOnly(v));
-          setError(null);
           setOtp('');
+          setOtpInvalid(false);
           otpFlow.reset();
         }}
         right={
           mode === 'otp' ? (
-            <Pressable
-              onPress={() => {
-                setError(null);
-                setOtp('');
-                void otpFlow.send(phone);
-              }}
-              disabled={resendOff}
-              hitSlop={8}>
-              <Text style={[styles.toggle, resendOff && styles.toggleOff]}>
-                {otpFlow.cooldown > 0
-                  ? `Resend in ${otpFlow.cooldown}s`
-                  : otpFlow.sent
-                    ? 'Resend'
-                    : 'Get OTP'}
-              </Text>
-            </Pressable>
+            <OtpFieldAction
+              sent={otpFlow.sent}
+              cooldown={otpFlow.cooldown}
+              busy={otpFlow.busy}
+              disabled={otpSendOff}
+              onPress={sendOtp}
+            />
           ) : undefined
         }
       />
+
       {mode === 'password' ? (
         <AuthField
           label="Password"
@@ -138,46 +144,47 @@ function LoginScreenContent() {
           placeholder="Enter your password"
           secureTextEntry={!showPassword}
           value={password}
-          onChangeText={(v) => {
-            setPassword(v);
-            setError(null);
-          }}
+          onChangeText={setPassword}
           onSubmitEditing={canSubmit ? submit : undefined}
           right={
-            <Pressable onPress={() => setShowPassword((s) => !s)} hitSlop={8}>
-              <Text style={styles.toggle}>{showPassword ? 'Hide' : 'Show'}</Text>
-            </Pressable>
+            <FieldToggle
+              label={showPassword ? 'Hide' : 'Show'}
+              onPress={() => setShowPassword((s) => !s)}
+            />
           }
         />
       ) : otpFlow.sent ? (
-        <View style={styles.otpBlock}>
-          <Text style={styles.hint}>Enter the 6-digit code sent to +91 {phone}</Text>
-          <OtpBoxes
-            length={OTP_LENGTH}
-            value={otp}
-            onChange={(v) => {
-              setOtp(v);
-              otpFlow.setError(null);
-            }}
-            onComplete={verifyOtp}
-            error={otpFlow.error}
-            autoFocus
-          />
-        </View>
-      ) : null}
-      {mode === 'otp' && !otpFlow.sent && otpFlow.error ? (
-        <Text style={styles.error}>{otpFlow.error}</Text>
-      ) : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+        <OtpBoxes
+          length={OTP_LENGTH}
+          value={otp}
+          onChange={(v) => {
+            setOtp(v);
+            setOtpInvalid(false);
+            otpFlow.setError(null);
+          }}
+          onComplete={verifyOtp}
+          invalid={otpInvalid}
+          autoFocus
+          hint={`Code sent to +91 ${phone}`}
+        />
+      ) : (
+        <Text style={styles.hint}>Enter your number, then tap Get OTP</Text>
+      )}
+
       {mode === 'password' ? (
         <PrimaryButton
-          label={submitting ? 'Logging in…' : 'Log in'}
+          label="Log in"
           onPress={submit}
-          disabled={!canSubmit || submitting}
+          disabled={!canSubmit}
+          loading={submitting}
         />
       ) : submitting ? (
-        <Text style={styles.hint}>Logging in…</Text>
+        <View style={styles.busyRow}>
+          <ActivityIndicator color={AUTH_COLORS.navy} />
+          <Text style={styles.hint}>Logging in…</Text>
+        </View>
       ) : null}
+
       <View style={styles.footer}>
         <Text style={styles.footerText}>New to Seznik? </Text>
         <Link href="/register" replace style={styles.footerLink}>
@@ -190,12 +197,9 @@ function LoginScreenContent() {
 }
 
 const styles = StyleSheet.create({
-  toggle: { color: AUTH_COLORS.blue, fontWeight: '700', fontSize: 13 },
-  toggleOff: { color: '#A9B4CC' },
-  otpBlock: { gap: 10 },
-  hint: { fontSize: 13, color: AUTH_COLORS.muted, textAlign: 'center' },
-  error: { color: AUTH_COLORS.error, fontSize: 13, textAlign: 'center' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' },
+  hint: { fontSize: 13, color: AUTH_COLORS.muted, textAlign: 'center', lineHeight: 18 },
+  busyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 4, flexWrap: 'wrap' },
   footerText: { color: AUTH_COLORS.muted, fontSize: 14 },
   footerLink: { color: AUTH_COLORS.blue, fontSize: 14, fontWeight: '700' },
 });

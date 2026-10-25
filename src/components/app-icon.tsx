@@ -84,6 +84,7 @@ const ION: Record<string, IoniconsName> = {
   lock: 'lock-closed-outline',
   'lock.open': 'lock-open-outline',
   magnifyingglass: 'search-outline',
+  'message.fill': 'chatbubble-ellipses',
   mic: 'mic-outline',
   person: 'person-outline',
   photo: 'image-outline',

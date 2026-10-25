@@ -1,4 +1,5 @@
 import { goBack } from '@/lib/go-back';
+import { StatusChip } from '@/components/home/status-chip';
 import { JoshProgressCard } from '@/components/printers/josh-progress-card';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -36,7 +37,6 @@ import {
   extractJewelryFirstColumnDocument,
   isJewelryDieCutDocument,
 } from '@/constants/jewelry-diecut';
-import { CONSUMER_PRINTERS } from '@/constants/printer-models';
 import { canonicalizeJewelryDieCutDocument } from '@/constants/jewelry-template-elements';
 import { resolvePrintQuality } from '@/lib/printer/print-quality';
 import {
@@ -508,7 +508,6 @@ export default function PrintScreen() {
   const printingSettings = useSettingsStore((s) => s.printing);
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
-  const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
   const addHistoryEntry = usePrinterStore((s) => s.addHistoryEntry);
   const printerDeviceId = usePrinterStore((s) => s.deviceId ?? s.lastDeviceId);
   const printerSdkId = usePrinterStore((s) => s.sdkId);
@@ -543,7 +542,6 @@ export default function PrintScreen() {
   const excelFiles = useDataStore((s) => s.excelFiles);
   const activeExcelFileId = useDataStore((s) => s.activeExcelFileId);
 
-  const activeModelMeta = CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas;
 
   const excelSheet = useMemo<ExcelSheet | null>(() => {
     const fileId = params.excelFileId ?? activeExcelFileId;
@@ -1016,12 +1014,6 @@ export default function PrintScreen() {
 
   // The Print preview renders the live vector document model via LabelPreview.
   // Hardware rasterization is executed on-demand during actual print dispatch.
-  // A job that reconnects first passes through 'connecting' / 'scanning'; the pill must not
-  // flash "Unconnected" while this screen is the one sending.
-  const connected =
-    status === 'connected' ||
-    status === 'printing' ||
-    (printing && (status === 'connecting' || status === 'scanning'));
   const footerHeight = 72 + insets.bottom;
 
   // Bound the preview to 42 % of the screen height so tall documents
@@ -2523,20 +2515,7 @@ export default function PrintScreen() {
           <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
         </Pressable>
 
-        <Pressable
-          onPress={() => router.push('/printer-connect')}
-          style={({ pressed }) => [
-            styles.connection,
-            connected && styles.connectionConnected,
-            pressed && styles.pressed,
-          ]}>
-          <Text numberOfLines={1} style={styles.connectionText}>
-            {connected
-              ? `${activeModelMeta.shortName}: ${deviceName ?? 'Connected'}`
-              : 'Not connected'}
-          </Text>
-          <AppIcon name="link" tintColor="#FFFFFF" size={14} /* theme-fixed: white icon on status fill */ />
-        </Pressable>
+        <StatusChip poll={false} keepLive={printing} />
       </View>
 
       <FormScrollView
@@ -3099,24 +3078,6 @@ const styles = themedStyles((c, scheme) => ({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  connection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: c.dangerFill,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    maxWidth: 220,
-  },
-  connectionConnected: {
-    backgroundColor: c.successFill,
-  },
-  connectionText: {
-    color: c.onAccent,
-    ...Type.badge,
-    flexShrink: 1,
   },
   scroll: {
     flex: 1,

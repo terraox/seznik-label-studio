@@ -111,6 +111,41 @@ export const openApiSpec = {
         responses: { '200': { description: 'Updated user with printerName' } },
       },
     },
+    '/api/app/account/delete': {
+      post: {
+        tags: ['Mobile Auth'],
+        summary: 'Delete the signed-in account (archives name, phone, printer, labels, reason)',
+        'x-status': 'implemented',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['reason'],
+                properties: {
+                  reason: { type: 'string', minLength: 3, maxLength: 500 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Account deleted; personal rows removed' },
+          '400': { description: 'Reason missing or too short' },
+          '401': { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/deleted-accounts': {
+      get: {
+        tags: ['Users'],
+        summary: 'List archived deleted accounts for the admin desk',
+        'x-status': 'implemented',
+        responses: { '200': { description: 'Paged deleted-account archive' } },
+      },
+    },
     '/api/admin/login': {
       post: {
         tags: ['Admin Auth'],

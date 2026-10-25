@@ -52,7 +52,13 @@ function PulseRing({ color, active }: { color: string; active: boolean }) {
   return <Animated.View pointerEvents="none" style={[styles.ring, ringStyle]} />;
 }
 
-export function StatusChip() {
+/**
+ * The printer card in the header. Home, Print, PDF and Shipping labels all show this one.
+ * `poll` keeps the connection and battery in step every few seconds; only Home needs it, since its tab stays
+ * mounted while the app is open. `keepLive` shows "Connected" while a job is reconnecting, so the card does
+ * not flash "Not connected" mid-print.
+ */
+export function StatusChip({ poll = true, keepLive = false }: { poll?: boolean; keepLive?: boolean } = {}) {
   useThemeRefresh();
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
@@ -74,16 +80,20 @@ export function StatusChip() {
       if (liveNow) void mgr.refreshBattery();
     };
     sync();
+    if (!poll) return undefined;
     const id = setInterval(sync, 2500);
     return () => clearInterval(id);
-  }, []);
+  }, [poll]);
   const deviceName = usePrinterStore((s) => s.deviceName);
   const nickname = usePrinterNickname(usePrinterStore((s) => s.deviceId));
   const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
   const modelName = (CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas).shortName;
 
-  const live = status === 'connected' || status === 'printing';
-  const fill = FILL[status];
+  const live =
+    status === 'connected' ||
+    status === 'printing' ||
+    (keepLive && (status === 'connecting' || status === 'scanning'));
+  const fill = live ? HomeStatusColors.ok : FILL[status]; // theme-fixed: status fill
   const printerName = nickname || deviceName || modelName;
   const caption = live ? (status === 'printing' ? 'Printing' : 'Connected') : 'Not connected';
   const text = live ? printerName : 'Tap to connect';

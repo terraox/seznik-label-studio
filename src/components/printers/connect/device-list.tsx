@@ -29,6 +29,16 @@ type DeviceListProps = {
   badgeFor: (device: DiscoveredPrinter) => DeviceBadge | null;
 };
 
+/** The printer's own name; while the scan has not read it yet, say so instead of showing a raw address. */
+function displayName(device: { id: string; name?: string | null }): string {
+  const name = (device.name ?? '').trim();
+  const upper = name.toUpperCase();
+  if (!name || upper === device.id.toUpperCase() || upper.startsWith('BLUETOOTH ')) {
+    return `Nearby device …${device.id.replace(/[^0-9A-Fa-f]/g, '').slice(-4).toUpperCase()}`;
+  }
+  return name;
+}
+
 export function DeviceList({
   devices,
   scanning,
@@ -120,7 +130,7 @@ function Section({
                 <View style={styles.info}>
                   <View style={styles.nameRow}>
                     <Text style={styles.name} numberOfLines={1}>
-                      {nickname ?? device.name ?? 'Unknown printer'}
+                      {nickname ?? displayName(device)}
                     </Text>
                     {badge ? (
                       <View style={[styles.badge, { backgroundColor: badge.background, borderColor: badge.border }]}>

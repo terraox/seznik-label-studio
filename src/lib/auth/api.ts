@@ -115,3 +115,17 @@ export async function setPurchasedPrinter(
   if (!res.ok) throw new Error(await parseError(res, 'Could not save printer.'));
   return (await res.json()) as { user: AuthUserDto; needsPrinter: boolean };
 }
+
+/** Permanently deletes the signed-in account after archiving name, phone, printer, labels, and reason. */
+export async function deleteAccountRequest(token: string, reason: string): Promise<void> {
+  const res = await fetch(`${apiBase()}/api/app/account/delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...appHeaders(),
+    },
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) throw new Error(await parseError(res, 'Could not delete your account.'));
+}

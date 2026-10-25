@@ -5,6 +5,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 
 
 import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
+import { FontStyleButtons } from '@/components/editor/font-style-buttons';
 import { TextAlignButtons } from '@/components/editor/text-align-buttons';
 import {
   DRAWING_COLORS,
@@ -165,38 +166,12 @@ function StyleButtons({
   state: TimeElementState;
   patch: (updates: Partial<TimeElementState>) => void;
 }) {
-  useThemeRefresh();
-  const items = [
-    { key: 'bold', label: 'B', style: styles.boldGlyph, active: state.bold, field: 'bold' as const },
-    { key: 'italic', label: 'I', style: styles.italicGlyph, active: state.italic, field: 'italic' as const },
-    {
-      key: 'underline',
-      label: 'U',
-      style: styles.underlineGlyph,
-      active: state.underline,
-      field: 'underline' as const,
-    },
-    {
-      key: 'strike',
-      label: 'S',
-      style: styles.strikeGlyph,
-      active: state.strikethrough,
-      field: 'strikethrough' as const,
-    },
-  ];
   return (
-    <View style={styles.styleRow}>
-      {items.map((item) => (
-        <Pressable
-          key={item.key}
-          onPress={() => patch({ [item.field]: !item.active })}
-          style={[styles.styleBtn, item.active && styles.styleBtnActive]}>
-          <Text style={[styles.styleBtnText, item.style, item.active && styles.styleBtnTextActive]}>
-            {item.label}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
+    <FontStyleButtons
+      state={state}
+      onChange={patch}
+      pressableStyle={(active) => [styles.styleBtn, active && styles.styleBtnActive]}
+    />
   );
 }
 
@@ -572,12 +547,6 @@ const styles = themedStyles((c) => ({
     justifyContent: 'center',
   },
   styleBtnActive: { backgroundColor: c.accent },
-  styleBtnText: { fontSize: 16, fontWeight: '600', color: c.textSecondary },
-  styleBtnTextActive: { color: c.onAccent },
-  boldGlyph: { fontWeight: '700' },
-  italicGlyph: { transform: [{ skewX: '-14deg' }] },
-  underlineGlyph: { textDecorationLine: 'underline' },
-  strikeGlyph: { textDecorationLine: 'line-through' },
   sliderBlock: { marginTop: 10, paddingBottom: 4 },
   sliderTrack: {
     height: 4,

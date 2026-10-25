@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 
 import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
+import { FontStyleButtons } from '@/components/editor/font-style-buttons';
 import { TextAlignButtons } from '@/components/editor/text-align-buttons';
 import {
   DRAWING_COLORS,
@@ -223,32 +224,12 @@ function StyleButtons({
   state: StylePatch;
   patch: (updates: Partial<BarcodeElementState>) => void;
 }) {
-  useThemeRefresh();
-  const items = [
-    { key: 'bold', label: 'B', style: styles.boldGlyph, active: state.bold, field: 'bold' as const },
-    { key: 'italic', label: 'I', style: styles.italicGlyph, active: state.italic, field: 'italic' as const },
-    { key: 'underline', label: 'U', style: styles.underlineGlyph, active: state.underline, field: 'underline' as const },
-    {
-      key: 'strike',
-      label: 'S',
-      style: styles.strikeGlyph,
-      active: state.strikethrough,
-      field: 'strikethrough' as const,
-    },
-  ];
   return (
-    <View style={styles.styleRow}>
-      {items.map((item) => (
-        <Pressable
-          key={item.key}
-          onPress={() => patch({ [item.field]: !item.active })}
-          style={[styles.styleBtn, item.active && styles.styleBtnActive]}>
-          <Text style={[styles.styleBtnText, item.style, item.active && styles.styleBtnTextActive]}>
-            {item.label}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
+    <FontStyleButtons
+      state={state}
+      onChange={patch}
+      pressableStyle={(active) => [styles.styleBtn, active && styles.styleBtnActive]}
+    />
   );
 }
 
@@ -807,12 +788,6 @@ const styles = themedStyles((c) => ({
     justifyContent: 'center',
   },
   styleBtnActive: { backgroundColor: c.accent },
-  styleBtnText: { fontSize: 16, color: c.textSecondary, fontWeight: '600' },
-  styleBtnTextActive: { color: c.onAccent },
-  boldGlyph: { fontWeight: '800' },
-  italicGlyph: { transform: [{ skewX: '-14deg' }] },
-  underlineGlyph: { textDecorationLine: 'underline' },
-  strikeGlyph: { textDecorationLine: 'line-through' },
   sliderBlock: { marginTop: 10, paddingBottom: 4 },
   sliderTrack: { height: 4, borderRadius: 2, backgroundColor: c.fillStrong, position: 'relative' },
   sliderFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 2, backgroundColor: c.accent },

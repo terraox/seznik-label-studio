@@ -46,6 +46,7 @@ export const FEATURES: Record<string, { label: string; group: FeatureGroup }> = 
   'settings.walkthrough': { label: 'Walkthrough', group: 'settings' },
   'settings.feedback': { label: 'Feedback', group: 'settings' },
   'settings.about': { label: 'About us', group: 'settings' },
+  'settings.delete_account': { label: 'Delete account', group: 'settings' },
 };
 
 export const FEATURE_KEYS = Object.keys(FEATURES);

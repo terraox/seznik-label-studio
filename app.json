@@ -121,6 +121,35 @@
           "isBackgroundEnabled": false,
           "bluetoothAlwaysPermission": "Allow Sez Print to connect to your Bluetooth label printer."
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "SeznikFeatures",
+              "label": "Seznik tools",
+              "description": "New label, PDF, shipping, Excel, and serial shortcuts",
+              "minWidth": "250dp",
+              "minHeight": "140dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "widgetCategory": "home_screen"
+            },
+            {
+              "name": "SeznikShipping",
+              "label": "Seznik shipping",
+              "description": "Open Amazon, Flipkart, or Meesho shipping labels",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "widgetCategory": "home_screen"
+            }
+          ]
+        }
       ]
     ],
     "experiments": {

@@ -9,6 +9,9 @@ export const GRID_SPACING_OPTIONS = [...GRID_SPACING_LABELS, GRID_CUSTOM_LABEL] 
 export const GRID_PRINT_DISCLAIMER =
   'Design grid is editor-only and is not included when you print.';
 
+export const GRID_OVERLAY_HELP =
+  'Overlay keeps grid lines visible over elements. Off lets elements cover the grid.';
+
 export function isPresetGridSpacing(mm: number): boolean {
   const clamped = clampGridSpacingMm(mm);
   return GRID_SPACING_PRESETS_MM.some((value) => value === clamped);

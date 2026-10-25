@@ -412,3 +412,28 @@ model AppConfig {
   value     Json
   updatedAt DateTime @updatedAt
 }
+
+/// Snapshot kept when a user deletes their account from the app. The AppUser row and related
+/// personal rows are removed; print events stay anonymised (userId set null). The phone claim in
+/// RegisteredPhone is kept so the number cannot register again.
+model DeletedAccount {
+  id            String   @id @default(cuid())
+  /// Original AppUser.id (the live row is gone).
+  formerUserId  String
+  name          String
+  mobile        String
+  /// Purchased printer at deletion: tejas | rudra | josh
+  printerName   String?
+  /// Labels printed while the account existed (from AppUser.printCountTotal).
+  labelsPrinted Int      @default(0)
+  /// Why the user asked to delete, in their words.
+  reason        String
+  registeredAt  DateTime?
+  deletedAt     DateTime @default(now())
+  isInternal    Boolean  @default(false)
+  appVersion    String?
+  platform      String?
+
+  @@index([deletedAt])
+  @@index([mobile])
+}

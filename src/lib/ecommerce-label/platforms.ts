@@ -19,6 +19,12 @@ export function platformName(id: PlatformId): string {
   return PLATFORMS.find((p) => p.id === id)?.name ?? id;
 }
 
+/** Accepts deep-link / query values like `?platform=amazon`. */
+export function parsePlatformId(raw: string | null | undefined): PlatformId | null {
+  if (raw === 'amazon' || raw === 'flipkart' || raw === 'meesho') return raw;
+  return null;
+}
+
 export type LeafLike = Pick<Section, 'rect' | 'hasCodeLike' | 'boundedBy'>;
 
 export type LocatedPage = {

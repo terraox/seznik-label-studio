@@ -1,6 +1,8 @@
 import { Image } from 'expo-image';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -26,6 +28,11 @@ export const AUTH_COLORS = {
   background: '#FFFFFF',
 };
 
+/** System popup so auth failures are never buried below the fold. */
+export function showAuthAlert(title: string, message: string) {
+  Alert.alert(title, message);
+}
+
 export function AuthScreen({
   title,
   subtitle,
@@ -42,8 +49,9 @@ export function AuthScreen({
       contentContainerStyle={styles.scroll}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}>
-      <View style={[styles.hero, { paddingTop: insets.top + 28 }]}>
+      <View style={[styles.hero, { paddingTop: insets.top + 20 }]}>
         <View style={styles.blobLarge} />
+        <View style={styles.blobMid} />
         <View style={styles.blobSmall} />
         <View style={styles.logoTile}>
           <Image
@@ -52,10 +60,12 @@ export function AuthScreen({
             contentFit="contain"
           />
         </View>
+        <Text style={styles.brand}>Seznik</Text>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
       </View>
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 28 }]}>
+        <View style={styles.sheetHandle} />
         <View style={styles.form}>{children}</View>
       </View>
     </FormScrollView>
@@ -96,7 +106,7 @@ export function AuthField({
             style={styles.fieldIcon}
           />
         ) : null}
-        {prefix ? <Text style={styles.prefix} /* layout-ok: short dial-code prefix */>{prefix}</Text> : null}
+        {prefix ? <Text style={styles.prefix} /* layout-ok: short country code beside the input */>{prefix}</Text> : null}
         <TextInput
           style={styles.input}
           placeholderTextColor="#94A3B8"
@@ -126,27 +136,112 @@ export function AuthField({
   );
 }
 
+/** Text control for Show/Hide and similar in-field actions. */
+export function FieldToggle({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={10}
+      style={({ pressed }) => [styles.fieldToggle, pressed && { opacity: 0.7 }]}>
+      <Text style={[styles.fieldToggleText, disabled && styles.fieldToggleOff]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * Get OTP / Resend / Verified control that sits beside the phone number inside the field.
+ */
+export function OtpFieldAction({
+  sent,
+  verified,
+  cooldown,
+  busy,
+  disabled,
+  onPress,
+}: {
+  sent: boolean;
+  verified?: boolean;
+  cooldown: number;
+  busy?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  if (verified) {
+    return (
+      <View style={styles.otpChipVerified}>
+        <AppIcon name="checkmark" size={12} tintColor="#FFFFFF" />
+        <Text style={styles.otpChipVerifiedText}>Verified</Text>
+      </View>
+    );
+  }
+
+  const cooling = cooldown > 0;
+  const off = disabled || busy || cooling;
+  const label = busy
+    ? '…'
+    : cooling
+      ? `${cooldown}s`
+      : sent
+        ? 'Resend'
+        : 'Get OTP';
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={off}
+      accessibilityRole="button"
+      accessibilityLabel={busy ? 'Sending OTP' : cooling ? `Resend in ${cooldown}s` : label}
+      hitSlop={6}
+      style={({ pressed }) => [
+        styles.otpChip,
+        sent && !cooling && !busy && styles.otpChipResend,
+        off && styles.otpChipOff,
+        pressed && !off && { opacity: 0.88 },
+      ]}>
+      {busy ? (
+        <ActivityIndicator color="#FFFFFF" size="small" />
+      ) : (
+        <Text style={styles.otpChipText}>{label}</Text>
+      )}
+    </Pressable>
+  );
+}
+
 /** Six boxes over one hidden input. Autofills the SMS code and calls onComplete when full. */
 export function OtpBoxes({
   value,
   onChange,
   onComplete,
   length,
-  error,
+  invalid,
   autoFocus,
+  hint,
 }: {
   value: string;
   onChange: (v: string) => void;
   onComplete?: (v: string) => void;
   length: number;
-  error?: string | null;
+  invalid?: boolean;
   autoFocus?: boolean;
+  hint?: string;
 }) {
   const ref = useRef<RNTextInput>(null);
   const [focused, setFocused] = useState(false);
 
   useEffect(() => {
-    if (autoFocus) ref.current?.focus();
+    if (autoFocus) {
+      const id = setTimeout(() => ref.current?.focus(), 80);
+      return () => clearTimeout(id);
+    }
   }, [autoFocus]);
 
   const change = (raw: string) => {
@@ -156,17 +251,20 @@ export function OtpBoxes({
   };
 
   return (
-    <View style={styles.fieldWrap}>
+    <View style={styles.otpBlock}>
+      {hint ? <Text style={styles.otpHint}>{hint}</Text> : null}
       <Pressable style={styles.otpRow} onPress={() => ref.current?.focus()}>
         {Array.from({ length }, (_, i) => {
           const active = focused && i === Math.min(value.length, length - 1);
+          const filled = Boolean(value[i]);
           return (
             <View
               key={i}
               style={[
                 styles.otpBox,
+                filled && styles.otpBoxFilled,
                 active && styles.otpBoxActive,
-                !!error && styles.fieldError,
+                invalid && styles.fieldError,
               ]}>
               <Text style={styles.otpDigit}>{value[i] ?? ''}</Text>
             </View>
@@ -187,7 +285,6 @@ export function OtpBoxes({
           style={styles.otpHidden}
         />
       </Pressable>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }
@@ -196,21 +293,28 @@ export function PrimaryButton({
   label,
   onPress,
   disabled,
+  loading,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  loading?: boolean;
 }) {
+  const off = disabled || loading;
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled}
+      disabled={off}
       style={({ pressed }) => [
         styles.button,
-        disabled && styles.buttonDisabled,
-        pressed && { opacity: 0.85 },
+        off && styles.buttonDisabled,
+        pressed && !off && { opacity: 0.85 },
       ]}>
-      <Text style={styles.buttonText}>{label}</Text>
+      {loading ? (
+        <ActivityIndicator color="#FFFFFF" />
+      ) : (
+        <Text style={styles.buttonText}>{label}</Text>
+      )}
     </Pressable>
   );
 }
@@ -235,6 +339,25 @@ export function Segmented<T extends string>({
             {o.label}
           </Text>
         </Pressable>
+      ))}
+    </View>
+  );
+}
+
+export function PasswordRules({
+  rules,
+}: {
+  rules: { id: string; label: string; met: boolean }[];
+}) {
+  return (
+    <View style={styles.rules}>
+      {rules.map((rule) => (
+        <View key={rule.id} style={[styles.ruleChip, rule.met && styles.ruleChipMet]}>
+          <Text style={[styles.ruleChipText, rule.met && styles.ruleChipTextMet]}>
+            {rule.met ? '✓ ' : ''}
+            {rule.label}
+          </Text>
+        </View>
       ))}
     </View>
   );
@@ -278,96 +401,194 @@ const styles = StyleSheet.create({
     backgroundColor: AUTH_COLORS.navy,
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingBottom: 44,
+    paddingBottom: 36,
     overflow: 'hidden',
   },
   blobLarge: {
     position: 'absolute',
-    width: 260,
-    height: 260,
-    borderRadius: 130,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
     backgroundColor: AUTH_COLORS.blue,
-    opacity: 0.18,
-    top: -90,
-    right: -70,
+    opacity: 0.2,
+    top: -100,
+    right: -80,
+  },
+  blobMid: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#3B82F6',
+    opacity: 0.14,
+    top: 40,
+    left: -30,
   },
   blobSmall: {
     position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
     backgroundColor: AUTH_COLORS.blue,
-    opacity: 0.12,
-    bottom: -40,
-    left: -40,
+    opacity: 0.1,
+    bottom: -50,
+    left: -50,
   },
   logoTile: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
+    width: 84,
+    height: 84,
+    borderRadius: 24,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 10,
   },
-  logo: { width: 76, height: 76 },
+  logo: { width: 66, height: 66 },
+  brand: {
+    marginTop: 14,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 3,
+    color: '#7EB6F5',
+    textTransform: 'uppercase',
+  },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',
-    marginTop: 18,
+    marginTop: 6,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#B9C7E6',
     textAlign: 'center',
     marginTop: 6,
+    lineHeight: 21,
+    maxWidth: 280,
   },
   sheet: {
     flexGrow: 1,
     backgroundColor: AUTH_COLORS.background,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    marginTop: -24,
-    paddingHorizontal: 24,
-    paddingTop: 28,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -20,
+    paddingHorizontal: 22,
+    paddingTop: 12,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E2E8F0',
+    marginBottom: 18,
   },
   form: { gap: 16 },
-  fieldWrap: { gap: 6 },
-  label: { fontSize: 13, fontWeight: '700', color: AUTH_COLORS.navy },
+  fieldWrap: { gap: 8 },
+  label: { fontSize: 13, fontWeight: '700', color: AUTH_COLORS.navy, letterSpacing: 0.2 },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: AUTH_COLORS.border,
     borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 58,
+    paddingLeft: 14,
+    paddingRight: 8,
+    minHeight: 56,
   },
-  fieldFocused: { borderColor: AUTH_COLORS.blue, backgroundColor: '#F4F9FF' },
+  fieldFocused: {
+    borderColor: AUTH_COLORS.blue,
+    backgroundColor: '#F0F7FF',
+  },
   fieldError: { borderColor: AUTH_COLORS.error },
-  fieldIcon: { marginRight: 10 },
-  prefix: { fontSize: 16, color: AUTH_COLORS.text, fontWeight: '600', marginRight: 8 },
-  input: { flex: 1, fontSize: 16, color: AUTH_COLORS.text, height: '100%' },
+  fieldIcon: { marginRight: 8 },
+  prefix: {
+    fontSize: 15,
+    color: AUTH_COLORS.text,
+    fontWeight: '700',
+    marginRight: 8,
+    paddingRight: 8,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: AUTH_COLORS.border,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: AUTH_COLORS.text,
+    height: '100%',
+    paddingVertical: 14,
+    minWidth: 0,
+  },
+  fieldToggle: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  fieldToggleText: { color: AUTH_COLORS.blue, fontWeight: '700', fontSize: 14 },
+  fieldToggleOff: { color: '#A9B4CC' },
   error: { fontSize: 12, color: AUTH_COLORS.error },
-  otpRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  otpChip: {
+    minWidth: 84,
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: AUTH_COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  otpChipResend: {
+    backgroundColor: AUTH_COLORS.navy,
+  },
+  otpChipOff: {
+    backgroundColor: '#C5CDD9',
+  },
+  otpChipText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  otpChipVerified: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: AUTH_COLORS.success,
+    marginLeft: 6,
+  },
+  otpChipVerifiedText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  otpBlock: { gap: 10 },
+  otpHint: {
+    fontSize: 13,
+    color: AUTH_COLORS.muted,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  otpRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 7 },
   otpBox: {
     flex: 1,
-    height: 58,
+    height: 54,
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: AUTH_COLORS.border,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  otpBoxActive: { borderColor: AUTH_COLORS.blue, backgroundColor: '#F4F9FF' },
+  otpBoxFilled: { borderColor: '#B8D4F0', backgroundColor: '#F0F7FF' },
+  otpBoxActive: { borderColor: AUTH_COLORS.blue, backgroundColor: '#E8F3FF' },
   otpDigit: { fontSize: 22, fontWeight: '800', color: AUTH_COLORS.navy },
   otpHidden: { position: 'absolute', width: '100%', height: '100%', opacity: 0.02 },
   segment: {
@@ -376,35 +597,56 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 4,
   },
-  segmentItem: { flex: 1, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  segmentItem: {
+    flex: 1,
+    height: 42,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   segmentItemOn: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowColor: '#12295C',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     elevation: 2,
   },
   segmentText: { fontSize: 14, fontWeight: '700', color: AUTH_COLORS.muted },
   segmentTextOn: { color: AUTH_COLORS.navy },
+  rules: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: -4 },
+  ruleChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  ruleChipMet: {
+    backgroundColor: '#ECFDF3',
+    borderColor: '#86EFAC',
+  },
+  ruleChipText: { fontSize: 11, fontWeight: '600', color: AUTH_COLORS.muted },
+  ruleChipTextMet: { color: '#166534' },
   button: {
     height: 54,
     borderRadius: 16,
     backgroundColor: AUTH_COLORS.navy,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
+    marginTop: 2,
     shadowColor: AUTH_COLORS.navy,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.28,
     shadowRadius: 10,
     elevation: 5,
   },
-  buttonDisabled: { backgroundColor: '#A9B4CC' },
+  buttonDisabled: { backgroundColor: '#A9B4CC', shadowOpacity: 0, elevation: 0 },
   buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
   link: { color: AUTH_COLORS.blue, fontSize: 14, fontWeight: '700' },
   devButton: {
-    height: 48,
+    height: 46,
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
@@ -412,7 +654,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: 2,
   },
   devButtonPressed: {
     backgroundColor: '#EEF2F6',
@@ -420,7 +662,7 @@ const styles = StyleSheet.create({
   },
   devButtonText: {
     color: '#475569',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
