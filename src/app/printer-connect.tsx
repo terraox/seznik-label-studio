@@ -69,7 +69,11 @@ async function openPhoneBluetoothSettings() {
 }
 
 function mergeDevice(existing: DiscoveredPrinter, device: DiscoveredPrinter): DiscoveredPrinter {
-  const name = device.name || existing.name;
+  // A placeholder ('Bluetooth AA:BB:…') must never replace a real name seen earlier.
+  const name =
+    isPlaceholderName(device.name, device.id) && !isPlaceholderName(existing.name, existing.id)
+      ? existing.name
+      : device.name || existing.name;
   const incomingSpecific = device.sdkId && device.sdkId !== 'generic';
   const existingSpecific = existing.sdkId && existing.sdkId !== 'generic';
   const sdkId = incomingSpecific ? device.sdkId : existingSpecific ? existing.sdkId : device.sdkId ?? existing.sdkId;
@@ -121,6 +125,12 @@ function badgeFor(device: DiscoveredPrinter): DeviceBadge | null {
     background: match.accentSoft,
     border: match.accentBorder,
   };
+}
+
+/** True while a device has no real name yet (the scan reports just its address, or 'Bluetooth <address>'). */
+function isPlaceholderName(name: string | null | undefined, id: string): boolean {
+  const n = (name ?? '').trim().toUpperCase();
+  return !n || n === id.toUpperCase() || n.startsWith('BLUETOOTH ');
 }
 
 /** Bluetooth name prefix each printer family advertises (matched case-insensitively). */
@@ -407,8 +417,8 @@ export default function PrinterConnectScreen() {
         if (name.startsWith(namePrefix)) return true;
         // An unpaired printer is often seen before its name resolves (only the MAC shows).
         // Keep it listed so it can be paired from here.
-        const unnamed = !name || name === d.id.toUpperCase() || name.startsWith('BLUETOOTH ');
-        return selectedModel === 'josh' && !d.bonded && unnamed;
+        const unnamed = isPlaceholderName(name, d.id);
+        return (selectedModel === 'josh' || selectedModel === 'tejas' || selectedModel === 'rudra') && !d.bonded && unnamed;
       }),
     [sortedDevices, namePrefix, selectedModel],
   );

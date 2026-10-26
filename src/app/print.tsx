@@ -1,4 +1,5 @@
 import { goBack } from '@/lib/go-back';
+import { StatusChip } from '@/components/home/status-chip';
 import { JoshProgressCard } from '@/components/printers/josh-progress-card';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -25,6 +26,7 @@ import {
   DEFAULT_ELEMENT_STATE,
   DEFAULT_QRCODE_STATE,
 } from '@/components/editor/types';
+import { canvasFillFromDocument } from '@/lib/template-schema';
 import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Type } from '@/constants/ui';
@@ -36,7 +38,6 @@ import {
   extractJewelryFirstColumnDocument,
   isJewelryDieCutDocument,
 } from '@/constants/jewelry-diecut';
-import { CONSUMER_PRINTERS } from '@/constants/printer-models';
 import { canonicalizeJewelryDieCutDocument } from '@/constants/jewelry-template-elements';
 import { resolvePrintQuality } from '@/lib/printer/print-quality';
 import {
@@ -125,8 +126,7 @@ import {
   formatPaperTypeSetting,
   paperPrinterId,
   paperTypeCommand,
-  paperTypeSelectionNote,
-  paperTypeTestBadge,
+  paperTypeLabel,
 } from '@/lib/printer/paper-type';
 import { resolveTd404JobParams } from '@/lib/printer/td404-job-params';
 import {
@@ -426,11 +426,13 @@ function ChipGroup<T extends string>({
   selected,
   onSelect,
   badgeFor,
+  labelFor,
 }: {
   options: readonly T[];
   selected: T;
   onSelect: (value: T) => void;
   badgeFor?: (value: T) => string | null;
+  labelFor?: (value: T) => string;
 }) {
   useThemeRefresh();
   return (
@@ -450,7 +452,7 @@ function ChipGroup<T extends string>({
               pressed && styles.pressed,
             ]}>
             <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-              {option}
+              {labelFor ? labelFor(option) : option}
             </Text>
             {badge ? (
               <Text style={[styles.chipBadge, active && styles.chipBadgeActive]} numberOfLines={1}>
@@ -508,7 +510,6 @@ export default function PrintScreen() {
   const printingSettings = useSettingsStore((s) => s.printing);
   const status = usePrinterStore((s) => s.status);
   const deviceName = usePrinterStore((s) => s.deviceName);
-  const selectedModel = usePrinterStore((s) => s.selectedPrinterModel);
   const addHistoryEntry = usePrinterStore((s) => s.addHistoryEntry);
   const printerDeviceId = usePrinterStore((s) => s.deviceId ?? s.lastDeviceId);
   const printerSdkId = usePrinterStore((s) => s.sdkId);
@@ -543,7 +544,6 @@ export default function PrintScreen() {
   const excelFiles = useDataStore((s) => s.excelFiles);
   const activeExcelFileId = useDataStore((s) => s.activeExcelFileId);
 
-  const activeModelMeta = CONSUMER_PRINTERS[selectedModel] ?? CONSUMER_PRINTERS.tejas;
 
   const excelSheet = useMemo<ExcelSheet | null>(() => {
     const fileId = params.excelFileId ?? activeExcelFileId;
@@ -1016,12 +1016,6 @@ export default function PrintScreen() {
 
   // The Print preview renders the live vector document model via LabelPreview.
   // Hardware rasterization is executed on-demand during actual print dispatch.
-  // A job that reconnects first passes through 'connecting' / 'scanning'; the pill must not
-  // flash "Unconnected" while this screen is the one sending.
-  const connected =
-    status === 'connected' ||
-    status === 'printing' ||
-    (printing && (status === 'connecting' || status === 'scanning'));
   const footerHeight = 72 + insets.bottom;
 
   // Bound the preview to 42 % of the screen height so tall documents
@@ -1054,6 +1048,12 @@ export default function PrintScreen() {
     () => (activeDoc && layerOffsetsUsable ? previewWithLayerOffsets(activeDoc, layerOffsets, layerBridge!) : activeDoc),
     [activeDoc, layerOffsetsUsable, layerOffsets, layerBridge],
   );
+
+  /** A shaped label (cut-outs, die-cut) has no rectangle to lift: a rectangular shadow would fill its notches. */
+  const previewShapeFlat = useMemo(() => {
+    const doc = layerPreviewDocument ?? displayDocument ?? previewDocument;
+    return !!doc && canvasFillFromDocument(doc) === 'transparent';
+  }, [layerPreviewDocument, displayDocument, previewDocument]);
   const orientationDegNow = parseInt(orientation.replace('°', ''), 10);
   const layerWarning = useMemo(() => {
     if (!layerOffsetsUsable) return null;
@@ -1154,20 +1154,12 @@ export default function PrintScreen() {
   );
   const previewAreaMinHeight = maxPreviewHeight + 56; // 28 px padding each side
 
-  // The print job rotates the bitmap by the chosen orientation, so show the label turned the same
-  // way (clockwise, matching rotateGray). Quarter turns swap the box the label is fitted into.
+  // The print job rotates the bitmap by the chosen orientation, so show the contents turned the
+  // same way (clockwise, matching rotateGray).
   const previewTurn = ratTail143Job ? 0 : parseInt(orientation.replace('°', ''), 10);
-  const previewQuarter = previewTurn === 90 || previewTurn === 270;
-  const turned = fitLabelSize(
-    previewQuarter ? (activeDoc?.heightMm ?? 44) : (activeDoc?.widthMm ?? 80),
-    previewQuarter ? (activeDoc?.widthMm ?? 80) : (activeDoc?.heightMm ?? 44),
-    Math.round(baseCardWidth * zoom),
-    Math.round(maxPreviewHeight * zoom),
-  );
-  const previewBoxW = turned.widthPx;
-  const previewBoxH = turned.heightPx;
-  const previewDrawW = previewQuarter ? previewBoxH : previewBoxW;
-  const previewDrawH = previewQuarter ? previewBoxW : previewBoxH;
+  // The label keeps its own shape and orientation; only its contents are turned (see LabelPreview).
+  const previewBoxW = cardWidth;
+  const previewBoxH = cardHeight;
 
   const historySource: PrintHistoryEntry['source'] = params.labelId
     ? 'label'
@@ -2523,20 +2515,7 @@ export default function PrintScreen() {
           <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
         </Pressable>
 
-        <Pressable
-          onPress={() => router.push('/printer-connect')}
-          style={({ pressed }) => [
-            styles.connection,
-            connected && styles.connectionConnected,
-            pressed && styles.pressed,
-          ]}>
-          <Text numberOfLines={1} style={styles.connectionText}>
-            {connected
-              ? `${activeModelMeta.shortName}: ${deviceName ?? 'Connected'}`
-              : 'Not connected'}
-          </Text>
-          <AppIcon name="link" tintColor="#FFFFFF" size={14} /* theme-fixed: white icon on status fill */ />
-        </Pressable>
+        <StatusChip poll={false} keepLive={printing} />
       </View>
 
       <FormScrollView
@@ -2544,7 +2523,7 @@ export default function PrintScreen() {
         contentContainerStyle={{ paddingBottom: footerHeight + Spacing.three }}
         showsVerticalScrollIndicator={false}>
         <View style={[styles.previewArea, { minHeight: previewAreaMinHeight }]}>
-          <View style={styles.previewShadow}>
+          <View style={[styles.previewShadow, previewShapeFlat && styles.previewShadowFlat]}>
             {(displayDocument ?? previewDocument) ? (
               <View
                 style={{
@@ -2553,15 +2532,15 @@ export default function PrintScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
-                <View style={{ transform: [{ rotate: `${previewTurn}deg` }] }}>
-                  <LabelPreview
-                    document={(layerPreviewDocument ?? displayDocument ?? previewDocument)!}
-                    width={previewDrawW}
-                    maxHeight={previewDrawH}
-                    showArtboardBorder={false}
-                    hideNonPrinting
-                  />
-                </View>
+                <LabelPreview
+                  document={(layerPreviewDocument ?? displayDocument ?? previewDocument)!}
+                  width={previewBoxW}
+                  maxHeight={previewBoxH}
+                  showArtboardBorder={false}
+                  hideNonPrinting
+                  showShapeGuides
+                  contentTurnDeg={previewTurn}
+                />
               </View>
             ) : params.imageUri ? (
               <View style={[styles.previewCard, { width: cardWidth, height: cardHeight }]}>
@@ -2833,11 +2812,8 @@ export default function PrintScreen() {
                 options={paperTypesFor(printerSdkId)}
                 selected={shownPaperType(paperType, printerSdkId)}
                 onSelect={changePaperType}
-                badgeFor={(option) => paperTypeTestBadge(option)}
+                labelFor={paperTypeLabel}
               />
-              {paperTypeSelectionNote(shownPaperType(paperType, printerSdkId)) ? (
-                <Text style={styles.helperText}>{paperTypeSelectionNote(shownPaperType(paperType, printerSdkId))}</Text>
-              ) : null}
               {jewelryDieCutJob ? (
                 <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
                   💡 Jewelry rolls print as Label. If prints skip or overlap, run “Calibrate Paper Sensor” in Printer Connect.
@@ -3100,24 +3076,6 @@ const styles = themedStyles((c, scheme) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  connection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: c.dangerFill,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    maxWidth: 220,
-  },
-  connectionConnected: {
-    backgroundColor: c.successFill,
-  },
-  connectionText: {
-    color: c.onAccent,
-    ...Type.badge,
-    flexShrink: 1,
-  },
   scroll: {
     flex: 1,
   },
@@ -3137,6 +3095,10 @@ const styles = themedStyles((c, scheme) => ({
     shadowOpacity: 0.22,
     shadowRadius: 6,
     elevation: 4,
+  },
+  previewShadowFlat: {
+    shadowOpacity: 0,
+    elevation: 0,
   },
   sizeBadge: {
     marginTop: 10,

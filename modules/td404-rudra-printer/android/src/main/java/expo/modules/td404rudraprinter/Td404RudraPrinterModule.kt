@@ -57,7 +57,8 @@ class Td404RudraPrinterModule : Module() {
   private val discoveryReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
       when (intent?.action) {
-        BluetoothDevice.ACTION_FOUND -> {
+        // NAME_CHANGED: a printer first seen without a name announces it a moment later.
+        BluetoothDevice.ACTION_FOUND, BluetoothDevice.ACTION_NAME_CHANGED -> {
           val device: BluetoothDevice? =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
               intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
@@ -66,7 +67,8 @@ class Td404RudraPrinterModule : Module() {
               intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
             }
           if (device != null) {
-            emitDevice(device, bonded = false)
+            // The name carried by the broadcast is more reliable than device.name for an unpaired printer.
+            emitDevice(device, bonded = false, nameHint = intent.getStringExtra(BluetoothDevice.EXTRA_NAME))
           }
         }
         BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
@@ -1259,6 +1261,7 @@ class Td404RudraPrinterModule : Module() {
     val context = appContext.reactContext ?: return
     val filter = IntentFilter().apply {
       addAction(BluetoothDevice.ACTION_FOUND)
+      addAction(BluetoothDevice.ACTION_NAME_CHANGED)
       addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -1336,12 +1339,13 @@ class Td404RudraPrinterModule : Module() {
   }
 
   @SuppressLint("MissingPermission")
-  private fun deviceToMap(device: BluetoothDevice, bonded: Boolean): Map<String, Any?> {
-    val name = try {
+  private fun deviceToMap(device: BluetoothDevice, bonded: Boolean, nameHint: String? = null): Map<String, Any?> {
+    val systemName = try {
       device.name
     } catch (_: SecurityException) {
       null
     }
+    val name = systemName?.takeIf { it.isNotBlank() } ?: nameHint?.takeIf { it.isNotBlank() }
     val displayName = if (name.isNullOrBlank()) "Bluetooth ${device.address}" else name
     return mapOf(
       "id" to device.address,
@@ -1355,8 +1359,8 @@ class Td404RudraPrinterModule : Module() {
   }
 
   @SuppressLint("MissingPermission")
-  private fun emitDevice(device: BluetoothDevice, bonded: Boolean) {
-    sendEvent("onDeviceFound", deviceToMap(device, bonded))
+  private fun emitDevice(device: BluetoothDevice, bonded: Boolean, nameHint: String? = null) {
+    sendEvent("onDeviceFound", deviceToMap(device, bonded, nameHint))
   }
 
   private fun isLikelyTd404(name: String?): Boolean {

@@ -88,11 +88,11 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FEFEFE",
-          "image": "./assets/images/splash-blank.png",
-          "imageWidth": 8,
+          "image": "./assets/images/logo-intro.png",
+          "imageWidth": 200,
           "dark": {
             "backgroundColor": "#000000",
-            "image": "./assets/images/splash-blank.png"
+            "image": "./assets/images/logo-intro.png"
           }
         }
       ],
@@ -121,6 +121,37 @@
           "isBackgroundEnabled": false,
           "bluetoothAlwaysPermission": "Allow Sez Print to connect to your Bluetooth label printer."
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "SeznikFeatures",
+              "label": "Seznik tools",
+              "description": "New label, PDF, shipping, Excel, and serial shortcuts",
+              "minWidth": "250dp",
+              "minHeight": "140dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "widgetCategory": "home_screen",
+              "previewImage": "./assets/widget-previews/seznikfeatures.png"
+            },
+            {
+              "name": "SeznikShipping",
+              "label": "Seznik shipping",
+              "description": "Open Amazon, Flipkart, or Meesho shipping labels",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "widgetCategory": "home_screen",
+              "previewImage": "./assets/widget-previews/seznikshipping.png"
+            }
+          ]
+        }
       ]
     ],
     "experiments": {
@@ -128,7 +159,7 @@
     },
     "extra": {
       "router": {},
-      "apiUrl": "https://api2.seznik.in",
+      "apiUrl": "http://localhost:3000",
       "eas": {
         "projectId": "371f5893-bcd6-404f-8e45-227898d40375"
       }

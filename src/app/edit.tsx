@@ -2417,10 +2417,19 @@ export default function EditScreen() {
 
   const gridSpacingMm =
     editorSettings.editorGridSpacingMm ?? DEFAULT_EDITOR_SETTINGS.editorGridSpacingMm;
+  const gridOverlay =
+    editorSettings.editorGridOverlay ?? DEFAULT_EDITOR_SETTINGS.editorGridOverlay;
 
   const changeGridSpacing = useCallback(
     (mm: number) => {
       patchEditor({ editorGridSpacingMm: mm });
+    },
+    [patchEditor],
+  );
+
+  const changeGridOverlay = useCallback(
+    (overlay: boolean) => {
+      patchEditor({ editorGridOverlay: overlay });
     },
     [patchEditor],
   );
@@ -4639,6 +4648,7 @@ export default function EditScreen() {
                     selectionColor={selectionColor}
                     surfaceColor={artboardFill}
                     showGrid={gridShown}
+                    gridOverlay={gridOverlay}
                     gridSpacingMm={gridSpacingMm}
                     gridColor={editorSettings.editorGridColor}
                     liveBounds={liveRulerBounds}
@@ -5390,7 +5400,7 @@ export default function EditScreen() {
         onSaveAs={handleSaveAs}
         onShare={() => {
           saveDocument(false);
-          router.push({ pathname: '/share', params: { labelId: docRef.current.id } });
+          router.push({ pathname: '/share', params: { labelId: docRef.current.id, from: 'canvas' } });
         }}
         onUpload={() => {
           saveDocument(false);
@@ -5446,8 +5456,10 @@ export default function EditScreen() {
       <GridSpacingPopover
         visible={gridSpacingPopoverVisible}
         spacingMm={gridSpacingMm}
+        overlay={gridOverlay}
         onClose={() => setGridSpacingPopoverVisible(false)}
         onSpacingChange={changeGridSpacing}
+        onOverlayChange={changeGridOverlay}
       />
 
       <LabelSizeDialog

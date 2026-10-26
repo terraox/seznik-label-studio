@@ -43,8 +43,13 @@ type KonvaCanvasProps = {
   selectionColor: string;
   /** Editor nested artboard fill. Print capture keeps document white. */
   surfaceColor?: string;
-  /** Editor-only design grid (not included in print capture via LabelPreview). */
+  /** Editor-only design grid (not in print capture via LabelPreview). */
   showGrid?: boolean;
+  /**
+   * When true, grid draws above elements. When false, elements cover the grid
+   * (white plates under each element, same as the pre-overlay behaviour).
+   */
+  gridOverlay?: boolean;
   gridSpacingMm?: number;
   gridColor?: string;
   liveBounds?: LiveRulerBounds;
@@ -312,6 +317,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
     selectionColor,
     surfaceColor,
     showGrid = false,
+    gridOverlay = true,
     gridSpacingMm = DEFAULT_GRID_SPACING_MM,
     gridColor,
     liveBounds,
@@ -354,10 +360,11 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
   const h = Math.max(1, canvasHeightPx);
   const resolvedGridSpacingMm = gridSpacingMm ?? DEFAULT_GRID_SPACING_MM;
   const printRulerOn = printRulerEnabled(doc);
-  const showGridSv = useSharedValue(showGrid ? 1 : 0);
+  const underlayGrid = showGrid && !gridOverlay;
+  const showGridSv = useSharedValue(underlayGrid ? 1 : 0);
   useEffect(() => {
-    showGridSv.value = showGrid ? 1 : 0;
-  }, [showGrid, showGridSv]);
+    showGridSv.value = underlayGrid ? 1 : 0;
+  }, [underlayGrid, showGridSv]);
 
   const isCircle = doc.mediaShape === 'circle' || doc.mediaShape === 'ellipse';
   const cableFlag = isCableFlagDieCutDocument(doc);
@@ -686,16 +693,17 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
 
           {cableFlag || stockCut || isCircle ? null : <View style={styles.artboardBorder} />}
 
-          <CanvasGridOverlay
-            widthPx={w}
-            heightPx={h}
-            pxPerMM={pxPerMM}
-            spacingMm={resolvedGridSpacingMm}
-            visible={showGrid}
-            gridColor={gridColor}
-          />
-          {showGrid
-            ? gridCoverRectsMm(sortedElements, { includeNonPrinting: true })
+          {underlayGrid ? (
+            <>
+              <CanvasGridOverlay
+                widthPx={w}
+                heightPx={h}
+                pxPerMM={pxPerMM}
+                spacingMm={resolvedGridSpacingMm}
+                visible
+                gridColor={gridColor}
+              />
+              {gridCoverRectsMm(sortedElements, { includeNonPrinting: true })
                 .filter((item) => item.id !== gridLiveElementId)
                 .map((item, index) => (
                   <GridStaticPlate
@@ -707,16 +715,17 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
                     color={stickerFillColor}
                     rotationDeg={0}
                   />
-                ))
-            : null}
-          {liveBounds ? (
-            <GridLivePlate
-              liveBounds={liveBounds}
-              showGridSv={showGridSv}
-              pxPerMM={pxPerMM}
-              color={stickerFillColor}
-              rotationDeg={0}
-            />
+                ))}
+              {liveBounds ? (
+                <GridLivePlate
+                  liveBounds={liveBounds}
+                  showGridSv={showGridSv}
+                  pxPerMM={pxPerMM}
+                  color={stickerFillColor}
+                  rotationDeg={0}
+                />
+              ) : null}
+            </>
           ) : null}
         </View>
       </View>
@@ -741,6 +750,18 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
           ) : null}
         </View>
       </ViewShot>
+      {showGrid && gridOverlay ? (
+        <View pointerEvents="none" style={styles.gridLayer} collapsable={false}>
+          <CanvasGridOverlay
+            widthPx={w}
+            heightPx={h}
+            pxPerMM={pxPerMM}
+            spacingMm={resolvedGridSpacingMm}
+            visible
+            gridColor={gridColor}
+          />
+        </View>
+      ) : null}
       {mediaShapeGuide}
       {cableFlagOutline}
       {snapGuides.length > 0 ? (
@@ -803,6 +824,10 @@ const styles = themedStyles((c) => ({
     zIndex: 1,
     overflow: 'hidden',
     backgroundColor: 'transparent',
+  },
+  gridLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
   },
   canvasPad: {
     overflow: 'hidden',

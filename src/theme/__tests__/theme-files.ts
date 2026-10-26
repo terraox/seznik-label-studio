@@ -24,6 +24,7 @@ export const CONVERTED_FILES: string[] = [
   'src/components/app-tabs.tsx',
   'src/components/settings-stack-header.tsx',
   'src/components/settings-ui.tsx',
+  'src/components/appearance-picker.tsx',
   'src/components/ui/action-sheet.tsx',
   'src/components/ui/ios-alert-modal.tsx',
   'src/components/ui/ios-alert-host.tsx',
@@ -31,7 +32,6 @@ export const CONVERTED_FILES: string[] = [
   'src/components/hint-row.tsx',
   'src/components/walkthrough/walkthrough-overlay.tsx',
   'src/components/walkthrough/walkthrough-target.tsx',
-  'src/components/intro-screen.tsx',
   // G2 (pulled forward)
   'src/app/(tabs)/setting.tsx',
   // Bulk conversion (G2, G3, G4b, G5 printers, G6, G7)
@@ -74,6 +74,7 @@ export const CONVERTED_FILES: string[] = [
   'src/components/editor/editing-pad.tsx',
   'src/components/editor/editor-menu-icons.tsx',
   'src/components/editor/font-slider.tsx',
+  'src/components/editor/font-style-buttons.tsx',
   'src/components/editor/gray-threshold-slider.tsx',
   'src/components/editor/grid-spacing-popover.tsx',
   'src/components/editor/image-crop-screen.tsx',

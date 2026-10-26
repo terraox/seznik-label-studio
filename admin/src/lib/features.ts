@@ -43,9 +43,11 @@ export const FEATURES: Record<string, { label: string; group: FeatureGroup }> = 
   'settings.appearance': { label: 'Appearance', group: 'settings' },
   'settings.advanced': { label: 'Advanced settings', group: 'settings' },
   'settings.permissions': { label: 'App permissions', group: 'settings' },
+  'settings.widgets': { label: 'Widgets', group: 'settings' },
   'settings.walkthrough': { label: 'Walkthrough', group: 'settings' },
   'settings.feedback': { label: 'Feedback', group: 'settings' },
   'settings.about': { label: 'About us', group: 'settings' },
+  'settings.delete_account': { label: 'Delete account', group: 'settings' },
 };
 
 export const FEATURE_KEYS = Object.keys(FEATURES);

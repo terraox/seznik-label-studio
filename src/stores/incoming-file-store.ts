@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 
-export type IncomingSpreadsheet = { name: string; uri: string; size?: number };
+export type IncomingFileKind = 'excel' | 'pdf' | 'label';
+
+/** A file another app sent to Seznik (share or "Open with"), already copied into the app cache. */
+export type IncomingFile = { kind: IncomingFileKind; name: string; uri: string; size?: number };
 
 type IncomingFileState = {
-  /** A spreadsheet another app sent to Sez Print, waiting for the Data File screen to import it. */
-  pending: IncomingSpreadsheet | null;
-  setPending: (file: IncomingSpreadsheet) => void;
+  /** Waiting for the app to be ready (signed in) so it can be opened on the right screen. */
+  pending: IncomingFile | null;
+  setPending: (file: IncomingFile) => void;
   clearPending: () => void;
 };
 

@@ -25,7 +25,7 @@ import { editorBridge, isBorderRemoval } from '@/constants/editor-bridge';
 import { DRAWING_COLORS } from '@/components/editor/types';
 import { borderBoxForCenterGap } from '@/lib/border-geometry';
 import { generateId, parseOrientation, readPaperType, type LabelDocument, type LabelOrientation, type PaperType } from '@/lib/label-document';
-import { paperTypesFor, paperTypeSelectionNote, paperTypeTestBadge, shownPaperType } from '@/lib/printer/paper-type';
+import { paperTypesFor, paperTypeLabel, shownPaperType } from '@/lib/printer/paper-type';
 import { clampLabelMm } from '@/lib/label-geometry';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import {
@@ -362,13 +362,10 @@ export default function LabelSettingsScreen() {
           label="Paper Type"
           options={paperTypesFor(printerSdkId)}
           selected={shownPaperType(doc.paperType, printerSdkId)}
-          badgeFor={(option) => paperTypeTestBadge(option)}
+          labelFor={paperTypeLabel}
           onSelect={(paperType) => commit({ paperType: paperType as PaperType })}
           showDivider
         />
-        {paperTypeSelectionNote(shownPaperType(doc.paperType, printerSdkId)) ? (
-          <SettingsNote>{paperTypeSelectionNote(shownPaperType(doc.paperType, printerSdkId)) ?? ''}</SettingsNote>
-        ) : null}
         <SettingsStepperRow
           label="Gap Length"
           value={`${(readPaperType(doc.paperType) === 'Receipt' ? 0 : settings.gapLengthMm).toFixed(1)} mm`}

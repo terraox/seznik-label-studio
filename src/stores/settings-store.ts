@@ -29,6 +29,11 @@ export type EditorSettings = {
   editorGridSpacingMm: number;
   /** Design grid line color (hex). */
   editorGridColor: string;
+  /**
+   * When true, grid lines draw above elements (visible across the label).
+   * When false, elements cover the grid (knockouts under each element).
+   */
+  editorGridOverlay: boolean;
   /** One-time alert shown when the user first enables the design grid. */
   editorGridDisclaimerSeen: boolean;
   /** Extra D-pad under the canvas. Off by default — use Editor Settings to show it. */
@@ -89,6 +94,7 @@ export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   editorGrid: false,
   editorGridSpacingMm: 5,
   editorGridColor: '#000000',
+  editorGridOverlay: true,
   editorGridDisclaimerSeen: false,
   showNudgePad: false,
   canvasSplitRatio: DEFAULT_CANVAS_SPLIT_RATIO,
@@ -147,6 +153,8 @@ type SettingsStoreState = {
   smartCropHintSeen: boolean;
   /** Settings → Appearance. Follow system by default. */
   appearance: AppearancePreference;
+  /** The first-launch "choose your look" screen has been answered. */
+  themeChosen: boolean;
   /** Settings profile card photo (file uri inside sezprint/images), or null. */
   profilePhotoUri: string | null;
   patchEditor: (updates: Partial<EditorSettings>) => void;
@@ -164,6 +172,7 @@ type SettingsStoreState = {
   markPdfTourSeen: (screen: string) => void;
   setSmartCropHintSeen: (seen: boolean) => void;
   setAppearance: (appearance: AppearancePreference) => void;
+  setThemeChosen: (chosen: boolean) => void;
   setProfilePhotoUri: (uri: string | null) => void;
 };
 
@@ -183,6 +192,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       pdfTourSeen: [],
       smartCropHintSeen: false,
       appearance: 'light',
+      themeChosen: false,
       profilePhotoUri: null,
 
       patchEditor: (updates) => set((state) => ({ editor: { ...state.editor, ...updates } })),
@@ -203,6 +213,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
         set((s) => (s.pdfTourSeen.includes(screen) ? s : { pdfTourSeen: [...s.pdfTourSeen, screen] })),
       setSmartCropHintSeen: (seen) => set({ smartCropHintSeen: seen }),
       setAppearance: (appearance) => set({ appearance }),
+      setThemeChosen: (themeChosen) => set({ themeChosen }),
       setProfilePhotoUri: (profilePhotoUri) => set({ profilePhotoUri }),
     }),
     {

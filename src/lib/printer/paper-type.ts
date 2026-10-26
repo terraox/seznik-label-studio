@@ -10,7 +10,7 @@ import { readPaperType, type PaperType } from '@/lib/label-document';
 import { JOSH_GAP_TYPE, joshGapTypeFromMedia } from '@/lib/printer/josh-print';
 
 /** TD-404, Dev and the other TSPL-style printers. */
-export const PAPER_TYPES = ['Receipt', 'Label'] as const satisfies readonly PaperType[];
+export const PAPER_TYPES = ['Label', 'Receipt'] as const satisfies readonly PaperType[];
 /** Josh (LPAPI) has a sensor for each. */
 export const JOSH_PAPER_TYPES = ['Label', 'Receipt', 'Transparent', 'Cardstock'] as const satisfies readonly PaperType[];
 
@@ -140,15 +140,7 @@ export function formatPaperTypeSetting(command: PaperTypeCommand): string {
   return command.mediaLine.replace(/\r\n$/, '');
 }
 
-/** Chip badge. Receipt, Transparent and Cardstock stay marked Test until a roll confirms them. */
-export function paperTypeTestBadge(paperType: string): 'Test' | null {
-  return paperType === 'Receipt' || paperType === 'Transparent' || paperType === 'Cardstock' ? 'Test' : null;
-}
-
-/** Caption under the chips for the selected type. */
-export function paperTypeSelectionNote(paperType: string): string | null {
-  if (paperType === 'Receipt') return 'Test. Continuous feed. Gap length is 0 mm.';
-  if (paperType === 'Transparent') return 'Test. Uses the hole sensor. Gap Length is the hole length.';
-  if (paperType === 'Cardstock') return 'Test. Uses the black-mark sensor. Gap Length is the mark length.';
-  return null;
+/** Chip text. Cardstock (the black-mark sensor) is shown as Black mark; the saved value stays Cardstock. */
+export function paperTypeLabel(paperType: string): string {
+  return paperType === 'Cardstock' ? 'Black mark' : paperType;
 }

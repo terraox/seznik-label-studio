@@ -9,6 +9,7 @@ import {
   Inbox,
   MessageSquare,
   Users,
+  UserX,
   Printer,
   ShoppingBag,
   MousePointerClick,
@@ -28,6 +29,7 @@ import type { Admin } from '@/lib/types';
 const NAV = [
   { href: '/overview', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard },
   { href: '/users', label: 'Users', shortLabel: 'Users', icon: Users },
+  { href: '/deleted-accounts', label: 'Deleted accounts', shortLabel: 'Deleted', icon: UserX },
   { href: '/printers', label: 'Printers', shortLabel: 'Printers', icon: Printer },
   { href: '/shop', label: 'Shop clicks', shortLabel: 'Shop', icon: ShoppingBag },
   { href: '/features', label: 'Most used', shortLabel: 'Most used', icon: MousePointerClick },

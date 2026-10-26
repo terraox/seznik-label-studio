@@ -246,27 +246,18 @@ export default function TemplateScreen() {
   const { layoutWidth, cardMaxWidth: templateCardMaxWidth } = templateLayout(windowWidth);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'local' | 'industry' | 'cloud'>('industry');
+  const [activeTab, setActiveTab] = useState<'local' | 'industry'>('industry');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [localGroup, setLocalGroup] = useState<string>('All');
-  const [sortNewestFirst, setSortNewestFirst] = useState(true);
+  const [sortNewestFirst] = useState(true);
   const [newGroupVisible, setNewGroupVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
-  const [loginVisible, setLoginVisible] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginName, setLoginName] = useState('');
 
   const documents = useLabelStore((s) => s.documents);
   const groups = useLabelStore((s) => s.groups);
   const addGroup = useLabelStore((s) => s.addGroup);
   const deleteDocument = useLabelStore((s) => s.deleteDocument);
-  const cloudProfile = useLabelStore((s) => s.cloudProfile);
-  const cloudTemplates = useLabelStore((s) => s.cloudTemplates);
-  const signIn = useLabelStore((s) => s.signIn);
-  const signOut = useLabelStore((s) => s.signOut);
-  const deleteCloudTemplate = useLabelStore((s) => s.deleteCloudTemplate);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
-  const ensureLocalDocument = useLabelStore((s) => s.ensureLocalDocument);
   const { t } = useTranslation();
   const catalogCategories = useTemplateCatalogStore((s) => s.categories);
   const catalogTemplates = useTemplateCatalogStore((s) => s.templates);
@@ -318,25 +309,6 @@ export default function TemplateScreen() {
     if (q) list = list.filter((d) => d.name.toLowerCase().includes(q));
     return list;
   }, [documents, localGroup, searchQuery, sortNewestFirst]);
-
-  const visibleCloudTemplates = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return cloudTemplates;
-    return cloudTemplates.filter((t) => t.name.toLowerCase().includes(q));
-  }, [cloudTemplates, searchQuery]);
-
-  const handleEditCloudTemplate = (tpl: (typeof cloudTemplates)[number]) => {
-    const local = ensureLocalDocument(tpl.id);
-    if (!local) return;
-    router.push({ pathname: '/edit', params: { labelId: local.id } });
-  };
-
-  const handleDeleteCloudTemplate = (tpl: (typeof cloudTemplates)[number]) => {
-    Alert.alert('Delete Cloud Template', `Delete "${tpl.name}" from cloud sync?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteCloudTemplate(tpl.id) },
-    ]);
-  };
 
   const rightScrollRef = useRef<ScrollView>(null);
 
@@ -464,15 +436,6 @@ export default function TemplateScreen() {
     setNewGroupVisible(false);
   };
 
-  const handleLogin = () => {
-    const email = loginEmail.trim();
-    if (!email) return;
-    signIn(email, loginName.trim() || email.split('@')[0]);
-    setLoginVisible(false);
-    setLoginEmail('');
-    setLoginName('');
-  };
-
   const handleDeleteLocal = (id: string, name: string) => {
     Alert.alert('Delete Label', `Delete "${name}"?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -501,7 +464,7 @@ export default function TemplateScreen() {
             />
           </View>
 
-          {/* Right Action Icons: Scanner, Sort */}
+          {/* Import a .seznik label file */}
           <View style={styles.headerIcons}>
             <Pressable
               hitSlop={8}
@@ -510,26 +473,10 @@ export default function TemplateScreen() {
               style={({ pressed }) => [styles.iconBtn, pressed && styles.cardPressed]}>
               <AppIcon name="tray.and.arrow.down" tintColor={C.onHeader} size={21} />
             </Pressable>
-            <Pressable
-              hitSlop={8}
-              onPress={() => router.push('/scan')}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.cardPressed]}>
-              <AppIcon name="qrcode.viewfinder" tintColor={C.onHeader} size={21} />
-            </Pressable>
-            <Pressable
-              hitSlop={8}
-              onPress={() => setSortNewestFirst((v) => !v)}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.cardPressed]}>
-              <AppIcon
-                name={sortNewestFirst ? 'arrow.down' : 'arrow.up'}
-                tintColor={C.onHeader}
-                size={19}
-              />
-            </Pressable>
           </View>
         </View>
 
-        {/* Header Tabs: Local (0) | Industry (13) | Cloud */}
+        {/* Header Tabs: Local | Industry */}
         <View style={styles.tabRow}>
           <Pressable
             onPress={() => setActiveTab('local')}
@@ -548,111 +495,9 @@ export default function TemplateScreen() {
             </Text>
             {activeTab === 'industry' && <View style={styles.tabIndicator} />}
           </Pressable>
-
-          <Pressable
-            onPress={() => setActiveTab('cloud')}
-            style={[styles.tabItem, activeTab === 'cloud' && styles.tabItemActive]}>
-            <Text style={[styles.tabText, activeTab === 'cloud' && styles.tabTextActive]}>
-              {t('template.cloud')}
-            </Text>
-            {activeTab === 'cloud' && <View style={styles.tabIndicator} />}
-          </Pressable>
         </View>
       </View>
 
-      {activeTab === 'cloud' ? (
-        cloudProfile ? (
-          <ScrollView
-            style={styles.cloudSignedInScroll}
-            contentContainerStyle={[styles.cloudSignedInContent, { paddingBottom: tabPad }]}
-            showsVerticalScrollIndicator={false}>
-            <View style={styles.cloudProfileCard}>
-              <View style={styles.cloudAvatar}>
-                <Text style={styles.cloudAvatarText}>
-                  {cloudProfile.name.slice(0, 1).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.cloudProfileInfo}>
-                <Text style={styles.cloudProfileName}>{cloudProfile.name}</Text>
-                <Text style={styles.cloudProfileEmail}>{cloudProfile.email}</Text>
-              </View>
-              <Pressable
-                onPress={() =>
-                  Alert.alert('Sign Out', 'Sign out from cloud sync?', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Sign Out', style: 'destructive', onPress: signOut },
-                  ])
-                }
-                style={({ pressed }) => [styles.cloudSignOutBtn, pressed && styles.cardPressed]}>
-                <Text style={styles.cloudSignOutText}>Sign Out</Text>
-              </Pressable>
-            </View>
-
-            <Text style={styles.cloudSectionTitle}>
-              Saved on this device ({cloudTemplates.length})
-            </Text>
-
-            {visibleCloudTemplates.length === 0 ? (
-              <View style={styles.cloudEmptyCard}>
-                <AppIcon name="icloud.and.arrow.up" tintColor={C.textMuted} size={30} />
-                <Text style={styles.cloudEmptyText}>
-                  {searchQuery.trim()
-                    ? 'No synced templates match your search.'
-                    : 'No synced templates yet. Use Upload on the Home screen or in the editor to sync a label.'}
-                </Text>
-              </View>
-            ) : (
-              visibleCloudTemplates.map((tpl) => (
-                <View key={tpl.id} style={styles.localCard}>
-                  <View style={styles.cardHeaderBanner}>
-                    <View style={styles.bannerLeft}>
-                      <Text numberOfLines={1} style={styles.bannerTitle}>
-                        {tpl.name}
-                      </Text>
-                    </View>
-                    <Text style={styles.bannerDimensions}>
-                      {catalogDimensions(tpl.widthMm, tpl.heightMm)}
-                    </Text>
-                  </View>
-                  <LabelPreview document={composeUpsDocument(tpl)} catalogStock />
-                  <View style={styles.cardFooter}>
-                    <Pressable hitSlop={10} onPress={() => handleEditCloudTemplate(tpl)}>
-                      <AppIcon name="square.and.pencil" tintColor={C.accent} size={19} />
-                    </Pressable>
-                    <Pressable hitSlop={10} onPress={() => handleDeleteCloudTemplate(tpl)}>
-                      <AppIcon name="trash" tintColor={C.danger} size={18} />
-                    </Pressable>
-                  </View>
-                </View>
-              ))
-            )}
-          </ScrollView>
-        ) : (
-        <View style={styles.cloudContent}>
-          <Pressable
-            style={({ pressed }) => [styles.cloudLoginBtn, pressed && styles.cardPressed]}
-            onPress={() => setLoginVisible(true)}>
-            <Text style={styles.cloudLoginText}>Login</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.cloudPublicBtn, pressed && styles.cardPressed]}
-            onPress={() => {
-              setSearchQuery('');
-              setActiveTab('industry');
-            }}>
-            <Text style={styles.cloudPublicText}>Public Access</Text>
-          </Pressable>
-
-          <Text style={styles.cloudDescription}>
-            We provide the function of sharing label templates online. Through &apos;Online Sharing&apos;,
-            you can obtain the label templates shared by others with you in real time, and you can also
-            share your own label templates with others. To use this function, please click
-            &apos;Login&apos;.
-          </Text>
-        </View>
-        )
-      ) : (
       <View style={styles.body}>
         {/* Left Category Sidebar */}
         <View style={styles.sidebar}>
@@ -863,7 +708,6 @@ export default function TemplateScreen() {
           )}
         </View>
       </View>
-      )}
       </View>
 
       <TemplateRequestModal
@@ -946,30 +790,6 @@ export default function TemplateScreen() {
         />
       </IosAlertModal>
 
-      <IosAlertModal
-        visible={loginVisible}
-        onClose={() => setLoginVisible(false)}
-        title="Cloud Login"
-        message="Saved on this phone only — there is no remote cloud account yet."
-        buttons={[
-          { text: 'Cancel', style: 'cancel', onPress: () => setLoginVisible(false) },
-          { text: 'Login', style: 'default', bold: true, onPress: handleLogin },
-        ]}>
-        <IosAlertInput
-          value={loginEmail}
-          onChangeText={setLoginEmail}
-          placeholder="Email"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          autoFocus
-        />
-        <IosAlertInput
-          value={loginName}
-          onChangeText={setLoginName}
-          placeholder="Display name (optional)"
-          style={{ marginTop: 8 }}
-        />
-      </IosAlertModal>
       {documentSourceSheet}
     </View>
   );
@@ -1261,54 +1081,6 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 14,
     fontWeight: '700',
   },
-  cloudContent: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: c.surface,
-    alignItems: 'center',
-    paddingHorizontal: 28,
-    paddingTop: 48,
-  },
-  cloudLoginBtn: {
-    width: '100%',
-    maxWidth: 320,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: c.accentFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  cloudLoginText: {
-    color: c.onAccent,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cloudPublicBtn: {
-    width: '100%',
-    maxWidth: 320,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: c.accent,
-    backgroundColor: c.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  cloudPublicText: {
-    color: c.accent,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cloudDescription: {
-    width: '100%',
-    maxWidth: 340,
-    fontSize: 14,
-    lineHeight: 22,
-    color: c.textMuted,
-    textAlign: 'left',
-  },
   localNewGroupBtn: {
     alignItems: 'center',
     paddingVertical: 10,
@@ -1439,81 +1211,5 @@ const styles = themedStyles((c, scheme) => ({
     maxWidth: 520,
     alignSelf: 'center',
     ...cardElevation(c, scheme),
-  },
-  cloudSignedInScroll: {
-    flex: 1,
-  },
-  cloudSignedInContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  cloudProfileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: c.surface,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 18,
-    ...cardElevation(c, scheme),
-  },
-  cloudAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: c.accentFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cloudAvatarText: {
-    color: c.onAccent,
-    fontSize: 18,
-    fontWeight: '500',
-  },
-  cloudProfileInfo: {
-    flex: 1,
-  },
-  cloudProfileName: {
-    fontSize: 15.5,
-    fontWeight: '600',
-    color: c.text,
-  },
-  cloudProfileEmail: {
-    fontSize: 12.5,
-    color: c.textMuted,
-    marginTop: 1,
-  },
-  cloudSignOutBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: c.dangerSoft,
-  },
-  cloudSignOutText: {
-    color: c.danger,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  cloudSectionTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: c.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 10,
-  },
-  cloudEmptyCard: {
-    backgroundColor: c.surface,
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-    gap: 10,
-    ...cardElevation(c, scheme),
-  },
-  cloudEmptyText: {
-    color: c.textMuted,
-    fontSize: 13.5,
-    lineHeight: 19,
-    textAlign: 'center',
   },
 }));

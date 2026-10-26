@@ -6,6 +6,7 @@ import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,14 +16,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppearancePicker } from '@/components/appearance-picker';
 import { SupportedPrintersSection } from '@/components/supported-printers-section';
-import { ActionSheet } from '@/components/ui/action-sheet';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple } from '@/constants/ui';
 import { copyImportIntoSezprint } from '@/lib/user-files/root';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
-import { useTranslation, type TranslationKey } from '@/lib/i18n';
+import { useTranslation } from '@/lib/i18n';
 import { usePrintHistoryStore } from '@/stores/print-history-store';
+import { DeleteAccountModal } from '@/components/delete-account-modal';
 import { FeedbackFormModal } from '@/components/feedback-form';
 import type { FeedbackPayload } from '@/lib/telemetry/events';
 import { useFeedbackStore } from '@/stores/feedback-store';
@@ -35,18 +37,11 @@ import {
   headerBar,
   makeStyles,
   useColors,
-  type AppearancePreference,
 } from '@/theme';
 import { useAuthStore } from '@/stores/auth-store';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
 type IconName = AppIconName;
-
-const APPEARANCE_OPTIONS: { value: AppearancePreference; key: TranslationKey }[] = [
-  { value: 'system', key: 'setting.appearanceSystem' },
-  { value: 'light', key: 'setting.appearanceLight' },
-  { value: 'dark', key: 'setting.appearanceDark' },
-];
 
 /** Hidden in release builds until every screen supports dark mode (THEME_DARK_READY). */
 const SHOW_APPEARANCE = THEME_DARK_READY || __DEV__;
@@ -67,6 +62,7 @@ function SettingRow({
   value,
   onPress,
   showDivider,
+  danger,
 }: {
   label: string;
   icon?: IconName;
@@ -75,9 +71,11 @@ function SettingRow({
   value?: string;
   onPress?: () => void;
   showDivider?: boolean;
+  danger?: boolean;
 }) {
   const c = useColors();
   const styles = useStyles();
+  const tint = danger ? c.danger : c.textSecondary;
   return (
     <>
       <Pressable
@@ -87,9 +85,9 @@ function SettingRow({
         style={({ pressed }) => [styles.row, pressed && onPress && styles.rowPressed]}>
         <View style={styles.rowIcon}>
           {customIcon ??
-            (icon ? <AppIcon name={icon} tintColor={c.textSecondary} size={22} /> : null)}
+            (icon ? <AppIcon name={icon} tintColor={tint} size={22} /> : null)}
         </View>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={[styles.rowLabel, danger && styles.rowLabelDanger]}>{label}</Text>
         {value ? <Text style={styles.rowValue}>{value}</Text> : null}
         <AppIcon name="chevron.right" tintColor={c.textDisabled} size={14} weight="semibold" />
       </Pressable>
@@ -220,14 +218,14 @@ export default function SettingScreen() {
   const startWalkthrough = useWalkthroughStore((s) => s.start);
   const appearance = useSettingsStore((s) => s.appearance);
   const setAppearance = useSettingsStore((s) => s.setAppearance);
-  const [appearanceOpen, setAppearanceOpen] = useState(false);
-  const appearanceKey =
-    APPEARANCE_OPTIONS.find((o) => o.value === appearance)?.key ?? 'setting.appearanceSystem';
   const logout = useAuthStore((s) => s.logout);
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
 
   const contentWidth = Math.min(width - Spacing.three * 2, MaxContentWidth);
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const handleFeedback = () => {
     trackFeatureClick('settings.feedback');
     setFeedbackOpen(true);
@@ -253,6 +251,23 @@ export default function SettingScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Log out', style: 'destructive', onPress: logout },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    trackFeatureClick('settings.delete_account');
+    setDeleteOpen(true);
+  };
+
+  const confirmDeleteAccount = async (reason: string) => {
+    setDeleteBusy(true);
+    const result = await deleteAccount(reason);
+    setDeleteBusy(false);
+    if (!result.ok) {
+      Alert.alert('Could not delete', result.error);
+      return;
+    }
+    setDeleteOpen(false);
+    Alert.alert('Account deleted', 'Your account has been permanently deleted.');
   };
 
   return (
@@ -294,6 +309,19 @@ export default function SettingScreen() {
               }}
             />
           </SettingGroup>
+
+          {SHOW_APPEARANCE ? (
+            <View style={styles.appearanceBlock}>
+              <Text style={styles.appearanceHeading}>{t('setting.appearance')}</Text>
+              <AppearancePicker
+                value={appearance}
+                onChange={(next) => {
+                  trackFeatureClick('settings.appearance');
+                  setAppearance(next);
+                }}
+              />
+            </View>
+          ) : null}
 
           <SettingGroup>
             <SettingRow
@@ -342,15 +370,14 @@ export default function SettingScreen() {
             />
           </SettingGroup>
 
-          {SHOW_APPEARANCE ? (
+          {Platform.OS === 'android' ? (
             <SettingGroup>
               <SettingRow
-                label={t('setting.appearance')}
-                icon="circle.lefthalf.filled"
-                value={t(appearanceKey)}
+                label={t('setting.widgets')}
+                icon="rectangle.3.group"
                 onPress={() => {
-                  trackFeatureClick('settings.appearance');
-                  setAppearanceOpen(true);
+                  trackFeatureClick('settings.widgets');
+                  router.push('/widgets');
                 }}
               />
             </SettingGroup>
@@ -400,28 +427,37 @@ export default function SettingScreen() {
 
           <SettingGroup>
             <SettingRow
-              label="Log out"
+              label={t('setting.logOut')}
               icon="rectangle.portrait.and.arrow.right"
               onPress={handleLogout}
+              showDivider
+            />
+            <SettingRow
+              label={t('setting.deleteAccount')}
+              icon="trash"
+              danger
+              onPress={handleDeleteAccount}
             />
           </SettingGroup>
         </View>
       </ScrollView>
 
-      <ActionSheet
-        visible={appearanceOpen}
-        onClose={() => setAppearanceOpen(false)}
-        items={APPEARANCE_OPTIONS.map((o) => ({
-          label: t(o.key),
-          selected: o.value === appearance,
-          onPress: () => setAppearance(o.value),
-        }))}
-      />
-
       <FeedbackFormModal
         visible={feedbackOpen}
         onCancel={() => setFeedbackOpen(false)}
         onSubmit={sendFeedback}
+      />
+
+      <DeleteAccountModal
+        visible={deleteOpen}
+        busy={deleteBusy}
+        onCancel={() => {
+          if (deleteBusy) return;
+          setDeleteOpen(false);
+        }}
+        onConfirm={(reason) => {
+          void confirmDeleteAccount(reason);
+        }}
       />
     </View>
   );
@@ -467,6 +503,15 @@ const useStyles = makeStyles((c, scheme) => ({
     borderRadius: 10,
     ...cardElevation(c, scheme),
   },
+  appearanceBlock: {
+    gap: 8,
+  },
+  appearanceHeading: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: c.text,
+    paddingHorizontal: 2,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -487,6 +532,10 @@ const useStyles = makeStyles((c, scheme) => ({
     fontSize: 15,
     fontWeight: '400',
     color: c.text,
+  },
+  rowLabelDanger: {
+    color: c.danger,
+    fontWeight: '500',
   },
   rowValue: {
     fontSize: 14,

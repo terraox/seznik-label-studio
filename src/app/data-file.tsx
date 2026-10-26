@@ -258,7 +258,7 @@ export default function DataFileScreen() {
   const incomingFile = useIncomingFileStore((s) => s.pending);
   const clearIncomingFile = useIncomingFileStore((s) => s.clearPending);
   useEffect(() => {
-    if (!incomingFile || importing) return;
+    if (!incomingFile || incomingFile.kind !== 'excel' || importing) return;
     clearIncomingFile();
     setImporting(true);
     void (async () => {

@@ -1,13 +1,21 @@
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import {
-  AUTH_COLORS,
+  useAuthColors,
+  authPalette,
+  AuthBanner,
   AuthField,
   AuthScreen,
   DevBypassButton,
+  FieldToggle,
+  LinkText,
   OtpBoxes,
+  OtpCard,
+  PhoneCard,
+  PasswordRules,
   PrimaryButton,
 } from '@/components/auth/auth-ui';
 import { usePhoneHint } from '@/lib/auth/use-phone-hint';
@@ -20,10 +28,13 @@ import {
   passwordRuleResults,
 } from '@/lib/auth/validation';
 import { useOtp } from '@/lib/auth/use-otp';
+import { goBack } from '@/lib/go-back';
 import { useAuthStore } from '@/stores/auth-store';
-import { LightScope } from '@/theme';
+import { makeStyles } from '@/theme';
 
-function RegisterScreenContent() {
+export default function RegisterScreen() {
+  const styles = useStyles();
+  const A = useAuthColors();
   const router = useRouter();
   const register = useAuthStore((s) => s.register);
   const bypassAuth = useAuthStore((s) => s.bypassAuth);
@@ -36,51 +47,69 @@ function RegisterScreenContent() {
   const [otp, setOtp] = useState('');
   const [otpProof, setOtpProof] = useState<string | null>(null);
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [otpInvalid, setOtpInvalid] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [celebrating, setCelebrating] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const verified = otpProof !== null;
   const phoneValid = isValidPhone(phone);
   const rules = passwordRuleResults(password);
   const passwordOk = isStrongPassword(password);
-  const confirmMismatch = confirm.length > 0 && confirm !== password;
-  const canCreate = isValidName(name) && phoneValid && verified && passwordOk && confirm === password;
-  const resendOff = !phoneValid || otpFlow.busy || otpFlow.cooldown > 0;
+  const canCreate = isValidName(name) && phoneValid && verified && passwordOk;
+  const otpSendOff = !phoneValid;
+
+  useEffect(() => {
+    if (!otpFlow.error) return;
+    setFormError(otpFlow.error);
+    setOtpInvalid(true);
+    otpFlow.setError(null);
+  }, [otpFlow.error, otpFlow.setError]);
 
   const changePhone = (value: string) => {
     setPhone(digitsOnly(value));
+    setFormError(null);
     // A new number needs a fresh OTP.
     setOtp('');
     setOtpProof(null);
+    setOtpInvalid(false);
     otpFlow.reset();
-    setError(null);
   };
 
   const onPhoneFocus = usePhoneHint(phone, changePhone);
 
   const sendOtp = async () => {
-    setError(null);
     setOtp('');
     setOtpProof(null);
+    setOtpInvalid(false);
     await otpFlow.send(phone);
   };
 
   const verifyOtp = async (code: string) => {
+    setChecking(true);
     const proof = await otpFlow.verify(phone, code);
-    if (proof) setOtpProof(proof);
-    else setOtp('');
+    setChecking(false);
+    if (proof) {
+      setOtpProof(proof);
+      setOtpInvalid(false);
+      setFormError(null);
+      setCelebrating(true);
+    } else {
+      setOtp('');
+    }
   };
 
   const submit = async () => {
     if (!otpProof) return;
+    setFormError(null);
     setSubmitting(true);
-    setError(null);
     const result = await register({ name: name.trim(), phone, password, otpProof });
     setSubmitting(false);
     if (!result.ok) {
-      setError(result.error);
+      setFormError(result.error);
       return;
     }
     router.replace(result.needsPrinter ? '/select-printer' : '/');
@@ -92,135 +121,135 @@ function RegisterScreenContent() {
   };
 
   return (
-    <AuthScreen title="Create account" subtitle="Register to start printing with Seznik">
-      <AuthField
-        label="Full name"
-        icon="person"
-        placeholder="Your name"
-        autoCapitalize="words"
-        value={name}
-        onChangeText={setName}
-      />
-
-      <AuthField
-        label="Phone number"
-        icon="phone.fill"
-        prefix="+91"
-        placeholder="10-digit mobile number"
-        keyboardType="number-pad"
-        maxLength={10}
-        value={phone}
-        onChangeText={changePhone}
-        onFocus={onPhoneFocus}
-        error={phone.length === 10 && !phoneValid ? 'Enter a valid mobile number' : null}
-        right={
-          verified ? (
-            <Text style={styles.verified}>Verified ✓</Text>
+    <AuthScreen
+      onBack={() => (step === 2 && !submitting ? setStep(1) : goBack('/welcome'))}
+      title={step === 1 ? 'Create account' : 'Almost there'}
+      subtitle={
+        step === 1 ? 'Verify your mobile number to get started' : 'Add your name and a password'
+      }
+      progress={{ step, total: 2, label: step === 1 ? 'Verify your number' : 'Your details' }}
+    >
+      {step === 1 ? (
+        <Animated.View key="step1" entering={FadeInDown.duration(260)} style={styles.stepBody}>
+          {otpFlow.sent && (!verified || celebrating) ? (
+            <OtpCard
+              phone={phone}
+              cooldown={otpFlow.cooldown}
+              busy={otpFlow.busy}
+              onResend={sendOtp}
+              onChangeNumber={() => changePhone('')}
+            >
+              <OtpBoxes
+                length={OTP_LENGTH}
+                value={otp}
+                onChange={(v) => {
+                  setFormError(null);
+                  setOtp(v);
+                  setOtpInvalid(false);
+                  otpFlow.setError(null);
+                }}
+                onComplete={verifyOtp}
+                invalid={otpInvalid}
+                verifying={checking}
+                success={verified}
+                onSuccessDone={() => {
+                  setCelebrating(false);
+                  setStep(2);
+                }}
+                autoFocus
+              />
+            </OtpCard>
           ) : (
-            <Pressable onPress={sendOtp} disabled={resendOff} hitSlop={8}>
-              <Text style={[styles.otpAction, resendOff && styles.otpActionOff]}>
-                {otpFlow.cooldown > 0
-                  ? `Resend in ${otpFlow.cooldown}s`
-                  : otpFlow.sent
-                    ? 'Resend'
-                    : 'Get OTP'}
-              </Text>
-            </Pressable>
-          )
-        }
-      />
+            <PhoneCard
+              value={phone}
+              onChangeText={changePhone}
+              onFocus={onPhoneFocus}
+              error={phone.length === 10 && !phoneValid ? 'Enter a valid mobile number' : null}
+              sent={otpFlow.sent}
+              verified={verified}
+              cooldown={otpFlow.cooldown}
+              busy={otpFlow.busy}
+              disabled={otpSendOff}
+              onSendOtp={sendOtp}
+            />
+          )}
 
-      {otpFlow.sent && !verified ? (
-        <View style={styles.otpBlock}>
-          <Text style={styles.otpHint}>Enter the 6-digit code sent to +91 {phone}</Text>
-          <OtpBoxes
-            length={OTP_LENGTH}
-            value={otp}
-            onChange={(v) => {
-              setOtp(v);
-              otpFlow.setError(null);
-            }}
-            onComplete={verifyOtp}
-            error={otpFlow.error}
-            autoFocus
-          />
-        </View>
-      ) : null}
+          <AuthBanner message={formError} />
 
-      <AuthField
-        label="Password"
-        icon="lock"
-        placeholder="Create a password"
-        secureTextEntry={!showPassword}
-        value={password}
-        onChangeText={setPassword}
-        right={
-          <Pressable onPress={() => setShowPassword((s) => !s)} hitSlop={8}>
-            <Text style={styles.otpAction}>{showPassword ? 'Hide' : 'Show'}</Text>
-          </Pressable>
-        }
-      />
+          {verified ? <PrimaryButton label="Continue" onPress={() => setStep(2)} /> : null}
 
-      <View style={styles.rules}>
-        {rules.map((rule) => (
-          <View key={rule.id} style={styles.rule}>
-            <Text style={[styles.ruleMark, rule.met && styles.ruleMet]}>{rule.met ? '✓' : '○'}</Text>
-            <Text style={[styles.ruleText, rule.met && styles.ruleMet]}>{rule.label}</Text>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Already have an account? </Text>
+            <Link href="/login" replace style={styles.footerLink}>
+              Log in
+            </Link>
           </View>
-        ))}
-      </View>
+          <DevBypassButton onPress={handleDevBypass} />
+        </Animated.View>
+      ) : (
+        <Animated.View key="step2" entering={FadeInDown.duration(260)} style={styles.stepBody}>
+          <Text style={styles.verifiedLine}>✓ +91 {phone} verified</Text>
 
-      <AuthField
-        label="Confirm password"
-        icon="lock"
-        placeholder="Re-enter your password"
-        secureTextEntry={!showPassword}
-        value={confirm}
-        onChangeText={setConfirm}
-        error={confirmMismatch ? 'Passwords do not match' : null}
-      />
+          <AuthField
+            label="Full name"
+            icon="person"
+            placeholder="Your name"
+            autoCapitalize="words"
+            value={name}
+            onChangeText={(v) => {
+              setFormError(null);
+              setName(v);
+            }}
+          />
 
-      {otpFlow.error && !otpFlow.sent ? <Text style={styles.error}>{otpFlow.error}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <PrimaryButton
-        label={submitting ? 'Creating…' : 'Create account'}
-        onPress={submit}
-        disabled={!canCreate || submitting}
-      />
+          <AuthField
+            label="Password"
+            icon="lock"
+            placeholder="Create a password"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={(v) => {
+              setFormError(null);
+              setPassword(v);
+            }}
+            onSubmitEditing={canCreate ? submit : undefined}
+            right={
+              <FieldToggle
+                label={showPassword ? 'Hide' : 'Show'}
+                onPress={() => setShowPassword((x) => !x)}
+              />
+            }
+          />
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Already have an account? </Text>
-        <Link href="/login" replace style={styles.footerLink}>
-          Log in
-        </Link>
-      </View>
-      <DevBypassButton onPress={handleDevBypass} />
+          {password.length > 0 ? <PasswordRules rules={rules} /> : null}
+
+          <AuthBanner message={formError} />
+
+          <PrimaryButton
+            label="Create account"
+            onPress={submit}
+            disabled={!canCreate}
+            loading={submitting}
+          />
+
+          <View style={styles.switchRow}>
+            <LinkText label="Change number" onPress={() => setStep(1)} disabled={submitting} />
+          </View>
+        </Animated.View>
+      )}
     </AuthScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  otpAction: { color: AUTH_COLORS.blue, fontWeight: '700', fontSize: 13 },
-  otpActionOff: { color: '#A9B4CC' },
-  verified: { color: AUTH_COLORS.success, fontWeight: '700', fontSize: 13 },
-  otpBlock: { gap: 10 },
-  otpHint: { fontSize: 13, color: AUTH_COLORS.muted },
-  rules: { gap: 6, marginTop: -4 },
-  rule: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ruleMark: { width: 16, fontSize: 13, color: AUTH_COLORS.muted },
-  ruleText: { fontSize: 13, color: AUTH_COLORS.muted, flexShrink: 1 },
-  ruleMet: { color: AUTH_COLORS.success },
-  error: { color: AUTH_COLORS.error, fontSize: 13, textAlign: 'center' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' },
-  footerText: { color: AUTH_COLORS.muted, fontSize: 14 },
-  footerLink: { color: AUTH_COLORS.blue, fontSize: 14, fontWeight: '700' },
+const useStyles = makeStyles((_c, scheme) => {
+  const A = authPalette(scheme);
+  return {
+    stepBody: { gap: 16 },
+    hint: { fontSize: 13, color: A.muted, textAlign: 'center', lineHeight: 18 },
+    verifiedLine: { fontSize: 13, fontWeight: '700', color: A.success },
+    switchRow: { alignItems: 'center' },
+    footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 4, flexWrap: 'wrap' },
+    footerText: { color: A.muted, fontSize: 14 },
+    footerLink: { color: A.link, fontSize: 14, fontWeight: '700' },
+  } as const;
 });
-
-/** Switched off for now (D8, backlog): stays light in dark mode until converted. */
-export default function RegisterScreen() {
-  return (
-    <LightScope>
-      <RegisterScreenContent />
-    </LightScope>
-  );
-}

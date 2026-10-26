@@ -55,10 +55,10 @@ export async function POST(request: Request) {
     }
     if (password.length < 8) return reply({ error: 'Password must be at least 8 characters.' }, 400);
 
-    // A number is claimed for good: once registered (or pre-blocked by an admin) it cannot sign up again.
+    // A number with a live account (or pre-blocked by an admin) cannot sign up; deleted accounts free it.
     const claim = await prisma.registeredPhone.findUnique({ where: { mobile } });
     if (claim?.blocked) return blockedResponse(claim.blockReason);
-    if (claim) return reply({ error: TAKEN, code: 'PHONE_TAKEN' }, 409);
+    if (claim?.userId) return reply({ error: TAKEN, code: 'PHONE_TAKEN' }, 409);
 
     const platform = cleanPlatform(body.platform ?? request.headers.get('x-app-platform'));
     const passwordHash = await hashAppPassword(password);
@@ -77,7 +77,11 @@ export async function POST(request: Request) {
             lastSeenAt: new Date(),
           },
         });
-        await tx.registeredPhone.create({ data: { mobile, userId: created.id } });
+        await tx.registeredPhone.upsert({
+          where: { mobile },
+          create: { mobile, userId: created.id },
+          update: { userId: created.id },
+        });
         return created;
       });
       return reply(

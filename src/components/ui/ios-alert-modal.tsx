@@ -3,6 +3,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   type TextInputProps,
@@ -75,13 +76,23 @@ export function IosAlertModal({
         {...(plainScroll ? {} : { behavior: 'padding' as const, keyboardVerticalOffset: Platform.OS === 'ios' ? 20 : 0 })}
         style={[styles.overlay, plainScroll && cardAlign === 'top' && styles.overlayTop]}>
         <Pressable style={styles.backdrop} onPress={handleBackdrop} />
-        <View style={[styles.card, { maxWidth: cardMaxWidth }, !plainScroll && { maxHeight: Math.round(windowHeight * 0.8) }]}>
+        <View
+          style={[
+            styles.card,
+            { maxWidth: cardMaxWidth },
+            { maxHeight: Math.round(windowHeight * (plainScroll ? 0.88 : 0.8)) - (plainScroll && cardAlign === 'top' ? 72 : 0) },
+          ]}>
           {plainScroll ? (
-            <View style={styles.body}>
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={styles.bodyScroll}
+              contentContainerStyle={styles.body}>
               {!!title && <Text style={styles.title}>{title}</Text>}
               {!!message && <Text style={styles.message}>{message}</Text>}
               {children}
-            </View>
+            </ScrollView>
           ) : (
             <FormScrollView
               bounces={false}

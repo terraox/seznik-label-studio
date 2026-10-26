@@ -21,10 +21,13 @@ export type TranslationKey =
   | 'setting.printingHistory'
   | 'setting.advancedSettings'
   | 'setting.appPermissions'
+  | 'setting.widgets'
   | 'setting.walkthrough'
   | 'setting.canvasWalkthrough'
   | 'setting.feedback'
   | 'setting.aboutUs'
+  | 'setting.logOut'
+  | 'setting.deleteAccount'
   | 'setting.appearance'
   | 'setting.appearanceSystem'
   | 'setting.appearanceLight'
@@ -63,12 +66,15 @@ const en: Record<TranslationKey, string> = {
   'setting.printingHistory': 'Printing History',
   'setting.advancedSettings': 'Advanced Settings',
   'setting.appPermissions': 'App Permissions',
+  'setting.widgets': 'Widgets',
   'setting.walkthrough': 'App Walkthrough',
   'setting.canvasWalkthrough': 'Canvas Walkthrough',
   'setting.feedback': 'Evaluation & Feedback',
   'setting.aboutUs': 'About Us',
+  'setting.logOut': 'Log out',
+  'setting.deleteAccount': 'Delete account',
   'setting.appearance': 'Appearance',
-  'setting.appearanceSystem': 'Follow system',
+  'setting.appearanceSystem': 'System',
   'setting.appearanceLight': 'Light',
   'setting.appearanceDark': 'Dark',
   'print.print': 'Print',
@@ -108,8 +114,10 @@ const hi: StringsTable = {
   'setting.canvasWalkthrough': 'कैनवास वॉकथ्रू',
   'setting.feedback': 'मूल्यांकन और प्रतिक्रिया',
   'setting.aboutUs': 'हमारे बारे में',
+  'setting.logOut': 'लॉग आउट',
+  'setting.deleteAccount': 'खाता हटाएँ',
   'setting.appearance': 'दिखावट',
-  'setting.appearanceSystem': 'सिस्टम के अनुसार',
+  'setting.appearanceSystem': 'सिस्टम',
   'setting.appearanceLight': 'लाइट',
   'setting.appearanceDark': 'डार्क',
   'print.print': 'प्रिंट करें',

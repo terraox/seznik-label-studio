@@ -1,6 +1,6 @@
 import { goBack } from '@/lib/go-back';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +12,6 @@ import { SamplePdfModal } from '@/components/ecommerce-label/sample-pdf-modal';
 import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor/pdf-print-sheet';
 import { PrintPagesStrip, type PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
 import { PdfOutputSizeRow } from '@/components/pdf-editor/pdf-output-size-row';
-import { PrinterConnectionPill } from '@/components/printers/printer-connection-pill';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { androidRipple } from '@/constants/ui';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
@@ -23,7 +22,7 @@ import {
   WrongPlatformError,
   type ScanResult,
 } from '@/lib/ecommerce-label/job';
-import { PLATFORMS, platformName, type PlatformId } from '@/lib/ecommerce-label/platforms';
+import { PLATFORMS, parsePlatformId, platformName, type PlatformId } from '@/lib/ecommerce-label/platforms';
 import { copyPdfToCache, loadPdfMetadata } from '@/lib/pdf-editor/load';
 import { clearPrintRasterCache, type PdfPrintOptions } from '@/lib/pdf-editor/print';
 import { clearRasterCache } from '@/lib/pdf-editor/raster';
@@ -55,6 +54,8 @@ const DEFAULT_SIZE: OutputSize = (() => {
 export default function EcommerceLabelScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ platform?: string | string[] }>();
+  const linkedPlatform = parsePlatformId(Array.isArray(params.platform) ? params.platform[0] : params.platform);
   const deviceName = usePrinterStore((s) => s.deviceName);
   const printerStatus = usePrinterStore((s) => s.status);
   const printerLive = printerStatus === 'connected' || printerStatus === 'printing';
@@ -62,8 +63,8 @@ export default function EcommerceLabelScreen() {
   const [printIndices, setPrintIndices] = useState<number[]>([]);
   const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
 
-  const [step, setStep] = useState<Step>('platform');
-  const [platform, setPlatform] = useState<PlatformId | null>(null);
+  const [step, setStep] = useState<Step>(linkedPlatform ? 'setup' : 'platform');
+  const [platform, setPlatform] = useState<PlatformId | null>(linkedPlatform);
   const [sampleOpen, setSampleOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [size, setSize] = useState<OutputSize>(DEFAULT_SIZE);
@@ -83,6 +84,13 @@ export default function EcommerceLabelScreen() {
       clearPrintRasterCache();
     };
   }, []);
+
+  // Home-screen widgets (and other deep links) can open a platform directly.
+  useEffect(() => {
+    if (!linkedPlatform) return;
+    setPlatform(linkedPlatform);
+    setStep((current) => (current === 'platform' ? 'setup' : current));
+  }, [linkedPlatform]);
 
   const items = useMemo(() => (scan ? printItems(scan.pages, keepInvoice) : []), [scan, keepInvoice]);
 
@@ -214,7 +222,6 @@ export default function EcommerceLabelScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {title}
         </Text>
-        <PrinterConnectionPill />
       </View>
 
       {step === 'platform' ? (

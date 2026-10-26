@@ -59,8 +59,7 @@ import {
   paperPrinterId,
   paperTypeCommand,
   paperTypesFor,
-  paperTypeSelectionNote,
-  paperTypeTestBadge,
+  paperTypeLabel,
   shownPaperType,
 } from '@/lib/printer/paper-type';
 import type { PaperType } from '@/lib/label-document';
@@ -147,11 +146,13 @@ function ChipGroup<T extends string>({
   selected,
   onSelect,
   badgeFor,
+  labelFor,
 }: {
   options: readonly T[];
   selected: T;
   onSelect: (v: T) => void;
   badgeFor?: (value: T) => string | null;
+  labelFor?: (value: T) => string;
 }) {
   useThemeRefresh();
   return (
@@ -169,7 +170,7 @@ function ChipGroup<T extends string>({
               pressed && styles.pressed,
             ]}>
             <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-              {option}
+              {labelFor ? labelFor(option) : option}
             </Text>
             {badge ? (
               <Text style={[styles.chipBadge, active && styles.chipBadgeActive]}>{badge}</Text>
@@ -854,11 +855,8 @@ export default function PrintPhotoScreen() {
             options={paperTypesFor(printerSdkId)}
             selected={shownPaper}
             onSelect={setPaperType}
-            badgeFor={(option) => paperTypeTestBadge(option)}
+            labelFor={paperTypeLabel}
           />
-          {paperTypeSelectionNote(shownPaper) ? (
-            <Text style={styles.paperNote}>{paperTypeSelectionNote(shownPaper)}</Text>
-          ) : null}
           <StepperRow
             label="Gap Length"
             value={`${(paperType === 'Receipt' ? 0 : gapLength).toFixed(2)} mm`}
