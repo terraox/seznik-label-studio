@@ -26,6 +26,7 @@ type LoginMode = 'password' | 'otp';
 function LoginScreenContent() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
+  const beginLogin = useAuthStore((s) => s.beginLogin);
   const bypassAuth = useAuthStore((s) => s.bypassAuth);
   const otpFlow = useOtp('login', (code) => {
     setOtp(code);
@@ -41,7 +42,7 @@ function LoginScreenContent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [otpVerified, setOtpVerified] = useState(false);
   const [checking, setChecking] = useState(false);
-  const otpProofRef = useRef<string | null>(null);
+  const pendingSignIn = useRef<ReturnType<typeof beginLogin> | null>(null);
 
   const phoneValid = isValidPhone(phone);
   const canSubmit = phoneValid && password.length > 0;
@@ -85,22 +86,35 @@ function LoginScreenContent() {
       return;
     }
     setFormError(null);
-    // Signing in swaps the navigator, so it waits for the verified animation to settle.
-    otpProofRef.current = proof;
+    // The request runs while the verified animation plays. The session only opens (which swaps
+    // the navigator) once the animation ends, so it is never cut short.
+    const signIn = beginLogin(phone, { otpProof: proof });
+    pendingSignIn.current = signIn;
     setOtpVerified(true);
+    const early = await signIn;
+    if (!early.ok && pendingSignIn.current === signIn) {
+      pendingSignIn.current = null;
+      setOtpVerified(false);
+      setOtp('');
+      otpFlow.reset();
+      setFormError(early.error);
+    }
   };
 
   const onVerifiedDone = async () => {
-    const proof = otpProofRef.current;
-    otpProofRef.current = null;
-    if (!proof) return;
-    const result = await login(phone, { otpProof: proof });
+    const signIn = pendingSignIn.current;
+    if (!signIn) return;
+    pendingSignIn.current = null;
+    const result = await signIn;
     if (!result.ok) {
       setOtpVerified(false);
       setOtp('');
       otpFlow.reset();
+      setFormError(result.error);
+      return;
     }
-    finish(result);
+    result.commit();
+    router.replace(result.needsPrinter ? '/select-printer' : '/');
   };
 
   const switchMode = (next: LoginMode) => {

@@ -41,6 +41,16 @@ type AuthStoreState = {
     phone: string,
     credential: { password: string } | { otpProof: string },
   ) => Promise<{ ok: true; needsPrinter: boolean } | { ok: false; error: string }>;
+  /**
+   * Signs in on the server without opening the session yet. `commit()` opens it (which swaps the
+   * navigator), so a screen can overlap the request with an animation and commit when it ends.
+   */
+  beginLogin: (
+    phone: string,
+    credential: { password: string } | { otpProof: string },
+  ) => Promise<
+    { ok: true; needsPrinter: boolean; commit: () => void } | { ok: false; error: string }
+  >;
   setPrinter: (
     printerId: ConsumerPrinterId,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -77,22 +87,34 @@ export const useAuthStore = create<AuthStoreState>()(
         }
       },
 
-      login: async (phone, credential) => {
+      beginLogin: async (phone, credential) => {
         try {
           const result = await loginUser({ mobile: phone, ...credential });
-          set({
-            token: result.token,
-            user: result.user,
+          return {
+            ok: true,
             needsPrinter: result.needsPrinter,
-          });
-          applyPurchasedPrinter(result.user.printerId, false, result.user.printCountTotal);
-          return { ok: true, needsPrinter: result.needsPrinter };
+            commit: () => {
+              set({
+                token: result.token,
+                user: result.user,
+                needsPrinter: result.needsPrinter,
+              });
+              applyPurchasedPrinter(result.user.printerId, false, result.user.printCountTotal);
+            },
+          };
         } catch (err) {
           return {
             ok: false,
             error: err instanceof Error ? err.message : 'Login failed.',
           };
         }
+      },
+
+      login: async (phone, credential) => {
+        const result = await get().beginLogin(phone, credential);
+        if (!result.ok) return result;
+        result.commit();
+        return { ok: true, needsPrinter: result.needsPrinter };
       },
 
       setPrinter: async (printerId) => {

@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack, router } from 'expo-router';
@@ -80,6 +81,8 @@ function AppRoot() {
   useEffect(() => startInstalledFontHydration(), []);
   useEffect(() => {
     void preloadFeatureBanners();
+    // The tab bar draws Ionicons; load the font now so it is ready when the tabs first appear.
+    void Ionicons.loadFont().catch(() => undefined);
   }, []);
 
   // Connect to the last printer on open. The saved printers load from storage after the first
