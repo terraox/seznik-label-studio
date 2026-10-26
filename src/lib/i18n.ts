@@ -21,6 +21,7 @@ export type TranslationKey =
   | 'setting.printingHistory'
   | 'setting.advancedSettings'
   | 'setting.appPermissions'
+  | 'setting.widgets'
   | 'setting.walkthrough'
   | 'setting.canvasWalkthrough'
   | 'setting.feedback'
@@ -65,6 +66,7 @@ const en: Record<TranslationKey, string> = {
   'setting.printingHistory': 'Printing History',
   'setting.advancedSettings': 'Advanced Settings',
   'setting.appPermissions': 'App Permissions',
+  'setting.widgets': 'Widgets',
   'setting.walkthrough': 'App Walkthrough',
   'setting.canvasWalkthrough': 'Canvas Walkthrough',
   'setting.feedback': 'Evaluation & Feedback',

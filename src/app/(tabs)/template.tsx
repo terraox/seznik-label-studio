@@ -249,7 +249,7 @@ export default function TemplateScreen() {
   const [activeTab, setActiveTab] = useState<'local' | 'industry'>('industry');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [localGroup, setLocalGroup] = useState<string>('All');
-  const [sortNewestFirst, setSortNewestFirst] = useState(true);
+  const [sortNewestFirst] = useState(true);
   const [newGroupVisible, setNewGroupVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
 
@@ -464,7 +464,7 @@ export default function TemplateScreen() {
             />
           </View>
 
-          {/* Right Action Icons: Scanner, Sort */}
+          {/* Import a .seznik label file */}
           <View style={styles.headerIcons}>
             <Pressable
               hitSlop={8}
@@ -472,22 +472,6 @@ export default function TemplateScreen() {
               onPress={() => void openLabelFile()}
               style={({ pressed }) => [styles.iconBtn, pressed && styles.cardPressed]}>
               <AppIcon name="tray.and.arrow.down" tintColor={C.onHeader} size={21} />
-            </Pressable>
-            <Pressable
-              hitSlop={8}
-              onPress={() => router.push('/scan')}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.cardPressed]}>
-              <AppIcon name="qrcode.viewfinder" tintColor={C.onHeader} size={21} />
-            </Pressable>
-            <Pressable
-              hitSlop={8}
-              onPress={() => setSortNewestFirst((v) => !v)}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.cardPressed]}>
-              <AppIcon
-                name={sortNewestFirst ? 'arrow.down' : 'arrow.up'}
-                tintColor={C.onHeader}
-                size={19}
-              />
             </Pressable>
           </View>
         </View>

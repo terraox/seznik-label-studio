@@ -161,6 +161,8 @@ type LabelPreviewProps = {
   bakeTd404Feed?: boolean;
   /** H/V print offset in mm. Moves every element, border included, by the same amount. */
   shiftMm?: ShiftMm;
+  /** Print-page preview: turn the contents (elements, grid, photo) while the label itself stays put. */
+  contentTurnDeg?: number;
   /** Catalog preview of a multi-up row: leaves the gap between the labels as bare liner. */
   upsDividers?: { columns: number; gapMm: number };
 };
@@ -318,6 +320,33 @@ function TemplateBackgroundImage({ document }: { document: LabelDocument }) {
   );
 }
 
+/**
+ * Turns what is printed on the label, not the label. A quarter turn swaps the content's width and
+ * height, so it is also scaled down to stay inside the label.
+ */
+function ContentTurn({
+  deg,
+  widthPx,
+  heightPx,
+  children,
+}: {
+  deg: number;
+  widthPx: number;
+  heightPx: number;
+  children: ReactNode;
+}) {
+  if (!deg) return <>{children}</>;
+  const quarter = deg === 90 || deg === 270;
+  const fit = quarter ? Math.min(widthPx / heightPx, heightPx / widthPx) : 1;
+  return (
+    <View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${deg}deg` }, { scale: fit }] }]}>
+      {children}
+    </View>
+  );
+}
+
 function LabelCanvas({
   document,
   fitted,
@@ -328,6 +357,7 @@ function LabelCanvas({
   printDpi,
   bakeTd404Feed = false,
   shiftMm,
+  contentTurnDeg = 0,
 }: {
   document: LabelDocument;
   fitted: { widthPx: number; heightPx: number; scale: number };
@@ -338,6 +368,7 @@ function LabelCanvas({
   printDpi?: number;
   bakeTd404Feed?: boolean;
   shiftMm?: ShiftMm;
+  contentTurnDeg?: number;
 }) {
   const elements = document.elements;
   const gridKnockouts = useMemo(() => printGridKnockoutsMm({ elements }), [elements]);
@@ -393,7 +424,9 @@ function LabelCanvas({
       style={style}
       showBorder={showBorder}>
       <TemplateBackgroundImage document={document} />
-      <ReferencePhoto document={document} hideNonPrinting={hideNonPrinting} />
+      <ContentTurn deg={contentTurnDeg} widthPx={fitted.widthPx || 1} heightPx={fitted.heightPx || 1}>
+        <ReferencePhoto document={document} hideNonPrinting={hideNonPrinting} />
+      </ContentTurn>
       {fitted.scale > 0 ? (
         <>
           {(hideNonPrinting && !showShapeGuides) || printDpi != null ? null : (
@@ -414,6 +447,7 @@ function LabelCanvas({
               <TemplateSvgOverlay document={document} />
             </>
           )}
+          <ContentTurn deg={contentTurnDeg} widthPx={fitted.widthPx || 1} heightPx={fitted.heightPx || 1}>
           {gridSpacingMm != null ? (
             <PrintGridLayer
               widthMm={document.widthMm}
@@ -444,6 +478,7 @@ function LabelCanvas({
             bakeTd404Feed={bakeTd404Feed}
             shiftMm={shiftMm}
           />
+          </ContentTurn>
         </>
       ) : null}
     </ArtboardFrame>
@@ -587,6 +622,7 @@ export function LabelPreview({
   showShapeGuides = false,
   bakeTd404Feed = false,
   shiftMm,
+  contentTurnDeg,
   upsDividers,
 }: LabelPreviewProps) {
   const [stageWidth, setStageWidth] = useState(0);
@@ -651,6 +687,7 @@ export function LabelPreview({
         hideNonPrinting={hideNonPrinting}
         showShapeGuides={showShapeGuides}
         shiftMm={shiftMm}
+        contentTurnDeg={contentTurnDeg}
       />
     );
   }

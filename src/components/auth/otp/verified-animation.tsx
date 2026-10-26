@@ -26,7 +26,8 @@ import {
 } from '@/components/auth/otp/easing';
 import { GlowRing } from '@/components/auth/otp/glow-ring';
 import { Haze } from '@/components/auth/otp/haze';
-import { AUTH_COLORS } from '@/components/auth/auth-colors';
+import { authPalette, useAuthColors } from '@/components/auth/auth-colors';
+import { makeStyles } from '@/theme';
 
 /** Trailing copies of each box while it slides, which read as motion blur. */
 const TRAILS = [
@@ -51,6 +52,8 @@ function mergeAt(clock: number, lag: number) {
 }
 
 function Box({ index, count, digit, boxWidth, clock, ringProgress, glow }: BoxProps) {
+  const styles = useStyles();
+  const A = useAuthColors();
   const offset = (index - (count - 1) / 2) * (boxWidth + OTP_BOX.gap);
   const lean = index % 2 === 0 ? -1 : 1;
 
@@ -59,8 +62,8 @@ function Box({ index, count, digit, boxWidth, clock, ringProgress, glow }: BoxPr
     const m = mergeAt(t, 0);
     const settle = easeInOutSine(windowed(t, [T.ring[0], T.ring[1]]));
     return {
-      borderColor: interpolateColor(settle, [0, 1], [OTP_GLOW.restBorder, OTP_GLOW.dimBorder]),
-      backgroundColor: interpolateColor(settle, [0, 1], [OTP_GLOW.restFill, OTP_GLOW.dimFill]),
+      borderColor: interpolateColor(settle, [0, 1], [A.otpRestBorder, A.otpDimBorder]),
+      backgroundColor: interpolateColor(settle, [0, 1], [A.otpRestFill, A.otpDimFill]),
       // Fades only once almost merged, so the bundle reads as one solid thing.
       opacity: 1 - windowed(m, [0.72, 1]),
       transform: [
@@ -105,6 +108,7 @@ function Trail({
   lag: number;
   opacity: number;
 }) {
+  const styles = useStyles();
   const offset = (index - (count - 1) / 2) * (boxWidth + OTP_BOX.gap);
   const lean = index % 2 === 0 ? -1 : 1;
   const style = useAnimatedStyle(() => {
@@ -135,6 +139,7 @@ function Badge({
   clock: SharedValue<number>;
   glow: SharedValue<number>;
 }) {
+  const styles = useStyles();
   const full = useSharedValue(1);
   const checkProgress = useDerivedValue(() => easeOutCubic(windowed(clock.value, T.check)));
   const style = useAnimatedStyle(() => {
@@ -166,7 +171,7 @@ function Badge({
 }
 
 /**
- * Plays once a code is verified. Orange outlines draw round every box, the boxes lean and slide
+ * Plays once a code is verified. Blue outlines draw round every box, the boxes lean and slide
  * into one, and a tick draws itself inside it. Calls `onDone` just before the animation settles,
  * so the caller can move on without cutting the end of it.
  */
@@ -179,6 +184,7 @@ export function VerifiedAnimation({
   width: number;
   onDone: () => void;
 }) {
+  const styles = useStyles();
   const reduceMotion = useReducedMotion();
   const count = digits.length;
   const boxWidth = (width - OTP_BOX.gap * (count - 1)) / count;
@@ -239,36 +245,39 @@ export function VerifiedAnimation({
   );
 }
 
-const styles = StyleSheet.create({
-  stage: { height: OTP_BOX.height, alignSelf: 'center' },
-  box: {
-    position: 'absolute',
-    top: 0,
-    height: OTP_BOX.height,
-    borderRadius: OTP_BOX.radius,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trail: {
-    position: 'absolute',
-    top: 0,
-    height: OTP_BOX.height,
-    borderRadius: OTP_BOX.radius,
-    borderWidth: 1.5,
-    borderColor: OTP_GLOW.hot,
-    backgroundColor: OTP_GLOW.fill,
-    opacity: 0,
-  },
-  badge: {
-    position: 'absolute',
-    top: 0,
-    width: OTP_BOX.badge,
-    height: OTP_BOX.badge,
-    borderRadius: OTP_BOX.badgeRadius,
-    backgroundColor: OTP_GLOW.fill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  digit: { fontSize: 22, fontWeight: '800', color: AUTH_COLORS.text },
+const useStyles = makeStyles((_c, scheme) => {
+  const A = authPalette(scheme);
+  return {
+    stage: { height: OTP_BOX.height, alignSelf: 'center' },
+    box: {
+      position: 'absolute',
+      top: 0,
+      height: OTP_BOX.height,
+      borderRadius: OTP_BOX.radius,
+      borderWidth: 1.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    trail: {
+      position: 'absolute',
+      top: 0,
+      height: OTP_BOX.height,
+      borderRadius: OTP_BOX.radius,
+      borderWidth: 1.5,
+      borderColor: OTP_GLOW.hot,
+      backgroundColor: OTP_GLOW.fill,
+      opacity: 0,
+    },
+    badge: {
+      position: 'absolute',
+      top: 0,
+      width: OTP_BOX.badge,
+      height: OTP_BOX.badge,
+      borderRadius: OTP_BOX.badgeRadius,
+      backgroundColor: OTP_GLOW.fill,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    digit: { fontSize: 22, fontWeight: '800', color: A.text },
+  } as const;
 });

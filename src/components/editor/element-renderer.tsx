@@ -65,12 +65,10 @@ import { dotsPerMm } from "@/lib/printer/print-spec";
 import { applySerialOffset, logLegacySerial } from "@/lib/serial-content";
 import {
   measureTextWidthMm,
-  computeWrappedLines,
   resolveDrawFontSizePt,
   textHorizontalPaddingMm,
   textLineBoxHeightMm,
   textVerticalPaddingMm,
-  textWrapWidthMm,
 } from "@/lib/text-metrics";
 import {
   cleanNativeLines,
@@ -294,21 +292,9 @@ function formatTextForRender(
     };
   }
   const layout = visibleLayout(element, raw, layoutWidthMm, resolvedFamily);
-  // Live resize uses the same wrap as the frame height so the lines and the box
-  // move together. Resting text keeps the measured preview lines.
-  const lines =
-    layoutWidthMm != null
-      ? computeWrappedLines({
-          text: raw,
-          fontSize: element.fontSize,
-          widthMm: textWrapWidthMm(layoutWidthMm, element.fontSize, false),
-          autoWrapping: element.autoWrapping,
-          charSpacing: element.charSpacing ?? 0,
-          bold: element.bold ?? false,
-          verticalDisplay: element.verticalDisplay ?? false,
-          fontFamily: resolvedFamily ?? element.fontFamily,
-        })
-      : visibleWrappedLines(layout);
+  // Resting and live resize wrap with the one measurer (same face as print) that also sizes
+  // the frame, so lines, box height and drawn glyphs agree at every width.
+  const lines = visibleWrappedLines(layout);
   return {
     text: lines.join("\n"),
     numberOfLines: undefined as number | undefined,
@@ -434,21 +420,43 @@ function TextContent({
   // Native underlines sit on the font descent and overlap between lines, so draw the bars at
   // the same offsets as print (em box centred in the line, bar just below the em).
   const hasDecoration = !!(element.underline || element.strikethrough);
-  const [decoLines, setDecoLines] = useState<
-    { x: number; y: number; width: number; height: number; ascender: number }[]
-  >([]);
+  const [deco, setDeco] = useState<{
+    sig: string;
+    lines: { x: number; y: number; width: number; height: number; ascender: number; descender: number }[];
+  }>({ sig: "", lines: [] });
   const [textOrigin, setTextOrigin] = useState({ x: 0, y: 0 });
   const emPx = Math.max(1, style.fontSize);
   const decoThick = Math.max(1, Math.round(emPx * (element.bold ? 0.09 : 0.065)));
-  const decoBars = hasDecoration
-    ? decoLines.flatMap((ln, idx) => {
+  // Bars are only trusted for the exact text/size they were measured at; until then (a fresh
+  // toggle, a resize) the native decoration shows so the line never lags or sits in a stale spot.
+  const decoSig = `${element.underline ? 1 : 0}${element.strikethrough ? 1 : 0}|${style.fontSize}|${
+    element.bold ? 1 : 0
+  }|${element.align}|${layoutWidthMm ?? element.width}|${raw}`;
+  const barsReady = hasDecoration && deco.sig === decoSig;
+  const decoBars = barsReady
+    ? deco.lines.flatMap((ln, idx) => {
         if (ln.width <= 0) return [];
         const top =
           textOrigin.y + style.paddingVertical + ln.y + (ln.height - emPx) / 2;
         const left = textOrigin.x + style.paddingHorizontal + ln.x;
         const bars: { key: string; left: number; top: number; width: number }[] = [];
         if (element.underline)
-          bars.push({ key: `u${idx}`, left, top: top + emPx * 1.02, width: ln.width });
+          bars.push({
+            key: `u${idx}`,
+            left,
+            // Hang from this line's own baseline, below the deepest descender (p, g, j, y), so
+            // the bar clears every glyph whatever the face, weight or italic.
+            top:
+              ln.ascender > 0
+                ? textOrigin.y +
+                  style.paddingVertical +
+                  ln.y +
+                  ln.ascender +
+                  Math.max(ln.descender, emPx * 0.25) +
+                  decoThick * 0.4
+                : top + emPx * 1.02,
+            width: ln.width,
+          });
         if (element.strikethrough)
           bars.push({
             key: `s${idx}`,
@@ -488,17 +496,20 @@ function TextContent({
       {/* Italic skew on a View — Text fontStyle is ignored for expo-font cuts (same as print). */}
       <View
         style={[styles.textFill, previewItalicWrapStyle(element.italic)]}
-        onLayout={
-          hasDecoration
-            ? (e) => setTextOrigin({ x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y })
-            : undefined
-        }
+        collapsable={false}
+        onLayout={(e) => {
+          const { x, y } = e.nativeEvent.layout;
+          setTextOrigin((prev) => (prev.x === x && prev.y === y ? prev : { x, y }));
+        }}
       >
         <RestingText
+          // Remount on a decoration toggle: native layout is unchanged, so onTextLayout
+          // would never re-fire and the bars would not be measured.
+          key={hasDecoration ? "deco" : "plain"}
           allowFontScaling={false}
           style={[
             style,
-            hasDecoration ? { textDecorationLine: "none" as const } : null,
+            barsReady ? { textDecorationLine: "none" as const } : null,
             { width: "100%" },
             { textAlign: align },
             letterSpacingStyle(drawElement, raw, scale),
@@ -513,15 +524,17 @@ function TextContent({
               ? undefined
               : (event) => {
                   if (hasDecoration) {
-                    setDecoLines(
-                      event.nativeEvent.lines.map((l) => ({
+                    setDeco({
+                      sig: decoSig,
+                      lines: event.nativeEvent.lines.map((l) => ({
                         x: l.x,
                         y: l.y,
                         width: l.width,
                         height: l.height,
                         ascender: l.ascender,
+                        descender: l.descender,
                       })),
-                    );
+                    });
                   }
                   // Live width drag reflows every frame; caching those lines would thrash the
                   // canvas and freeze a mid-drag wrap after release.
@@ -540,20 +553,28 @@ function TextContent({
           {formatted.text}
         </RestingText>
       </View>
-      {decoBars.map((bar) => (
-        <View
-          key={bar.key}
+      {decoBars.length > 0 ? (
+        // Hidden while the width handle reflows: the live text carries its own native line.
+        <Animated.View
           pointerEvents="none"
-          style={{
-            position: "absolute",
-            left: bar.left,
-            top: bar.top,
-            width: bar.width,
-            height: decoThick,
-            backgroundColor: style.color,
-          }}
-        />
-      ))}
+          style={[StyleSheet.absoluteFill, liveReflowSv ? swap.resting : null]}
+        >
+          {decoBars.map((bar) => (
+            <View
+              key={bar.key}
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: bar.left,
+                top: bar.top,
+                width: bar.width,
+                height: decoThick,
+                backgroundColor: style.color,
+              }}
+            />
+          ))}
+        </Animated.View>
+      ) : null}
       {liveReflowSv ? (
         <View
           pointerEvents="none"
@@ -655,7 +676,7 @@ function DegreesContent({
         dataColumnHighlightStyle(element, highlightColumnName),
       ]}
     >
-      <View style={[styles.textFill, previewItalicWrapStyle(element.italic)]}>
+      <View collapsable={false} style={[styles.textFill, previewItalicWrapStyle(element.italic)]}>
         <RestingText
           allowFontScaling={false}
           style={[

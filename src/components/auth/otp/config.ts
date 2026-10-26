@@ -26,7 +26,7 @@ export const OTP_GLOW = {
  * that clock, so retiming is a matter of editing numbers here.
  */
 export const VERIFY_TIMELINE = {
-  /** Orange line leaves the top of every box and runs round both sides to the bottom. */
+  /** Blue line leaves the top of every box and runs round both sides to the bottom. */
   ring: [0, 520],
   /** Soft light spreads behind the row and builds to full. */
   haze: [0, 700],

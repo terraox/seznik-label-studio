@@ -94,8 +94,15 @@ export function useVisibleTextRevision(): number {
   );
 }
 
-type SkiaFontLike = { measureText: (sample: string) => { width: number } };
-type SkiaModuleLike = { matchFont?: (style: Record<string, unknown>) => SkiaFontLike };
+type SkiaFontLike = {
+  measureText: (sample: string) => { width: number };
+  getGlyphIDs?: (sample: string) => number[];
+  getGlyphWidths?: (ids: number[]) => number[];
+};
+type SkiaModuleLike = {
+  matchFont?: (style: Record<string, unknown>) => SkiaFontLike;
+  Skia?: { Font: (face: unknown, size: number) => SkiaFontLike };
+};
 
 let skiaModule: SkiaModuleLike | null | undefined;
 const fontCache = new Map<string, SkiaFontLike | null>();
@@ -112,14 +119,68 @@ function loadSkia(): SkiaModuleLike | null {
   return skiaModule;
 }
 
+/** The decoded face print draws with (bold swap included). Null until it has been loaded. */
+function embeddedFace(family: string | undefined, bold: boolean): unknown {
+  if (!family) return null;
+  try {
+    const map = require('@/printing/raster/print-typeface-map') as {
+      getPrintTypeface: (family?: string, bold?: boolean) => unknown;
+    };
+    return map.getPrintTypeface(family, bold) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const faceRequests = new Set<string>();
+
+/**
+ * matchFont only sees system fonts, so a library / downloaded / Indic face measures as the
+ * default face until its file is decoded. Load it once, then drop the measurements taken
+ * without it and publish so every text re-wraps with the real widths.
+ */
+function requestFace(family: string) {
+  if (faceRequests.has(family)) return;
+  faceRequests.add(family);
+  void (async () => {
+    try {
+      const mod = require('@/printing/raster/print-typeface') as {
+        ensurePrintTypefaces: () => Promise<void>;
+        registerPrintTypeface: (key: string, uri: string) => Promise<boolean>;
+      };
+      await mod.ensurePrintTypefaces();
+      const store = require('@/stores/installed-font-store') as {
+        useInstalledFontStore: {
+          getState: () => { items: { familyKey?: string; fileUri?: string }[] };
+        };
+      };
+      const record = store.useInstalledFontStore
+        .getState()
+        .items.find((font) => font.familyKey === family);
+      if (record?.fileUri) await mod.registerPrintTypeface(family, record.fileUri);
+    } catch {
+      // No native Skia (tests) or a bad file: keep the fallback measurer.
+    } finally {
+      fontCache.clear();
+      widthCache.clear();
+      publish();
+    }
+  })();
+}
+
 function skiaFont(fontSizePt: number, bold: boolean, fontFamily?: string): SkiaFontLike | null {
-  const key = `${fontFamily ?? ''}|${fontSizePt}|${bold ? 1 : 0}`;
+  const face = embeddedFace(fontFamily, bold);
+  if (fontFamily && !face) requestFace(fontFamily);
+  // The face is part of the key so a measurement taken before it loaded is never reused.
+  const key = `${fontFamily ?? ''}|${fontSizePt}|${bold ? 1 : 0}|${face ? 'f' : 'm'}`;
   const hit = fontCache.get(key);
   if (hit !== undefined) return hit;
   let font: SkiaFontLike | null = null;
   try {
     const skia = loadSkia();
-    if (skia?.matchFont) {
+    if (face && skia?.Skia?.Font) {
+      font = skia.Skia.Font(face, fontSizePt);
+    } else if (skia?.matchFont) {
       font = skia.matchFont({
         ...(fontFamily ? { fontFamily } : {}),
         fontSize: fontSizePt,
@@ -147,7 +208,8 @@ function skiaWidthMm(
   fontFamily?: string,
 ): number | null {
   if (!text) return 0;
-  const key = `${fontFamily ?? ''}|${fontSizePt}|${bold ? 1 : 0}|${charSpacingMm}|${text}`;
+  const faced = embeddedFace(fontFamily, bold) ? 'f' : 'm';
+  const key = `${fontFamily ?? ''}|${fontSizePt}|${bold ? 1 : 0}|${faced}|${charSpacingMm}|${text}`;
   const hit = widthCache.get(key);
   if (hit !== undefined) return hit;
   const value = measureSkiaWidthMm(text, fontSizePt, charSpacingMm, bold, fontFamily);
@@ -186,7 +248,17 @@ function measureSkiaWidthMm(
     }
     const font = skiaFont(fontSizePt, bold, fontFamily);
     if (!font) return null;
-    const px = font.measureText(text).width;
+    // Pen advance, not ink bounds: the screen text lays out by advance, and ink width drops
+    // side bearings (a trailing space measures ~0), which lets a line run wider than its box.
+    let px = 0;
+    try {
+      const ids = font.getGlyphIDs?.(text);
+      const widths = ids && ids.length > 0 ? font.getGlyphWidths?.(ids) : undefined;
+      if (widths) for (let i = 0; i < widths.length; i += 1) px += widths[i];
+    } catch {
+      px = 0;
+    }
+    if (!(px > 0)) px = font.measureText(text).width;
     if (!(px > 0)) return null;
     const spacingPx = ((charSpacingMm * 72) / 25.4) * text.length;
     return (px + spacingPx) * (25.4 / 72);

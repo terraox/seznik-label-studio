@@ -4,7 +4,8 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import {
-  AUTH_COLORS,
+  useAuthColors,
+  authPalette,
   AuthBanner,
   AuthField,
   AuthScreen,
@@ -18,12 +19,15 @@ import {
 import { useOtp } from '@/lib/auth/use-otp';
 import { usePhoneHint } from '@/lib/auth/use-phone-hint';
 import { OTP_LENGTH, digitsOnly, isValidPhone } from '@/lib/auth/validation';
+import { goBack } from '@/lib/go-back';
 import { useAuthStore } from '@/stores/auth-store';
-import { LightScope } from '@/theme';
+import { makeStyles } from '@/theme';
 
 type LoginMode = 'password' | 'otp';
 
-function LoginScreenContent() {
+export default function LoginScreen() {
+  const styles = useStyles();
+  const A = useAuthColors();
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
   const beginLogin = useAuthStore((s) => s.beginLogin);
@@ -139,7 +143,7 @@ function LoginScreenContent() {
   };
 
   return (
-    <AuthScreen title="Welcome back" subtitle="Log in to continue printing with Seznik">
+    <AuthScreen onBack={() => goBack('/welcome')} title="Welcome back" subtitle="Log in to continue printing with Seznik">
       <AuthField
         label="Phone number"
         icon="phone.fill"
@@ -217,7 +221,7 @@ function LoginScreenContent() {
         <PrimaryButton label="Log in" onPress={submit} disabled={!canSubmit} loading={submitting} />
       ) : submitting ? (
         <View style={styles.busyRow}>
-          <ActivityIndicator color={AUTH_COLORS.accent} />
+          <ActivityIndicator color={A.accent} />
           <Text style={styles.hint}>Logging in…</Text>
         </View>
       ) : null}
@@ -240,20 +244,14 @@ function LoginScreenContent() {
   );
 }
 
-const styles = StyleSheet.create({
-  hint: { fontSize: 13, color: AUTH_COLORS.muted, textAlign: 'center', lineHeight: 18 },
-  busyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  switchRow: { alignItems: 'center' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 4, flexWrap: 'wrap' },
-  footerText: { color: AUTH_COLORS.muted, fontSize: 14 },
-  footerLink: { color: AUTH_COLORS.accent, fontSize: 14, fontWeight: '700' },
+const useStyles = makeStyles((_c, scheme) => {
+  const A = authPalette(scheme);
+  return {
+    hint: { fontSize: 13, color: A.muted, textAlign: 'center', lineHeight: 18 },
+    busyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+    switchRow: { alignItems: 'center' },
+    footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 4, flexWrap: 'wrap' },
+    footerText: { color: A.muted, fontSize: 14 },
+    footerLink: { color: A.link, fontSize: 14, fontWeight: '700' },
+  } as const;
 });
-
-/** Switched off for now (D8, backlog): stays light in dark mode until converted. */
-export default function LoginScreen() {
-  return (
-    <LightScope>
-      <LoginScreenContent />
-    </LightScope>
-  );
-}

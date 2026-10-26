@@ -6,6 +6,7 @@ import { AppIcon, type AppIconName } from '@/components/app-icon';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -368,6 +369,19 @@ export default function SettingScreen() {
               }}
             />
           </SettingGroup>
+
+          {Platform.OS === 'android' ? (
+            <SettingGroup>
+              <SettingRow
+                label={t('setting.widgets')}
+                icon="rectangle.3.group"
+                onPress={() => {
+                  trackFeatureClick('settings.widgets');
+                  router.push('/widgets');
+                }}
+              />
+            </SettingGroup>
+          ) : null}
 
           <SettingGroup>
             <SettingRow

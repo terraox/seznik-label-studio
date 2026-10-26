@@ -126,8 +126,7 @@ import {
   formatPaperTypeSetting,
   paperPrinterId,
   paperTypeCommand,
-  paperTypeSelectionNote,
-  paperTypeTestBadge,
+  paperTypeLabel,
 } from '@/lib/printer/paper-type';
 import { resolveTd404JobParams } from '@/lib/printer/td404-job-params';
 import {
@@ -427,11 +426,13 @@ function ChipGroup<T extends string>({
   selected,
   onSelect,
   badgeFor,
+  labelFor,
 }: {
   options: readonly T[];
   selected: T;
   onSelect: (value: T) => void;
   badgeFor?: (value: T) => string | null;
+  labelFor?: (value: T) => string;
 }) {
   useThemeRefresh();
   return (
@@ -451,7 +452,7 @@ function ChipGroup<T extends string>({
               pressed && styles.pressed,
             ]}>
             <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-              {option}
+              {labelFor ? labelFor(option) : option}
             </Text>
             {badge ? (
               <Text style={[styles.chipBadge, active && styles.chipBadgeActive]} numberOfLines={1}>
@@ -1153,20 +1154,12 @@ export default function PrintScreen() {
   );
   const previewAreaMinHeight = maxPreviewHeight + 56; // 28 px padding each side
 
-  // The print job rotates the bitmap by the chosen orientation, so show the label turned the same
-  // way (clockwise, matching rotateGray). Quarter turns swap the box the label is fitted into.
+  // The print job rotates the bitmap by the chosen orientation, so show the contents turned the
+  // same way (clockwise, matching rotateGray).
   const previewTurn = ratTail143Job ? 0 : parseInt(orientation.replace('°', ''), 10);
-  const previewQuarter = previewTurn === 90 || previewTurn === 270;
-  const turned = fitLabelSize(
-    previewQuarter ? (activeDoc?.heightMm ?? 44) : (activeDoc?.widthMm ?? 80),
-    previewQuarter ? (activeDoc?.widthMm ?? 80) : (activeDoc?.heightMm ?? 44),
-    Math.round(baseCardWidth * zoom),
-    Math.round(maxPreviewHeight * zoom),
-  );
-  const previewBoxW = turned.widthPx;
-  const previewBoxH = turned.heightPx;
-  const previewDrawW = previewQuarter ? previewBoxH : previewBoxW;
-  const previewDrawH = previewQuarter ? previewBoxW : previewBoxH;
+  // The label keeps its own shape and orientation; only its contents are turned (see LabelPreview).
+  const previewBoxW = cardWidth;
+  const previewBoxH = cardHeight;
 
   const historySource: PrintHistoryEntry['source'] = params.labelId
     ? 'label'
@@ -2539,16 +2532,15 @@ export default function PrintScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
-                <View style={{ transform: [{ rotate: `${previewTurn}deg` }] }}>
-                  <LabelPreview
-                    document={(layerPreviewDocument ?? displayDocument ?? previewDocument)!}
-                    width={previewDrawW}
-                    maxHeight={previewDrawH}
-                    showArtboardBorder={false}
-                    hideNonPrinting
-                    showShapeGuides
-                  />
-                </View>
+                <LabelPreview
+                  document={(layerPreviewDocument ?? displayDocument ?? previewDocument)!}
+                  width={previewBoxW}
+                  maxHeight={previewBoxH}
+                  showArtboardBorder={false}
+                  hideNonPrinting
+                  showShapeGuides
+                  contentTurnDeg={previewTurn}
+                />
               </View>
             ) : params.imageUri ? (
               <View style={[styles.previewCard, { width: cardWidth, height: cardHeight }]}>
@@ -2820,11 +2812,8 @@ export default function PrintScreen() {
                 options={paperTypesFor(printerSdkId)}
                 selected={shownPaperType(paperType, printerSdkId)}
                 onSelect={changePaperType}
-                badgeFor={(option) => paperTypeTestBadge(option)}
+                labelFor={paperTypeLabel}
               />
-              {paperTypeSelectionNote(shownPaperType(paperType, printerSdkId)) ? (
-                <Text style={styles.helperText}>{paperTypeSelectionNote(shownPaperType(paperType, printerSdkId))}</Text>
-              ) : null}
               {jewelryDieCutJob ? (
                 <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
                   💡 Jewelry rolls print as Label. If prints skip or overlap, run “Calibrate Paper Sensor” in Printer Connect.

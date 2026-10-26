@@ -24,6 +24,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { openIncomingFile } from '@/lib/file-import/open-incoming-file';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
 import { usePrinterStore } from '@/stores/printer-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { AppThemeProvider, DarkColors, useScheme, useSettingsHydrated } from '@/theme';
 
 /** React Navigation colours for dark mode. Light keeps DefaultTheme exactly as before. */
@@ -56,7 +57,9 @@ class RootErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
   render() {
     if (this.state.error) {
       return (
-        <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 24, justifyContent: 'center' }}>
+        <View
+          style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 24, justifyContent: 'center' }}
+        >
           <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 8, color: '#111827' }}>
             Sez Print failed to start
           </Text>
@@ -119,6 +122,7 @@ function AppRoot() {
   const authHydrated = useAuthStore((s) => s.hydrated);
   const signedIn = useAuthStore((s) => s.token !== null);
   const needsPrinter = useAuthStore((s) => s.needsPrinter);
+  const themeChosen = useSettingsStore((s) => s.themeChosen);
 
   const settingsReady = authHydrated && settingsHydrated;
   useEffect(() => {
@@ -140,8 +144,12 @@ function AppRoot() {
       <StatusBar style="light" />
       {appReady && authHydrated && settingsHydrated ? (
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Protected guard={!signedIn}>
-            <Stack.Screen name="login" />
+          <Stack.Protected guard={!signedIn && !themeChosen}>
+            <Stack.Screen name="choose-theme" />
+          </Stack.Protected>
+          <Stack.Protected guard={!signedIn && themeChosen}>
+            <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
+            <Stack.Screen name="login" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="register" options={{ animation: 'slide_from_right' }} />
           </Stack.Protected>
           <Stack.Protected guard={signedIn && needsPrinter}>
@@ -187,11 +195,15 @@ function AppRoot() {
           <Stack.Screen name="printing-settings" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="editing-settings" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="editor-settings" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="default-property-settings" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen
+            name="default-property-settings"
+            options={{ animation: 'slide_from_right' }}
+          />
           <Stack.Screen name="label-settings" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="drawing-color" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="cache-settings" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="app-permissions" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="widgets" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="help-topic" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="printing-history" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="printer-connect" options={{ animation: 'slide_from_right' }} />
@@ -211,7 +223,10 @@ function AppRoot() {
           <Stack.Screen name="ground-truth-parity" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="calibration-dots" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="location-dots" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="file-picker-diagnostics" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen
+            name="file-picker-diagnostics"
+            options={{ animation: 'slide_from_right' }}
+          />
           <Stack.Screen name="dot-buffer-1k" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="new-label-setup" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen
@@ -222,18 +237,9 @@ function AppRoot() {
             name="customize-template"
             options={{ presentation: 'transparentModal', animation: 'fade' }}
           />
-          <Stack.Screen
-            name="img-to-label"
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="image-to-label"
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="serial-label"
-            options={{ animation: 'slide_from_right' }}
-          />
+          <Stack.Screen name="img-to-label" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="image-to-label" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="serial-label" options={{ animation: 'slide_from_right' }} />
         </Stack>
       ) : null}
       <FeedbackPrompt enabled={appReady && signedIn && !needsPrinter} />
@@ -246,7 +252,12 @@ export default function RootLayout() {
   return (
     <RootErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <KeyboardProvider statusBarTranslucent navigationBarTranslucent preserveEdgeToEdge preload={false}>
+        <KeyboardProvider
+          statusBarTranslucent
+          navigationBarTranslucent
+          preserveEdgeToEdge
+          preload={false}
+        >
           <AppThemeProvider>
             <AppRoot />
             <IosAlertHost />

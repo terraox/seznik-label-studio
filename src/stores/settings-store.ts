@@ -153,6 +153,8 @@ type SettingsStoreState = {
   smartCropHintSeen: boolean;
   /** Settings → Appearance. Follow system by default. */
   appearance: AppearancePreference;
+  /** The first-launch "choose your look" screen has been answered. */
+  themeChosen: boolean;
   /** Settings profile card photo (file uri inside sezprint/images), or null. */
   profilePhotoUri: string | null;
   patchEditor: (updates: Partial<EditorSettings>) => void;
@@ -170,6 +172,7 @@ type SettingsStoreState = {
   markPdfTourSeen: (screen: string) => void;
   setSmartCropHintSeen: (seen: boolean) => void;
   setAppearance: (appearance: AppearancePreference) => void;
+  setThemeChosen: (chosen: boolean) => void;
   setProfilePhotoUri: (uri: string | null) => void;
 };
 
@@ -189,6 +192,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       pdfTourSeen: [],
       smartCropHintSeen: false,
       appearance: 'light',
+      themeChosen: false,
       profilePhotoUri: null,
 
       patchEditor: (updates) => set((state) => ({ editor: { ...state.editor, ...updates } })),
@@ -209,6 +213,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
         set((s) => (s.pdfTourSeen.includes(screen) ? s : { pdfTourSeen: [...s.pdfTourSeen, screen] })),
       setSmartCropHintSeen: (seen) => set({ smartCropHintSeen: seen }),
       setAppearance: (appearance) => set({ appearance }),
+      setThemeChosen: (themeChosen) => set({ themeChosen }),
       setProfilePhotoUri: (profilePhotoUri) => set({ profilePhotoUri }),
     }),
     {

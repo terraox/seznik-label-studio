@@ -4,19 +4,14 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
-import {
-  AUTH_COLORS,
-  AuthScreen,
-  LinkText,
-  PrimaryButton,
-} from '@/components/auth/auth-ui';
+import { authPalette, AuthScreen, LinkText, PrimaryButton } from '@/components/auth/auth-ui';
 import {
   CONSUMER_PRINTER_LIST,
   type ConsumerPrinter,
   type ConsumerPrinterId,
 } from '@/constants/printer-models';
 import { useAuthStore } from '@/stores/auth-store';
-import { LightScope } from '@/theme';
+import { makeStyles } from '@/theme';
 
 // Small copies of the printer photos: the full 1024px PNGs decode slowly for a card.
 const PHOTOS: Record<ConsumerPrinterId, number> = {
@@ -26,8 +21,11 @@ const PHOTOS: Record<ConsumerPrinterId, number> = {
 };
 
 function PrinterPhoto({ printer, size }: { printer: ConsumerPrinter; size: number }) {
+  const styles = useStyles();
   return (
-    <View style={[styles.stage, { width: size, height: size, backgroundColor: printer.accentSoft }]}>
+    <View
+      style={[styles.stage, { width: size, height: size, backgroundColor: printer.accentSoft }]}
+    >
       <Image
         source={PHOTOS[printer.id]}
         style={{ width: size - 12, height: size - 12 }}
@@ -38,7 +36,8 @@ function PrinterPhoto({ printer, size }: { printer: ConsumerPrinter; size: numbe
   );
 }
 
-function SelectPrinterContent() {
+export default function SelectPrinterScreen() {
+  const styles = useStyles();
   const router = useRouter();
   const setPrinter = useAuthStore((s) => s.setPrinter);
   const [step, setStep] = useState<'supported' | 'choose'>('supported');
@@ -61,9 +60,7 @@ function SelectPrinterContent() {
 
   if (step === 'supported') {
     return (
-      <AuthScreen
-        title="Printers we support"
-        subtitle="Seznik works with these printers right now">
+      <AuthScreen title="Printers we support" subtitle="Seznik works with these printers right now">
         <View style={styles.list}>
           {CONSUMER_PRINTER_LIST.map((printer) => (
             <View key={printer.id} style={[styles.card, { borderColor: printer.accentBorder }]}>
@@ -84,7 +81,8 @@ function SelectPrinterContent() {
   return (
     <AuthScreen
       title="Which printer did you buy?"
-      subtitle="We'll select it automatically when you connect over Bluetooth">
+      subtitle="We'll select it automatically when you connect over Bluetooth"
+    >
       <View style={styles.list}>
         {CONSUMER_PRINTER_LIST.map((printer) => {
           const active = selected === printer.id;
@@ -100,10 +98,13 @@ function SelectPrinterContent() {
               style={[
                 styles.card,
                 active && { borderColor: printer.accent, backgroundColor: printer.accentSoft },
-              ]}>
+              ]}
+            >
               <PrinterPhoto printer={printer} size={72} />
               <View style={styles.cardText}>
-                <Text style={[styles.name, active && { color: printer.accent }]}>{printer.name}</Text>
+                <Text style={[styles.name, active && { color: printer.accent }]}>
+                  {printer.name}
+                </Text>
                 <Text style={styles.tagline}>{printer.tagline}</Text>
               </View>
               {active ? (
@@ -128,38 +129,33 @@ function SelectPrinterContent() {
   );
 }
 
-const styles = StyleSheet.create({
-  list: { gap: 12 },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    borderWidth: 1.5,
-    borderColor: AUTH_COLORS.border,
-    borderRadius: 18,
-    padding: 12,
-    backgroundColor: '#FFFFFF',
-  },
-  stage: { borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  cardText: { flex: 1 },
-  name: { fontSize: 16, fontWeight: '800', color: AUTH_COLORS.text },
-  tagline: { marginTop: 4, fontSize: 13, color: AUTH_COLORS.muted, lineHeight: 18 },
-  check: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  note: { fontSize: 13, color: AUTH_COLORS.muted, textAlign: 'center' },
-  back: { alignItems: 'center', marginTop: 4 },
-  error: { color: AUTH_COLORS.error, fontSize: 13, textAlign: 'center' },
+const useStyles = makeStyles((_c, scheme) => {
+  const A = authPalette(scheme);
+  return {
+    list: { gap: 12 },
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      borderWidth: 1.5,
+      borderColor: A.border,
+      borderRadius: 18,
+      padding: 12,
+      backgroundColor: A.field,
+    },
+    stage: { borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    cardText: { flex: 1 },
+    name: { fontSize: 16, fontWeight: '800', color: A.text },
+    tagline: { marginTop: 4, fontSize: 13, color: A.muted, lineHeight: 18 },
+    check: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    note: { fontSize: 13, color: A.muted, textAlign: 'center' },
+    back: { alignItems: 'center', marginTop: 4 },
+    error: { color: A.error, fontSize: 13, textAlign: 'center' },
+  } as const;
 });
-
-export default function SelectPrinterScreen() {
-  return (
-    <LightScope>
-      <SelectPrinterContent />
-    </LightScope>
-  );
-}

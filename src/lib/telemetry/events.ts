@@ -300,7 +300,7 @@ export type FeatureKey =
   | 'templates.open' | 'templates.favourite' | 'templates.request'
   | 'settings.printer' | 'settings.language' | 'settings.fonts' | 'settings.clipart' | 'settings.borders'
   | 'settings.data_file' | 'settings.history' | 'settings.appearance' | 'settings.advanced'
-  | 'settings.permissions' | 'settings.walkthrough' | 'settings.feedback' | 'settings.about'
+  | 'settings.permissions' | 'settings.widgets' | 'settings.walkthrough' | 'settings.feedback' | 'settings.about'
   | 'settings.delete_account';
 
 // A double tap or a tab re-press within this window counts once.

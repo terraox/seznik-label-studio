@@ -10,9 +10,8 @@ import {
   formatPaperTypeSetting,
   mediaForPaperType,
   paperTypeCommand,
-  paperTypeSelectionNote,
   paperTypesFor,
-  paperTypeTestBadge,
+  paperTypeLabel,
   shownPaperType,
   tsplMedia,
   type PaperPrinterId,
@@ -25,17 +24,13 @@ const OLD_OR_UNKNOWN = [...LEGACY_PAPER_TYPES, 'unknown', '', 'receipt', 'transp
 
 test('Josh offers Label, Receipt, Transparent, Cardstock; TD-404 and Dev offer Receipt, Label', () => {
   assert.deepEqual([...JOSH_PAPER_TYPES], ['Label', 'Receipt', 'Transparent', 'Cardstock']);
-  assert.deepEqual([...PAPER_TYPES], ['Receipt', 'Label']);
+  assert.deepEqual([...PAPER_TYPES], ['Label', 'Receipt']);
   assert.deepEqual([...paperTypesFor('josh')], [...JOSH_PAPER_TYPES]);
   for (const sdkId of ['td404', 'dev', 'tez', 'labelx', null, undefined]) {
     assert.deepEqual([...paperTypesFor(sdkId)], [...PAPER_TYPES], String(sdkId));
   }
-  for (const type of ['Receipt', 'Transparent', 'Cardstock']) assert.equal(paperTypeTestBadge(type), 'Test', type);
-  assert.equal(paperTypeTestBadge('Label'), null);
-  assert.equal(paperTypeSelectionNote('Receipt'), 'Test. Continuous feed. Gap length is 0 mm.');
-  assert.equal(paperTypeSelectionNote('Transparent'), 'Test. Uses the hole sensor. Gap Length is the hole length.');
-  assert.equal(paperTypeSelectionNote('Cardstock'), 'Test. Uses the black-mark sensor. Gap Length is the mark length.');
-  assert.equal(paperTypeSelectionNote('Label'), null);
+  assert.equal(paperTypeLabel('Cardstock'), 'Black mark');
+  assert.equal(paperTypeLabel('Label'), 'Label');
 });
 
 test('stored values: the four types stay; Black mark, missing and unknown open as Label', () => {
@@ -167,7 +162,7 @@ test('omitted gap uses the printer default; the label name does not change the c
 
 test('only the sensor line differs between Receipt and Label', () => {
   for (const printer of ['td404', 'dev'] as const) {
-    const [receipt, label] = PAPER_TYPES.map((paperType) => paperTypeCommand({ printer, paperType, gapMm: 3 }));
+    const [label, receipt] = PAPER_TYPES.map((paperType) => paperTypeCommand({ printer, paperType, gapMm: 3 }));
     const header = (line: string) => `SIZE 50.00 mm,30.00 mm\r\n${line}SPEED 3\r\nDENSITY 10\r\nREFERENCE 0,0\r\nBITMAP 0,0,`;
     assert.equal(header(receipt.mediaLine).replace(receipt.mediaLine, 'MEDIA\r\n'), header(label.mediaLine).replace(label.mediaLine, 'MEDIA\r\n'));
     assert.notEqual(receipt.mediaLine, label.mediaLine);

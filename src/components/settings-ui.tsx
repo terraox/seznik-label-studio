@@ -249,11 +249,13 @@ export function SettingsSegmentGroup<T extends string>({
   selected,
   onSelect,
   badgeFor,
+  labelFor,
 }: {
   options: readonly T[];
   selected: T;
   onSelect: (value: T) => void;
   badgeFor?: (value: T) => string | null;
+  labelFor?: (value: T) => string;
 }) {
   const styles = useStyles();
   return (
@@ -269,7 +271,7 @@ export function SettingsSegmentGroup<T extends string>({
               hitSlop={SETTINGS_CHIP_HIT_SLOP}
               style={[styles.segmentChip, active && styles.segmentChipActive]}>
               <Text style={[styles.segmentText, active && styles.segmentTextActive]} numberOfLines={1}>
-                {option}
+                {labelFor ? labelFor(option) : option}
               </Text>
               {badge ? (
                 <Text style={[styles.segmentBadge, active && styles.segmentBadgeActive]} numberOfLines={1}>
@@ -291,6 +293,7 @@ export function SettingsSegmentRow<T extends string>({
   onSelect,
   showDivider,
   badgeFor,
+  labelFor,
 }: {
   label: string;
   options: readonly T[];
@@ -298,6 +301,7 @@ export function SettingsSegmentRow<T extends string>({
   onSelect: (value: T) => void;
   showDivider?: boolean;
   badgeFor?: (value: T) => string | null;
+  labelFor?: (value: T) => string;
 }) {
   const styles = useStyles();
   return (
@@ -309,6 +313,7 @@ export function SettingsSegmentRow<T extends string>({
           selected={selected}
           onSelect={onSelect}
           badgeFor={badgeFor}
+          labelFor={labelFor}
         />
       </View>
       {showDivider ? <SettingsDivider /> : null}

@@ -22,7 +22,8 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-import { AUTH_COLORS } from '@/components/auth/auth-colors';
+import { authPalette, useAuthColors } from '@/components/auth/auth-colors';
+import { makeStyles } from '@/theme';
 import { OTP_BOX, OTP_GLOW } from '@/components/auth/otp/config';
 import { VerifiedAnimation } from '@/components/auth/otp/verified-animation';
 import { TextInput } from '@/components/ui/text-input';
@@ -45,11 +46,13 @@ function OtpBox({
   verifying?: boolean;
   wave: SharedValue<number>;
 }) {
+  const styles = useStyles();
+  const A = useAuthColors();
   const waveStyle = useAnimatedStyle(() => {
     const phase = (((wave.value - index / count) % 1) + 1) % 1;
     const k = phase < 0.45 ? Math.sin((Math.PI * phase) / 0.45) : 0;
     return {
-      borderColor: interpolateColor(k, [0, 1], [OTP_GLOW.restBorder, OTP_GLOW.accent]),
+      borderColor: interpolateColor(k, [0, 1], [A.otpRestBorder, OTP_GLOW.accent]),
       shadowOpacity: 0.7 * k,
     };
   });
@@ -74,6 +77,7 @@ function OtpBox({
 }
 
 function VerifiedLabel() {
+  const styles = useStyles();
   return (
     <Animated.Text style={styles.verifiedLabel} entering={FadeIn.duration(260)}>
       Verified successfully
@@ -109,6 +113,7 @@ export function OtpBoxes({
   success?: boolean;
   onSuccessDone?: () => void;
 }) {
+  const styles = useStyles();
   const ref = useRef<RNTextInput>(null);
   const [focused, setFocused] = useState(false);
   const [rowWidth, setRowWidth] = useState(0);
@@ -194,6 +199,7 @@ export function OtpBoxes({
             keyboardType="number-pad"
             maxLength={length}
             selectTextOnFocus={false}
+            underlineColorAndroid="transparent"
             textContentType="oneTimeCode"
             autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
             caretHidden
@@ -210,37 +216,40 @@ export function OtpBoxes({
   );
 }
 
-const styles = StyleSheet.create({
-  block: { gap: 10 },
-  top: { minHeight: 20, justifyContent: 'center' },
-  hint: { fontSize: 13, color: AUTH_COLORS.muted, textAlign: 'center', lineHeight: 18 },
-  verifiedLabel: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: AUTH_COLORS.text,
-    textAlign: 'center',
-  },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: OTP_BOX.gap },
-  rowHidden: { opacity: 0 },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, height: OTP_BOX.height },
-  box: {
-    flex: 1,
-    height: OTP_BOX.height,
-    borderRadius: OTP_BOX.radius,
-    borderWidth: 1.5,
-    borderColor: AUTH_COLORS.border,
-    backgroundColor: AUTH_COLORS.field,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  boxFilled: { borderColor: OTP_GLOW.restBorder, backgroundColor: OTP_GLOW.restFill },
-  boxActive: { borderColor: OTP_GLOW.accent, backgroundColor: '#13202D' },
-  boxInvalid: { borderColor: AUTH_COLORS.error },
-  boxWave: {
-    shadowColor: OTP_GLOW.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 10,
-  },
-  digit: { fontSize: 22, fontWeight: '800', color: AUTH_COLORS.text },
-  hidden: { position: 'absolute', width: '100%', height: '100%', opacity: 0.02 },
+const useStyles = makeStyles((_c, scheme) => {
+  const A = authPalette(scheme);
+  return {
+    block: { gap: 10 },
+    top: { minHeight: 20, justifyContent: 'center' },
+    hint: { fontSize: 13, color: A.muted, textAlign: 'center', lineHeight: 18 },
+    verifiedLabel: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: A.text,
+      textAlign: 'center',
+    },
+    row: { flexDirection: 'row', justifyContent: 'space-between', gap: OTP_BOX.gap },
+    rowHidden: { opacity: 0 },
+    overlay: { position: 'absolute', top: 0, left: 0, right: 0, height: OTP_BOX.height },
+    box: {
+      flex: 1,
+      height: OTP_BOX.height,
+      borderRadius: OTP_BOX.radius,
+      borderWidth: 1.5,
+      borderColor: A.border,
+      backgroundColor: A.field,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    boxFilled: { borderColor: A.otpRestBorder, backgroundColor: A.otpRestFill },
+    boxActive: { borderColor: OTP_GLOW.accent, backgroundColor: A.otpActiveFill },
+    boxInvalid: { borderColor: A.error },
+    boxWave: {
+      shadowColor: OTP_GLOW.accent,
+      shadowOffset: { width: 0, height: 0 },
+      shadowRadius: 10,
+    },
+    digit: { fontSize: 22, fontWeight: '800', color: A.text },
+    hidden: { position: 'absolute', width: '100%', height: '100%', opacity: 0.02 },
+  } as const;
 });

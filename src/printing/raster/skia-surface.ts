@@ -258,7 +258,8 @@ function drawTextDecorations(
   const thick = Math.max(1, Math.round(size * (style.bold ? 0.09 : 0.065)));
   const w = Math.max(1, Math.round(width));
   const left = Math.round(x);
-  if (style.underline) fill(left, Math.round(y + size * 1.02), w, thick, style.ink);
+  // Below the baseline (y + size) and the deepest descender, so p / g / j / y are never cut.
+  if (style.underline) fill(left, Math.round(y + size * 1.25 + thick * 0.4), w, thick, style.ink);
   if (style.strikethrough) fill(left, Math.round(y + size * 0.68 - thick / 2), w, thick, style.ink);
 }
 

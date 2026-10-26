@@ -4,7 +4,6 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { LabelDimensionModal } from '@/components/label-dimension-modal';
 import {
   SettingsCard,
-  SettingsNote,
   SettingsSectionLabel,
   SettingsSegmentRow,
   SettingsStepperRow,
@@ -15,7 +14,7 @@ import { formatLiveDate, formatLiveTime } from '@/components/editor/types';
 import { BARCODE_MODES } from '@/lib/barcode-code128';
 import type { LabelUnit } from '@/lib/label-geometry';
 import { parseOrientation, type LabelOrientation, type PaperType } from '@/lib/label-document';
-import { paperTypesFor, paperTypeSelectionNote, paperTypeTestBadge, shownPaperType } from '@/lib/printer/paper-type';
+import { paperTypesFor, paperTypeLabel, shownPaperType } from '@/lib/printer/paper-type';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { androidRipple } from '@/constants/ui';
@@ -80,12 +79,9 @@ export function DefaultPropertySettingsFields() {
           label="Paper Type"
           options={paperTypesFor(printerSdkId)}
           selected={paperType}
-          badgeFor={(option) => paperTypeTestBadge(option)}
+          labelFor={paperTypeLabel}
           onSelect={(value) => patchDefaults({ paperType: value as PaperType })}
         />
-        {paperTypeSelectionNote(paperType) ? (
-          <SettingsNote>{paperTypeSelectionNote(paperType) ?? ''}</SettingsNote>
-        ) : null}
       </SettingsCard>
 
       <SettingsSectionLabel>Font</SettingsSectionLabel>

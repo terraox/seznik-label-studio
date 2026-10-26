@@ -4,7 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import {
-  AUTH_COLORS,
+  useAuthColors,
+  authPalette,
   AuthBanner,
   AuthField,
   AuthScreen,
@@ -12,7 +13,8 @@ import {
   FieldToggle,
   LinkText,
   OtpBoxes,
-  OtpFieldAction,
+  OtpCard,
+  PhoneCard,
   PasswordRules,
   PrimaryButton,
 } from '@/components/auth/auth-ui';
@@ -26,10 +28,13 @@ import {
   passwordRuleResults,
 } from '@/lib/auth/validation';
 import { useOtp } from '@/lib/auth/use-otp';
+import { goBack } from '@/lib/go-back';
 import { useAuthStore } from '@/stores/auth-store';
-import { LightScope } from '@/theme';
+import { makeStyles } from '@/theme';
 
-function RegisterScreenContent() {
+export default function RegisterScreen() {
+  const styles = useStyles();
+  const A = useAuthColors();
   const router = useRouter();
   const register = useAuthStore((s) => s.register);
   const bypassAuth = useAuthStore((s) => s.bypassAuth);
@@ -117,60 +122,56 @@ function RegisterScreenContent() {
 
   return (
     <AuthScreen
+      onBack={() => (step === 2 && !submitting ? setStep(1) : goBack('/welcome'))}
       title={step === 1 ? 'Create account' : 'Almost there'}
       subtitle={
         step === 1 ? 'Verify your mobile number to get started' : 'Add your name and a password'
       }
-      progress={{ step, total: 2 }}
+      progress={{ step, total: 2, label: step === 1 ? 'Verify your number' : 'Your details' }}
     >
       {step === 1 ? (
         <Animated.View key="step1" entering={FadeInDown.duration(260)} style={styles.stepBody}>
-          <AuthField
-            label="Phone number"
-            icon="phone.fill"
-            prefix="+91"
-            placeholder="10-digit mobile"
-            keyboardType="number-pad"
-            maxLength={10}
-            value={phone}
-            onChangeText={changePhone}
-            onFocus={onPhoneFocus}
-            error={phone.length === 10 && !phoneValid ? 'Enter a valid mobile number' : null}
-            right={
-              <OtpFieldAction
-                sent={otpFlow.sent}
-                verified={verified}
-                cooldown={otpFlow.cooldown}
-                busy={otpFlow.busy}
-                disabled={otpSendOff}
-                onPress={sendOtp}
-              />
-            }
-          />
-
           {otpFlow.sent && (!verified || celebrating) ? (
-            <OtpBoxes
-              length={OTP_LENGTH}
-              value={otp}
-              onChange={(v) => {
-                setFormError(null);
-                setOtp(v);
-                setOtpInvalid(false);
-                otpFlow.setError(null);
-              }}
-              onComplete={verifyOtp}
-              invalid={otpInvalid}
-              verifying={checking}
-              success={verified}
-              onSuccessDone={() => {
-                setCelebrating(false);
-                setStep(2);
-              }}
-              autoFocus
-              hint={`Code sent to +91 ${phone}`}
-            />
+            <OtpCard
+              phone={phone}
+              cooldown={otpFlow.cooldown}
+              busy={otpFlow.busy}
+              onResend={sendOtp}
+              onChangeNumber={() => changePhone('')}
+            >
+              <OtpBoxes
+                length={OTP_LENGTH}
+                value={otp}
+                onChange={(v) => {
+                  setFormError(null);
+                  setOtp(v);
+                  setOtpInvalid(false);
+                  otpFlow.setError(null);
+                }}
+                onComplete={verifyOtp}
+                invalid={otpInvalid}
+                verifying={checking}
+                success={verified}
+                onSuccessDone={() => {
+                  setCelebrating(false);
+                  setStep(2);
+                }}
+                autoFocus
+              />
+            </OtpCard>
           ) : (
-            <Text style={styles.hint}>Enter your number, then tap Get OTP</Text>
+            <PhoneCard
+              value={phone}
+              onChangeText={changePhone}
+              onFocus={onPhoneFocus}
+              error={phone.length === 10 && !phoneValid ? 'Enter a valid mobile number' : null}
+              sent={otpFlow.sent}
+              verified={verified}
+              cooldown={otpFlow.cooldown}
+              busy={otpFlow.busy}
+              disabled={otpSendOff}
+              onSendOtp={sendOtp}
+            />
           )}
 
           <AuthBanner message={formError} />
@@ -240,21 +241,15 @@ function RegisterScreenContent() {
   );
 }
 
-const styles = StyleSheet.create({
-  stepBody: { gap: 16 },
-  hint: { fontSize: 13, color: AUTH_COLORS.muted, textAlign: 'center', lineHeight: 18 },
-  verifiedLine: { fontSize: 13, fontWeight: '700', color: AUTH_COLORS.success },
-  switchRow: { alignItems: 'center' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 4, flexWrap: 'wrap' },
-  footerText: { color: AUTH_COLORS.muted, fontSize: 14 },
-  footerLink: { color: AUTH_COLORS.accent, fontSize: 14, fontWeight: '700' },
+const useStyles = makeStyles((_c, scheme) => {
+  const A = authPalette(scheme);
+  return {
+    stepBody: { gap: 16 },
+    hint: { fontSize: 13, color: A.muted, textAlign: 'center', lineHeight: 18 },
+    verifiedLine: { fontSize: 13, fontWeight: '700', color: A.success },
+    switchRow: { alignItems: 'center' },
+    footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 4, flexWrap: 'wrap' },
+    footerText: { color: A.muted, fontSize: 14 },
+    footerLink: { color: A.link, fontSize: 14, fontWeight: '700' },
+  } as const;
 });
-
-/** Switched off for now (D8, backlog): stays light in dark mode until converted. */
-export default function RegisterScreen() {
-  return (
-    <LightScope>
-      <RegisterScreenContent />
-    </LightScope>
-  );
-}

@@ -666,14 +666,6 @@ export default function NewLabelSetupScreen() {
           <Text style={styles.templatesLinkText}>Browse our templates</Text>
           <Text style={styles.chevronRight}>›</Text>
         </Pressable>
-        {isSerialEditor ? (
-          <Pressable
-            onPress={() => router.replace('/serial-label')}
-            style={({ pressed }) => [styles.templatesLink, pressed && styles.pressed]}>
-            <Text style={styles.templatesLinkText}>Use the classic serial generator</Text>
-            <Text style={styles.chevronRight}>›</Text>
-          </Pressable>
-        ) : null}
       </FormScrollView>
 
       <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }} style={styles.stickyHost}>
