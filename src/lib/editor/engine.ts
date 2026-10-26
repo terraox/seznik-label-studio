@@ -334,7 +334,7 @@ export function duplicateElements(
   offsetMm = 2,
 ): { elements: LabelElement[]; newIds: string[] } {
   const sources = elements.filter(
-    (el) => ids.includes(el.id) && el.type !== 'border' && el.needPrinting !== false,
+    (el) => ids.includes(el.id) && el.type !== 'border',
   );
   const clones = sources.map((el) => {
     const clone = JSON.parse(JSON.stringify(el)) as LabelElement;

@@ -90,14 +90,11 @@ export function inkColor(drawingColorIndex: number) {
   return drawingColorIndex === 0 || color === "#FFFFFF" ? DESIGN_INK : color;
 }
 
-function paletteColor(drawingColorIndex: number) {
-  return DRAWING_COLORS[drawingColorIndex] ?? DESIGN_INK;
-}
-
 function shapeFillColor(element: ShapeElementState) {
   if (!element.fill) return "transparent";
   if (element.fillColor) return element.fillColor;
-  return paletteColor(element.drawingColorIndex);
+  // Palette slot 0 is white (paper), which made the fill invisible; print fills with ink.
+  return inkColor(element.drawingColorIndex);
 }
 
 function fontSizePx(fontSizePt: number, scale: number) {
@@ -1274,6 +1271,8 @@ function ShapeContent({
   const fill = shapeFillColor(element);
   const innerW = Math.max(1, widthPx - strokeWidth - safePad * 2);
   const innerH = Math.max(1, heightPx - strokeWidth - safePad * 2);
+  // Android keeps the old fill when only the colour prop changes; a new key repaints the shape.
+  const paintKey = `${element.figureShape}|${fill}|${color}|${strokeWidth}|${element.roundRadius}`;
 
   if (element.figureShape === "oval" || element.figureShape === "circle") {
     const rx =
@@ -1286,11 +1285,23 @@ function ShapeContent({
         : heightPx / 2 - inset;
     return (
       <Svg
+        key={paintKey}
         width="100%"
         height="100%"
         viewBox={`0 0 ${widthPx} ${heightPx}`}
         preserveAspectRatio="none"
       >
+        {fill !== "transparent" ? (
+          <Ellipse
+            cx={widthPx / 2}
+            cy={heightPx / 2}
+            rx={Math.max(1, rx)}
+            ry={Math.max(1, ry)}
+            fill={fill}
+            fillOpacity={1}
+            stroke="none"
+          />
+        ) : null}
         <Ellipse
           cx={widthPx / 2}
           cy={heightPx / 2}
@@ -1298,7 +1309,7 @@ function ShapeContent({
           ry={Math.max(1, ry)}
           stroke={color}
           strokeWidth={strokeWidth}
-          fill={fill}
+          fill="none"
         />
       </Svg>
     );
@@ -1310,11 +1321,25 @@ function ShapeContent({
       : 0;
   return (
     <Svg
+      key={paintKey}
       width="100%"
       height="100%"
       viewBox={`0 0 ${widthPx} ${heightPx}`}
       preserveAspectRatio="none"
     >
+      {fill !== "transparent" ? (
+        <Rect
+          x={inset}
+          y={inset}
+          width={innerW}
+          height={innerH}
+          rx={radius}
+          ry={radius}
+          fill={fill}
+          fillOpacity={1}
+          stroke="none"
+        />
+      ) : null}
       <Rect
         x={inset}
         y={inset}
@@ -1324,7 +1349,7 @@ function ShapeContent({
         ry={radius}
         stroke={color}
         strokeWidth={strokeWidth}
-        fill={fill}
+        fill="none"
       />
     </Svg>
   );

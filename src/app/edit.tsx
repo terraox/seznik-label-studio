@@ -2266,9 +2266,9 @@ export default function EditScreen() {
 
     setElements((elements) => elements.filter((el) => !ids.includes(el.id)), true);
 
-    // Prefer a remaining canvas-selectable element (not border / non-printing chrome).
+    // Prefer a remaining canvas-selectable element (not a border).
     const candidates = sortLayers(remaining).filter(
-      (el) => el.type !== 'border' && el.needPrinting !== false && isEditorVisible(el),
+      (el) => el.type !== 'border' && isEditorVisible(el),
     );
     const next = candidates.length > 0 ? candidates[candidates.length - 1] : null;
 
@@ -2480,7 +2480,7 @@ export default function EditScreen() {
   const handleSelect = useCallback(
     (id: string, source: SelectSource = 'touch') => {
       const element = docRef.current.elements.find((el) => el.id === id);
-      if (!element || element.needPrinting === false) return;
+      if (!element) return;
       if (!mountedRef.current) return;
       // Borders are not canvas-selectable — only the Border menu may open their panel.
       if (element.type === 'border' && source !== 'menu') return;

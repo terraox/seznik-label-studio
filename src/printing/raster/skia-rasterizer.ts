@@ -938,6 +938,18 @@ function drawLine(
   }
 }
 
+/** Print gray (0 ink .. 255 paper) for a shape's fill, matching what the editor paints. */
+function shapeFillGray(el: Extract<LabelElement, { type: 'shape' }>): number {
+  const hex = (el.fillColor ?? '').trim();
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return 0; // no explicit colour: the editor fills with the ink colour
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+}
+
 function drawShape(
   surface: RasterSurface,
   el: Extract<LabelElement, { type: 'shape' }>,
@@ -946,14 +958,32 @@ function drawShape(
 ): void {
   const { x0, y0, w, h } = box;
   const stroke = Math.max(1, Math.round(el.lineWidth * dpm));
-  if (el.figureShape === 'oval' || el.figureShape === 'circle') {
-    const rx = el.figureShape === 'circle' ? Math.min(w, h) / 2 : w / 2;
-    const ry = el.figureShape === 'circle' ? Math.min(w, h) / 2 : h / 2;
-    surface.fillEllipse(x0 + w / 2, y0 + h / 2, rx, ry, el.fill ? 0 : 255);
+  const curved = el.figureShape === 'oval' || el.figureShape === 'circle' || el.figureShape === 'roundedRectangle';
+  if (!curved) {
+    if (el.fill) surface.fillRect(x0, y0, w, h, shapeFillGray(el));
+    surface.strokeRect(x0, y0, w, h, stroke, 0);
     return;
   }
-  if (el.fill) surface.fillRect(x0, y0, w, h, 0);
-  else surface.strokeRect(x0, y0, w, h, stroke, 0);
+  let sx = x0;
+  let sy = y0;
+  let sw = w;
+  let sh = h;
+  let kind: 'roundRect' | 'ellipse' = 'ellipse';
+  if (el.figureShape === 'circle') {
+    // A circle is the largest square that fits, centred in the box, like the editor draws it.
+    const side = Math.min(w, h);
+    sx = x0 + (w - side) / 2;
+    sy = y0 + (h - side) / 2;
+    sw = side;
+    sh = side;
+  } else if (el.figureShape === 'roundedRectangle') {
+    kind = 'roundRect';
+  }
+  const radius = Math.max(0, el.roundRadius * dpm);
+  if (el.fill) {
+    surface.paintShape({ kind, x: sx, y: sy, w: sw, h: sh, radius, stroke: null }, shapeFillGray(el));
+  }
+  surface.paintShape({ kind, x: sx, y: sy, w: sw, h: sh, radius, stroke }, 0);
 }
 
 /** Frozen 50×30 mm fixture from PHASE_4_PLAN.md Part 1. */

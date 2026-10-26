@@ -1764,6 +1764,12 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   // as the box grows. The frame's own width/height is the size instead.
   const lineEmojiFrame =
     element.type === 'clipart' && element.clipartId.startsWith('le-') && element.tile !== true;
+  // The Android hardware layer keeps a bitmap of the shape; a new key on a style change drops it,
+  // otherwise toggling Fill leaves the old picture on the canvas.
+  const shapePaintKey =
+    element.type === 'shape'
+      ? `${element.fill ? 1 : 0}|${element.fillColor ?? ''}|${element.drawingColorIndex}|${element.figureShape}`
+      : undefined;
   const liveScaleContent =
     !lineEmojiFrame &&
     element.type !== 'border' &&
@@ -1825,8 +1831,8 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   });
 
   // Borders are display-only on the canvas: edit them via the Border tool in the menu.
-  // Non-printing chrome is also non-interactive.
-  if (element.type === 'border' || element.needPrinting === false) {
+  // An element that is set not to print stays fully editable (move, resize, select).
+  if (element.type === 'border') {
     return (
       <View
         pointerEvents="none"
@@ -1847,11 +1853,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             heightPx={baseHeightPx}
             scale={pxPerMMSafe}
             mediaShape={borderMediaShape}
-            selectedTableCell={element.type === 'table' ? selectedTableCell : null}
+            selectedTableCell={null}
             tableSelectionColor={tableSelectionColor}
           />
         </View>
-        {element.type === 'border' && selected ? (
+        {selected ? (
           <View
             pointerEvents="none"
             style={{
@@ -1891,6 +1897,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
               }
             : {})}>
           <Animated.View
+            key={shapePaintKey}
             pointerEvents="none"
             collapsable={false}
             renderToHardwareTextureAndroid={liveScaleContent}
