@@ -724,7 +724,7 @@ export function normalizeDocumentElements(doc: LabelDocument): LabelElement[] {
  * QR codes are constrained to 1:1 square ratio.
  * Barcodes enforce an optical scan aspect proportion guard (<= 6:1) with a 3.5mm floor.
  */
-function scaleElementFields(
+export function scaleElementFields(
   el: LabelElement,
   sx: number,
   sy: number,

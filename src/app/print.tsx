@@ -159,6 +159,7 @@ import { warmupPrintRasterSurface } from '@/printing/raster/skia-surface';
 import { prepareImageTiles } from '@/printing/raster/image-tiles';
 import { TD404_HEADLESS_SKIA_PRINT } from '@/printing/raster/td404-headless-flag';
 import { loadInstalledFontsIntoRuntime } from '@/lib/fonts/runtime';
+import { turnDocumentContents, type ContentTurn } from '@/lib/turn-document';
 import { ensurePrintTypefacesForDocument, missingPrintTypefaces } from '@/printing/raster/print-typeface';
 import { useDataStore, type ExcelSheet } from '@/stores/data-store';
 import { useLabelStore } from '@/stores/label-store';
@@ -891,6 +892,24 @@ export default function PrintScreen() {
     [buildBasePageDocument, serialInfo, liveSerialOffset],
   );
 
+  // A turned job keeps the label as it is and turns what is printed on it, so the document itself is
+  // turned here and every printer path then prints an ordinary un-turned job (what the preview shows).
+  // Photo / PDF jobs, Fit Label, cable flags, jewellery and rat-tail keep the old bitmap rotation.
+  const requestedTurn = (
+    ratTail143Job ? 0 : parseInt(orientation.replace('°', ''), 10)
+  ) as ContentTurn;
+  const turnsContents = useCallback(
+    (doc: LabelDocument | null | undefined): boolean =>
+      doc != null &&
+      requestedTurn !== 0 &&
+      !cableFlagJob &&
+      !jewelryDieCutJob &&
+      !doc.ups &&
+      !doc.upsTile &&
+      !isFitLabelImageOnlyDocument(doc),
+    [requestedTurn, cableFlagJob, jewelryDieCutJob],
+  );
+
   const applyDisplayTransforms = useCallback(
     (preview: LabelDocument | null): LabelDocument | null => {
       if (!preview || !printSize) return preview;
@@ -915,9 +934,12 @@ export default function PrintScreen() {
       if (isFitLabelImageOnlyDocument(preview)) {
         return refitFitLabelDocument(preview, printSize.widthMm, printSize.heightMm);
       }
-      return applyPrintSize(preview, printPreset, printSize);
+      const sized = applyPrintSize(preview, printPreset, printSize);
+      return turnsContents(preview) ? turnDocumentContents(sized, requestedTurn) : sized;
     },
     [
+      turnsContents,
+      requestedTurn,
       printSize,
       printPreset,
       jewelryDieCutJob,
@@ -931,6 +953,8 @@ export default function PrintScreen() {
     () => buildPageDocument(Math.min(pageIndex, pageCount - 1)),
     [buildPageDocument, pageIndex, pageCount],
   );
+
+  const turnedInDoc = turnsContents(previewDocument);
 
   const displayDocument = useMemo(
     () => applyDisplayTransforms(previewDocument),
@@ -1054,7 +1078,7 @@ export default function PrintScreen() {
     const doc = layerPreviewDocument ?? displayDocument ?? previewDocument;
     return !!doc && canvasFillFromDocument(doc) === 'transparent';
   }, [layerPreviewDocument, displayDocument, previewDocument]);
-  const orientationDegNow = parseInt(orientation.replace('°', ''), 10);
+  const orientationDegNow = turnedInDoc ? 0 : parseInt(orientation.replace('°', ''), 10);
   const layerWarning = useMemo(() => {
     if (!layerOffsetsUsable) return null;
     const baked =
@@ -1154,12 +1178,22 @@ export default function PrintScreen() {
   );
   const previewAreaMinHeight = maxPreviewHeight + 56; // 28 px padding each side
 
-  // The print job rotates the bitmap by the chosen orientation, so show the contents turned the
-  // same way (clockwise, matching rotateGray).
-  const previewTurn = ratTail143Job ? 0 : parseInt(orientation.replace('°', ''), 10);
-  // The label keeps its own shape and orientation; only its contents are turned (see LabelPreview).
-  const previewBoxW = cardWidth;
-  const previewBoxH = cardHeight;
+  // A turned label job is turned inside its document (see `turnsContents`), so the preview just shows
+  // that document. Jobs that still rotate the bitmap (photo, PDF, Fit Label, cable flag, rat-tail,
+  // jewellery) show the whole label turned the same way, clockwise like rotateGray; quarter turns
+  // swap the box the label is fitted into.
+  const previewTurn = ratTail143Job || turnedInDoc ? 0 : parseInt(orientation.replace('°', ''), 10);
+  const previewQuarter = previewTurn === 90 || previewTurn === 270;
+  const turned = fitLabelSize(
+    previewQuarter ? (activeDoc?.heightMm ?? 44) : (activeDoc?.widthMm ?? 80),
+    previewQuarter ? (activeDoc?.widthMm ?? 80) : (activeDoc?.heightMm ?? 44),
+    Math.round(baseCardWidth * zoom),
+    Math.round(maxPreviewHeight * zoom),
+  );
+  const previewBoxW = turned.widthPx;
+  const previewBoxH = turned.heightPx;
+  const previewDrawW = previewQuarter ? previewBoxH : previewBoxW;
+  const previewDrawH = previewQuarter ? previewBoxW : previewBoxH;
 
   const historySource: PrintHistoryEntry['source'] = params.labelId
     ? 'label'
@@ -1256,8 +1290,13 @@ export default function PrintScreen() {
 
     const widthMm = (displayDocument ?? previewDocument)?.widthMm ?? defaults.labelWidth;
     const heightMm = (displayDocument ?? previewDocument)?.heightMm ?? defaults.labelHeight;
+    // A turned document is already printed upright; only the old bitmap-rotation jobs rotate here.
     const orientationDeg = (
-      ratTail143Job ? RAT_TAIL_143_PRINT.captureOrientation : parseInt(orientation.replace('°', ''), 10)
+      ratTail143Job
+        ? RAT_TAIL_143_PRINT.captureOrientation
+        : turnedInDoc
+          ? 0
+          : parseInt(orientation.replace('°', ''), 10)
     ) as LabelOrientation;
     const paper = ratTail143Job
       ? ratTail143PrintPaper()
@@ -2467,6 +2506,7 @@ export default function PrintScreen() {
     defaults.colorMode,
     defaults.grayThreshold,
     orientation,
+    turnedInDoc,
     effLayerOffsets,
     darkness,
     speed,
@@ -2495,7 +2535,7 @@ export default function PrintScreen() {
     calibrationKey,
   ]);
 
-  const unrotatedJob = !ratTail143Job && orientation === '0°';
+  const unrotatedJob = !ratTail143Job && (turnedInDoc || orientation === '0°');
   const captureShiftMm = useMemo(() => {
     if (!unrotatedJob) return undefined;
     if (printerSdkId === 'josh') {
@@ -2532,15 +2572,16 @@ export default function PrintScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
-                <LabelPreview
-                  document={(layerPreviewDocument ?? displayDocument ?? previewDocument)!}
-                  width={previewBoxW}
-                  maxHeight={previewBoxH}
-                  showArtboardBorder={false}
-                  hideNonPrinting
-                  showShapeGuides
-                  contentTurnDeg={previewTurn}
-                />
+                <View style={{ transform: [{ rotate: `${previewTurn}deg` }] }}>
+                  <LabelPreview
+                    document={(layerPreviewDocument ?? displayDocument ?? previewDocument)!}
+                    width={previewDrawW}
+                    maxHeight={previewDrawH}
+                    showArtboardBorder={false}
+                    hideNonPrinting
+                    showShapeGuides
+                  />
+                </View>
               </View>
             ) : params.imageUri ? (
               <View style={[styles.previewCard, { width: cardWidth, height: cardHeight }]}>
