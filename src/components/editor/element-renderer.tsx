@@ -603,15 +603,10 @@ function TextContent({
   );
 }
 
+/** A counter is text whose value is `content`: drawn by the Text renderer so wrapping, italic and the decoration bars are the same. */
 function DegreesContent({
   element,
-  scale,
-  heightPx,
-  layoutWidthMm,
-  layoutHeightMm,
-  liveReflowSv,
-  liveWidthSv,
-  liveHeightSv,
+  ...rest
 }: {
   element: DegreesElementState;
   scale: number;
@@ -623,118 +618,7 @@ function DegreesContent({
   liveWidthSv?: SharedValue<number>;
   liveHeightSv?: SharedValue<number>;
 }) {
-  const rememberWhenSettled = useSettledLineMemory(scale);
-  const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
-  const highlightColumnName = useSettingsStore(
-    (s) => s.editor.highlightColumnName,
-  );
-  const raw = resolveTextRaw(element, element.content, showColumnName);
-  const resolvedFamily = resolveEditorFontFamily(raw, element.fontFamily);
-  const frameH =
-    layoutHeightMm ??
-    (scale > 0 && typeof heightPx === "number" && heightPx > 0 ? heightPx / scale : element.height);
-  const autoHeight = element.autoTextHeight !== false && element.autoWrapping !== "Close";
-  const drawFont =
-    autoHeight || layoutWidthMm != null
-      ? element.fontSize
-      : typeof frameH === "number" && frameH > 0
-        ? resolveDrawFontSizePt({
-            text: raw,
-            fontSize: element.fontSize,
-            widthMm: element.width,
-            heightMm: frameH,
-            autoWrapping: element.autoWrapping,
-            lineSpacing: element.lineSpacing,
-            charSpacing: element.charSpacing,
-            bold: element.bold,
-            verticalDisplay: element.verticalDisplay,
-            fontFamily: resolvedFamily ?? element.fontFamily,
-          })
-        : element.fontSize;
-  const drawElement = drawFont === element.fontSize ? element : { ...element, fontSize: drawFont };
-  const style = textStyleFor(drawElement, scale, resolvedFamily, raw);
-  const formatted = formatTextForRender(drawElement, raw, layoutWidthMm, resolvedFamily);
-  const align = element.align === "spacing" ? "justify" : element.align;
-  const swap = useReflowSwapStyles(liveReflowSv, liveWidthSv);
-  const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
-  return (
-    <View
-      style={[
-        styles.fill,
-        {
-          justifyContent: "flex-start",
-          alignItems:
-            align === "center"
-              ? "center"
-              : align === "right"
-                ? "flex-end"
-                : "stretch",
-          overflow: autoHeight ? "visible" : "hidden",
-        },
-        element.antiColor && styles.antiBg,
-        dataColumnHighlightStyle(element, highlightColumnName),
-      ]}
-    >
-      <View collapsable={false} style={[styles.textFill, previewItalicWrapStyle(element.italic)]}>
-        <RestingText
-          allowFontScaling={false}
-          style={[
-            style,
-            { width: "100%" },
-            { textAlign: align },
-            letterSpacingStyle(drawElement, raw, scale),
-            liveReflowSv ? swap.resting : null,
-          ]}
-          numberOfLines={formatted.numberOfLines}
-          ellipsizeMode={
-            "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
-          }
-          onTextLayout={
-            layoutWidthMm != null
-              ? undefined
-              : (event) => {
-                  if (liveReflowSv?.value) return;
-                  if (!formatted.layoutKey) return;
-                  rememberWhenSettled(
-                    formatted.layoutKey,
-                    cleanNativeLines(
-                      event.nativeEvent.lines.map((line) => line.text),
-                      raw,
-                    ),
-                  );
-                }
-          }
-        >
-          {formatted.text}
-        </RestingText>
-      </View>
-      {liveReflowSv ? (
-        <View
-          pointerEvents="none"
-          style={[styles.liveReflowText, previewItalicWrapStyle(element.italic)]}
-        >
-          <Animated.Text
-            pointerEvents="none"
-            allowFontScaling={false}
-            style={[
-              textStyleFor(element, scale, resolvedFamily, raw),
-              { width: "100%" },
-              { textAlign: align },
-              letterSpacingStyle(element, raw, scale),
-              swap.live,
-            ]}
-            onLayout={(e) => {
-              if (!liveHeightSv) return;
-              const h = e.nativeEvent.layout.height;
-              if (h > 0) liveHeightSv.value = h;
-            }}
-          >
-            {raw}
-          </Animated.Text>
-        </View>
-      ) : null}
-    </View>
-  );
+  return <TextContent element={{ ...element, text: element.content }} {...rest} />;
 }
 
 function TimeContent({

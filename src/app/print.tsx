@@ -159,7 +159,6 @@ import { warmupPrintRasterSurface } from '@/printing/raster/skia-surface';
 import { prepareImageTiles } from '@/printing/raster/image-tiles';
 import { TD404_HEADLESS_SKIA_PRINT } from '@/printing/raster/td404-headless-flag';
 import { loadInstalledFontsIntoRuntime } from '@/lib/fonts/runtime';
-import { turnDocumentContents, type ContentTurn } from '@/lib/turn-document';
 import { ensurePrintTypefacesForDocument, missingPrintTypefaces } from '@/printing/raster/print-typeface';
 import { useDataStore, type ExcelSheet } from '@/stores/data-store';
 import { useLabelStore } from '@/stores/label-store';
@@ -892,23 +891,9 @@ export default function PrintScreen() {
     [buildBasePageDocument, serialInfo, liveSerialOffset],
   );
 
-  // A turned job keeps the label as it is and turns what is printed on it, so the document itself is
-  // turned here and every printer path then prints an ordinary un-turned job (what the preview shows).
-  // Photo / PDF jobs, Fit Label, cable flags, jewellery and rat-tail keep the old bitmap rotation.
-  const requestedTurn = (
-    ratTail143Job ? 0 : parseInt(orientation.replace('°', ''), 10)
-  ) as ContentTurn;
-  const turnsContents = useCallback(
-    (doc: LabelDocument | null | undefined): boolean =>
-      doc != null &&
-      requestedTurn !== 0 &&
-      !cableFlagJob &&
-      !jewelryDieCutJob &&
-      !doc.ups &&
-      !doc.upsTile &&
-      !isFitLabelImageOnlyDocument(doc),
-    [requestedTurn, cableFlagJob, jewelryDieCutJob],
-  );
+  // The whole label turns with everything on it: the paper size swaps on a quarter turn and the bitmap
+  // is rotated once in JS for every printer (rotatePngBase64 / rotateGray), so the print matches the
+  // turned preview. Contents are never turned inside the document.
 
   const applyDisplayTransforms = useCallback(
     (preview: LabelDocument | null): LabelDocument | null => {
@@ -934,12 +919,9 @@ export default function PrintScreen() {
       if (isFitLabelImageOnlyDocument(preview)) {
         return refitFitLabelDocument(preview, printSize.widthMm, printSize.heightMm);
       }
-      const sized = applyPrintSize(preview, printPreset, printSize);
-      return turnsContents(preview) ? turnDocumentContents(sized, requestedTurn) : sized;
+      return applyPrintSize(preview, printPreset, printSize);
     },
     [
-      turnsContents,
-      requestedTurn,
       printSize,
       printPreset,
       jewelryDieCutJob,
@@ -953,8 +935,6 @@ export default function PrintScreen() {
     () => buildPageDocument(Math.min(pageIndex, pageCount - 1)),
     [buildPageDocument, pageIndex, pageCount],
   );
-
-  const turnedInDoc = turnsContents(previewDocument);
 
   const displayDocument = useMemo(
     () => applyDisplayTransforms(previewDocument),
@@ -1078,7 +1058,7 @@ export default function PrintScreen() {
     const doc = layerPreviewDocument ?? displayDocument ?? previewDocument;
     return !!doc && canvasFillFromDocument(doc) === 'transparent';
   }, [layerPreviewDocument, displayDocument, previewDocument]);
-  const orientationDegNow = turnedInDoc ? 0 : parseInt(orientation.replace('°', ''), 10);
+  const orientationDegNow = parseInt(orientation.replace('°', ''), 10);
   const layerWarning = useMemo(() => {
     if (!layerOffsetsUsable) return null;
     const baked =
@@ -1178,11 +1158,9 @@ export default function PrintScreen() {
   );
   const previewAreaMinHeight = maxPreviewHeight + 56; // 28 px padding each side
 
-  // A turned label job is turned inside its document (see `turnsContents`), so the preview just shows
-  // that document. Jobs that still rotate the bitmap (photo, PDF, Fit Label, cable flag, rat-tail,
-  // jewellery) show the whole label turned the same way, clockwise like rotateGray; quarter turns
-  // swap the box the label is fitted into.
-  const previewTurn = ratTail143Job || turnedInDoc ? 0 : parseInt(orientation.replace('°', ''), 10);
+  // Every job rotates the bitmap, so the preview shows the whole label turned the same way, clockwise
+  // like rotateGray; quarter turns swap the box the label is fitted into.
+  const previewTurn = ratTail143Job ? 0 : parseInt(orientation.replace('°', ''), 10);
   const previewQuarter = previewTurn === 90 || previewTurn === 270;
   const turned = fitLabelSize(
     previewQuarter ? (activeDoc?.heightMm ?? 44) : (activeDoc?.widthMm ?? 80),
@@ -1294,9 +1272,7 @@ export default function PrintScreen() {
     const orientationDeg = (
       ratTail143Job
         ? RAT_TAIL_143_PRINT.captureOrientation
-        : turnedInDoc
-          ? 0
-          : parseInt(orientation.replace('°', ''), 10)
+        : parseInt(orientation.replace('°', ''), 10)
     ) as LabelOrientation;
     const paper = ratTail143Job
       ? ratTail143PrintPaper()
@@ -2506,7 +2482,6 @@ export default function PrintScreen() {
     defaults.colorMode,
     defaults.grayThreshold,
     orientation,
-    turnedInDoc,
     effLayerOffsets,
     darkness,
     speed,
@@ -2535,7 +2510,7 @@ export default function PrintScreen() {
     calibrationKey,
   ]);
 
-  const unrotatedJob = !ratTail143Job && (turnedInDoc || orientation === '0°');
+  const unrotatedJob = !ratTail143Job && orientation === '0°';
   const captureShiftMm = useMemo(() => {
     if (!unrotatedJob) return undefined;
     if (printerSdkId === 'josh') {
