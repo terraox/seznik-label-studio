@@ -1,7 +1,7 @@
 # Admin panel: task list
 
 Built one at a time, in this order. A task is crossed off (`[x]`) only after it was run and its evidence is written next to it.
-Local only (no AWS until the last group). Source plan: `BACKEND_ADMIN_PLAN.md`. Diagram: `database.dbml`.
+Local only (no AWS until the last group). Source plan: `docs/BACKEND_ADMIN_PLAN.md`. Diagram: `database.dbml`.
 
 Rules for every task: schema change -> migration + `database.dbml` updated -> `npm run ci` green -> a check run against the real server.
 

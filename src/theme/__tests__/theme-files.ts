@@ -32,7 +32,6 @@ export const CONVERTED_FILES: string[] = [
   'src/components/hint-row.tsx',
   'src/components/walkthrough/walkthrough-overlay.tsx',
   'src/components/walkthrough/walkthrough-target.tsx',
-  'src/components/intro-screen.tsx',
   // G2 (pulled forward)
   'src/app/(tabs)/setting.tsx',
   // Bulk conversion (G2, G3, G4b, G5 printers, G6, G7)

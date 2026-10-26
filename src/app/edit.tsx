@@ -5400,7 +5400,7 @@ export default function EditScreen() {
         onSaveAs={handleSaveAs}
         onShare={() => {
           saveDocument(false);
-          router.push({ pathname: '/share', params: { labelId: docRef.current.id } });
+          router.push({ pathname: '/share', params: { labelId: docRef.current.id, from: 'canvas' } });
         }}
         onUpload={() => {
           saveDocument(false);

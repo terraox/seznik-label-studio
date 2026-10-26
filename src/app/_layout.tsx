@@ -3,14 +3,13 @@ import { useFonts } from 'expo-font';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { Component, type ErrorInfo, type ReactNode, useCallback, useEffect, useState } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import { AppState, ScrollView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { preloadFeatureBanners } from '@/components/home/feature-banners';
 import { FeedbackPrompt } from '@/components/feedback-prompt';
-import { IntroScreen } from '@/components/intro-screen';
 import { NavigationBarScrim } from '@/components/navigation-bar-scrim';
 import { IosAlertHost } from '@/components/ui/ios-alert-host';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
@@ -21,6 +20,7 @@ import { hydrateUserClipartSvgs } from '@/lib/clipart/user-storage';
 import { migrateLegacyUserFiles } from '@/lib/user-files/migrate';
 import { flushNow, flushOnBackground } from '@/lib/telemetry/events';
 import { useAuthStore } from '@/stores/auth-store';
+import { openIncomingFile } from '@/lib/file-import/open-incoming-file';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
 import { usePrinterStore } from '@/stores/printer-store';
 import { AppThemeProvider, DarkColors, useScheme, useSettingsHydrated } from '@/theme';
@@ -111,24 +111,26 @@ function AppRoot() {
       });
   }, []);
 
-  // The splash plays alone first. The navigator (and so the home screen, its tabs and the
-  // first-run walkthrough) only mounts once the animation has finished.
-  const [appReady, setAppReady] = useState(false);
-  const [splashDone, setSplashDone] = useState(false);
-  const handleSplashFinish = useCallback(() => setAppReady(true), []);
-  const handleSplashDone = useCallback(() => setSplashDone(true), []);
+  // The native splash (static logo) stays up until the stores have loaded; then the navigator mounts.
+  const appReady = true;
   const authHydrated = useAuthStore((s) => s.hydrated);
   const signedIn = useAuthStore((s) => s.token !== null);
   const needsPrinter = useAuthStore((s) => s.needsPrinter);
 
-  // A spreadsheet shared to the app opens Data File once the app is ready and signed in.
-  useIncomingSharedFile();
-  const hasIncomingFile = useIncomingFileStore((s) => s.pending !== null);
+  const settingsReady = authHydrated && settingsHydrated;
   useEffect(() => {
-    if (hasIncomingFile && appReady && authHydrated && signedIn) {
-      router.push('/data-file');
+    if (settingsReady) SplashScreen.hideAsync().catch(() => {});
+  }, [settingsReady]);
+
+  // A file sent to the app ("Open with" or share: Excel, PDF, .seznik) opens on its own screen
+  // once the app is ready and signed in.
+  useIncomingSharedFile();
+  const incomingFile = useIncomingFileStore((s) => s.pending);
+  useEffect(() => {
+    if (incomingFile && appReady && authHydrated && signedIn) {
+      void openIncomingFile(incomingFile);
     }
-  }, [hasIncomingFile, appReady, authHydrated, signedIn]);
+  }, [incomingFile, appReady, authHydrated, signedIn]);
 
   return (
     <ThemeProvider value={scheme === 'dark' ? NavDarkTheme : DefaultTheme}>
@@ -232,7 +234,6 @@ function AppRoot() {
         </Stack>
       ) : null}
       <FeedbackPrompt enabled={appReady && signedIn && !needsPrinter} />
-      {splashDone ? null : <IntroScreen onFinish={handleSplashFinish} onDone={handleSplashDone} />}
       <NavigationBarScrim />
     </ThemeProvider>
   );

@@ -88,11 +88,11 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FEFEFE",
-          "image": "./assets/images/splash-blank.png",
-          "imageWidth": 8,
+          "image": "./assets/images/logo-intro.png",
+          "imageWidth": 200,
           "dark": {
             "backgroundColor": "#000000",
-            "image": "./assets/images/splash-blank.png"
+            "image": "./assets/images/logo-intro.png"
           }
         }
       ],
@@ -135,7 +135,8 @@
               "targetCellWidth": 4,
               "targetCellHeight": 2,
               "resizeMode": "horizontal|vertical",
-              "widgetCategory": "home_screen"
+              "widgetCategory": "home_screen",
+              "previewImage": "./assets/widget-previews/seznikfeatures.png"
             },
             {
               "name": "SeznikShipping",
@@ -146,7 +147,8 @@
               "targetCellWidth": 4,
               "targetCellHeight": 2,
               "resizeMode": "horizontal|vertical",
-              "widgetCategory": "home_screen"
+              "widgetCategory": "home_screen",
+              "previewImage": "./assets/widget-previews/seznikshipping.png"
             }
           ]
         }

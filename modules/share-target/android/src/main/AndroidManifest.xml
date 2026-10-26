@@ -1,14 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
     <!--
-      Lets the user send a spreadsheet to SEZ Print (Google Sheets: Share & export > Send a copy,
-      or any file manager). The alias forwards the intent to the app's MainActivity.
+      Makes the app appear in "Open with" and in the share sheet for the files it supports:
+      spreadsheets (Excel, CSV), PDFs and .seznik label files. The alias forwards the intent to
+      the app's MainActivity, where the ShareTarget module copies the file into the app cache.
     -->
     <activity-alias
       android:name="expo.modules.sharetarget.ShareTargetAlias"
       android:targetActivity="com.sezprint.app.MainActivity"
       android:exported="true"
-      android:label="SEZ Print">
+      android:icon="@mipmap/ic_launcher"
+      android:roundIcon="@mipmap/ic_launcher_round"
+      android:label="Seznik Label Studio">
+
+      <!-- Share sheet: spreadsheets, PDFs and label files. -->
       <intent-filter>
         <action android:name="android.intent.action.SEND" />
         <category android:name="android.intent.category.DEFAULT" />
@@ -17,6 +22,53 @@
         <data android:mimeType="application/vnd.ms-excel.sheet.macroEnabled.12" />
         <data android:mimeType="text/csv" />
         <data android:mimeType="text/comma-separated-values" />
+        <data android:mimeType="application/pdf" />
+        <data android:mimeType="application/zip" />
+        <data android:mimeType="application/x-zip-compressed" />
+        <data android:mimeType="application/octet-stream" />
+      </intent-filter>
+
+      <!-- Open with: spreadsheets and PDFs, by type. -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="content" />
+        <data android:scheme="file" />
+        <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+        <data android:mimeType="application/vnd.ms-excel" />
+        <data android:mimeType="application/vnd.ms-excel.sheet.macroEnabled.12" />
+        <data android:mimeType="text/csv" />
+        <data android:mimeType="text/comma-separated-values" />
+        <data android:mimeType="application/pdf" />
+      </intent-filter>
+
+      <!-- Open with: .seznik label files. Phones report them as a zip or unknown binary, so the
+           type alone is not enough; the file name is checked in the app. -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="content" />
+        <data android:scheme="file" />
+        <data android:mimeType="application/zip" />
+        <data android:mimeType="application/x-zip-compressed" />
+        <data android:mimeType="application/octet-stream" />
+        <data android:mimeType="application/vnd.sezprint.label+zip" />
+      </intent-filter>
+
+      <!-- Open with: .seznik (and the older .sezlabel) by file name, whatever type the phone reports. -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="content" />
+        <data android:scheme="file" />
+        <data android:host="*" />
+        <data android:mimeType="*/*" />
+        <data android:pathPattern=".*\\.seznik" />
+        <data android:pathPattern=".*\\..*\\.seznik" />
+        <data android:pathPattern=".*\\.sezlabel" />
       </intent-filter>
     </activity-alias>
   </application>

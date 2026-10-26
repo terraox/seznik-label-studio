@@ -1,7 +1,7 @@
 import { requireNativeModule } from 'expo-modules-core';
 import { Platform } from 'react-native';
 
-/** A spreadsheet sent to the app from another app. `error` is set when it could not be read. */
+/** A file (spreadsheet, PDF or .seznik label) sent to the app from another app. `error` is set when it could not be read. */
 export type SharedFile = {
   name?: string;
   uri?: string;

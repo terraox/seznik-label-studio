@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   Platform,
   Pressable,
   StyleSheet,
@@ -11,64 +12,177 @@ import {
   type TextInputProps,
   View,
 } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  LinearTransition,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  ZoomIn,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { AppIcon } from '@/components/app-icon';
+import { AUTH_COLORS } from '@/components/auth/auth-colors';
+import { OtpVerifiedEffect, VerifiedLabel } from '@/components/auth/otp-success';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export const AUTH_COLORS = {
-  navy: '#12295C',
-  blue: '#0A8CF0',
-  text: '#0F172A',
-  muted: '#64748B',
-  border: '#D7DEE9',
-  field: '#F5F7FB',
-  error: '#DC2626',
-  success: '#16A34A',
-  background: '#FFFFFF',
-};
+export { AUTH_COLORS };
 
 /** System popup so auth failures are never buried below the fold. */
 export function showAuthAlert(title: string, message: string) {
   Alert.alert(title, message);
 }
 
+/** True while the soft keyboard is up, so screens can give the form the room. */
+function useKeyboardOpen() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setOpen(true),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setOpen(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return open;
+}
+
 export function AuthScreen({
   title,
   subtitle,
+  progress,
   children,
 }: {
   title: string;
   subtitle: string;
+  /** Multi-step flows show "Step n of total" above the form. */
+  progress?: { step: number; total: number };
   children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const keyboardOpen = useKeyboardOpen();
   return (
     <FormScrollView
       style={styles.root}
       contentContainerStyle={styles.scroll}
       keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}>
-      <View style={[styles.hero, { paddingTop: insets.top + 20 }]}>
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.View
+        layout={HERO_LAYOUT}
+        style={[
+          styles.hero,
+          keyboardOpen && styles.heroCompact,
+          { paddingTop: insets.top + (keyboardOpen ? 10 : 16) },
+        ]}
+      >
         <View style={styles.blobLarge} />
         <View style={styles.blobMid} />
         <View style={styles.blobSmall} />
-        <View style={styles.logoTile}>
-          <Image
-            source={require('../../../assets/images/logo.png')}
-            style={styles.logo}
-            contentFit="contain"
-          />
-        </View>
-        <Text style={styles.brand}>Seznik</Text>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
-      </View>
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 28 }]}>
+        {keyboardOpen ? null : (
+          <Animated.View
+            entering={FadeIn.duration(220)}
+            exiting={FadeOut.duration(100)}
+            style={styles.heroBrand}
+          >
+            <View style={styles.logoTile}>
+              <Image
+                source={require('../../../assets/images/logo.png')}
+                style={styles.logo}
+                contentFit="contain"
+              />
+            </View>
+            <Text style={styles.brand}>Seznik</Text>
+          </Animated.View>
+        )}
+        <Animated.Text
+          key={title}
+          entering={FadeIn.duration(260)}
+          style={[styles.title, keyboardOpen && styles.titleCompact]}
+        >
+          {title}
+        </Animated.Text>
+        {keyboardOpen ? null : (
+          <Animated.Text
+            key={subtitle}
+            entering={FadeIn.duration(260)}
+            exiting={FadeOut.duration(100)}
+            style={styles.subtitle}
+          >
+            {subtitle}
+          </Animated.Text>
+        )}
+      </Animated.View>
+      <Animated.View
+        layout={HERO_LAYOUT}
+        style={[styles.sheet, { paddingBottom: insets.bottom + 28 }]}
+      >
         <View style={styles.sheetHandle} />
+        {progress ? <StepProgress step={progress.step} total={progress.total} /> : null}
         <View style={styles.form}>{children}</View>
-      </View>
+      </Animated.View>
     </FormScrollView>
+  );
+}
+
+/** Hero and sheet glide when the keyboard opens or the step changes. */
+const HERO_LAYOUT = LinearTransition.duration(240);
+
+function ProgressBar({ on }: { on: boolean }) {
+  const fill = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    fill.value = withTiming(on ? 1 : 0, { duration: 320, easing: Easing.out(Easing.cubic) });
+  }, [on, fill]);
+  const fillStyle = useAnimatedStyle(() => ({ width: `${fill.value * 100}%` }));
+  return (
+    <View style={styles.progressBar}>
+      <Animated.View style={[styles.progressFill, fillStyle]} />
+    </View>
+  );
+}
+
+function StepProgress({ step, total }: { step: number; total: number }) {
+  return (
+    <View style={styles.progress} accessibilityLabel={`Step ${step} of ${total}`}>
+      <View style={styles.progressBars}>
+        {Array.from({ length: total }, (_, i) => (
+          <ProgressBar key={i} on={i < step} />
+        ))}
+      </View>
+      <Text style={styles.progressText}>
+        Step {step} of {total}
+      </Text>
+    </View>
+  );
+}
+
+/** Inline failure message that replaces the popup, so the form stays in view. */
+export function AuthBanner({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(200)}
+      exiting={FadeOut.duration(120)}
+      style={styles.banner}
+      accessibilityRole="alert"
+    >
+      <Text style={styles.bannerText}>{message}</Text>
+    </Animated.View>
   );
 }
 
@@ -92,26 +206,25 @@ export function AuthField({
   return (
     <View style={styles.fieldWrap}>
       <Text style={styles.label}>{label}</Text>
-      <View
-        style={[
-          styles.field,
-          focused && styles.fieldFocused,
-          !!error && styles.fieldError,
-        ]}>
+      <View style={[styles.field, focused && styles.fieldFocused, !!error && styles.fieldError]}>
         {icon ? (
           <AppIcon
             name={icon}
             size={18}
-            tintColor={focused ? AUTH_COLORS.blue : '#94A3B8'}
+            tintColor={focused ? AUTH_COLORS.accent : '#6B6B73'}
             style={styles.fieldIcon}
           />
         ) : null}
-        {prefix ? <Text style={styles.prefix} /* layout-ok: short country code beside the input */>{prefix}</Text> : null}
+        {prefix ? (
+          <Text style={styles.prefix} /* layout-ok: short country code beside the input */>
+            {prefix}
+          </Text>
+        ) : null}
         <TextInput
           style={styles.input}
           placeholderTextColor="#94A3B8"
-          selectionColor={AUTH_COLORS.blue}
-          cursorColor={AUTH_COLORS.blue}
+          selectionColor={AUTH_COLORS.accent}
+          cursorColor={AUTH_COLORS.accent}
           selectTextOnFocus={false}
           autoCapitalize="none"
           autoCorrect={false}
@@ -151,7 +264,8 @@ export function FieldToggle({
       onPress={onPress}
       disabled={disabled}
       hitSlop={10}
-      style={({ pressed }) => [styles.fieldToggle, pressed && { opacity: 0.7 }]}>
+      style={({ pressed }) => [styles.fieldToggle, pressed && { opacity: 0.7 }]}
+    >
       <Text style={[styles.fieldToggleText, disabled && styles.fieldToggleOff]}>{label}</Text>
     </Pressable>
   );
@@ -186,13 +300,7 @@ export function OtpFieldAction({
 
   const cooling = cooldown > 0;
   const off = disabled || busy || cooling;
-  const label = busy
-    ? '…'
-    : cooling
-      ? `${cooldown}s`
-      : sent
-        ? 'Resend'
-        : 'Get OTP';
+  const label = busy ? '…' : cooling ? `${cooldown}s` : sent ? 'Resend' : 'Get OTP';
 
   return (
     <Pressable
@@ -206,13 +314,61 @@ export function OtpFieldAction({
         sent && !cooling && !busy && styles.otpChipResend,
         off && styles.otpChipOff,
         pressed && !off && { opacity: 0.88 },
-      ]}>
+      ]}
+    >
       {busy ? (
         <ActivityIndicator color="#FFFFFF" size="small" />
       ) : (
         <Text style={styles.otpChipText}>{label}</Text>
       )}
     </Pressable>
+  );
+}
+
+/** Six boxes over one hidden input. Autofills the SMS code and calls onComplete when full. */
+/** One OTP box: digit pops in, and a highlight travels across the row while a code is checked. */
+function OtpBox({
+  index,
+  count,
+  char,
+  active,
+  invalid,
+  verifying,
+  wave,
+}: {
+  index: number;
+  count: number;
+  char: string;
+  active: boolean;
+  invalid?: boolean;
+  verifying?: boolean;
+  wave: SharedValue<number>;
+}) {
+  const waveStyle = useAnimatedStyle(() => {
+    const phase = (((wave.value - index / count) % 1) + 1) % 1;
+    const k = phase < 0.45 ? Math.sin((Math.PI * phase) / 0.45) : 0;
+    return {
+      borderColor: interpolateColor(k, [0, 1], ['#3F3F45', AUTH_COLORS.accent]),
+      shadowOpacity: 0.7 * k,
+    };
+  });
+  return (
+    <Animated.View
+      style={[
+        styles.otpBox,
+        Boolean(char) && styles.otpBoxFilled,
+        active && styles.otpBoxActive,
+        invalid && styles.fieldError,
+        verifying && styles.otpBoxWave,
+        verifying && waveStyle,
+      ]}
+    >
+      {char ? (
+        <Animated.Text key={char + index} entering={ZoomIn.duration(140)} style={styles.otpDigit}>
+          {char}
+        </Animated.Text>
+      ) : null}
+    </Animated.View>
   );
 }
 
@@ -225,6 +381,9 @@ export function OtpBoxes({
   invalid,
   autoFocus,
   hint,
+  verifying,
+  success,
+  onSuccessDone,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -233,9 +392,40 @@ export function OtpBoxes({
   invalid?: boolean;
   autoFocus?: boolean;
   hint?: string;
+  /** The code is being checked: a highlight runs across the boxes. */
+  verifying?: boolean;
+  /** Verified: boxes spin into one and a tick draws, then onSuccessDone fires. */
+  success?: boolean;
+  onSuccessDone?: () => void;
 }) {
   const ref = useRef<RNTextInput>(null);
   const [focused, setFocused] = useState(false);
+  const [rowWidth, setRowWidth] = useState(0);
+  const shake = useSharedValue(0);
+  const wave = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shake.value }],
+  }));
+
+  useEffect(() => {
+    if (!invalid) return;
+    shake.value = withSequence(
+      withTiming(-9, { duration: 55 }),
+      withTiming(9, { duration: 90 }),
+      withTiming(-6, { duration: 80 }),
+      withTiming(0, { duration: 60 }),
+    );
+  }, [invalid, shake]);
+
+  useEffect(() => {
+    if (!verifying) {
+      cancelAnimation(wave);
+      wave.value = 0;
+      return;
+    }
+    wave.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.linear }), -1, false);
+    return () => cancelAnimation(wave);
+  }, [verifying, wave]);
 
   useEffect(() => {
     if (autoFocus) {
@@ -250,41 +440,64 @@ export function OtpBoxes({
     if (next.length === length) onComplete?.(next);
   };
 
+  const playing = Boolean(success) && rowWidth > 0;
+
   return (
     <View style={styles.otpBlock}>
-      {hint ? <Text style={styles.otpHint}>{hint}</Text> : null}
-      <Pressable style={styles.otpRow} onPress={() => ref.current?.focus()}>
-        {Array.from({ length }, (_, i) => {
-          const active = focused && i === Math.min(value.length, length - 1);
-          const filled = Boolean(value[i]);
-          return (
-            <View
+      <View style={styles.otpTop}>
+        {playing ? (
+          <VerifiedLabel key="verified" />
+        ) : hint ? (
+          <Animated.Text
+            key="hint"
+            exiting={FadeOut.duration(140)}
+            style={[styles.otpHint, StyleSheet.absoluteFill]}
+          >
+            {hint}
+          </Animated.Text>
+        ) : null}
+      </View>
+      <Animated.View style={shakeStyle}>
+        {/* The row stays mounted (just hidden) so the keyboard and layout do not jump. */}
+        <Pressable
+          style={[styles.otpRow, playing && styles.otpRowHidden]}
+          onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}
+          onPress={() => ref.current?.focus()}
+        >
+          {Array.from({ length }, (_, i) => (
+            <OtpBox
               key={i}
-              style={[
-                styles.otpBox,
-                filled && styles.otpBoxFilled,
-                active && styles.otpBoxActive,
-                invalid && styles.fieldError,
-              ]}>
-              <Text style={styles.otpDigit}>{value[i] ?? ''}</Text>
-            </View>
-          );
-        })}
-        <TextInput
-          ref={ref}
-          value={value}
-          onChangeText={change}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          keyboardType="number-pad"
-          maxLength={length}
-          selectTextOnFocus={false}
-          textContentType="oneTimeCode"
-          autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
-          caretHidden
-          style={styles.otpHidden}
-        />
-      </Pressable>
+              index={i}
+              count={length}
+              char={value[i] ?? ''}
+              active={focused && !success && i === Math.min(value.length, length - 1)}
+              invalid={invalid}
+              verifying={verifying && !success}
+              wave={wave}
+            />
+          ))}
+          <TextInput
+            ref={ref}
+            value={value}
+            onChangeText={change}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            editable={!verifying && !success}
+            keyboardType="number-pad"
+            maxLength={length}
+            selectTextOnFocus={false}
+            textContentType="oneTimeCode"
+            autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+            caretHidden
+            style={styles.otpHidden}
+          />
+        </Pressable>
+        {playing ? (
+          <View style={styles.otpOverlay} pointerEvents="none">
+            <OtpVerifiedEffect digits={value} width={rowWidth} onDone={() => onSuccessDone?.()} />
+          </View>
+        ) : null}
+      </Animated.View>
     </View>
   );
 }
@@ -309,7 +522,8 @@ export function PrimaryButton({
         styles.button,
         off && styles.buttonDisabled,
         pressed && !off && { opacity: 0.85 },
-      ]}>
+      ]}
+    >
       {loading ? (
         <ActivityIndicator color="#FFFFFF" />
       ) : (
@@ -334,7 +548,8 @@ export function Segmented<T extends string>({
         <Pressable
           key={o.value}
           onPress={() => onChange(o.value)}
-          style={[styles.segmentItem, o.value === value && styles.segmentItemOn]}>
+          style={[styles.segmentItem, o.value === value && styles.segmentItemOn]}
+        >
           <Text style={[styles.segmentText, o.value === value && styles.segmentTextOn]}>
             {o.label}
           </Text>
@@ -344,11 +559,7 @@ export function Segmented<T extends string>({
   );
 }
 
-export function PasswordRules({
-  rules,
-}: {
-  rules: { id: string; label: string; met: boolean }[];
-}) {
+export function PasswordRules({ rules }: { rules: { id: string; label: string; met: boolean }[] }) {
   return (
     <View style={styles.rules}>
       {rules.map((rule) => (
@@ -363,7 +574,15 @@ export function PasswordRules({
   );
 }
 
-export function LinkText({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+export function LinkText({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
   return (
     <Pressable onPress={onPress} disabled={disabled} hitSlop={8}>
       <Text style={[styles.link, disabled && { color: AUTH_COLORS.muted }]}>{label}</Text>
@@ -385,31 +604,31 @@ export function DevBypassButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.devButton,
-        pressed && styles.devButtonPressed,
-      ]}>
+      style={({ pressed }) => [styles.devButton, pressed && styles.devButtonPressed]}
+    >
       <Text style={styles.devButtonText}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: AUTH_COLORS.navy },
+  root: { flex: 1, backgroundColor: AUTH_COLORS.bg },
   scroll: { flexGrow: 1 },
   hero: {
-    backgroundColor: AUTH_COLORS.navy,
+    backgroundColor: AUTH_COLORS.bg,
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingBottom: 36,
+    paddingBottom: 30,
     overflow: 'hidden',
   },
+  heroBrand: { alignItems: 'center' },
+  heroCompact: { paddingBottom: 14 },
   blobLarge: {
     position: 'absolute',
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: AUTH_COLORS.blue,
+    backgroundColor: AUTH_COLORS.accent,
     opacity: 0.2,
     top: -100,
     right: -80,
@@ -419,7 +638,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#FF8A4C',
     opacity: 0.14,
     top: 40,
     left: -30,
@@ -429,15 +648,15 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: AUTH_COLORS.blue,
+    backgroundColor: AUTH_COLORS.accent,
     opacity: 0.1,
     bottom: -50,
     left: -50,
   },
   logoTile: {
-    width: 84,
-    height: 84,
-    borderRadius: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -447,17 +666,38 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 10,
   },
-  logo: { width: 66, height: 66 },
+  logo: { width: 50, height: 50 },
   brand: {
-    marginTop: 14,
-    fontSize: 13,
+    marginTop: 10,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 3,
-    color: '#7EB6F5',
+    color: '#FF8A4C',
     textTransform: 'uppercase',
   },
+  titleCompact: { fontSize: 22, marginTop: 0 },
+  progress: { gap: 8, marginBottom: 18 },
+  progressBars: { flexDirection: 'row', gap: 6 },
+  progressBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#2A2A2E',
+    overflow: 'hidden',
+  },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: AUTH_COLORS.accent },
+  progressText: { fontSize: 12, fontWeight: '700', color: AUTH_COLORS.muted },
+  banner: {
+    backgroundColor: '#2A1717',
+    borderWidth: 1,
+    borderColor: '#5B2323',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  bannerText: { fontSize: 13, color: AUTH_COLORS.error, lineHeight: 18 },
   title: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',
@@ -465,7 +705,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 15,
-    color: '#B9C7E6',
+    color: '#A1A1AA',
     textAlign: 'center',
     marginTop: 6,
     lineHeight: 21,
@@ -485,16 +725,21 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#35353A',
     marginBottom: 18,
   },
   form: { gap: 16 },
   fieldWrap: { gap: 8 },
-  label: { fontSize: 13, fontWeight: '700', color: AUTH_COLORS.navy, letterSpacing: 0.2 },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E4E4E7',
+    letterSpacing: 0.2,
+  },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: AUTH_COLORS.field,
     borderWidth: 1.5,
     borderColor: AUTH_COLORS.border,
     borderRadius: 16,
@@ -503,8 +748,8 @@ const styles = StyleSheet.create({
     minHeight: 56,
   },
   fieldFocused: {
-    borderColor: AUTH_COLORS.blue,
-    backgroundColor: '#F0F7FF',
+    borderColor: AUTH_COLORS.accent,
+    backgroundColor: AUTH_COLORS.fieldFocus,
   },
   fieldError: { borderColor: AUTH_COLORS.error },
   fieldIcon: { marginRight: 8 },
@@ -529,24 +774,28 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
   },
-  fieldToggleText: { color: AUTH_COLORS.blue, fontWeight: '700', fontSize: 14 },
-  fieldToggleOff: { color: '#A9B4CC' },
+  fieldToggleText: {
+    color: AUTH_COLORS.accent,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  fieldToggleOff: { color: '#55555C' },
   error: { fontSize: 12, color: AUTH_COLORS.error },
   otpChip: {
     minWidth: 84,
     height: 38,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: AUTH_COLORS.blue,
+    backgroundColor: AUTH_COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 6,
   },
   otpChipResend: {
-    backgroundColor: AUTH_COLORS.navy,
+    backgroundColor: '#3A3A40',
   },
   otpChipOff: {
-    backgroundColor: '#C5CDD9',
+    backgroundColor: '#2E2E33',
   },
   otpChipText: {
     color: '#FFFFFF',
@@ -570,6 +819,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   otpBlock: { gap: 10 },
+  otpTop: { minHeight: 20, justifyContent: 'center' },
+  otpRowHidden: { opacity: 0 },
+  otpOverlay: { position: 'absolute', top: 0, left: 0, right: 0, height: 54 },
+  otpBoxWave: {
+    shadowColor: AUTH_COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 10,
+  },
   otpHint: {
     fontSize: 13,
     color: AUTH_COLORS.muted,
@@ -583,17 +840,25 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: AUTH_COLORS.border,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: AUTH_COLORS.field,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  otpBoxFilled: { borderColor: '#B8D4F0', backgroundColor: '#F0F7FF' },
-  otpBoxActive: { borderColor: AUTH_COLORS.blue, backgroundColor: '#E8F3FF' },
-  otpDigit: { fontSize: 22, fontWeight: '800', color: AUTH_COLORS.navy },
-  otpHidden: { position: 'absolute', width: '100%', height: '100%', opacity: 0.02 },
+  otpBoxFilled: { borderColor: '#3F3F45', backgroundColor: '#242427' },
+  otpBoxActive: {
+    borderColor: AUTH_COLORS.accent,
+    backgroundColor: AUTH_COLORS.fieldFocus,
+  },
+  otpDigit: { fontSize: 22, fontWeight: '800', color: AUTH_COLORS.text },
+  otpHidden: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 0.02,
+  },
   segment: {
     flexDirection: 'row',
-    backgroundColor: '#EEF2F8',
+    backgroundColor: '#232326',
     borderRadius: 14,
     padding: 4,
   },
@@ -605,63 +870,72 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentItemOn: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#12295C',
+    backgroundColor: '#35353A',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
   },
   segmentText: { fontSize: 14, fontWeight: '700', color: AUTH_COLORS.muted },
-  segmentTextOn: { color: AUTH_COLORS.navy },
+  segmentTextOn: { color: AUTH_COLORS.text },
   rules: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: -4 },
   ruleChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#232326',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#35353A',
   },
   ruleChipMet: {
-    backgroundColor: '#ECFDF3',
-    borderColor: '#86EFAC',
+    backgroundColor: '#12281F',
+    borderColor: '#1F5C41',
   },
   ruleChipText: { fontSize: 11, fontWeight: '600', color: AUTH_COLORS.muted },
-  ruleChipTextMet: { color: '#166534' },
+  ruleChipTextMet: { color: '#6EE7B7' },
   button: {
     height: 54,
     borderRadius: 16,
-    backgroundColor: AUTH_COLORS.navy,
+    backgroundColor: AUTH_COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
-    shadowColor: AUTH_COLORS.navy,
+    shadowColor: AUTH_COLORS.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.28,
     shadowRadius: 10,
     elevation: 5,
   },
-  buttonDisabled: { backgroundColor: '#A9B4CC', shadowOpacity: 0, elevation: 0 },
-  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
-  link: { color: AUTH_COLORS.blue, fontSize: 14, fontWeight: '700' },
+  buttonDisabled: {
+    backgroundColor: '#2E2E33',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  link: { color: AUTH_COLORS.accent, fontSize: 14, fontWeight: '700' },
   devButton: {
     height: 46,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: '#3F3F45',
     borderStyle: 'dashed',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: AUTH_COLORS.field,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   devButtonPressed: {
-    backgroundColor: '#EEF2F6',
-    borderColor: '#94A3B8',
+    backgroundColor: '#2A2A2E',
+    borderColor: '#6B6B73',
   },
   devButtonText: {
-    color: '#475569',
+    color: '#A1A1AA',
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.2,

@@ -1,5 +1,6 @@
 import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { AppIcon } from '@/components/app-icon';
 import { useMemo, useRef, useState } from 'react';
@@ -25,7 +26,7 @@ function ShareOption({
   color,
   onPress,
 }: {
-  icon: 'square.grid.2x2' | 'photo';
+  icon: 'square.grid.2x2' | 'photo' | 'doc.text';
   label: string;
   color: string;
   onPress?: () => void;
@@ -46,7 +47,7 @@ function ShareOption({
 export default function ShareModal() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ labelId?: string }>();
+  const params = useLocalSearchParams<{ labelId?: string; from?: string }>();
   const documents = useLabelStore((s) => s.documents);
   const shotRef = useRef<ViewShot>(null);
   const [busy, setBusy] = useState(false);
@@ -97,6 +98,32 @@ export default function ShareModal() {
       const message =
         error instanceof ShareFormatError || error instanceof Error ? error.message : 'Could not share.';
       Alert.alert('Share Failed', message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSharePdf = async () => {
+    if (!doc || busy) return;
+    if (!(await ensureSharingAvailable())) return;
+    setBusy(true);
+    try {
+      const capture = shotRef.current?.capture;
+      if (!capture) throw new Error('Could not render the label.');
+      const png = await capture();
+      const base64 = await FileSystem.readAsStringAsync(png, { encoding: FileSystem.EncodingType.Base64 });
+      const widthPt = Math.max(1, Math.round((doc.widthMm / 25.4) * 72));
+      const heightPt = Math.max(1, Math.round((doc.heightMm / 25.4) * 72));
+      const html = `<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>@page{margin:0}html,body{margin:0;padding:0}img{display:block;width:100%;height:100%}</style></head><body><img src="data:image/png;base64,${base64}"/></body></html>`;
+      const file = await Print.printToFileAsync({ html, width: widthPt, height: heightPt });
+      await Sharing.shareAsync(file.uri, {
+        mimeType: 'application/pdf',
+        UTI: 'com.adobe.pdf',
+        dialogTitle: `Share "${doc.name}"`,
+      });
+      goBack();
+    } catch (error) {
+      Alert.alert('Share Failed', error instanceof Error ? error.message : 'Could not create the PDF.');
     } finally {
       setBusy(false);
     }
@@ -191,6 +218,14 @@ export default function ShareModal() {
                 color="#8BC34A" // theme-fixed: category tile colour
                 onPress={() => void handleShareImage()}
               />
+              {params.from === 'canvas' ? (
+                <ShareOption
+                  icon="doc.text"
+                  label="As PDF"
+                  color="#E74C3C" // theme-fixed: category tile colour
+                  onPress={() => void handleSharePdf()}
+                />
+              ) : null}
             </View>
           ) : (
             <Text style={styles.emptyHint}>
@@ -257,7 +292,7 @@ const styles = themedStyles((c) => ({
   },
   option: {
     alignItems: 'center',
-    width: 120,
+    width: 96,
     gap: 10,
   },
   optionIcon: {
