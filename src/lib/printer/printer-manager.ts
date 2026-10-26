@@ -26,6 +26,9 @@ import { joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
 import {
   JOSH_BORDER_PAD_DOTS,
+  JOSH_ELEMENT_X_OFFSET_MM,
+  JOSH_LPAPI_DRAW_BIAS_H_MM,
+  JOSH_LPAPI_DRAW_BIAS_V_MM,
   joshEffectiveDpi,
 } from '@/lib/printer/josh-print';
 import {
@@ -3747,15 +3750,27 @@ class PrinterManager {
   }
 
   /**
-   * Test print through the connected printer's own bridge, at that bridge's normal
-   * Auto darkness and speed. Maximum heat made the TD-404 label come out too dark.
+   * Test print through the connected printer's own bridge (main pipeline), Auto darkness/speed
+   * (max heat fattens TD-404 strokes). Josh only: cancel baked element/LPAPI bias. Tejas keeps
+   * saved calibration.
    */
   async printTestLabel(): Promise<void> {
     if (!this.isConnected) throw new Error('No printer connected.');
     const { doc, lines } = buildTestPrintDocument();
-    const { darkness, speed } = testPrintQuality(this.transport);
-    console.info(`[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=${darkness ?? 'auto'} speed=${speed ?? 'auto'}: ${lines.join(' | ')}`);
-    await printLabelDocumentMainPipeline(doc, { gapMm: 3, darkness, speed });
+    const { darkness, speed } = testPrintQuality();
+    // Josh only: undo baked element X + LPAPI H/V draw bias so 2 mm inset hits the die-cut.
+    const offsetExtraMm = this.isJosh
+      ? {
+          x: -(JOSH_ELEMENT_X_OFFSET_MM + JOSH_LPAPI_DRAW_BIAS_H_MM),
+          y: -JOSH_LPAPI_DRAW_BIAS_V_MM,
+        }
+      : undefined;
+    console.info(
+      `[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=auto speed=auto` +
+        (offsetExtraMm ? ` offsetExtra=${offsetExtraMm.x},${offsetExtraMm.y}` : '') +
+        `: ${lines.join(' | ')}`,
+    );
+    await printLabelDocumentMainPipeline(doc, { gapMm: 3, darkness, speed, offsetExtraMm });
   }
 
   /**
