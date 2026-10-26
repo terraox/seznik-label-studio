@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { corsPreflight, withCors } from '@/lib/cors';
 import { sendOtpSms } from '@/lib/msg91';
 import { blockedResponse, upgradeRequired } from '@/lib/app-auth';
-import { devBypassCode, discardOtp, issueOtp } from '@/lib/otp-store';
+import { discardOtp, issueOtp } from '@/lib/otp-store';
 import { RESEND_COOLDOWN_MS, takeSendSlot } from '@/lib/otp-throttle';
 import { parsePurpose } from '@/lib/otp-proof';
 import { normalizeMobile } from '@/lib/phone';
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     const otp = await issueOtp(mobile, purpose);
-    const result = devBypassCode(mobile) ? { ok: true as const } : await sendOtpSms(mobile, otp);
+    const result = await sendOtpSms(mobile, otp);
     if (!result.ok) {
       await discardOtp(mobile);
       return withCors(NextResponse.json({ error: result.error }, { status: 502 }));
