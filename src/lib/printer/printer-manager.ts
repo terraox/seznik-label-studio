@@ -19,7 +19,7 @@ import {
   bluetoothOffScanResult,
 } from '@/lib/printer/bluetooth-guard';
 import { assertJoshMonoBuffer, joshPackedPageDots } from '@/lib/printer/josh-mono-validate';
-import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
+import { JOSH_DENSITY_MAX, JOSH_SPEED_MIN, resolveJoshJobParams } from '@/lib/printer/josh-job-params';
 import { tsplMedia } from '@/lib/printer/paper-type';
 import { joshCharging, joshFailMessage, joshPrintError, parseJoshFailure, type JoshPrinterStatus } from '@/lib/printer/josh-status';
 import { joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
@@ -432,26 +432,108 @@ class PrinterManager {
     // SDK may still hold a live RFCOMM session after a spurious ACL drop.
     // Josh LPAPI often stays connected after Android fires ACL_DISCONNECTED
     // during profile setup — wait and re-check before tearing the session down.
-    if (this.isConnectionHealthy()) {
+    // The socket flags stay true after a power-off, so ask the link itself.
+    if (this.isConnectionHealthy() && (await this.probeLinkAlive())) {
       console.info(`[printer] ACL drop for ${droppedMac} was transient — SDK still connected`);
       return;
     }
     if (store.sdkId === 'josh' || this.activeTransport === 'josh-lpapi') {
       await new Promise<void>((resolve) => setTimeout(resolve, 1500));
-      if (this.isConnectionHealthy()) {
+      if (this.isConnectionHealthy() && (await this.probeLinkAlive())) {
         console.info(`[printer] ACL drop for ${droppedMac} recovered — JOSH still connected`);
         return;
       }
     }
 
     console.warn(`[printer] ACL_DISCONNECTED confirmed for active printer ${droppedMac}`);
+    this.dropDeadConnection();
+  }
+
+  /** Tear the session down locally and tell the store, once the link is known to be gone. */
+  private dropDeadConnection(): void {
+    const transport = this.activeTransport;
     this.activeTransport = null;
     this.connectionState = 'disconnected';
     this.connectedDevice = null;
     this.writableTarget = null;
     this.autoReconnectSessionKey = null;
+    this.livenessFailures = 0;
     this.stopBatteryPolling();
-    store.clearConnection();
+    usePrinterStore.getState().clearConnection();
+    // Release the native handle so a later reconnect starts clean.
+    if (transport === 'td404-spp') void this.getTd404()?.disconnectTd404().catch(() => {});
+    else if (transport === 'josh-lpapi') void this.getJosh()?.disconnectJosh().catch(() => {});
+  }
+
+  /**
+   * Ask the printer itself whether the link is alive. Socket flags stay true after the printer is
+   * switched off, so a write (TD-404: a harmless CR/LF) or a status read is the only honest answer.
+   * `quiet` skips probes that disturb the printer. Returns true when the link cannot be tested,
+   * so an unknown never drops a good connection.
+   */
+  private async probeLinkAlive(opts?: { quiet?: boolean }): Promise<boolean> {
+    try {
+      if (this.activeTransport === 'td404-spp') {
+        const td404 = this.getTd404();
+        if (!td404) return true;
+        await td404.printTd404Raw(new Uint8Array([0x0d, 0x0a]));
+        return true;
+      }
+      // Josh's status light flashes on every read, so the timed watch leaves it to the ACL drop.
+      if (!opts?.quiet && (this.activeTransport === 'josh-lpapi' || this.isJosh)) {
+        const status = await this.readJoshPrinterStatus(1200);
+        return Boolean(status?.available);
+      }
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
+  private livenessTimer: ReturnType<typeof setInterval> | null = null;
+  private livenessFailures = 0;
+  private livenessInFlight = false;
+  private static readonly LIVENESS_POLL_MS = 8_000;
+  /** Failed probes in a row before the printer counts as gone (one miss can be a busy printer). */
+  private static readonly LIVENESS_FAIL_STREAK = 2;
+
+  /** While connected and idle in the foreground, probe the link so a power-off shows up within seconds. */
+  startLivenessWatch(): void {
+    if (this.livenessTimer || Platform.OS === 'web') return;
+    this.livenessTimer = setInterval(() => void this.checkLiveness(), PrinterManager.LIVENESS_POLL_MS);
+  }
+
+  private async checkLiveness(): Promise<void> {
+    if (this.livenessInFlight || AppState.currentState !== 'active') return;
+    const store = usePrinterStore.getState();
+    if (store.status !== 'connected') {
+      this.livenessFailures = 0;
+      return;
+    }
+    if (this.connectionState === 'printing' || this.connectionState === 'connecting' || this.printQueueDepth > 0) {
+      return;
+    }
+    this.livenessInFlight = true;
+    try {
+      // Native already knows it is gone: let reconcile handle it right now.
+      if (!this.isConnectionHealthy()) {
+        this.dropDeadConnection();
+        return;
+      }
+      if (await this.probeLinkAlive({ quiet: true })) {
+        this.livenessFailures = 0;
+        return;
+      }
+      // A print may have started while the probe ran.
+      if (usePrinterStore.getState().status !== 'connected') return;
+      this.livenessFailures += 1;
+      if (this.livenessFailures >= PrinterManager.LIVENESS_FAIL_STREAK) {
+        console.warn('[printer] liveness probe failed — printer unreachable, marking disconnected');
+        this.dropDeadConnection();
+      }
+    } finally {
+      this.livenessInFlight = false;
+    }
   }
 
   /** OS-level ACL link events — catches drops the SDK read loop misses. */
@@ -3750,14 +3832,17 @@ class PrinterManager {
   }
 
   /**
-   * Test print through the connected printer's own bridge (main pipeline), Auto darkness/speed
-   * (max heat fattens TD-404 strokes). Josh only: cancel baked element/LPAPI bias. Tejas keeps
-   * saved calibration.
+   * Test print through the connected printer's own bridge. Tejas/Rudra: Auto heat (max fattens
+   * TD-404 strokes). Josh: max density + slowest speed (no bitmap ink grow). Josh also cancels
+   * baked element/LPAPI bias; Tejas keeps saved calibration.
    */
   async printTestLabel(): Promise<void> {
     if (!this.isConnected) throw new Error('No printer connected.');
     const { doc, lines } = buildTestPrintDocument();
-    const { darkness, speed } = testPrintQuality();
+    const quality = testPrintQuality(this.transport);
+    // Force LPAPI ceiling when the live session is Josh (bridge id can lag the store).
+    const darkness = this.isJosh ? (quality.darkness ?? JOSH_DENSITY_MAX) : quality.darkness;
+    const speed = this.isJosh ? (quality.speed ?? JOSH_SPEED_MIN) : quality.speed;
     // Josh only: undo baked element X + LPAPI H/V draw bias so 2 mm inset hits the die-cut.
     const offsetExtraMm = this.isJosh
       ? {
@@ -3766,7 +3851,7 @@ class PrinterManager {
         }
       : undefined;
     console.info(
-      `[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=auto speed=auto` +
+      `[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=${darkness ?? 'auto'} speed=${speed ?? 'auto'}` +
         (offsetExtraMm ? ` offsetExtra=${offsetExtraMm.x},${offsetExtraMm.y}` : '') +
         `: ${lines.join(' | ')}`,
     );
@@ -4792,6 +4877,7 @@ export function getPrinterManager(): PrinterManager {
     manager = new PrinterManager();
     manager.setupAclListener();
     manager.setupSessionDropGuard();
+    manager.startLivenessWatch();
     setupAppStateListener();
     persistPrinterManagerSingleton();
   }

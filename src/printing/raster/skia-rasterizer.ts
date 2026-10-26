@@ -795,8 +795,7 @@ function drawBarcode(
   const snapped = snap1DBarcodeModules(rawModules, el.width, 203, false);
   if (!snapped) throw new Error('Barcode snap failed');
   const { x0, y0, w: boxW, h: boxH } = box;
-  const ink = inkValue(el.antiColor);
-  if (el.antiColor) surface.fillRect(x0, y0, boxW, boxH, 0);
+  const ink = inkValue(false);
   const fontH = Math.max(8, Math.round(ptToMm(el.fontSize) * dpm));
   const showLabel = el.textFlag !== 'Hide';
   const labelH = showLabel ? Math.max(8, Math.round(fontH * 1.2)) : 0;
@@ -813,8 +812,7 @@ function drawBarcode(
       fontSizeDots: fontH,
       bold: el.bold,
       italic: el.italic,
-      underline: el.underline,
-      strikethrough: el.strikethrough,
+      // Barcode digits take bold and italic only.
       family: resolvePrintFontFamily(hri, el.fontFamily),
       ink,
     };

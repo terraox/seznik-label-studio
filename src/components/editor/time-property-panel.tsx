@@ -6,7 +6,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 
 import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
 import { FontStyleButtons } from '@/components/editor/font-style-buttons';
-import { TextAlignButtons } from '@/components/editor/text-align-buttons';
+import { TextAlignButtons, alignOptionsFor } from '@/components/editor/text-align-buttons';
 import {
   DRAWING_COLORS,
   applyTimeOffsets,
@@ -182,7 +182,7 @@ function AlignButtons({
   state: TimeElementState;
   patch: (updates: Partial<TimeElementState>) => void;
 }) {
-  return <TextAlignButtons align={state.align} onChange={(align) => patch({ align })} />;
+  return <TextAlignButtons align={state.align} onChange={(align) => patch({ align })} options={alignOptionsFor(state.align, true)} />;
 }
 
 function ColorRow({
@@ -480,7 +480,7 @@ const styles = themedStyles((c) => ({
   },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 16 },
   sectionGap: { height: 8, backgroundColor: c.fillStrong },
-  graySection: { backgroundColor: c.fillStrong },
+  graySection: { backgroundColor: c.surface },
   segmentRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   segmentChip: {
     flex: 1,

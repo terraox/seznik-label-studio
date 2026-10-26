@@ -13,6 +13,10 @@ export type ArcTextLayoutResult = {
   radius: number;
   strokeWidth: number;
   effectiveFontSizePx: number;
+  /** Radius the glyph centres sit on, and the angles (rad, 0 = 3 o'clock, clockwise) the string spans. */
+  baselineRadius: number;
+  startAngle: number;
+  endAngle: number;
   characters: ArcCharLayout[];
 };
 
@@ -82,6 +86,9 @@ export function computeArcTextLayout({
       radius,
       strokeWidth,
       effectiveFontSizePx: Math.max(minFont, Math.min(nominalFontSizePx, radius * MAX_FONT_OVER_RADIUS)),
+      baselineRadius: radius,
+      startAngle: -Math.PI / 2,
+      endAngle: -Math.PI / 2,
       characters: [],
     };
   }
@@ -102,7 +109,8 @@ export function computeArcTextLayout({
   const totalAngle = totalAngleFor(text, effectiveFontSizePx, baselineRadius, bold);
   const tracking = effectiveFontSizePx * TRACKING_EM;
 
-  let currentAngle = -Math.PI / 2 - totalAngle / 2;
+  const startAngle = -Math.PI / 2 - totalAngle / 2;
+  let currentAngle = startAngle;
   const characters: ArcCharLayout[] = [];
 
   for (let i = 0; i < text.length; i++) {
@@ -127,6 +135,9 @@ export function computeArcTextLayout({
     radius,
     strokeWidth,
     effectiveFontSizePx,
+    baselineRadius,
+    startAngle,
+    endAngle: currentAngle,
     characters,
   };
 }

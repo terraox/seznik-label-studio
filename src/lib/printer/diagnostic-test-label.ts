@@ -24,7 +24,6 @@ export function buildDiagnosticCompactLabelDocument(
   const marginTopMm = layout.marginTopMm ?? layout.marginMm ?? 1;
   const marginRightMm = layout.marginRightMm ?? marginLeftMm;
   const lineHeightMm = layout.lineHeightMm ?? (heightMm <= 16 ? 4.2 : 5.5);
-  // Stretch to the right die-cut (minus a small inset) so long Bluetooth names are not clipped.
   const textWidthMm = Math.max(8, widthMm - marginLeftMm - marginRightMm);
   const fontPt = layout.fontPt ?? DEFAULT_TEXT_FONT_PT;
   const elements: LabelElement[] = lines

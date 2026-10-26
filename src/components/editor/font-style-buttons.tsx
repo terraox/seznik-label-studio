@@ -13,6 +13,8 @@ type StyleFields = {
 type FontStyleButtonsProps = {
   state: StyleFields;
   onChange: (updates: Partial<StyleFields>) => void;
+  /** Underline and strikethrough toggles; off for elements that only take bold and italic. */
+  decorations?: boolean;
   /** Match host panel pressable styling when provided. */
   pressableStyle?: (active: boolean, pressed: boolean) => StyleProp<ViewStyle>;
 };
@@ -24,14 +26,14 @@ type FontStyleButtonsProps = {
  * drops Text-level transform and textDecorationLine, and themedStyles StyleSheet
  * caches can leave new keys undefined after a soft Fast Refresh.
  */
-export function FontStyleButtons({ state, onChange, pressableStyle }: FontStyleButtonsProps) {
+export function FontStyleButtons({ state, onChange, decorations = true, pressableStyle }: FontStyleButtonsProps) {
   useThemeRefresh();
   const items = [
     { key: 'bold' as const, label: 'B', active: state.bold, field: 'bold' as const },
     { key: 'italic' as const, label: '𝐼', active: state.italic, field: 'italic' as const },
     { key: 'underline' as const, label: 'U', active: state.underline, field: 'underline' as const },
     { key: 'strike' as const, label: 'S', active: state.strikethrough, field: 'strikethrough' as const },
-  ];
+  ].filter((item) => decorations || (item.key !== 'underline' && item.key !== 'strike'));
 
   return (
     <View style={styles.styleRow}>

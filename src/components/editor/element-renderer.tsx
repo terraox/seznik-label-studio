@@ -19,6 +19,7 @@ import { ClipartIcon } from "@/components/clipart-icon";
 import { MonoImagePreview } from "@/components/editor/mono-image-preview";
 import { SignaturePreview } from "@/components/editor/signature-preview";
 import {
+  DEFAULT_ELEMENT_STATE,
   DRAWING_COLORS,
   applyTimeOffsets,
   formatLiveDateTime,
@@ -41,6 +42,7 @@ import {
   textContainsEmoji,
 } from "@/lib/fonts/text-font-family";
 import {
+  PREVIEW_ITALIC_SKEW_DEG,
   previewItalicWrapStyle,
   previewSyntheticBoldStyle,
   resolvePreviewFontStyle,
@@ -738,45 +740,42 @@ function DegreesContent({
 function TimeContent({
   element,
   scale,
+  widthPx,
+  heightPx,
 }: {
   element: TimeElementState;
   scale: number;
   widthPx: number;
+  heightPx?: number;
 }) {
   const now = useClock(true);
-  const adjusted = applyTimeOffsets(now, element);
-  const liveText = formatLiveDateTime(adjusted);
-  const style = textStyleFor(
-    element,
-    scale,
-    resolveEditorFontFamily(liveText, element.fontFamily),
-    liveText,
-  );
-  const align = element.align === "spacing" ? "justify" : element.align;
+  const liveText = formatLiveDateTime(applyTimeOffsets(now, element));
+  // Drawn by the Text renderer (italic skew, decoration bars, same face and padding as print).
+  // "Close" keeps it on one line: a narrow box shrinks the type instead of wrapping onto more lines.
+  const asText = {
+    ...DEFAULT_ELEMENT_STATE,
+    text: liveText,
+    fontSize: element.fontSize,
+    fontFamily: element.fontFamily,
+    bold: element.bold,
+    italic: element.italic,
+    underline: element.underline,
+    strikethrough: element.strikethrough,
+    align: element.align,
+    width: element.width,
+    height: element.height,
+    antiColor: element.antiColor,
+    drawingColorIndex: element.drawingColorIndex,
+    autoWrapping: "Close" as const,
+    autoTextHeight: false,
+  };
   return (
-    <View
-      style={[
-        styles.fill,
-        {
-          justifyContent: "center",
-          alignItems:
-            align === "center"
-              ? "center"
-              : align === "right"
-                ? "flex-end"
-                : "stretch",
-          overflow: "hidden",
-        },
-        element.antiColor && styles.antiBg,
-      ]}
-    >
-      <Text
-        allowFontScaling={false}
-        style={[style, styles.textFill, { textAlign: align }]}
-      >
-        {liveText}
-      </Text>
-    </View>
+    <TextContent
+      element={asText}
+      scale={scale}
+      widthPx={widthPx}
+      heightPx={heightPx}
+    />
   );
 }
 
@@ -846,12 +845,9 @@ function BarcodeContent({
     () => barcodeModulesForMode(element.encodeMode, content),
     [content, element.encodeMode],
   );
-  const color = element.antiColor
-    ? "#FFFFFF"
-    : inkColor(element.drawingColorIndex);
-  const bgColor = element.antiColor
-    ? inkColor(element.drawingColorIndex)
-    : "transparent";
+  // Barcodes have no Anti-Color: inverted bars are not scannable.
+  const color = inkColor(element.drawingColorIndex);
+  const bgColor = "transparent";
   const labelSize = fontSizePx(element.fontSize, scale);
   const showLabel = element.textFlag !== "Hide";
   // The digit line sits in its own band. Text-frame padding is for paragraphs and
@@ -910,18 +906,22 @@ function BarcodeContent({
 
   const label = showLabel ? (
     <View
-      style={{
-        width: "100%",
-        height: labelHeight,
-        flexShrink: 0,
-        alignItems:
-          align === "center"
-            ? "center"
-            : align === "right"
-              ? "flex-end"
-              : "stretch",
-        justifyContent: "center",
-      }}
+      style={[
+        {
+          width: "100%",
+          height: labelHeight,
+          flexShrink: 0,
+          alignItems:
+            align === "center"
+              ? "center"
+              : align === "right"
+                ? "flex-end"
+                : "stretch",
+          justifyContent: "center",
+        },
+        // Italic is a wrapper skew (fontStyle does nothing on these cuts); print uses the same shear.
+        previewItalicWrapStyle(element.italic),
+      ]}
     >
       <Text
         numberOfLines={1}
@@ -1523,28 +1523,70 @@ function TableContent({
               cell && dataColumnHighlightStyle(cell, highlightColumnName),
             ]}
           >
-            {cell && flat ? (
-              <Text
-                allowFontScaling={false}
-                numberOfLines={1}
-                ellipsizeMode="clip"
-                style={[
-                  style,
-                  letterSpacingStyle(cell, flat, scale),
-                  {
-                    textAlign: align,
-                    width: scaleX < 1 ? measuredPx : "100%",
-                    ...(scaleX < 1
-                      ? {
-                          transform: [{ scaleX }],
-                          transformOrigin: "left center" as const,
-                        }
-                      : null),
-                  },
-                ]}
+            {cell && flat && style ? (
+              <View
+                collapsable={false}
+                // Italic is a shear on a wrapper (Text fontStyle does nothing on these cuts), as in Text.
+                style={[{ width: "100%" }, previewItalicWrapStyle(cell.italic)]}
               >
-                {flat}
-              </Text>
+                <Text
+                  allowFontScaling={false}
+                  numberOfLines={1}
+                  ellipsizeMode="clip"
+                  style={[
+                    style,
+                    // Bars below replace the native decoration, which Android often drops.
+                    cell.underline || cell.strikethrough
+                      ? { textDecorationLine: "none" as const }
+                      : null,
+                    letterSpacingStyle(cell, flat, scale),
+                    {
+                      textAlign: align,
+                      width: scaleX < 1 ? measuredPx : "100%",
+                      ...(scaleX < 1
+                        ? {
+                            transform: [{ scaleX }],
+                            transformOrigin: "left center" as const,
+                          }
+                        : null),
+                    },
+                  ]}
+                >
+                  {flat}
+                </Text>
+                {(cell.underline || cell.strikethrough) &&
+                  (() => {
+                    const em = Math.max(1, style.fontSize);
+                    const lineBox = Number(style.lineHeight) || em * 1.2;
+                    const boxH = lineBox + (Number(style.paddingVertical) || 0) * 2;
+                    const thick = Math.max(1, Math.round(em * (cell.bold ? 0.09 : 0.065)));
+                    const barW = Math.max(1, Math.min(measuredPx || innerW, innerW));
+                    const barLeft =
+                      align === "center"
+                        ? (innerW - barW) / 2
+                        : align === "right"
+                          ? innerW - barW
+                          : 0;
+                    const bars: { key: string; top: number }[] = [];
+                    if (cell.underline)
+                      bars.push({ key: "u", top: boxH / 2 + em * 0.5 + thick * 0.4 });
+                    if (cell.strikethrough)
+                      bars.push({ key: "s", top: boxH / 2 - thick / 2 });
+                    return bars.map((bar) => (
+                      <View
+                        key={bar.key}
+                        style={{
+                          position: "absolute",
+                          left: barLeft,
+                          top: bar.top,
+                          width: barW,
+                          height: thick,
+                          backgroundColor: style.color,
+                        }}
+                      />
+                    ));
+                  })()}
+              </View>
             ) : null}
           </View>
         );
@@ -1553,16 +1595,43 @@ function TableContent({
   );
 }
 
+/** Radii (px) of the underline / strikethrough arcs, measured from the glyph centres' circle. */
+function arcDecorationRadii(
+  element: Pick<ArcTextElementState, "underline" | "strikethrough" | "bold">,
+  baselineRadius: number,
+  fontSizePx: number,
+) {
+  const thickness = Math.max(1, fontSizePx * (element.bold ? 0.09 : 0.065));
+  const bars: { key: string; radius: number; thickness: number }[] = [];
+  // Glyph tops point outward, so "below the baseline" is nearer the centre.
+  if (element.underline)
+    bars.push({ key: "u", radius: Math.max(1, baselineRadius - fontSizePx * 0.5 - thickness), thickness });
+  if (element.strikethrough) bars.push({ key: "s", radius: baselineRadius, thickness });
+  return bars;
+}
+
+/** Clockwise SVG arc from `from` to `to` (radians) on a circle. */
+function arcPath(cx: number, cy: number, r: number, from: number, to: number) {
+  const x0 = cx + r * Math.cos(from);
+  const y0 = cy + r * Math.sin(from);
+  const x1 = cx + r * Math.cos(to);
+  const y1 = cy + r * Math.sin(to);
+  const large = to - from > Math.PI ? 1 : 0;
+  return `M${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1}`;
+}
+
 function ArcTextContent({
   element,
   widthPx,
   heightPx,
   scale,
+  forPrint,
 }: {
   element: ArcTextElementState;
   widthPx: number;
   heightPx: number;
   scale: number;
+  forPrint?: boolean;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -1613,11 +1682,19 @@ function ArcTextContent({
     <View
       style={[
         styles.fill,
-        element.antiColor && styles.antiBg,
-        dataColumnHighlightStyle(element, highlightColumnName),
+        // Anti-color inverts the circle only; filling the box would print the resize frame.
+        !forPrint && dataColumnHighlightStyle(element, highlightColumnName),
       ]}
     >
       <Svg width="100%" height="100%" viewBox={`0 0 ${widthPx} ${heightPx}`}>
+        {element.antiColor && (
+          <Circle
+            cx={layout.cx}
+            cy={layout.cy}
+            r={layout.radius + layout.strokeWidth / 2}
+            fill={forPrint ? "#000000" : "#111827"}
+          />
+        )}
         {/* Circular guide line matching reference specification */}
         <Circle
           cx={layout.cx}
@@ -1635,25 +1712,45 @@ function ArcTextContent({
             x={item.x}
             y={item.y}
             fill={textColor}
+            // The print threshold turns half-covered pixels black, so thin white letters on the
+            // black circle vanish. A same-colour stroke keeps them as wide as black ones.
+            stroke={forPrint && element.antiColor ? textColor : undefined}
+            strokeWidth={
+              forPrint && element.antiColor
+                ? layout.effectiveFontSizePx * 0.12
+                : undefined
+            }
             fontSize={layout.effectiveFontSizePx}
             fontFamily={fontFamily}
             fontWeight={element.bold ? "700" : "400"}
-            fontStyle={element.italic ? "italic" : "normal"}
-            textDecoration={
-              element.underline
-                ? "underline"
-                : element.strikethrough
-                  ? "line-through"
-                  : "none"
-            }
             textAnchor="middle"
             alignmentBaseline="middle"
             dominantBaseline="middle"
-            transform={`rotate(${item.rotationDeg}, ${item.x}, ${item.y})`}
+            // Italic is a shear about the glyph (same angle as the Text preview and print):
+            // fontStyle is ignored by single-cut fonts.
+            transform={
+              element.italic
+                ? `rotate(${item.rotationDeg}, ${item.x}, ${item.y}) translate(${item.x}, ${item.y}) skewX(${PREVIEW_ITALIC_SKEW_DEG}) translate(${-item.x}, ${-item.y})`
+                : `rotate(${item.rotationDeg}, ${item.x}, ${item.y})`
+            }
           >
             {item.char}
           </SvgText>
         ))}
+
+        {/* Underline and strikethrough follow the arc, so both can show at once */}
+        {layout.characters.length > 0 &&
+          arcDecorationRadii(element, layout.baselineRadius, layout.effectiveFontSizePx).map(
+            ({ key, radius, thickness }) => (
+              <Path
+                key={key}
+                d={arcPath(layout.cx, layout.cy, radius, layout.startAngle, layout.endAngle)}
+                stroke={textColor}
+                strokeWidth={thickness}
+                fill="none"
+              />
+            ),
+          )}
       </Svg>
     </View>
   );
@@ -1763,7 +1860,14 @@ export function ElementContentView({
         />
       );
     case "time":
-      return <TimeContent element={element} scale={scale} widthPx={widthPx} />;
+      return (
+        <TimeContent
+          element={element}
+          scale={scale}
+          widthPx={widthPx}
+          heightPx={heightPx}
+        />
+      );
     case "barcode":
       return (
         <BarcodeContent
@@ -1822,6 +1926,7 @@ export function ElementContentView({
           widthPx={widthPx}
           heightPx={heightPx}
           scale={scale}
+          forPrint={forPrint}
         />
       );
     case "image":

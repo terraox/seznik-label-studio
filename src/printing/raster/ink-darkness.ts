@@ -12,12 +12,14 @@ import { usesModedPrint } from './image-element-settings';
 
 export type DotRect = { x0: number; y0: number; w: number; h: number };
 
-/** Printed barcode / QR bounds in mm (rotation included) that darkness must not touch. */
+/** Printed barcode / QR / Anti-Color bounds in mm (rotation included) that darkness must not touch. */
 export function scanCodeRectsMm(doc: LabelDocument): DotRect[] {
   const rects: DotRect[] = [];
   for (const el of doc.elements) {
     // Barcodes, QR codes and dithered pictures are exact dots: darkness steps must not touch them.
-    if (el.type !== 'barcode' && el.type !== 'qrcode' && !usesModedPrint(el)) continue;
+    // Anti-Color fills are exact too: growing the black closes the white letters inside it.
+    const inverted = 'antiColor' in el && el.antiColor === true;
+    if (el.type !== 'barcode' && el.type !== 'qrcode' && !inverted && !usesModedPrint(el)) continue;
     if (el.needPrinting === false || el.visible === false) continue;
     const size = elementSizeMm(el);
     const rad = (((el.rotation ?? 0) % 360) * Math.PI) / 180;

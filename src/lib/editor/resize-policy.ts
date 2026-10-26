@@ -100,7 +100,7 @@ export function resizePolicyFor(element: LabelElement): ResizePolicy {
         rotateHandle: false,
         minMm: MIN_ELEMENT_MM,
         comment:
-          'Time: box width and height. Font size stays put; narrowing wraps onto more lines.',
+          'Time: box width and height. One line only: a narrow box shrinks the type instead of wrapping.',
       };
     default:
       return {

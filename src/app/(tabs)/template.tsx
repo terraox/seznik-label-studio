@@ -114,9 +114,9 @@ function isTwoUpTemplate(t: CatalogTemplate): boolean {
   return /2up|two up/i.test(t.name) && !/cable|jewel/i.test(t.name);
 }
 
-/** The 3-up jewellery sheet uses the built-in rat-tail die-cut; other jewellery templates use their admin SVG and design. */
-function isJewellerySheetTemplate(t: CatalogTemplate): boolean {
-  return /jewel/i.test(t.name) && /3\s*-?\s*up|three up/i.test(t.name);
+/** Off: the built-in rat-tail die-cut forced 54 x 96 mm, so jewellery now opens at the size set in the admin panel, drawn from its own SVG. */
+function isJewellerySheetTemplate(_t: CatalogTemplate): boolean {
+  return false;
 }
 
 function templateSampleLayout(t: CatalogTemplate): SampleElement[] {

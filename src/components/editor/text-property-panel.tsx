@@ -9,7 +9,7 @@ import { ContentTypeRow, SerialBlock } from '@/components/editor/serial-section'
 import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
 import { FontStyleButtons } from '@/components/editor/font-style-buttons';
-import { TextAlignButtons } from '@/components/editor/text-align-buttons';
+import { TextAlignButtons, alignOptionsFor } from '@/components/editor/text-align-buttons';
 import { formatDataSourceColumn } from '@/lib/editor/data-source-display';
 import { fitFontSizeToLabel } from '@/lib/editor/label-bounds';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -189,11 +189,19 @@ function StyleButtons({
 function AlignButtons({
   state,
   patch,
+  singleLine = false,
 }: {
   state: EditorElementState;
   patch: (updates: Partial<EditorElementState & { degreesOffset?: number }>) => void;
+  singleLine?: boolean;
 }) {
-  return <TextAlignButtons align={state.align} onChange={(align) => patch({ align })} />;
+  return (
+    <TextAlignButtons
+      align={state.align}
+      onChange={(align) => patch({ align })}
+      options={alignOptionsFor(state.align, singleLine)}
+    />
+  );
 }
 
 function ColorRow({
@@ -469,7 +477,7 @@ export function TextPropertyPanel({
             <Divider />
             <View style={styles.block}>
               <Text style={styles.rowLabel}>Hor Alignment</Text>
-              <AlignButtons state={state} patch={patch} />
+              <AlignButtons state={state} patch={patch} singleLine={isTableCell || state.autoWrapping === 'Close'} />
             </View>
             <Divider />
             {!isTableCell ? (
@@ -654,7 +662,7 @@ export function TextPropertyPanel({
             <Divider />
             <View style={styles.block}>
               <Text style={styles.rowLabel}>Hor Alignment</Text>
-              <AlignButtons state={state} patch={patch} />
+              <AlignButtons state={state} patch={patch} singleLine={isTableCell || state.autoWrapping === 'Close'} />
             </View>
           </>
         )}

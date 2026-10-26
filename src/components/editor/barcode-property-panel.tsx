@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import { FontSlider } from '@/components/editor/font-slider';
 import { PositionControls } from '@/components/editor/position-controls';
 import { FontStyleButtons } from '@/components/editor/font-style-buttons';
-import { TextAlignButtons } from '@/components/editor/text-align-buttons';
+import { TextAlignButtons, alignOptionsFor } from '@/components/editor/text-align-buttons';
 import {
   DRAWING_COLORS,
   formatMm,
@@ -228,6 +228,7 @@ function StyleButtons({
     <FontStyleButtons
       state={state}
       onChange={patch}
+      decorations={false}
       pressableStyle={(active) => [styles.styleBtn, active && styles.styleBtnActive]}
     />
   );
@@ -241,7 +242,7 @@ function AlignButtons({
   patch: (updates: Partial<BarcodeElementState>) => void;
 }) {
   useThemeRefresh();
-  return <TextAlignButtons align={align} onChange={(value) => patch({ align: value })} />;
+  return <TextAlignButtons align={align} onChange={(value) => patch({ align: value })} options={alignOptionsFor(align, true)} />;
 }
 
 function ColorRow({
@@ -594,12 +595,6 @@ export function BarcodePropertyPanel({
               label="Need Printing"
               value={state.needPrinting}
               onValueChange={(needPrinting) => patch({ needPrinting })}
-            />
-            <Divider />
-            <ToggleRow
-              label="Anti-Color"
-              value={state.antiColor}
-              onValueChange={(antiColor) => patch({ antiColor })}
             />
             <Divider />
             <ColorRow
