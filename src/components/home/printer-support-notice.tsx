@@ -2,17 +2,12 @@ import { Image, Modal, Pressable, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { CONSUMER_PRINTER_LIST } from '@/constants/printer-models';
+import { PRINTER_PHOTOS } from '@/constants/printer-photos';
 import { Spacing } from '@/constants/theme';
 import { androidRipple } from '@/constants/ui';
 import { themedStyles, useColors, useThemeRefresh } from '@/theme';
 import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
-// Small copies of the printer photos and logo: the full 1024px PNGs decode slowly for a ~100dp tile.
-const NOTICE_PHOTOS = {
-  tejas: require('../../../assets/images/notice/printer_tejas.png'),
-  rudra: require('../../../assets/images/notice/printer_rudra.png'),
-  josh: require('../../../assets/images/notice/printer_josh.png'),
-} as const;
 const NOTICE_LOGO = require('../../../assets/images/notice/logo.png');
 
 /** One-time welcome card on first launch: which printers work today, and where to send feedback. */
@@ -33,7 +28,7 @@ export function PrinterSupportNotice({ visible, onClose }: { visible: boolean; o
               {CONSUMER_PRINTER_LIST.map((p) => (
                 <View key={p.id} style={styles.printer}>
                   <View style={styles.stage}>
-                    <Image source={NOTICE_PHOTOS[p.id]} style={styles.photo} resizeMode="contain" fadeDuration={0} />
+                    <Image source={PRINTER_PHOTOS[p.id]} style={styles.photo} resizeMode="contain" fadeDuration={0} />
                   </View>
                   <Text style={[styles.printerName, { color: p.accent }]} numberOfLines={1}>
                     {p.shortName}

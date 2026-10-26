@@ -155,6 +155,8 @@ type LabelPreviewProps = {
   showArtboardBorder?: boolean;
   /** Omit elements with needPrinting === false (print capture only). */
   hideNonPrinting?: boolean;
+  /** Keep the stock outline and die-cut guides while hiding non-printing elements (on-screen preview, not capture). */
+  showShapeGuides?: boolean;
   /** TD-404 capture only. Same border and feed cancel as the headless raster. */
   bakeTd404Feed?: boolean;
   /** H/V print offset in mm. Moves every element, border included, by the same amount. */
@@ -322,6 +324,7 @@ function LabelCanvas({
   style,
   showBorder = true,
   hideNonPrinting = false,
+  showShapeGuides = false,
   printDpi,
   bakeTd404Feed = false,
   shiftMm,
@@ -331,6 +334,7 @@ function LabelCanvas({
   style?: StyleProp<ViewStyle>;
   showBorder?: boolean;
   hideNonPrinting?: boolean;
+  showShapeGuides?: boolean;
   printDpi?: number;
   bakeTd404Feed?: boolean;
   shiftMm?: ShiftMm;
@@ -392,7 +396,7 @@ function LabelCanvas({
       <ReferencePhoto document={document} hideNonPrinting={hideNonPrinting} />
       {fitted.scale > 0 ? (
         <>
-          {hideNonPrinting || printDpi != null ? null : (
+          {(hideNonPrinting && !showShapeGuides) || printDpi != null ? null : (
             <>
               <StockSilhouetteOverlay
                 document={document}
@@ -580,6 +584,7 @@ export function LabelPreview({
   style,
   showArtboardBorder = true,
   hideNonPrinting = false,
+  showShapeGuides = false,
   bakeTd404Feed = false,
   shiftMm,
   upsDividers,
@@ -644,6 +649,7 @@ export function LabelPreview({
         style={style}
         showBorder={showArtboardBorder}
         hideNonPrinting={hideNonPrinting}
+        showShapeGuides={showShapeGuides}
         shiftMm={shiftMm}
       />
     );

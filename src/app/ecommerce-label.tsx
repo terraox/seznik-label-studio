@@ -12,7 +12,6 @@ import { SamplePdfModal } from '@/components/ecommerce-label/sample-pdf-modal';
 import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor/pdf-print-sheet';
 import { PrintPagesStrip, type PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
 import { PdfOutputSizeRow } from '@/components/pdf-editor/pdf-output-size-row';
-import { PrinterConnectionPill } from '@/components/printers/printer-connection-pill';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { androidRipple } from '@/constants/ui';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
@@ -223,7 +222,6 @@ export default function EcommerceLabelScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {title}
         </Text>
-        <PrinterConnectionPill />
       </View>
 
       {step === 'platform' ? (

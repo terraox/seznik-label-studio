@@ -7,10 +7,8 @@ import { makeStyles, useColors } from '@/theme';
 const DISCLAIMER =
   'Deleting your account is permanent and cannot be undone.\n\n' +
   '• Your profile and personal data will be removed from our systems.\n' +
-  '• Labels, feedback, and other account-linked records will be deleted.\n' +
-  '• Your mobile number cannot be used to register again.\n' +
-  '• We keep a limited record of this deletion (name, phone, printer, labels printed, and your reason) for our records.\n' +
-  '• Anonymous print analytics that are no longer linked to you may remain.';
+  '• Labels, feedback, and other account-linked records will be deleted.';
+
 
 export function DeleteAccountModal({
   visible,
@@ -87,7 +85,8 @@ const useStyles = makeStyles((c) => ({
     alignSelf: 'stretch',
   },
   input: {
-    minHeight: 72,
+    height: 72,
+    paddingTop: 8,
     textAlignVertical: 'top',
   },
   busyRow: {

@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
 import { CONSUMER_PRINTERS } from '@/constants/printer-models';
+import { PRINTER_PHOTOS } from '@/constants/printer-photos';
 import { androidRipple, HomeLayout, HomeStatusColors } from '@/constants/ui'; // theme-fixed: status fills keep white text readable in both themes
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { isJoshPrinter } from '@/lib/printer/battery-percent';
@@ -122,8 +123,18 @@ export function StatusChip({ poll = true, keepLive = false }: { poll?: boolean; 
         }
         accessibilityHint="Opens printer connection"
         style={({ pressed }) => [styles.chip, { backgroundColor: fill }, pressed && styles.pressed]}>
-        <View style={styles.iconDisc}>
-          <AppIcon name="printer" tintColor={fill} size={16} pointerEvents="none" />
+        <View style={live ? styles.photoWrap : styles.iconDisc}>
+          {live ? (
+            <Image
+              source={PRINTER_PHOTOS[CONSUMER_PRINTERS[selectedModel] ? selectedModel : 'tejas']}
+              style={styles.photo}
+              resizeMode="contain"
+              fadeDuration={0}
+              accessibilityIgnoresInvertColors
+            />
+          ) : (
+            <AppIcon name="printer" tintColor={fill} size={16} pointerEvents="none" />
+          )}
         </View>
         <View style={styles.lines}>
           <View style={styles.captionRow}>
@@ -177,13 +188,16 @@ const styles = themedStyles((c) => ({
     overflow: 'hidden',
   },
   iconDisc: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: c.onAccent,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The printer photo sits straight on the status colour, with no disc behind it.
+  photoWrap: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  photo: { width: 34, height: 34 },
   lines: { flexShrink: 1, minWidth: 0 },
   captionRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   caption: {

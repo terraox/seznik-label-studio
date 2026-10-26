@@ -32,7 +32,6 @@ import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { PDF_WALKTHROUGHS } from '@/lib/walkthrough/pdf-steps';
 import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
-import { PrinterConnectionPill } from '@/components/printers/printer-connection-pill';
 import { PdfWatermarkTool } from '@/components/pdf-editor/pdf-watermark-tool';
 import {
   clearSmartCropCache,
@@ -640,8 +639,9 @@ export default function PdfEditorScreen() {
   );
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={styles.screen}>
+      {/* The header runs up under the status bar, so that strip is blue too. */}
+      <View style={[styles.header, { paddingTop: insets.top, height: 48 + insets.top }]}>
         <Pressable onPress={goBack} hitSlop={8} style={styles.headerBtn}>
           <AppIcon name="chevron.left" size={22} tintColor={C.onAccent} />
         </Pressable>
@@ -656,7 +656,6 @@ export default function PdfEditorScreen() {
           style={({ pressed }) => [styles.headerHelp, pressed && styles.pressed]}>
           <AppIcon name="info.circle" tintColor={C.onAccent} size={22} />
         </Pressable>
-        <PrinterConnectionPill />
       </View>
 
       {step !== 'pick' && step !== 'edit' && session ? (

@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     if (purpose === 'register' && claim?.blocked) return blockedResponse(claim.blockReason);
     const existing = await prisma.user.findUnique({ where: { mobile } });
     if (purpose === 'login' && existing?.status === 'blocked') return blockedResponse(existing.blockMessage);
-    if (purpose === 'register' && (existing || claim)) {
+    if (purpose === 'register' && (existing || claim?.userId)) {
       return withCors(
         NextResponse.json(
           { error: 'This number is already registered. Please log in.' },

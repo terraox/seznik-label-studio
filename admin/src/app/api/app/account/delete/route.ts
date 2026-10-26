@@ -16,7 +16,7 @@ const MAX_REASON = 500;
 /**
  * User-initiated account deletion from Settings.
  * Archives name / mobile / printer / labels / reason, then hard-deletes the AppUser row
- * (cascades personal data; print events stay with userId null; RegisteredPhone claim kept).
+ * (cascades personal data; print events stay with userId null; number freed unless admin-blocked).
  */
 export async function POST(request: Request) {
   try {
@@ -53,7 +53,8 @@ export async function POST(request: Request) {
         },
       });
 
-      // Keep the permanent phone claim; unlink so cascade/delete does not remove it.
+      // Free the number so it can register again; an admin block stays in place.
+      await tx.registeredPhone.deleteMany({ where: { userId: user.id, blocked: false } });
       await tx.registeredPhone.updateMany({
         where: { userId: user.id },
         data: { userId: null },

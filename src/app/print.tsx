@@ -26,6 +26,7 @@ import {
   DEFAULT_ELEMENT_STATE,
   DEFAULT_QRCODE_STATE,
 } from '@/components/editor/types';
+import { canvasFillFromDocument } from '@/lib/template-schema';
 import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Type } from '@/constants/ui';
@@ -1046,6 +1047,12 @@ export default function PrintScreen() {
     () => (activeDoc && layerOffsetsUsable ? previewWithLayerOffsets(activeDoc, layerOffsets, layerBridge!) : activeDoc),
     [activeDoc, layerOffsetsUsable, layerOffsets, layerBridge],
   );
+
+  /** A shaped label (cut-outs, die-cut) has no rectangle to lift: a rectangular shadow would fill its notches. */
+  const previewShapeFlat = useMemo(() => {
+    const doc = layerPreviewDocument ?? displayDocument ?? previewDocument;
+    return !!doc && canvasFillFromDocument(doc) === 'transparent';
+  }, [layerPreviewDocument, displayDocument, previewDocument]);
   const orientationDegNow = parseInt(orientation.replace('°', ''), 10);
   const layerWarning = useMemo(() => {
     if (!layerOffsetsUsable) return null;
@@ -2523,7 +2530,7 @@ export default function PrintScreen() {
         contentContainerStyle={{ paddingBottom: footerHeight + Spacing.three }}
         showsVerticalScrollIndicator={false}>
         <View style={[styles.previewArea, { minHeight: previewAreaMinHeight }]}>
-          <View style={styles.previewShadow}>
+          <View style={[styles.previewShadow, previewShapeFlat && styles.previewShadowFlat]}>
             {(displayDocument ?? previewDocument) ? (
               <View
                 style={{
@@ -2539,6 +2546,7 @@ export default function PrintScreen() {
                     maxHeight={previewDrawH}
                     showArtboardBorder={false}
                     hideNonPrinting
+                    showShapeGuides
                   />
                 </View>
               </View>
@@ -3098,6 +3106,10 @@ const styles = themedStyles((c, scheme) => ({
     shadowOpacity: 0.22,
     shadowRadius: 6,
     elevation: 4,
+  },
+  previewShadowFlat: {
+    shadowOpacity: 0,
+    elevation: 0,
   },
   sizeBadge: {
     marginTop: 10,

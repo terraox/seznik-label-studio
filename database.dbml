@@ -374,7 +374,7 @@ Table DeletedAccount {
     deletedAt
     mobile
   }
-  Note: '[BUILT] Archive when a user deletes their account. Personal rows are removed; phone claim stays so the number cannot register again.'
+  Note: '[BUILT] Archive when a user deletes their account. Personal rows are removed; phone claim is released so the number can register again.'
 }
 
 // ─────────────── Not in Postgres yet [FILE] ───────────────
