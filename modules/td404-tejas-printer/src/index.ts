@@ -73,10 +73,12 @@ type NativeTd404 = {
   getBondedDevices(): Promise<Td404Device[]>;
   startScan(): Promise<{ discoveryStarted?: boolean; bondedCount?: number; reason?: string } | void>;
   stopScan(): Promise<void>;
+  pairDevice?(macAddress: string, timeoutMs: number): Promise<boolean>;
   connect(
     macAddress: string,
     name: string | null,
   ): Promise<{ id: string; name: string | null; transport: string; sdkId: string }>;
+  probe(macAddress: string, timeoutMs: number): Promise<boolean>;
   disconnect(): Promise<void>;
   isConnected(): boolean;
   getConnectedDevice(): Td404Device | null;
@@ -163,6 +165,19 @@ export async function getTd404BondedDevices(): Promise<Td404Device[]> {
   }
 }
 
+/** Opens the system pairing dialog for an unpaired printer. True once it is bonded. */
+export async function pairTd404Device(mac: string, timeoutMs = 30000): Promise<boolean> {
+  const mod = getNative();
+  if (!mod || typeof mod.pairDevice !== 'function') {
+    throw new Error('This app build cannot pair printers yet. Install the latest build.');
+  }
+  try {
+    return Boolean(await mod.pairDevice(mac, timeoutMs));
+  } catch {
+    return false;
+  }
+}
+
 export function startTd404Scan(
   onDevice: (device: Td404Device) => void,
   onFinished?: (error?: Error) => void,
@@ -224,6 +239,13 @@ export async function connectTd404(macAddress: string, name: string | null) {
   if (!mod) throw new Error('TD-404 Bluetooth module is not available.');
   await mod.stopScan().catch(() => {});
   return mod.connect(macAddress, name);
+}
+
+/** True when the paired printer answers an SPP connection right now (it is on and in range). */
+export async function probeTd404(macAddress: string, timeoutMs = 4000): Promise<boolean> {
+  const mod = getNative();
+  if (!mod) return false;
+  return mod.probe(macAddress, timeoutMs).catch(() => false);
 }
 
 export async function disconnectTd404() {

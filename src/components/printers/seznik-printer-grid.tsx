@@ -93,6 +93,7 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
       if (onDisconnect) {
         await onDisconnect(model);
       } else {
+        getPrinterManager().suppressAutoReconnect();
         await getPrinterManager().disconnect();
       }
       setConnectedSdk(null);

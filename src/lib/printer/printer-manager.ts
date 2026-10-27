@@ -51,7 +51,7 @@ import {
   buildLabelSizeScaleJob,
 } from '@/lib/printer/td404-label-size';
 import { assertTd404MonoBuffer } from '@/printing/raster/td404-mono-validate';
-import { usePrinterStore, normalizePrinterMac, type PrinterTransport } from '@/stores/printer-store';
+import { usePrinterStore, normalizePrinterMac, isAutoConnectEnabled, type PrinterTransport } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import {
   CONSUMER_PRINTERS,
@@ -76,6 +76,8 @@ export type DiscoveredPrinter = {
   likelyDev?: boolean;
   likelyLabelX?: boolean;
   bonded?: boolean;
+  /** Heard over the air in this scan (not just listed from the paired devices). */
+  live?: boolean;
 };
 
 export type BluetoothCapabilities = {
@@ -306,6 +308,7 @@ class PrinterManager {
   private pendingAclDisconnectMac: string | null = null;
   /** Skip app-wide auto-reconnect until the last printer's ACL link comes back (manual disconnect). */
   private autoReconnectSuppressed = false;
+  private userDisconnected = false;
   /** Last successful auto-reconnect per bridge+MAC — cleared when the link drops. */
   private autoReconnectSessionKey: string | null = null;
   private autoReconnectInFlight = false;
@@ -724,6 +727,13 @@ class PrinterManager {
     const josh = this.getJosh();
     if (!josh?.isJoshNativeAvailable()) return false;
     return josh.pairJoshDevice(mac);
+  }
+
+  /** Opens the system pairing dialog for an unpaired Tejas / Rudra printer. True once it is paired. */
+  async pairTd404Device(mac: string): Promise<boolean> {
+    const td404 = this.getTd404();
+    if (!td404?.isTd404NativeAvailable()) return false;
+    return td404.pairTd404Device(mac);
   }
 
   private joshPrintsInFlight = 0;
@@ -1392,12 +1402,17 @@ class PrinterManager {
       if (!key) return;
       // Re-emit when a later sighting brings a real name; the first one is often just the MAC.
       const named = Boolean(d.name && d.name.toUpperCase() !== key && !d.name.startsWith('Bluetooth '));
-      if (seen.has(key) && !(named && !namedSeen.has(key))) return;
+      // Paired-list entries are bonded:true and carry no signal; anything else came from discovery.
+      const live = d.bonded !== true || d.rssi != null;
+      const firstLive = live && !liveSeen.has(key);
+      if (seen.has(key) && !(named && !namedSeen.has(key)) && !firstLive) return;
       seen.add(key);
       if (named) namedSeen.add(key);
-      onDevice(d);
+      if (live) liveSeen.add(key);
+      onDevice(live ? { ...d, live: true } : d);
     };
     const namedSeen = new Set<string>();
+    const liveSeen = new Set<string>();
 
     let paired = 0;
     let nearby = 0;
@@ -3037,26 +3052,36 @@ class PrinterManager {
   }
 
   /**
-   * Auto-reconnect only brings back the printer when the app opens. Once a live session ends
-   * (printer switched off or the user tapped Disconnect), stop retrying until the user connects
-   * again or the app is reopened. Connecting again clears the block.
+   * When a live session drops (printer switched off), auto-reconnect keeps trying from any
+   * screen. Only the user's Disconnect blocks it, until they connect again.
    */
   setupSessionDropGuard(): void {
     if (this.sessionDropUnsub) return;
     this.sessionDropUnsub = usePrinterStore.subscribe((next, prev) => {
       const wasLive = prev.status === 'connected' || prev.status === 'printing';
       const isLive = next.status === 'connected' || next.status === 'printing';
-      if (wasLive && next.status === 'disconnected') this.suppressAutoReconnect();
-      else if (!wasLive && isLive) this.autoReconnectSuppressed = false;
+      // A drop (printer off, out of range) keeps auto-reconnect running; only the user's
+      // Disconnect stops it. Clear the session key so the same printer may be retried.
+      if (wasLive && next.status === 'disconnected') this.autoReconnectSessionKey = null;
+      else if (!wasLive && isLive) {
+        this.autoReconnectSuppressed = false;
+        this.userDisconnected = false;
+      }
     });
   }
 
   private sessionDropUnsub: (() => void) | null = null;
 
   /** User tapped Disconnect — block every automatic reconnect until they connect again manually. */
-  suppressAutoReconnect(): void {
+  suppressAutoReconnect(byUser = true): void {
     this.autoReconnectSuppressed = true;
+    if (byUser) this.userDisconnected = true;
     this.autoReconnectSessionKey = null;
+  }
+
+  /** True only after the user tapped Disconnect; a dropped session (printer off) is false. */
+  isUserDisconnected(): boolean {
+    return this.userDisconnected;
   }
 
   isAutoReconnectSuppressed(): boolean {
@@ -3066,6 +3091,7 @@ class PrinterManager {
   /** Cleared when the user picks a printer or taps Reconnect last. */
   allowAutoReconnectAgain(): void {
     this.autoReconnectSuppressed = false;
+    this.userDisconnected = false;
     this.autoReconnectSessionKey = null;
   }
 
@@ -3636,11 +3662,14 @@ class PrinterManager {
    */
   async reconnectLastForConsumer(
     consumer: ConsumerPrinterId,
-    options?: { userRequested?: boolean },
+    options?: { userRequested?: boolean; screenProbe?: boolean },
   ): Promise<boolean> {
     if (options?.userRequested) {
       this.allowAutoReconnectAgain();
-    } else if (this.autoReconnectSuppressed) {
+    } else if (options?.screenProbe ? this.userDisconnected : this.autoReconnectSuppressed) {
+      return false;
+    }
+    if (!options?.userRequested && !isAutoConnectEnabled(usePrinterStore.getState().autoConnectByModel, consumer)) {
       return false;
     }
     const bridge = defaultBridgeForConsumer(consumer);

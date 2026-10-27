@@ -69,6 +69,8 @@ type PrinterStoreState = {
   printCalibration: Record<string, PrintCalibrationEntry>;
   /** User-chosen printer names, keyed by normalized MAC. */
   printerNicknames: Record<string, string>;
+  /** Auto-connect to the last printer, per family. A missing entry means on. */
+  autoConnectByModel: Partial<Record<ConsumerPrinterId, boolean>>;
   /** Printer battery 0–100 while connected. Null when the printer does not report it. Not persisted. */
   batteryPercent: number | null;
   /** Josh battery bars 1-4 from the printer voltage. Null when not reported. Not persisted. */
@@ -84,6 +86,7 @@ type PrinterStoreState = {
   setDevCommandSet: (cmd: 'tspl' | 'escpos') => void;
   setPrintCalibration: (key: string, entry: PrintCalibrationEntry) => void;
   /** Blank or null clears the nickname. */
+  setAutoConnect: (model: ConsumerPrinterId, on: boolean) => void;
   setPrinterNickname: (deviceId: string, nickname: string | null) => void;
   setConnectedDevice: (
     deviceId: string,
@@ -119,6 +122,14 @@ function resolvePinnedDriver(
 }
 
 /** Normalize Bluetooth MAC for stable pin keys (AA:BB:CC:DD:EE:FF). */
+/** Auto-connect to the last printer is on unless the user turned it off for this family. */
+export function isAutoConnectEnabled(
+  map: Partial<Record<ConsumerPrinterId, boolean>> | undefined,
+  model: ConsumerPrinterId,
+): boolean {
+  return map?.[model] !== false;
+}
+
 export function normalizePrinterMac(mac: string): string {
   const hex = mac.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
   if (hex.length !== 12) return mac.trim().toUpperCase();
@@ -160,6 +171,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
       devCommandSet: 'tspl',
       printCalibration: {},
       printerNicknames: {},
+      autoConnectByModel: {},
       batteryPercent: null,
       batteryBars: null,
       charging: false,
@@ -175,6 +187,8 @@ export const usePrinterStore = create<PrinterStoreState>()(
         set((state) => ({
           printCalibration: { ...state.printCalibration, [key]: entry },
         })),
+      setAutoConnect: (model, on) =>
+        set((state) => ({ autoConnectByModel: { ...state.autoConnectByModel, [model]: on } })),
       setPrinterNickname: (deviceId, nickname) =>
         set((state) => {
           const key = normalizePrinterMac(deviceId);
@@ -211,6 +225,8 @@ export const usePrinterStore = create<PrinterStoreState>()(
             backendPrinterId: meta?.backendPrinterId ?? null,
             lastDeviceId: deviceId,
             lastDeviceName: deviceName,
+            // Whatever printer family connects becomes the one the connection page opens on.
+            preferredPrinterModel: consumer,
             selectedPrinterModel:
               consumer === state.selectedPrinterModel ? consumer : state.selectedPrinterModel,
             lastDeviceForModel: {
@@ -273,6 +289,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
         pinnedDriverByMac: state.pinnedDriverByMac,
         printCalibration: state.printCalibration,
         printerNicknames: state.printerNicknames,
+        autoConnectByModel: state.autoConnectByModel,
       }),
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<PrinterStoreState> & {

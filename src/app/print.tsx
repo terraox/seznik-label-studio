@@ -18,6 +18,9 @@ import {
   View,
 } from 'react-native';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
+import { CollapsibleBar } from '@/components/new-label/new-label-parts';
+import { parseRowText, rowSelectionSummary, type RowSelection } from '@/lib/bulk-row-filter';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 
@@ -31,14 +34,8 @@ import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Type } from '@/constants/ui';
 import {
-  JEWELRY_DIECUT,
-  JEWELRY_DIECUT_PRINT_PRESET_2UP,
-  JEWELRY_DIECUT_PRINT_PRESET_3UP,
-  JEWELRY_DIECUT_PRINT_PRESET_SINGLE,
-  extractJewelryFirstColumnDocument,
   isJewelryDieCutDocument,
 } from '@/constants/jewelry-diecut';
-import { canonicalizeJewelryDieCutDocument } from '@/constants/jewelry-template-elements';
 import { resolvePrintQuality } from '@/lib/printer/print-quality';
 import {
   calibrationQualityWarning,
@@ -202,8 +199,6 @@ import {
   applyPrintSize,
   formatPrintSize,
   PRINT_SIZE_PRESETS,
-  tileDocumentThreeUpDieCut54,
-  tileDocumentTwoUpDieCut37,
   type PrintSizePreset,
 } from '@/lib/print-sizes';
 import { logCaptureSha1 } from '@/lib/debug/capture-hash';
@@ -595,10 +590,10 @@ export default function PrintScreen() {
   // and rat-tail keep their own canvases.
   const baseDocument = useMemo<LabelDocument | null>(() => {
     if (!sourceDocument) return null;
-    if (jewelryDieCutJob || cableFlagJob || ratTail143Job) return sourceDocument;
+    if (cableFlagJob || ratTail143Job) return sourceDocument;
     if ((sourceDocument.ups?.columns ?? 0) >= 2) return composeUpsDocument(sourceDocument);
     return sourceDocument;
-  }, [sourceDocument, jewelryDieCutJob, cableFlagJob, ratTail143Job]);
+  }, [sourceDocument, cableFlagJob, ratTail143Job]);
   // Always use the connected printer's real DPI — a hardcoded 304 blurs 203 DPI
   // Josh/Dev/Tez heads (already fixed for jewelry; cable-flag/rat-tail-143 had the same bug).
   const jewelryJobDpi = null;
@@ -609,9 +604,8 @@ export default function PrintScreen() {
     if (cableFlagJob) {
       return PRINT_SIZE_PRESETS.find((p) => p.id === CABLE_FLAG_PRINT_PRESET_SINGLE) ?? null;
     }
-    if (!jewelryDieCutJob) return null;
-    return PRINT_SIZE_PRESETS.find((p) => p.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) ?? null;
-  }, [cableFlagJob, jewelryDieCutJob]);
+    return null;
+  }, [cableFlagJob]);
 
   const defaultPrintSize = useMemo<LabelSizeMm>(() => {
     if (!baseDocument) return { widthMm: defaults.labelWidth, heightMm: defaults.labelHeight };
@@ -619,13 +613,18 @@ export default function PrintScreen() {
     if (cableFlagJob) {
       return { widthMm: CABLE_FLAG_DIECUT.widthMm, heightMm: CABLE_FLAG_DIECUT.heightMm };
     }
-    if (defaultPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) {
-      return { widthMm: JEWELRY_DIECUT.sheetWidthMm, heightMm: JEWELRY_DIECUT.sheetHeightMm };
-    }
     return printMediaSizeMm(baseDocument.widthMm, baseDocument.heightMm);
   }, [baseDocument, defaultPreset, defaults.labelWidth, defaults.labelHeight, cableFlagJob, ratTail143Job]);
 
   const [copies, setCopies] = useState(1);
+  const [rowsOpen, setRowsOpen] = useState(false);
+  const [rowMode, setRowMode] = useState<RowSelection['mode']>('all');
+  const [rowText, setRowText] = useState('');
+  const rowSelection = useMemo<RowSelection>(
+    () => (rowMode === 'custom' ? { mode: 'custom', text: rowText } : { mode: rowMode } as RowSelection),
+    [rowMode, rowText],
+  );
+  const rowError = rowMode === 'custom' ? parseRowText(rowText, baseDocument?.bulk?.rowCount ?? 0).error : null;
   const [collate, setCollate] = useState(false);
   const [printProgress, setPrintProgress] = useState<string | null>(null);
   // A boolean, not the text: the text changes with every printer event and would re-render this whole screen.
@@ -836,8 +835,9 @@ export default function PrintScreen() {
       baseDocument.bulk.copiesColumnIndex ?? null,
       copies,
       baseDocument.bulk.rowCopiesOverrides,
+      rowSelection,
     );
-  }, [baseDocument, excelFiles, copies]);
+  }, [baseDocument, excelFiles, copies, rowSelection]);
 
   const showCollate = Boolean(baseDocument?.bulk && bulkPrintPlan);
   // Collate only changes anything once the job repeats.
@@ -903,18 +903,6 @@ export default function PrintScreen() {
       }
       if (cableFlagJob) {
         return cableFlagPrintDocument(preview);
-      }
-      if (jewelryDieCutJob && sourceDocument) {
-        // Freeze author mm positions — no softFit/refit on the print path.
-        const frozen = canonicalizeJewelryDieCutDocument(sourceDocument);
-        if (printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) {
-          return tileDocumentThreeUpDieCut54(frozen);
-        }
-        if (printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_2UP) {
-          return tileDocumentTwoUpDieCut37(frozen);
-        }
-        // Single Label Tag: crop leftmost 14×96 column (not full sheet SIZE).
-        return extractJewelryFirstColumnDocument(frozen);
       }
       if (isFitLabelImageOnlyDocument(preview)) {
         return refitFitLabelDocument(preview, printSize.widthMm, printSize.heightMm);
@@ -1292,11 +1280,17 @@ export default function PrintScreen() {
             baseDocument.bulk.copiesColumnIndex ?? null,
             copies,
             baseDocument.bulk.rowCopiesOverrides,
+            rowSelection,
           )
         : null;
+    if (rowError) {
+      printingLockRef.current = false;
+      Alert.alert('Rows to print', rowError);
+      return;
+    }
     if (bulkPlan?.allZero) {
       printingLockRef.current = false;
-      Alert.alert('Nothing to print', 'Every row has 0 copies, so nothing was sent.');
+      Alert.alert('Nothing to print', 'No row is selected with at least 1 copy, so nothing was sent.');
       return;
     }
     if (bulkPlan?.overCap) {
@@ -2720,6 +2714,42 @@ export default function PrintScreen() {
                   : `${serialInfo.count} rows x ${copies} ${copies === 1 ? 'copy' : 'copies'} = ${serialInfo.count * copies} to print.`}
               </Text>
             ) : null}
+            {showCollate && baseDocument?.bulk ? (
+              <View style={styles.cardSection}>
+                <CollapsibleBar
+                  title="Rows to print"
+                  value={rowSelectionSummary(rowSelection, baseDocument.bulk.rowCount)}
+                  open={rowsOpen}
+                  onToggle={() => setRowsOpen((o) => !o)}>
+                  <ChipGroup
+                    options={['All', 'Even', 'Odd', 'Custom']}
+                    selected={rowMode[0].toUpperCase() + rowMode.slice(1)}
+                    onSelect={(opt) => setRowMode(opt.toLowerCase() as RowSelection['mode'])}
+                  />
+                  {rowMode === 'custom' ? (
+                    <TextInput
+                      value={rowText}
+                      onChangeText={setRowText}
+                      placeholder="e.g. 1-5, 8, 12-"
+                      placeholderTextColor={C.textMuted}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      accessibilityLabel="Rows to print"
+                      style={styles.rowsInput}
+                    />
+                  ) : null}
+                  <Text style={[styles.helperText, rowText.trim() && rowError ? { color: C.danger } : null]}>
+                    {rowMode === 'custom'
+                      ? rowText.trim() && rowError
+                        ? rowError
+                        : 'Row 1 is the first row under the header. Commas for single rows (3, 7), a dash for a range (10-20), "30-" for row 30 to the end.'
+                      : rowMode === 'all'
+                        ? 'Every row prints.'
+                        : `Only ${rowMode} row numbers print.`}
+                  </Text>
+                </CollapsibleBar>
+              </View>
+            ) : null}
             {showCollate ? (
               <View style={styles.collateWrap}>
                 <Text style={styles.collateLabel}>Print order</Text>
@@ -2759,46 +2789,6 @@ export default function PrintScreen() {
                 {bulkPrintPlan.totalPhysical} {bulkPrintPlan.totalPhysical === 1 ? 'label' : 'labels'} from{' '}
                 {baseDocument.bulk.rowCount} {baseDocument.bulk.rowCount === 1 ? 'design' : 'designs'}
               </Text>
-            ) : null}
-
-            {jewelryDieCutJob ? (
-              <View style={styles.cardSection}>
-                <Text style={styles.groupLabel}>Jewelry Print Mode</Text>
-                <ChipGroup
-                  options={['3-Across (54×96 Sheet)', 'Single Label Tag']}
-                  selected={
-                    printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP
-                      ? '3-Across (54×96 Sheet)'
-                      : 'Single Label Tag'
-                  }
-                  onSelect={(opt) => {
-                    if (opt === '3-Across (54×96 Sheet)') {
-                      const p =
-                        PRINT_SIZE_PRESETS.find((preset) => preset.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) ??
-                        null;
-                      setPrintPreset(p);
-                      setPrintSize({
-                        widthMm: JEWELRY_DIECUT.sheetWidthMm,
-                        heightMm: JEWELRY_DIECUT.sheetHeightMm,
-                      });
-                    } else {
-                      setPrintPreset(
-                        PRINT_SIZE_PRESETS.find((preset) => preset.id === JEWELRY_DIECUT_PRINT_PRESET_SINGLE) ??
-                          null,
-                      );
-                      setPrintSize({
-                        widthMm: JEWELRY_DIECUT.tagWidthMm,
-                        heightMm: JEWELRY_DIECUT.tagHeightMm,
-                      });
-                    }
-                  }}
-                />
-                <Text style={styles.helperText}>
-                  {printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP
-                    ? 'Prints across all 3 labels on the 54 × 96 mm backing sheet (3 mm gaps).'
-                    : `Prints one 14 × 96 mm tag (left column). SIZE 14.00 mm,96.00 mm.`}
-                </Text>
-              </View>
             ) : null}
 
             {cableFlagJob ? (
@@ -3281,6 +3271,16 @@ const styles = themedStyles((c, scheme) => ({
     color: c.textSecondary,
     fontSize: 12,
     lineHeight: 16,
+  },
+  rowsInput: {
+    minHeight: 48,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.hairline,
+    fontSize: 16,
+    color: c.text,
   },
   bulkTotal: {
     color: c.textSecondary,

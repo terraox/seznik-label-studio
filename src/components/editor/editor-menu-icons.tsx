@@ -32,13 +32,13 @@ export function ToolMenuIcon({
     case 'Barcode':
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32">
-          <Line x1="5.5" y1="6" x2="5.5" y2="26" stroke={color} strokeWidth="2" strokeLinecap="round" />
-          <Line x1="9.5" y1="6" x2="9.5" y2="26" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
-          <Line x1="13" y1="6" x2="13" y2="26" stroke={color} strokeWidth="2.6" strokeLinecap="round" />
-          <Line x1="16.5" y1="6" x2="16.5" y2="26" stroke={accentColor} strokeWidth="1.4" strokeLinecap="round" />
-          <Line x1="19.5" y1="6" x2="19.5" y2="26" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
-          <Line x1="23" y1="6" x2="23" y2="26" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
-          <Line x1="26.5" y1="6" x2="26.5" y2="26" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <Line x1="5.5" y1="4" x2="5.5" y2="28" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <Line x1="9.5" y1="4" x2="9.5" y2="28" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+          <Line x1="13" y1="4" x2="13" y2="28" stroke={color} strokeWidth="2.6" strokeLinecap="round" />
+          <Line x1="16.5" y1="4" x2="16.5" y2="28" stroke={accentColor} strokeWidth="1.4" strokeLinecap="round" />
+          <Line x1="19.5" y1="4" x2="19.5" y2="28" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
+          <Line x1="23" y1="4" x2="23" y2="28" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+          <Line x1="26.5" y1="4" x2="26.5" y2="28" stroke={color} strokeWidth="2" strokeLinecap="round" />
         </Svg>
       );
 

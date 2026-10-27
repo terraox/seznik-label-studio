@@ -45,6 +45,7 @@ class Td404RudraPrinterModule : Module() {
   private val nativeRev = "td404-border-fix-2"
   private val sppUuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
   private val ioExecutor = Executors.newCachedThreadPool()
+  @Volatile private var probeSocket: android.bluetooth.BluetoothSocket? = null
   private val connectTimeoutMs = 8_000L
   private val printChunk = 32 * 1024
   private val connectGeneration = AtomicInteger(0)
@@ -236,6 +237,25 @@ class Td404RudraPrinterModule : Module() {
       }
     }
 
+    /** Opens the system pairing dialog for an unpaired printer. Resolves true once it is bonded. */
+    AsyncFunction("pairDevice") { macAddress: String, timeoutMs: Int, promise: Promise ->
+      val context = appContext.reactContext
+      val adapter = getAdapter()
+      if (context == null || adapter == null || !adapter.isEnabled || !hasConnectPermission(context)) {
+        promise.resolve(false)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        promise.resolve(
+          try {
+            pairBlocking(context, adapter, macAddress, timeoutMs.toLong())
+          } catch (_: Exception) {
+            false
+          },
+        )
+      }
+    }
+
     AsyncFunction("stopScan") { promise: Promise ->
       ioExecutor.execute {
         try {
@@ -246,6 +266,46 @@ class Td404RudraPrinterModule : Module() {
           promise.resolve(null)
         } catch (e: Exception) {
           promise.reject("STOP_FAILED", e.message, e)
+        }
+      }
+    }
+
+    // Reachability check for the paired printer: opens the SPP link and closes it again.
+    // A paired printer is often not discoverable, so a scan can't tell if it is on.
+    AsyncFunction("probe") { macAddress: String, timeoutMs: Int, promise: Promise ->
+      val adapter = getAdapter()
+      if (adapter == null || !adapter.isEnabled) {
+        promise.resolve(false)
+        return@AsyncFunction
+      }
+      if (socket != null && connectedMac.equals(macAddress, ignoreCase = true)) {
+        promise.resolve(true)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        var sock: android.bluetooth.BluetoothSocket? = null
+        var killer: Thread? = null
+        try {
+          @SuppressLint("MissingPermission")
+          if (adapter.isDiscovering) adapter.cancelDiscovery()
+          val device = adapter.getRemoteDevice(macAddress.uppercase())
+          @SuppressLint("MissingPermission")
+          val s = device.createInsecureRfcommSocketToServiceRecord(sppUuid)
+          sock = s
+          probeSocket = s
+          killer = Thread {
+            try { Thread.sleep(timeoutMs.toLong()) } catch (_: InterruptedException) { return@Thread }
+            try { s.close() } catch (_: Exception) {}
+          }.also { it.isDaemon = true; it.start() }
+          @SuppressLint("MissingPermission")
+          s.connect()
+          promise.resolve(true)
+        } catch (_: Exception) {
+          promise.resolve(false)
+        } finally {
+          killer?.interrupt()
+          try { sock?.close() } catch (_: Exception) {}
+          if (probeSocket === sock) probeSocket = null
         }
       }
     }
@@ -272,6 +332,7 @@ class Td404RudraPrinterModule : Module() {
             adapter.cancelDiscovery()
             try { Thread.sleep(150) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
           }
+          try { probeSocket?.close() } catch (_: Exception) {}
           closePendingSocket()
           closeSocket()
           try { Thread.sleep(100) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
@@ -1254,6 +1315,56 @@ class Td404RudraPrinterModule : Module() {
       throw IOException("Printer did not accept the connection in time. Keep it on and close other phone connections.")
     }
     error?.let { throw it }
+  }
+
+  /** Bonds with an unpaired printer and waits for the result. False when declined, failed or timed out. */
+  @SuppressLint("MissingPermission")
+  private fun pairBlocking(context: Context, adapter: BluetoothAdapter, mac: String, timeoutMs: Long): Boolean {
+    val device = try { adapter.getRemoteDevice(mac.uppercase()) } catch (_: Exception) { return false }
+    if (device.bondState == BluetoothDevice.BOND_BONDED) return true
+
+    // An active inquiry makes bonding fail or crawl.
+    if (adapter.isDiscovering) {
+      adapter.cancelDiscovery()
+      var waited = 0
+      while (adapter.isDiscovering && waited < 2000) {
+        Thread.sleep(100)
+        waited += 100
+      }
+    }
+
+    val latch = CountDownLatch(1)
+    val receiver = object : BroadcastReceiver() {
+      override fun onReceive(c: Context?, intent: Intent?) {
+        if (intent == null) return
+        @Suppress("DEPRECATION")
+        val d = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+        if (d?.address != device.address) return
+        val state = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE)
+        val previous = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.BOND_NONE)
+        // Done when bonded, or when bonding ended back at none (declined / failed).
+        if (state == BluetoothDevice.BOND_BONDED ||
+          (state == BluetoothDevice.BOND_NONE && previous == BluetoothDevice.BOND_BONDING)
+        ) latch.countDown()
+      }
+    }
+    val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      context.registerReceiver(receiver, filter)
+    }
+    return try {
+      val started = device.createBond()
+      if (!started && device.bondState != BluetoothDevice.BOND_BONDING) {
+        false
+      } else {
+        latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+        device.bondState == BluetoothDevice.BOND_BONDED
+      }
+    } finally {
+      try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+    }
   }
 
   private fun ensureReceiver() {

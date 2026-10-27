@@ -26,6 +26,7 @@ import {
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 import { isBluetoothOffError } from '@/lib/printer/bluetooth-guard';
+import { probeTd404 } from '@/lib/printer/td404-bridge';
 import { bridgeDisplayLabel, defaultBridgeForConsumer, lastDeviceForConsumer } from '@/lib/printer/printer-bridge';
 import { getAmbiguousModelCandidates } from '@/lib/printer/printer-heuristics';
 import {
@@ -40,10 +41,14 @@ import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { useAuthStore } from '@/stores/auth-store';
 import { JOSH_LID_MESSAGE, joshLidOpen } from '@/lib/printer/josh-status';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
-import { normalizePrinterMac, usePrinterNickname, usePrinterStore } from '@/stores/printer-store';
+import { isAutoConnectEnabled, normalizePrinterMac, usePrinterNickname, usePrinterStore } from '@/stores/printer-store';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 const ANDROID_BLUETOOTH_SETTINGS = 'android.settings.BLUETOOTH_SETTINGS';
+// Discovery restarts as soon as it ends.
+const RESCAN_INTERVAL_MS = 1_000;
+const PROBE_INTERVAL_MS = 8_000;
+const PROBE_TIMEOUT_MS = 4_000;
 
 async function openPhoneBluetoothSettings() {
   try {
@@ -201,7 +206,8 @@ export default function PrinterConnectScreen() {
     async (device?: DiscoveredPrinter) => {
       const mgr = getPrinterManager();
       if (mgr.isConnectionHealthy()) return;
-      if (mgr.isAutoReconnectSuppressed()) return;
+      // Only the user's Disconnect blocks this screen; a dropped session reconnects when the printer is back.
+      if (mgr.isUserDisconnected()) return;
       if (connectingId || autoConnectingRef.current) return;
       const store = usePrinterStore.getState();
       if (store.status === 'connecting' || store.status === 'printing') return;
@@ -216,7 +222,7 @@ export default function PrinterConnectScreen() {
       if (autoConnectKeyRef.current === sessionKey) return;
       autoConnectingRef.current = true;
       try {
-        const ok = await mgr.reconnectLastForConsumer(selectedModel);
+        const ok = await mgr.reconnectLastForConsumer(selectedModel, { screenProbe: true });
         if (ok && userTargetRef.current == null) autoConnectKeyRef.current = sessionKey;
       } finally {
         autoConnectingRef.current = false;
@@ -337,7 +343,7 @@ export default function PrinterConnectScreen() {
         }
         const begin = () => {
           if (cancelled) return;
-          if (!mgr.isAutoReconnectSuppressed()) {
+          if (!mgr.isUserDisconnected() && isAutoConnectEnabled(usePrinterStore.getState().autoConnectByModel, usePrinterStore.getState().selectedPrinterModel)) {
             void attemptAutoConnectLastRef.current().catch(() => {});
           }
           void startScanRef.current(usePrinterStore.getState().selectedPrinterModel).catch(() => {});
@@ -367,6 +373,57 @@ export default function PrinterConnectScreen() {
       };
     }, []),
   );
+
+  // Presence goes stale the moment a scan ends, so rescan on a timer while this screen is up
+  // and no printer is linked.
+  const lastProbeAtRef = useRef(0);
+  const probingRef = useRef(false);
+  const scanningRef = useRef(false);
+  scanningRef.current = scanning;
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!mountedRef.current || scanningRef.current || AppState.currentState !== 'active') return;
+      const store = usePrinterStore.getState();
+      if (store.status === 'connecting' || store.status === 'connected' || store.status === 'printing') return;
+      if (getPrinterManager().isConnectionHealthy()) return;
+      if (!getPrinterManager().isBluetoothEnabled()) return;
+      // A connect attempt and discovery fight over the radio; never start a scan under one.
+      if (autoConnectingRef.current) return;
+      const model = store.selectedPrinterModel;
+      const lastSaved = lastDeviceForConsumer(store, model);
+      if ((model === 'tejas' || model === 'rudra') && lastSaved?.id && isAutoConnectEnabled(store.autoConnectByModel, model)) {
+        // A paired printer is usually not discoverable, so ask it directly. This replaces the
+        // scan loop while a saved TD-404 printer exists (discovery would also starve the probe).
+        if (probingRef.current) return;
+        probingRef.current = true;
+        const mac = normalizePrinterMac(lastSaved.id);
+        getPrinterManager().stopScan();
+        void probeTd404(mac, PROBE_TIMEOUT_MS)
+          .then((ok) => {
+            if (!mountedRef.current) return;
+            if (ok) void attemptAutoConnectLastRef.current().catch(() => {});
+          })
+          .finally(() => {
+            probingRef.current = false;
+          });
+        return;
+      }
+      const t = Date.now();
+      if (t - lastProbeAtRef.current >= PROBE_INTERVAL_MS) {
+        lastProbeAtRef.current = t;
+        // Paired printers are always in the list, so only a real connect attempt tells whether
+        // the last printer is reachable. Success lands on the connected view.
+        const mgr = getPrinterManager();
+        if (!mgr.isAutoReconnectSuppressed() && lastDeviceForConsumer(store, store.selectedPrinterModel)?.id) {
+          mgr.stopScan();
+          void attemptAutoConnectLastRef.current().catch(() => {});
+          return;
+        }
+      }
+      void startScanRef.current(store.selectedPrinterModel).catch(() => {});
+    }, RESCAN_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const appSub = AppState.addEventListener('change', (next) => {
@@ -429,18 +486,10 @@ export default function PrinterConnectScreen() {
   }, [matchingDevices, sortedDevices]);
   const listedDevices = showAllDevices ? allDevicesMatchFirst : matchingDevices;
 
+  const autoConnectOn = usePrinterStore((s) => isAutoConnectEnabled(s.autoConnectByModel, selectedModel));
+  const setAutoConnect = usePrinterStore((s) => s.setAutoConnect);
   const lastConsumer = lastForBridge?.consumer ?? selectedModel;
   const lastPrinterMeta = CONSUMER_PRINTERS[lastConsumer] ?? printer;
-  const lastNearby = useMemo(() => {
-    if (!lastForBridge?.id) return false;
-    const key = normalizePrinterMac(lastForBridge.id);
-    return listedDevices.some((d) => normalizePrinterMac(d.id) === key);
-  }, [lastForBridge?.id, listedDevices]);
-
-  // Paired printers are always listed (in range or not), so a clean scan that lacks the last
-  // printer means it was unpaired from Android Bluetooth settings.
-  const lastUnpaired = Boolean(lastForBridge?.id) && scanCleanDone && !scanning && !lastNearby;
-
   const connectWith = async (target: ConsumerPrinterId, device: DiscoveredPrinter) => {
     if (target !== usePrinterStore.getState().selectedPrinterModel) {
       setSelectedPrinterModel(target);
@@ -485,9 +534,12 @@ export default function PrinterConnectScreen() {
     setConnectingId(device.id);
     usePrinterStore.getState().setStatus('connecting');
     try {
-      // Unpaired Josh printer: open the system pairing dialog first, then connect.
-      if (selectedModel === 'josh' && !device.bonded) {
-        const paired = await mgr.pairJoshDevice(device.id);
+      // Unpaired Josh / Tejas / Rudra printer: open the system pairing dialog first, then connect.
+      if ((selectedModel === 'josh' || selectedModel === 'tejas' || selectedModel === 'rudra') && !device.bonded) {
+        const paired =
+          selectedModel === 'josh'
+            ? await mgr.pairJoshDevice(device.id)
+            : await mgr.pairTd404Device(device.id);
         if (request !== connectRequestRef.current) return;
         if (!paired) {
           usePrinterStore.getState().setStatus('disconnected');
@@ -664,10 +716,9 @@ export default function PrinterConnectScreen() {
             deviceId={lastForBridge?.id ?? ''}
             connectedAt={lastForBridge?.connectedAt}
             connecting={Boolean(lastForBridge && connectingId === lastForBridge.id)}
-            visible={Boolean(lastForBridge && caps.canScan && bluetoothOn && !lastUnpaired)}
-            nearby={lastNearby}
-            scanning={scanning}
-            autoConnectPaused={autoConnectPaused}
+            visible={Boolean(lastForBridge && caps.canScan && bluetoothOn)}
+            autoConnect={autoConnectOn}
+            onAutoConnectChange={(on) => setAutoConnect(selectedModel, on)}
             onConnect={() => void handleReconnectLast()}
           />
           <BluetoothBlockers
