@@ -45,8 +45,11 @@ import {
   type Shape,
 } from '@/lib/new-label-form';
 import { resolveProfile } from '@/printer-core/profiles';
+import { applySetupToSheet, type SavedSetup } from '@/lib/saved-setup';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore } from '@/stores/data-store';
+import { useLabelStore } from '@/stores/label-store';
+import { useSavedSetupStore } from '@/stores/saved-setup-store';
 import { useIncomingFileStore, type IncomingFile } from '@/stores/incoming-file-store';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -71,6 +74,10 @@ export default function ExcelPrintScreen() {
     setReceived(sharedFile);
     clearSharedFile();
   }, [sharedFile, clearSharedFile]);
+  const setups = useSavedSetupStore((s) => s.setups);
+  const removeSetup = useSavedSetupStore((s) => s.remove);
+  const touchSetup = useSavedSetupStore((s) => s.touch);
+  const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const [form, setForm] = useState<FormState>(() => initialFormState({}));
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [triedContinue, setTriedContinue] = useState(false);
@@ -183,6 +190,65 @@ export default function ExcelPrintScreen() {
     }
   };
 
+  // Saved setup: pick the sheet, lay it out like last time, and go straight to the label.
+  const useSetup = async (setup: SavedSetup) => {
+    if (picking) return;
+    setPicking(true);
+    try {
+      const picked = received ? await importExcelFromFile(received) : await importExcel();
+      if (!picked) return;
+      const sheetIndex = Math.max(
+        0,
+        picked.sheets.findIndex((s) => s.rows.length > 0),
+      );
+      const sheet = picked.sheets[sheetIndex];
+      const storedUri = await stageImportedFile('excel', picked.uri, picked.name);
+      const entry = addExcelFile({
+        name: picked.name,
+        uri: storedUri,
+        sheets: picked.sheets,
+        activeSheetIndex: sheetIndex,
+        hasHeaderRow: picked.hasHeaderRow,
+        dataStartRow: picked.dataStartRow,
+      });
+      const applied = applySetupToSheet(setup, sheet, { id: entry.id, name: picked.name }, sheetIndex);
+      if (!applied) {
+        Alert.alert(
+          'Columns do not match',
+          `None of the columns in "${setup.name}" (${setup.columns.join(', ')}) are in this sheet.`,
+        );
+        return;
+      }
+      const open = () => {
+        upsertDocument(applied.doc);
+        touchSetup(setup.id);
+        router.replace({ pathname: '/edit', params: { labelId: applied.doc.id } });
+      };
+      if (applied.missing.length === 0) {
+        open();
+        return;
+      }
+      Alert.alert(
+        'Some columns are missing',
+        `Not found in this sheet: ${applied.missing.join(', ')}.\n\nContinue without them?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: open },
+        ],
+      );
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Unable to open this setup.');
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  const confirmDeleteSetup = (setup: SavedSetup) =>
+    Alert.alert('Delete setup?', `"${setup.name}" will be removed. Labels already made from it stay.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => removeSetup(setup.id) },
+    ]);
+
   const sizeTitle = multi ? 'Size of each label' : 'Size';
 
   return (
@@ -227,6 +293,43 @@ export default function ExcelPrintScreen() {
             <Pressable onPress={() => setReceived(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Use a different file">
               <Text style={styles.receivedChange}>Change</Text>
             </Pressable>
+          </View>
+        ) : null}
+
+        {setups.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading}>Saved setups</Text>
+            {setups.map((setup) => (
+              <View key={setup.id} style={styles.setupRow}>
+                <Pressable
+                  disabled={picking}
+                  onPress={() => void useSetup(setup)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use saved setup ${setup.name}`}
+                  style={({ pressed }) => [styles.setupMain, pressed && styles.pressed]}>
+                  <View style={styles.setupIcon}>
+                    <AppIcon name="bolt.fill" tintColor={C.accent} size={18} />
+                  </View>
+                  <View style={styles.setupText}>
+                    <Text style={styles.setupName} numberOfLines={1}>
+                      {setup.name}
+                    </Text>
+                    <Text style={styles.setupMeta} numberOfLines={1}>
+                      {fmtMm(setup.doc.widthMm)} × {fmtMm(setup.doc.heightMm)} mm · {setup.columns.join(', ')}
+                    </Text>
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={() => confirmDeleteSetup(setup)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete saved setup ${setup.name}`}
+                  style={({ pressed }) => [styles.setupDelete, pressed && styles.pressed]}>
+                  <AppIcon name="trash" tintColor={C.textMuted} size={18} />
+                </Pressable>
+              </View>
+            ))}
+            <Text style={styles.note}>Pick one, choose your sheet, and the label is laid out like last time.</Text>
           </View>
         ) : null}
 
@@ -520,6 +623,20 @@ const styles = themedStyles((c) => ({
     borderRadius: 10,
     backgroundColor: c.accentSoft,
   },
+  setupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.hairline,
+  },
+  setupMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 12, minWidth: 0 },
+  setupIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  setupText: { flex: 1, minWidth: 0, gap: 1 },
+  setupName: { fontSize: 15, fontWeight: '700', color: c.text },
+  setupMeta: { fontSize: 12, color: c.textMuted },
+  setupDelete: { width: 44, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
   receivedName: { flex: 1, fontSize: 14, fontWeight: '600', color: c.text },
   receivedChange: { fontSize: 13, fontWeight: '700', color: c.link },
 }));

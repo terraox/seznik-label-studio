@@ -22,12 +22,11 @@ import {
   WrongPlatformError,
   type ScanResult,
 } from '@/lib/ecommerce-label/job';
-import { PLATFORMS, parsePlatformId, platformName, type PlatformId } from '@/lib/ecommerce-label/platforms';
+import { PLATFORMS, SHIPPING_SIZE_PRESETS, parsePlatformId, platformName, type PlatformId } from '@/lib/ecommerce-label/platforms';
 import { copyPdfToCache, loadPdfMetadata } from '@/lib/pdf-editor/load';
 import { clearPrintRasterCache, type PdfPrintOptions } from '@/lib/pdf-editor/print';
 import { clearRasterCache } from '@/lib/pdf-editor/raster';
 import {
-  OUTPUT_SIZE_PRESETS,
   resolvePrintPageIndices,
   type OutputSize,
   type PdfPrintSelection,
@@ -46,10 +45,12 @@ type PickedFile = {
   pageSizesPt: { w: number; h: number }[];
 };
 
-const DEFAULT_SIZE: OutputSize = (() => {
-  const p = OUTPUT_SIZE_PRESETS.find((x) => x.kind === '4x6') ?? OUTPUT_SIZE_PRESETS[0];
-  return { kind: p.kind, widthMm: p.widthMm, heightMm: p.heightMm };
-})();
+// 4 × 6 in is 100 × 150 mm here, exactly.
+const DEFAULT_SIZE: OutputSize = {
+  kind: 'custom',
+  widthMm: SHIPPING_SIZE_PRESETS[0].width,
+  heightMm: SHIPPING_SIZE_PRESETS[0].height,
+};
 
 export default function EcommerceLabelScreen() {
   useThemeRefresh();
@@ -299,7 +300,7 @@ export default function EcommerceLabelScreen() {
       {step === 'setup' && platform ? (
         <FormScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.heading}>Label size</Text>
-          <PdfOutputSizeRow value={size} onChange={setSize} />
+          <PdfOutputSizeRow value={size} onChange={setSize} presets={SHIPPING_SIZE_PRESETS} unitSwitch />
 
           <View style={styles.row}>
             <View style={styles.cardText}>

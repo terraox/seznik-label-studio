@@ -25,6 +25,7 @@ test('every Home tool has a help page', () => {
     shippingLabels: 'shipping-labels',
     excel: 'excel',
     pdf: 'pdf',
+    printImage: 'print-image',
     importLabel: 'seznik-files',
   };
   for (const id of Object.values(wanted)) assert.ok(helpTopic(id), id);

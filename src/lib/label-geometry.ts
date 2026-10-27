@@ -55,7 +55,6 @@ export type LabelSizePreset = {
 export const LABEL_SIZE_PRESETS: LabelSizePreset[] = [
   { id: '100x155', label: '100×155 mm Waybill', widthMm: 100, heightMm: 155 },
   { id: '100x150', label: '100×150 mm (4×6 in)', widthMm: 100, heightMm: 150 },
-  { id: '4x6in', label: '4×6 in (101.6×152.4 mm)', widthMm: 101.6, heightMm: 152.4 },
   { id: '100x100', label: '100×100 mm (4×4 in)', widthMm: 100, heightMm: 100 },
   { id: '76x130', label: '76×130 mm Courier', widthMm: 76, heightMm: 130 },
   { id: '75x100', label: '75×100 mm (3×4 in)', widthMm: 75, heightMm: 100 },
@@ -75,8 +74,8 @@ export const LABEL_SIZE_PRESETS: LabelSizePreset[] = [
   { id: '80x15', label: '80×15 mm Rat Tail Tag', widthMm: 80, heightMm: 15 },
   { id: '85x13', label: '85×13 mm Barbell', widthMm: 85, heightMm: 13 },
   { id: '85x15', label: '85×15 mm Barbell', widthMm: 85, heightMm: 15 },
-  { id: '2x1in', label: '2×1 in (50.8×25.4 mm)', widthMm: 50.8, heightMm: 25.4 },
-  { id: '3x2in', label: '3×2 in (76.2×50.8 mm)', widthMm: 76.2, heightMm: 50.8 },
+  { id: '2x1in', label: '2×1 in (50×25 mm)', widthMm: 50, heightMm: 25 },
+  { id: '3x2in', label: '3×2 in (75×50 mm)', widthMm: 75, heightMm: 50 },
   { id: 'a6', label: 'A6 (105×148 mm)', widthMm: 105, heightMm: 148 },
   { id: 'a4', label: 'A4 (210×297 mm)', widthMm: 210, heightMm: 297 },
 ];
@@ -184,7 +183,7 @@ export function printCaptureLayout(widthMm: number, heightMm: number, dpi = PRIN
 
 /**
  * Media size preserving true physical millimetres for exact 1:1 preview/print fidelity.
- * 4×6 in is preserved as 101.6 × 152.4 mm (no artificial integer rounding distortion).
+ * Sizes are exact millimetres: an inch size is 25 mm per inch here, so 4×6 in is 100 × 150 mm.
  */
 export function printMediaSizeMm(widthMm: number, heightMm: number): LabelSizeMm {
   return {

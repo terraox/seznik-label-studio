@@ -205,7 +205,46 @@ export const HELP_TOPICS: HelpTopic[] = [
         type: 'text',
         text: 'In the editor, select a text, barcode or QR field and set its content to Data Source, then pick the column name. That field is filled from each row as the labels print.',
       },
+      { type: 'heading', text: 'Saved setups' },
+      {
+        type: 'text',
+        text: 'Print the same kind of sheet often? The first time you tap Print on an Excel label, Sez Print offers to save its setup: the size, paper, labels across and the place and style of every column. Next time, tap Excel, pick the saved setup, choose your sheet and the label opens already laid out. The label is also kept in Templates, Local, with a Saved setup mark. The data in your sheet is never saved, only the layout.',
+      },
+      {
+        type: 'bullets',
+        items: [
+          'Columns are matched by their heading, so the order in the sheet does not matter. "Qty" and "qty" count as the same heading.',
+          'If a saved column is not in the new sheet, you are told which ones, and can continue without them. Extra columns in the sheet are ignored.',
+          'Delete a saved setup with the bin icon on its row. Labels already made from it stay.',
+        ],
+      },
       { type: 'tip', text: 'Keep the first row of the sheet for column headings and keep the data in one block with no empty rows. The Data File page in Settings lists the files you have imported.' },
+    ],
+  },
+  {
+    id: 'print-image',
+    title: 'Image',
+    summary: 'Print a photo on a label with Solid or Dither.',
+    icon: 'photo',
+    blocks: [
+      { type: 'text', text: 'Image prints a photo on your label roll. Pick a photo, choose the label size, and check the preview before you print.' },
+      {
+        type: 'steps',
+        items: [
+          'Tap Image on Home and choose a photo from your gallery or camera.',
+          'Choose the label size. A size close to the photo shape wastes the least.',
+          'Choose a print mode and adjust brightness and contrast. The preview shows what will print.',
+          'Set the number of copies and tap Print.',
+        ],
+      },
+      { type: 'heading', text: 'Print modes' },
+      {
+        type: 'bullets',
+        items: [
+          'Solid: pure black and white with a threshold. Best for logos, text and line art.',
+          'Dither: dots for the gray areas. Best for photos.',
+        ],
+      },
     ],
   },
   {

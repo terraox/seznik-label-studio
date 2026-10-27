@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { LabelDimensionModal } from '@/components/label-dimension-modal';
+import { SegmentedControl } from '@/components/new-label/new-label-parts';
 
 import { fromMm, type LabelUnit } from '@/lib/label-geometry';
 import { themedStyles, useThemeRefresh } from '@/theme';
@@ -22,6 +23,22 @@ function formatDimension(mm: number, unit: LabelUnit): string {
   return String(Math.round(v * 100) / 100);
 }
 
+export type LabelSizePreset = {
+  /** Chip title. Without it the chip shows the size in millimetres. */
+  name?: string;
+  width: number;
+  height: number;
+  /** Nominal inch size, shown as it is in inches (so 100 × 150 mm reads 4 × 6 in, not 3.94 × 5.91). */
+  inch?: [number, number];
+  label?: string;
+};
+
+const UNIT_OPTIONS: { id: LabelUnit; label: string }[] = [
+  { id: 'mm', label: 'mm' },
+  { id: 'cm', label: 'cm' },
+  { id: 'in', label: 'in' },
+];
+
 function unitSuffix(unit: LabelUnit): string {
   return unit === 'in' ? 'in' : unit;
 }
@@ -35,6 +52,10 @@ type LabelSizeSetupSectionProps = {
   /** When set, size presets update width and height in one call (avoids stale half-updates). */
   onSizeChange?: (widthMm: number, heightMm: number) => void;
   onUnitChange: (unit: LabelUnit) => void;
+  /** Replaces the default small-label presets, e.g. with shipping label sizes. */
+  presets?: LabelSizePreset[];
+  /** Shows a mm / cm / in switch, and writes the preset hint, chips and size line in that unit. */
+  unitSwitch?: boolean;
   /** Replaces the empty proportion box. The frame keeps the label aspect ratio. */
   preview?: ReactNode;
 };
@@ -54,6 +75,8 @@ export function LabelSizeSetupSection({
   onHeightChange,
   onSizeChange,
   onUnitChange,
+  presets = LABEL_SETUP_PRESETS,
+  unitSwitch = false,
   preview,
 }: LabelSizeSetupSectionProps) {
   useThemeRefresh();
@@ -91,40 +114,58 @@ export function LabelSizeSetupSection({
           </View>
         </View>
         <Text style={styles.previewHint}>
-          {widthMm} × {heightMm} mm
+          {unitSwitch
+            ? `${formatDimension(widthMm, unit)} × ${formatDimension(heightMm, unit)} ${unitSuffix(unit)}`
+            : `${widthMm} × ${heightMm} mm`}
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionHeading}>Size presets</Text>
-        <View style={styles.presetFormatCard}>
-          <Text style={styles.presetFormatTitle}>Size format</Text>
-          <View style={styles.presetFormatRow}>
-            <View style={styles.presetFormatPill}>
-              <Text style={styles.presetFormatPillLabel}>Width</Text>
+        {unitSwitch ? (
+          <SegmentedControl<LabelUnit> value={unit} onChange={onUnitChange} options={UNIT_OPTIONS} />
+        ) : (
+          <View style={styles.presetFormatCard}>
+            <Text style={styles.presetFormatTitle}>Size format</Text>
+            <View style={styles.presetFormatRow}>
+              <View style={styles.presetFormatPill}>
+                <Text style={styles.presetFormatPillLabel}>Width</Text>
+              </View>
+              <Text style={styles.presetFormatTimes}>×</Text>
+              <View style={styles.presetFormatPill}>
+                <Text style={styles.presetFormatPillLabel}>Height</Text>
+              </View>
+              <Text style={styles.presetFormatUnit}>mm</Text>
             </View>
-            <Text style={styles.presetFormatTimes}>×</Text>
-            <View style={styles.presetFormatPill}>
-              <Text style={styles.presetFormatPillLabel}>Height</Text>
-            </View>
-            <Text style={styles.presetFormatUnit}>mm</Text>
+            <Text style={styles.presetFormatHint}>Each preset is shown as width × height in millimetres.</Text>
           </View>
-          <Text style={styles.presetFormatHint}>Each preset is shown as width × height in millimetres.</Text>
-        </View>
+        )}
         <View style={styles.presetGrid}>
-          {LABEL_SETUP_PRESETS.map((p) => {
+          {presets.map((p) => {
             const active =
               Math.abs(widthMm - p.width) < 0.1 && Math.abs(heightMm - p.height) < 0.1;
+            const title = p.name ?? p.label ?? '';
+            const sizeLine =
+              unit === 'in' && p.inch
+                ? `${p.inch[0]} × ${p.inch[1]} in`
+                : `${formatDimension(p.width, unit)} × ${formatDimension(p.height, unit)} ${unitSuffix(unit)}`;
             return (
               <Pressable
-                key={p.label}
+                key={title}
                 onPress={() => applyPreset(p.width, p.height)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
                 style={[styles.presetChip, active && styles.presetChipActive]}>
                 <Text
                   style={[styles.presetChipText, active && styles.presetChipTextActive]}
                   numberOfLines={1}>
-                  {p.label}
+                  {title}
                 </Text>
+                {unitSwitch && p.name ? (
+                  <Text style={styles.presetChipSub} numberOfLines={1}>
+                    {sizeLine}
+                  </Text>
+                ) : null}
               </Pressable>
             );
           })}
@@ -303,6 +344,12 @@ const styles = themedStyles((c, scheme) => ({
     fontWeight: '600',
     color: c.textSecondary,
     lineHeight: 16,
+    textAlign: 'center',
+  },
+  presetChipSub: {
+    fontSize: 10,
+    color: c.textMuted,
+    lineHeight: 13,
     textAlign: 'center',
   },
   presetChipTextActive: {

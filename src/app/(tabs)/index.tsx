@@ -150,7 +150,7 @@ export default function HomeScreen() {
             <SectionHeading>Print from file</SectionHeading>
             <DeferredMount minHeight={HomeLayout.tileHeight}>
               <WalkthroughTarget id="home.fromFile">
-                <ToolGrid ids={FILE_TOOLS} columns={3} />
+                <ToolGrid ids={FILE_TOOLS} />
               </WalkthroughTarget>
             </DeferredMount>
           </View>
@@ -159,7 +159,7 @@ export default function HomeScreen() {
             <SectionHeading>More ways to create</SectionHeading>
             <DeferredMount minHeight={HomeLayout.tileHeight}>
               <WalkthroughTarget id="home.create">
-                <ToolGrid ids={CREATE_GRID_TOOLS} columns={3} />
+                <ToolGrid ids={CREATE_GRID_TOOLS} />
               </WalkthroughTarget>
             </DeferredMount>
           </View>

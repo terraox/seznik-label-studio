@@ -32,6 +32,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
 
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
+import { snapshotSetup } from '@/lib/saved-setup';
+import { useSavedSetupStore } from '@/stores/saved-setup-store';
 import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
 import { CANVAS_WALKTHROUGH } from '@/lib/walkthrough/canvas-steps';
 import { registerWalkthroughTarget } from '@/lib/walkthrough/registry';
@@ -951,6 +953,8 @@ export default function EditScreen() {
   const [sizeModalVisible, setSizeModalVisible] = useState(false);
   const [saveAsVisible, setSaveAsVisible] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
+  const [setupPromptVisible, setSetupPromptVisible] = useState(false);
+  const [setupName, setSetupName] = useState('');
   const [bulkScopeApplyAll, setBulkScopeApplyAll] = useState(true);
   const bulkApplyAllRef = useRef(true);
   bulkApplyAllRef.current = bulkScopeApplyAll;
@@ -3481,13 +3485,39 @@ export default function EditScreen() {
     });
   }, []);
 
-  const handlePrint = useCallback(() => {
+  const goToPrint = useCallback(() => {
     saveDocument(false);
     router.push({
       pathname: '/print',
       params: { labelId: docRef.current.id, ...(showSerialBar ? { serialIndex: String(serialIdx) } : {}) },
     });
   }, [saveDocument, showSerialBar, serialIdx]);
+
+  // An Excel label offers to become a saved setup the first time it is printed, once per label.
+  const handlePrint = useCallback(() => {
+    const current = docRef.current;
+    if (current.bulk && !useSavedSetupStore.getState().wasAsked(current.id)) {
+      setSetupName(current.name.split(' · ')[0] || current.name);
+      setSetupPromptVisible(true);
+      return;
+    }
+    goToPrint();
+  }, [goToPrint]);
+
+  const finishSetupPrompt = useCallback(
+    (save: boolean) => {
+      const current = docRef.current;
+      setSetupPromptVisible(false);
+      useSavedSetupStore.getState().markAsked(current.id);
+      if (save) {
+        const sheet = current.bulk ? resolveBulkSheet(useDataStore.getState().excelFiles, current.bulk) : null;
+        const setup = snapshotSetup(current, sheet, setupName);
+        if (setup) useSavedSetupStore.getState().add(setup);
+      }
+      goToPrint();
+    },
+    [goToPrint, setupName],
+  );
 
   const savedBulkCopies = doc.bulk?.rowCopiesOverrides?.[String(doc.bulk.activeRowIndex)];
   const bulkCopiesValue =
@@ -5525,6 +5555,22 @@ export default function EditScreen() {
           placeholder="Label name"
           autoFocus
         />
+      </IosAlertModal>
+
+      <IosAlertModal
+        visible={setupPromptVisible}
+        onClose={() => finishSetupPrompt(false)}
+        title="Save this setup?"
+        message={
+          'Saving keeps this label\'s size, paper and layout, and which column goes where.\n\n' +
+          'Next time: open Excel, tap this setup, and pick a new sheet with the same column names. The label opens already set up.\n\n' +
+          'It is also kept in Templates, Local, marked "Saved setup". Your sheet\'s data is not saved.'
+        }
+        buttons={[
+          { text: 'Not now', style: 'cancel', onPress: () => finishSetupPrompt(false) },
+          { text: 'Save', style: 'default', bold: true, onPress: () => finishSetupPrompt(true) },
+        ]}>
+        <IosAlertInput value={setupName} onChangeText={setSetupName} placeholder="Setup name" />
       </IosAlertModal>
 
       <GridSpacingPopover

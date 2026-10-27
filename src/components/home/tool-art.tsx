@@ -139,6 +139,18 @@ function UploadImageArt({ p }: { p: Palette }) {
   );
 }
 
+/** A photo (hills and sun) printing out as a tag: the Image tile. */
+function PrintImageArt({ p }: { p: Palette }) {
+  return (
+    <G>
+      <Rect x={5} y={5} width={29} height={25} rx={3.5} fill={p.paper} stroke={p.ink} strokeWidth={2} />
+      <Path d="M6 26.5l8-8.5 6 6 4-4 9 9" fill="none" stroke={p.ink} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <Circle cx={13} cy={12.5} r={3} fill={SUN} />
+      <Tag x={23} y={27} p={p} />
+    </G>
+  );
+}
+
 /** A .seznik file: a page with the folded corner and the logo swoosh on it. */
 function SeznikFile({ p, id }: { p: Palette; id: string }) {
   return (
@@ -203,6 +215,7 @@ export function NewLabelArt({ kind, size = 46 }: { kind: NewLabelArtKind; size?:
 const ART: Partial<Record<HomeToolId, (props: { p: Palette }) => React.JSX.Element>> = {
   excel: ExcelArt,
   pdf: PdfArt,
+  printImage: PrintImageArt,
   importLabel: ImportArt,
   imageToLabel: UploadArt,
   serialLabels: SerialArt,

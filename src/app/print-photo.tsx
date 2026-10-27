@@ -229,11 +229,11 @@ export default function PrintPhotoScreen() {
   const [vOffset, setVOffset] = useState(0);
   const [flipH, setFlipH] = useState(false);
   const [antiColor, setAntiColor] = useState(false);
-  // Image print modes (TD-404 and Josh). Photos default to Floyd-Steinberg on this screen only.
+  // Image print modes (every bridge). Photos default to Floyd-Steinberg on this screen only.
   const [printMode, setPrintMode] = useState<ImageMode>('floyd');
   const [brightness, setBrightness] = useState(0);
   const [contrast, setContrast] = useState(0);
-  const modesAvailable = connected && !isFrame && bridgeSupportsImageModes();
+  const modesAvailable = !isFrame && bridgeSupportsImageModes();
   const [printing, setPrinting] = useState(false);
   const [footerHeight, setFooterHeight] = useState(72);
   const [printSize, setPrintSize] = useState<LabelSizeMm | null>(null);

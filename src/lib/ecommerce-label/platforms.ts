@@ -116,3 +116,15 @@ export function locatePage(platform: PlatformId, leaves: LeafLike[]): LocatedPag
       return locateMeesho(leaves);
   }
 }
+
+/**
+ * Output sizes for shipping labels, in exact millimetres (nothing is rounded from inches: here 4 × 6 in
+ * IS 100 × 150 mm). `name` is how the size is sold. `inch` is the nominal inch size, shown as it is
+ * when the unit is inches instead of a converted 3.94 × 5.91.
+ */
+export const SHIPPING_SIZE_PRESETS: { name: string; width: number; height: number; inch?: [number, number] }[] = [
+  { name: '4 × 6 in', width: 100, height: 150, inch: [4, 6] },
+  { name: '100 × 155 mm', width: 100, height: 155 },
+  { name: 'A6', width: 105, height: 148 },
+  { name: '4 × 4 in', width: 100, height: 100, inch: [4, 4] },
+];

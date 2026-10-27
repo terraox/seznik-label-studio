@@ -39,11 +39,11 @@ const thisIdx = resolveScopeIndices({ mode: 'this' }, 6, 4);
 assert.deepStrictEqual(thisIdx, [4]);
 
 const page = { w: mmToPt(210), h: mmToPt(297) };
-const output = { kind: '4x6' as const, widthMm: 101.6, heightMm: 152.4 };
+const output = { kind: '4x6' as const, widthMm: 100, heightMm: 150 };
 const box = cropWindowPts(page, output, { x: 0, y: 0 });
 assert.strictEqual(box.fits, true);
-assert.ok(Math.abs(box.w - mmToPt(101.6)) < 0.05);
-assert.ok(Math.abs(box.h - mmToPt(152.4)) < 0.05);
+assert.ok(Math.abs(box.w - mmToPt(100)) < 0.05);
+assert.ok(Math.abs(box.h - mmToPt(150)) < 0.05);
 assert.ok(Math.abs(box.y + box.h - page.h) < 0.05, 'top-left origin maps to top of page (PDF y-up)');
 
 const tooBig = cropWindowPts({ w: mmToPt(50), h: mmToPt(50) }, output, { x: 0, y: 0 });

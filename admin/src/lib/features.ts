@@ -24,6 +24,7 @@ export const FEATURES: Record<string, { label: string; group: FeatureGroup }> = 
   'home.shipping_labels': { label: 'Shipping labels', group: 'home' },
   'home.excel': { label: 'Excel', group: 'home' },
   'home.pdf': { label: 'PDF', group: 'home' },
+  'home.print_image': { label: 'Print image', group: 'home' },
   'home.import': { label: 'Import', group: 'home' },
   'home.banner': { label: 'Home banner', group: 'home' },
   'home.shop_strip': { label: 'Buy from us strip', group: 'home' },

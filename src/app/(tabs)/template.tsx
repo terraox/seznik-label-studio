@@ -36,6 +36,7 @@ import { sampleToElements } from '@/lib/template-sample-elements';
 import type { SampleElement } from '@/lib/template-sample';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLabelStore } from '@/stores/label-store';
+import { useSavedSetupStore } from '@/stores/saved-setup-store';
 import { useOpenLabelFile } from '@/lib/label-share/use-open-label-file';
 import { useTranslation } from '@/lib/i18n';
 import { templateLayout } from '@/lib/layout/screen-sizes';
@@ -238,6 +239,12 @@ export default function TemplateScreen() {
   const documents = useLabelStore((s) => s.documents);
   const groups = useLabelStore((s) => s.groups);
   const addGroup = useLabelStore((s) => s.addGroup);
+  // Labels an Excel saved setup was made from get a "Saved setup" mark in the Local list.
+  const savedSetups = useSavedSetupStore((s) => s.setups);
+  const setupLabelIds = useMemo(
+    () => new Set(savedSetups.flatMap((s) => (s.sourceLabelId ? [s.sourceLabelId] : []))),
+    [savedSetups],
+  );
   const deleteDocument = useLabelStore((s) => s.deleteDocument);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const { t } = useTranslation();
@@ -603,6 +610,12 @@ export default function TemplateScreen() {
                       showCategory={false}
                     />
                     <View style={styles.cardFooter}>
+                      {setupLabelIds.has(docItem.id) ? (
+                        <View style={styles.setupBadge} accessibilityLabel="Saved setup">
+                          <AppIcon name="bolt.fill" tintColor={C.accent} size={12} />
+                          <Text style={styles.setupBadgeText}>Saved setup</Text>
+                        </View>
+                      ) : null}
                       <Pressable
                         hitSlop={8}
                         onPress={() =>
@@ -1056,6 +1069,17 @@ const styles = themedStyles((c, scheme) => ({
   // --- OTHER SPECIFIC STYLES ---
 
   // Card Footer (saved labels only)
+  setupBadge: {
+    marginRight: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: c.accentSoft,
+  },
+  setupBadgeText: { fontSize: 11, fontWeight: '700', color: c.accent },
   cardFooter: {
     backgroundColor: c.surface,
     flexDirection: 'row',

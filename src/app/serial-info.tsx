@@ -59,7 +59,6 @@ export default function SerialInfoScreen() {
   const [sample, setSample] = useState(DEFAULT_SERIAL_INFO.sample);
   const [count, setCount] = useState(String(DEFAULT_SERIAL_INFO.count));
   const [step, setStep] = useState('1');
-  const [digits, setDigits] = useState('');
   const [showText, setShowText] = useState(true);
   const [showBarcode, setShowBarcode] = useState(false);
   const [showQr, setShowQr] = useState(false);
@@ -83,7 +82,6 @@ export default function SerialInfoScreen() {
           sample: sample.trim() || DEFAULT_SERIAL_INFO.sample,
           count: countOk ? countNum : 1,
           step: Number(step) || 1,
-          digits: digits ? Number(digits) : undefined,
           showText,
           showBarcode,
           showQr,
@@ -91,7 +89,7 @@ export default function SerialInfoScreen() {
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [name, size.widthMm, size.heightMm, sample, countNum, countOk, step, digits, showText, showBarcode, showQr, barcodeType],
+    [name, size.widthMm, size.heightMm, sample, countNum, countOk, step, showText, showBarcode, showQr, barcodeType],
   );
 
   const total = countOk ? countNum : 1;
@@ -178,7 +176,7 @@ export default function SerialInfoScreen() {
               placeholderTextColor={C.textMuted}
               autoCapitalize="none"
             />
-            <Text style={styles.hint}>The last number in it counts up. Desk1, SN-001, Bin 42B.</Text>
+            <Text style={styles.hint}>The last number in it counts up. Type the zeros you want: SN-001 gives SN-001, SN-002. Letters stay as they are: Desk1, Bin 42B.</Text>
           </View>
 
           <View style={styles.field}>
@@ -246,18 +244,6 @@ export default function SerialInfoScreen() {
                 />
                 <Text style={styles.hint}>1 gives 1, 2, 3. 5 gives 5, 10, 15.</Text>
               </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>Digits (leading zeros)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={digits}
-                  onChangeText={(t) => setDigits(t.replace(/[^0-9]/g, ''))}
-                  keyboardType="numeric"
-                  placeholder="auto"
-                  placeholderTextColor={C.textMuted}
-                />
-                <Text style={styles.hint}>3 gives 001, 002, 003. Empty copies the zeros you typed.</Text>
-              </View>
             </View>
           ) : null}
         </View>
@@ -274,10 +260,24 @@ export default function SerialInfoScreen() {
 
       <View style={styles.footer}>
         <TouchableOpacity
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Design the labels in the editor"
           style={[styles.button, !!problem && styles.btnDisabled]}
           onPress={() => (problem ? Alert.alert('Serial labels', problem) : openEditor())}>
-          <Text style={styles.buttonText}>Open editor</Text>
-          <AppIcon name="chevron.right" tintColor={C.onAccent} size={18} />
+          <View style={styles.buttonTextCol}>
+            <Text style={styles.buttonText} numberOfLines={1}>
+              Design your labels
+            </Text>
+            <Text style={styles.buttonSub} numberOfLines={1}>
+              {problem
+                ? 'Fix the details above first'
+                : `${total} ${total === 1 ? 'label' : 'labels'}${built.range ? ` · ${built.range.first} → ${built.range.last}` : ''}`}
+            </Text>
+          </View>
+          <View style={styles.buttonArrow}>
+            <AppIcon name="arrow.right" tintColor={C.onAccent} size={18} />
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -372,16 +372,29 @@ const styles = themedStyles((c) => ({
   error: { color: c.danger, fontSize: 13, fontWeight: '500', marginBottom: 8 },
   warning: { color: c.textSecondary, fontSize: 12, lineHeight: 16, marginBottom: 8 },
   button: {
-    backgroundColor: '#2563EB', // theme-fixed: blue button, white text
-    borderRadius: 10,
-    paddingVertical: 14,
+    backgroundColor: c.accentFill,
+    borderRadius: 14,
+    minHeight: 58,
+    paddingVertical: 10,
+    paddingLeft: 18,
+    paddingRight: 12,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
   },
   btnDisabled: { opacity: 0.5 },
-  buttonText: { color: c.onAccent, fontWeight: '700', fontSize: 15, flexShrink: 1 },
+  buttonTextCol: { flex: 1, minWidth: 0, gap: 1 },
+  buttonText: { color: c.onAccent, fontWeight: '800', fontSize: 16 },
+  buttonSub: { color: c.onAccent, opacity: 0.8, fontSize: 12, fontWeight: '500' },
+  buttonArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)', // theme-fixed: soft white disc on the accent button
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   footer: {
     padding: 16,
     paddingTop: 8,
