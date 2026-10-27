@@ -243,10 +243,22 @@ function bitsToModules(bits: string): number[] {
   return modules;
 }
 
-function encodeUpcA(input: string): number[] | null {
+/**
+ * Digits of `input` as a full GS1 payload of `length` digits: short input is left-padded with zeros,
+ * long input is cut to the data digits, and the check digit is added (or kept when the full length
+ * is given). Returns null when there are no digits at all.
+ */
+export function gs1Payload(input: string, length: number): string | null {
   const digits = input.replace(/\D/g, '');
-  if (digits.length !== 11 && digits.length !== 12) return null;
-  const payload = digits.length === 11 ? `${digits}${eanChecksum(digits)}` : digits;
+  if (!digits) return null;
+  if (digits.length === length) return digits;
+  const data = digits.padStart(length - 1, '0').slice(0, length - 1);
+  return `${data}${eanChecksum(data)}`;
+}
+
+function encodeUpcA(input: string): number[] | null {
+  const payload = gs1Payload(input, 12);
+  if (!payload) return null;
   let bits = '101';
   for (let i = 0; i < 6; i += 1) bits += UPC_A_LEFT[Number(payload[i])];
   bits += '01010';
@@ -274,10 +286,8 @@ const EAN13_PARITY: Record<number, ('L' | 'G')[]> = {
 const eanChecksum = gs1CheckDigit;
 
 function encodeEan13(input: string): number[] | null {
-  const digits = input.replace(/\D/g, '');
-  if (digits.length < 12 || digits.length > 13) return null;
-  const payload =
-    digits.length === 12 ? `${digits}${eanChecksum(digits)}` : digits.slice(0, 13);
+  const payload = gs1Payload(input, 13);
+  if (!payload) return null;
   const lead = Number(payload[0]);
   const parity = EAN13_PARITY[lead];
   if (!parity) return null;
@@ -293,10 +303,8 @@ function encodeEan13(input: string): number[] | null {
 }
 
 function encodeEan8(input: string): number[] | null {
-  const digits = input.replace(/\D/g, '');
-  if (digits.length < 7 || digits.length > 8) return null;
-  const payload =
-    digits.length === 7 ? `${digits}${eanChecksum(digits)}` : digits.slice(0, 8);
+  const payload = gs1Payload(input, 8);
+  if (!payload) return null;
   let bits = '101';
   for (let i = 0; i < 4; i += 1) bits += UPC_A_LEFT[Number(payload[i])];
   bits += '01010';
