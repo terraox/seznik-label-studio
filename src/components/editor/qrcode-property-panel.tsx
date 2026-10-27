@@ -290,6 +290,18 @@ function EncodingSections({
           />
         </>
       )}
+      {state.encodeMode === 'DataMatrix' && (
+        <>
+          <Divider />
+          <SegmentRow
+            label="Code Shape"
+            options={['Auto', 'Square', 'Rectangle'] as const}
+            selected={state.codeShape}
+            onSelect={(codeShape: QrCodeShape) => patch({ codeShape })}
+          />
+          <PanelNote>{CODE_SHAPE_NOTE}</PanelNote>
+        </>
+      )}
     </>
   );
 }
@@ -391,49 +403,18 @@ export function QrcodePropertyPanel({
     </>
   );
 
-  const regularTabContent = (() => {
-    if (state.encodeMode === 'QRCode') {
-      return (
-        <>
-          <ContentTypeSection state={state} patch={patch} onColumnNamePress={onColumnNamePress} />
-          <SectionGap />
-          <EncodingSections state={state} patch={patch} />
-          <SectionGap />
-          <GraySection>{positionSection}</GraySection>
-          <SectionGap />
-          <GraySection>{toggleColorSection}</GraySection>
-        </>
-      );
-    }
-
-    if (state.encodeMode === 'PDF417') {
-      return (
-        <>
-          <EncodingSections state={state} patch={patch} />
-          <SectionGap />
-          <GraySection>{positionSection}</GraySection>
-          <SectionGap />
-          <GraySection>{toggleColorSection}</GraySection>
-        </>
-      );
-    }
-
-    return (
-      <>
-        <SegmentRow
-          label="Code Shape"
-          options={['Auto', 'Square', 'Rectangle'] as const}
-          selected={state.codeShape}
-          onSelect={(codeShape: QrCodeShape) => patch({ codeShape })}
-        />
-        <PanelNote>{CODE_SHAPE_NOTE}</PanelNote>
-        <SectionGap />
-        <GraySection>{positionSection}</GraySection>
-        <SectionGap />
-        <GraySection>{toggleColorSection}</GraySection>
-      </>
-    );
-  })();
+  // Same menu for every encode mode; only the mode-specific rows inside EncodingSections change.
+  const regularTabContent = (
+    <>
+      <ContentTypeSection state={state} patch={patch} onColumnNamePress={onColumnNamePress} />
+      <SectionGap />
+      <EncodingSections state={state} patch={patch} />
+      <SectionGap />
+      <GraySection>{positionSection}</GraySection>
+      <SectionGap />
+      <GraySection>{toggleColorSection}</GraySection>
+    </>
+  );
 
   return (
     <View style={styles.panel}>
