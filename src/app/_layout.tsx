@@ -243,6 +243,7 @@ function AppRoot() {
           <Stack.Screen name="img-to-label" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="image-to-label" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="serial-label" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="serial-info" options={{ animation: 'slide_from_right' }} />
         </Stack>
       ) : null}
       <FeedbackPrompt enabled={appReady && signedIn && !needsPrinter} />

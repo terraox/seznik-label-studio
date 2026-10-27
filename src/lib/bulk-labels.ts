@@ -15,12 +15,12 @@ import {
 import {
   fitBarcodeDefaults,
   fitQrcodeDefaults,
-  fitTextBoxToContent,
   fitTextDefaults,
   repositionDocumentToSize,
   scaleDocumentToSize,
   textBlockHeightMm,
 } from '@/lib/element-sizing';
+import { visibleTextHeightMm } from '@/lib/visible-text-layout';
 import { isExcelColumnEmpty } from '@/lib/excel-rows';
 import type { ExcelSheet } from '@/stores/data-store';
 
@@ -135,17 +135,27 @@ export function resolvedSlotGeometry(bulk: BulkLabelSet, rowIndex: number, slotI
   return bulk.sharedGeometry[slotId];
 }
 
+/**
+ * Non-breaking space after the head colon, so the head always stays on the same line as the
+ * start of its value (wrap measurers split on plain spaces only).
+ */
+const HEAD_SEPARATOR = ':\u00a0';
+
 /** Removes every leading `Column: ` that Display head added, so it is never stored or stacked. */
 function stripHeadPrefix(slot: BulkSlot, text: string): string {
-  const prefix = `${slot.columnName}: `;
+  const prefixes = [`${slot.columnName}: `, `${slot.columnName}${HEAD_SEPARATOR}`];
   let out = text;
-  while (out.startsWith(prefix)) out = out.slice(prefix.length);
+  for (let hit = true; hit; ) {
+    const prefix = prefixes.find((p) => out.startsWith(p));
+    hit = prefix !== undefined;
+    if (prefix) out = out.slice(prefix.length);
+  }
   return out;
 }
 
 function withHead(bulk: BulkLabelSet, slot: BulkSlot, raw: string): string {
   if (slot.kind === 'text' && bulk.displayHead && raw.trim()) {
-    return `${slot.columnName}: ${raw}`;
+    return `${slot.columnName}${HEAD_SEPARATOR}${raw}`;
   }
   return raw;
 }
@@ -409,14 +419,27 @@ function fitProjectedText(
   canvas: { widthMm: number; heightMm: number },
 ): LabelElement {
   if (el.type !== 'text') return el;
-  const fitted = fitTextBoxToContent(el, canvas);
+  // Every text slot keeps the width its layout gave it (equal across slots by default), so
+  // the same text wraps the same way in each; only the height follows the wrapped lines.
+  const maxH = Math.max(2, canvas.heightMm - Math.max(0, el.top));
+  const needed = visibleTextHeightMm({
+    text: el.text,
+    fontSize: el.fontSize,
+    widthMm: el.width,
+    autoWrapping: el.autoWrapping ?? 'Word',
+    lineSpacing: el.lineSpacing ?? '1.0',
+    charSpacing: el.charSpacing ?? 0,
+    bold: el.bold ?? false,
+    verticalDisplay: el.verticalDisplay ?? false,
+    fontFamily: el.fontFamily,
+  });
   const wraps = el.autoWrapping !== 'Close' && el.autoTextHeight !== false;
   // Wrapping text keeps every line visible; fixed-height text stays inside its slot.
   const height =
     !wraps && typeof el.height === 'number' && el.height > 0
-      ? Math.min(fitted.height, el.height)
-      : fitted.height;
-  return { ...el, width: fitted.width, height };
+      ? Math.min(needed, el.height)
+      : Math.min(maxH, needed);
+  return { ...el, height };
 }
 
 export function projectBulkElements(

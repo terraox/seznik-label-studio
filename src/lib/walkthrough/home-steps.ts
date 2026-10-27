@@ -4,8 +4,12 @@ export type WalkthroughStep = {
   target?: string;
   /** Target lives inside the screen's ScrollView. */
   scrolls?: boolean;
+  /** Scroll only when the target is off screen, and just enough to centre it (no jump to the top). */
+  scrollsIfHidden?: boolean;
   /** Per-side override of the cutout padding around the target, in px. */
   holePad?: { top?: number; right?: number; bottom?: number; left?: number };
+  /** Corner radius of the ring, to match the target's own corners. */
+  holeRadius?: number;
   title: string;
   body: string;
 };

@@ -167,22 +167,19 @@ test('Excel slots start at the same default sizes as adding tools on the canvas'
   assert.equal(qr.height, canvasQr.height);
 });
 
-test('Excel text slots hug the cell string instead of spanning the label', () => {
+test('Excel text slots keep the same layout width whatever the cell text', () => {
   const doc = created();
   const text = doc.elements.find((el) => el.id === 'col:0');
   assert.ok(text && text.type === 'text');
   assert.equal(text.text, 'Widget');
-  assert.ok(
-    text.width < doc.widthMm * 0.7,
-    `text box ${text.width}mm should be tighter than the ${doc.widthMm}mm label`,
-  );
   const longer = projectBulkDocument(doc, {
     ...sheet,
     rows: [['Widget Extra Long Name', 'SKU-100', 'https://a.example/1', 'first']],
   }, 0);
   const longEl = longer.elements.find((el) => el.id === 'col:0');
   assert.ok(longEl && longEl.type === 'text');
-  assert.ok(longEl.width > text.width, `longer cell ${longEl.width} should exceed ${text.width}`);
+  assert.equal(longEl.width, text.width);
+  assert.equal(longEl.left, text.left);
 });
 
 test('included columns become typed elements; excluded columns are omitted', () => {
@@ -448,7 +445,7 @@ test('display head prefixes text slot values', () => {
   assert.ok(doc?.bulk);
   const slot = doc.bulk.slots.find((s) => s.kind === 'text');
   assert.ok(slot);
-  assert.equal(resolvedSlotContent(doc.bulk, sheet, 0, slot), 'Name: Widget');
+  assert.equal(resolvedSlotContent(doc.bulk, sheet, 0, slot), 'Name: Widget');
 });
 
 test('display head prefix is not saved as an edit or stacked on re-projection', () => {
@@ -471,7 +468,7 @@ test('display head prefix is not saved as an edit or stacked on re-projection', 
     assert.deepEqual(bulk.rowContentOverrides, {});
     current = projectBulkDocument({ ...current, bulk }, sheet, 0);
   }
-  assert.equal(resolvedSlotContent(current.bulk!, sheet, 0, slot), 'Name: Widget');
+  assert.equal(resolvedSlotContent(current.bulk!, sheet, 0, slot), 'Name: Widget');
 
   // A real edit is stored without the prefix, and overrides damaged by older builds are healed.
   const edited = current.elements.map((el) =>
@@ -483,5 +480,5 @@ test('display head prefix is not saved as an edit or stacked on re-projection', 
     ...saved,
     rowContentOverrides: { '0': { [slot.id]: 'Name: Name: Gadget' } },
   };
-  assert.equal(resolvedSlotContent(damaged, sheet, 0, slot), 'Name: Gadget');
+  assert.equal(resolvedSlotContent(damaged, sheet, 0, slot), 'Name: Gadget');
 });

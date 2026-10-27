@@ -12,6 +12,7 @@ import {
   AppState,
   PixelRatio,
   Pressable,
+  type ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -162,6 +163,11 @@ import { useLabelStore } from '@/stores/label-store';
 import { usePrinterStore, type PrintHistoryEntry } from '@/stores/printer-store';
 import { usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useWalkthroughStore } from '@/stores/walkthrough-store';
+import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
+import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
+import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
+import { PRINT_ORDER_WALKTHROUGH } from '@/lib/walkthrough/print-order-steps';
 import { applyPaperType, defaultLabelSettings, resolveLabelSettings } from '@/lib/label-settings';
 import {
   clampLayerOffsetMm,
@@ -843,6 +849,31 @@ export default function PrintScreen() {
   // Collate only changes anything once the job repeats.
   const collateEnabled = Boolean(
     bulkPrintPlan && collateChangesOrder(bulkPrintPlan.rows, bulkPrintPlan.multiply),
+  );
+
+  // Explain Print order the first time the count goes above 1; the ? beside it replays the tour.
+  const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const stopWalkthrough = useWalkthroughStore((s) => s.stop);
+  const setPrintOrderTourSeen = useSettingsStore((s) => s.setPrintOrderTourSeen);
+  const printScrollRef = useRef<ScrollView>(null);
+  const printScrollY = useRef(0);
+  useEffect(() => {
+    setWalkthroughScroller((dy) =>
+      printScrollRef.current?.scrollTo({ y: Math.max(0, printScrollY.current + dy), animated: false }),
+    );
+    return () => setWalkthroughScroller(null);
+  }, []);
+  useEffect(() => {
+    if (!collateEnabled || useSettingsStore.getState().printOrderTourSeen) return;
+    const timer = setTimeout(() => startWalkthrough('printOrder'), 400);
+    return () => clearTimeout(timer);
+  }, [collateEnabled, startWalkthrough]);
+  useEffect(
+    () => () => {
+      const { active, tour } = useWalkthroughStore.getState();
+      if (active && tour === 'printOrder') useWalkthroughStore.getState().stop();
+    },
+    [],
   );
 
   const buildBasePageDocument = useCallback(
@@ -2528,6 +2559,11 @@ export default function PrintScreen() {
       </View>
 
       <FormScrollView
+        ref={printScrollRef}
+        onScroll={(e) => {
+          printScrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: footerHeight + Spacing.three }}
         showsVerticalScrollIndicator={false}>
@@ -2752,26 +2788,41 @@ export default function PrintScreen() {
             ) : null}
             {showCollate ? (
               <View style={styles.collateWrap}>
-                <Text style={styles.collateLabel}>Print order</Text>
+                <View style={styles.collateHead}>
+                  <Text style={styles.collateLabel}>Print order</Text>
+                  <Pressable
+                    onPress={() => startWalkthrough('printOrder')}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel="What do Collated and Uncollated mean?">
+                    <AppIcon name="questionmark.circle.fill" tintColor={C.textSecondary} size={18} />
+                  </Pressable>
+                </View>
                 <View style={styles.collateSeg}>
                   {([false, true] as const).map((on) => {
                     const selected = collateEnabled && collate === on;
+                    // One target per button so each tour step rings only the option it explains.
                     return (
-                      <Pressable
+                      <WalkthroughTarget
                         key={String(on)}
-                        disabled={printing || !collateEnabled}
-                        onPress={() => setCollate(on)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected, disabled: !collateEnabled }}
-                        style={[
-                          styles.collateOpt,
-                          selected && styles.collateOptOn,
-                          !collateEnabled && styles.collateOptOff,
-                        ]}>
-                        <Text style={[styles.collateOptText, selected && styles.collateOptTextOn]}>
-                          {on ? 'Collated' : 'Uncollated'}
-                        </Text>
-                      </Pressable>
+                        id={on ? 'print.order.collated' : 'print.order.uncollated'}
+                        style={styles.collateOptTarget}>
+                        <Pressable
+                          disabled={printing || !collateEnabled}
+                          onPress={() => setCollate(on)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected, disabled: !collateEnabled }}
+                          style={[
+                            styles.collateOpt,
+                            styles.collateOptFill,
+                            selected && styles.collateOptOn,
+                            !collateEnabled && styles.collateOptOff,
+                          ]}>
+                          <Text style={[styles.collateOptText, selected && styles.collateOptTextOn]}>
+                            {on ? 'Collated' : 'Uncollated'}
+                          </Text>
+                        </Pressable>
+                      </WalkthroughTarget>
                     );
                   })}
                 </View>
@@ -2779,8 +2830,8 @@ export default function PrintScreen() {
                   {!collateEnabled
                     ? 'Set the count above 1 to choose how repeats are ordered.'
                     : collate
-                      ? `Collated: the whole job prints once, rows 1 to ${baseDocument?.bulk?.rowCount ?? 'N'}, then again, ${copies} times in all.`
-                      : `Uncollated: row by row from the first, each row prints all its labels at once (its count × ${copies}).`}
+                      ? `Collated: the full set prints, then the whole set again (A B C, A B C), ${copies} times in all.`
+                      : `Uncollated: each label prints all its copies together (A A, B B, C C), ${copies} per label.`}
                 </Text>
               </View>
             ) : null}
@@ -3059,6 +3110,14 @@ export default function PrintScreen() {
           )}
         </Pressable>
       </View>
+      <WalkthroughOverlay
+        tour="printOrder"
+        steps={PRINT_ORDER_WALKTHROUGH}
+        onFinish={() => {
+          setPrintOrderTourSeen(true);
+          stopWalkthrough();
+        }}
+      />
     </View>
   );
 }
@@ -3234,6 +3293,11 @@ const styles = themedStyles((c, scheme) => ({
     paddingTop: 4,
     paddingBottom: 8,
   },
+  collateHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   collateSeg: {
     flexDirection: 'row',
     gap: 8,
@@ -3246,6 +3310,13 @@ const styles = themedStyles((c, scheme) => ({
     borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  collateOptTarget: {
+    flex: 1,
+  },
+  collateOptFill: {
+    flex: 0,
+    alignSelf: 'stretch',
   },
   collateOptOn: {
     borderColor: c.accent,

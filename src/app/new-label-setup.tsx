@@ -60,11 +60,6 @@ import { NEW_LABEL_WALKTHROUGH } from '@/lib/walkthrough/new-label-steps';
 import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
 import { useDataStore } from '@/stores/data-store';
-import { DEFAULT_ELEMENT_STATE } from '@/components/editor/types';
-import { fitTextDefaults } from '@/lib/element-sizing';
-import { defaultSerialConfig } from '@/lib/serial/legacy';
-import { storedValuePatch } from '@/lib/serial/stored';
-import { DEFAULT_SERIAL_COUNT } from '@/lib/serial/types';
 import { scaleDocumentToSize } from '@/lib/element-sizing';
 import { resolveProfile } from '@/printer-core/profiles';
 import { useLabelStore } from '@/stores/label-store';
@@ -206,34 +201,11 @@ export default function NewLabelSetupScreen() {
     }
 
     if (isSerialEditor) {
-      const serial = defaultSerialConfig();
-      const fit = fitTextDefaults(size.widthMm, size.heightMm);
-      const element = {
-        ...DEFAULT_ELEMENT_STATE,
-        id: generateId(),
-        type: 'text',
-        text: '1',
-        contentType: 'Degrees',
-        ...storedValuePatch(serial, 'text'),
-        left: fit.left,
-        top: fit.top,
-        width: fit.width,
-        fontSize: fit.fontSize,
-        autoTextHeight: true,
-        autoWrapping: defaults.autoWrap,
-      } as unknown as LabelElement;
-      const doc = createLabelDocument({
-        name,
-        widthMm: size.widthMm,
-        heightMm: size.heightMm,
-        orientation: defaults.orientation,
-        paperType: defaults.paperType,
-        elements: [element],
-        background: { type: 'color', color: '#FFFFFF' }, // theme-fixed: label paper colour (document data)
+      // Next: tell us what goes on the labels, then the editor opens.
+      router.push({
+        pathname: '/serial-info',
+        params: { name, widthMm: String(size.widthMm), heightMm: String(size.heightMm) },
       });
-      doc.serialBatch = { v: 1, count: DEFAULT_SERIAL_COUNT };
-      upsertDocument(doc);
-      router.replace({ pathname: '/edit', params: { labelId: doc.id } });
       return;
     }
 
@@ -677,7 +649,7 @@ export default function NewLabelSetupScreen() {
             accessibilityRole="button"
             accessibilityState={{ disabled: !canCreate }}
             style={({ pressed }) => [styles.newButton, !canCreate && styles.newButtonOff, pressed && styles.pressed]}>
-            <Text style={styles.newButtonText}>{isSerial || isSerialEditor ? 'Open on canvas' : isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
+            <Text style={styles.newButtonText}>{isSerialEditor ? 'Next' : isSerial ? 'Open on canvas' : isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
           </Pressable>
           </WalkthroughTarget>
         </View>
