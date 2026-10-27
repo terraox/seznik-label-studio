@@ -15,6 +15,11 @@ import {
 } from 'react-native';
 import { TextInput } from '@/components/ui/text-input';
 import { FadeInItem, PopOnActive } from '@/components/ui/motion';
+import { EmptyState } from '@/components/ui/empty-state';
+import { TipBanner } from '@/components/ui/tip-banner';
+import { TemplateQuickView } from '@/components/template-quick-view';
+import { useTipsStore } from '@/stores/tips-store';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 
@@ -144,6 +149,7 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
   cardMaxWidth,
   isFavorite,
   onPress,
+  onLongPress,
   onToggleFavorite,
 }: {
   item: CatalogTemplate;
@@ -152,12 +158,15 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
   cardMaxWidth: number;
   isFavorite: boolean;
   onPress: (item: CatalogTemplate) => void;
+  onLongPress: (item: CatalogTemplate) => void;
   onToggleFavorite: (id: string) => void;
 }) {
   useThemeRefresh();
   return (
     <Pressable
       onPress={() => onPress(item)}
+      onLongPress={() => onLongPress(item)}
+      delayLongPress={350}
       style={({ pressed }) => [
         styles.templateCard,
         { maxWidth: cardMaxWidth, width: '100%' },
@@ -245,7 +254,10 @@ export default function TemplateScreen() {
   // Only starring counts as a tap on the feature; un-starring is undoing it.
   const onToggleFavorite = useCallback(
     (id: string) => {
-      if (!useTemplateCatalogStore.getState().favoriteIds.includes(id)) trackFeatureClick('templates.favourite');
+      if (!useTemplateCatalogStore.getState().favoriteIds.includes(id)) {
+        trackFeatureClick('templates.favourite');
+        useTipsStore.getState().markSeen('templates.star');
+      }
       toggleFavorite(id);
     },
     [toggleFavorite],
@@ -306,6 +318,7 @@ export default function TemplateScreen() {
     return catalogTemplates.filter((t) => t.categoryIds.includes(activeCategoryId));
   }, [searchQuery, activeCategoryId, catalogTemplates, categoryNames, favoriteSet]);
 
+  const [quickView, setQuickView] = useState<CatalogTemplate | null>(null);
   const [choiceFor, setChoiceFor] = useState<{ template: CatalogTemplate; mode: AcrossMode } | null>(null);
   const [arrangeFor, setArrangeFor] = useState<CatalogTemplate | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -630,6 +643,12 @@ export default function TemplateScreen() {
               },
             ]}
             showsVerticalScrollIndicator={false}>
+            {activeTab === 'industry' && !searchQuery.trim() ? (
+              <View style={[styles.tipSlot, { maxWidth: templateCardMaxWidth }]}>
+                <TipBanner id="templates.star" text="Tap the star to save a template. Press and hold a card for a quick look." />
+              </View>
+            ) : null}
+
             {filteredTemplates.map((item, index) => (
               <FadeInItem key={`${activeCategoryId}-${item.id}`} index={index} style={styles.cardSlot}>
               <IndustryTemplateCard
@@ -642,15 +661,30 @@ export default function TemplateScreen() {
                 cardMaxWidth={templateCardMaxWidth}
                 isFavorite={favoriteSet.has(item.id)}
                 onPress={handleSelectTemplate}
+                onLongPress={(tpl) => setQuickView(tpl)}
                 onToggleFavorite={onToggleFavorite}
               />
               </FadeInItem>
             ))}
 
-            {filteredTemplates.length === 0 && (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No templates found</Text>
-              </View>
+            {catalogLoading && catalogTemplates.length === 0
+              ? [0, 1, 2].map((n) => (
+                  <View key={n} style={[styles.templateCard, { maxWidth: templateCardMaxWidth, width: '100%' }]}>
+                    <Skeleton style={styles.skeletonPreview} />
+                    <View style={styles.skeletonInfo}>
+                      <Skeleton style={styles.skeletonTitle} />
+                      <Skeleton style={styles.skeletonChip} />
+                    </View>
+                  </View>
+                ))
+              : null}
+
+            {filteredTemplates.length === 0 && !(catalogLoading && catalogTemplates.length === 0) && (
+              <EmptyState
+                icon="magnifyingglass"
+                title={searchQuery.trim() ? `No templates match “${searchQuery.trim()}”` : 'No templates here yet'}
+                hint={searchQuery.trim() ? 'Try a shorter word, or ask us for the label you need below.' : 'Pull down to refresh, or pick another category.'}
+              />
             )}
 
             {!catalogLoading || catalogTemplates.length > 0 ? (
@@ -677,6 +711,21 @@ export default function TemplateScreen() {
         </View>
       </View>
       </View>
+
+      <TemplateQuickView
+        visible={quickView !== null}
+        title={quickView?.name ?? ''}
+        size={quickView ? `${catalogDimensions(quickView.widthMm, quickView.heightMm)} mm` : ''}
+        isFavorite={quickView ? favoriteSet.has(quickView.id) : false}
+        onClose={() => setQuickView(null)}
+        onToggleFavorite={() => quickView && onToggleFavorite(quickView.id)}
+        onOpen={() => {
+          const tpl = quickView;
+          setQuickView(null);
+          if (tpl) handleSelectTemplate(tpl);
+        }}>
+        {quickView ? <TemplatePreview item={quickView} /> : null}
+      </TemplateQuickView>
 
       <TemplateRequestModal
         visible={requestOpen}
@@ -921,6 +970,9 @@ const styles = themedStyles((c, scheme) => ({
     overflow: 'hidden',
     ...cardElevation(c, scheme),
   },
+  tipSlot: {
+    width: '100%',
+  },
   cardSlot: {
     width: '100%',
     alignItems: 'center',
@@ -946,7 +998,7 @@ const styles = themedStyles((c, scheme) => ({
     fontWeight: '600',
   },
   infoCategory: {
-    color: c.accent,
+    color: c.accentInk,
     fontSize: 10.5,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -1015,6 +1067,17 @@ const styles = themedStyles((c, scheme) => ({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: c.hairline,
   },
+  skeletonPreview: { height: 150, borderRadius: 0 },
+  skeletonInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  skeletonTitle: { flex: 1, height: 14 },
+  skeletonChip: { width: 70, height: 22, borderRadius: 11 },
   emptyState: {
     padding: 30,
     alignItems: 'center',

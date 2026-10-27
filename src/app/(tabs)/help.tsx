@@ -8,6 +8,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { androidRipple } from '@/constants/ui';
 import { TextInput } from '@/components/ui/text-input';
 import { ExpandBody, ExpandCard } from '@/components/ui/motion';
+import { TipBanner } from '@/components/ui/tip-banner';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
 import { HELP_TOPICS, type HelpTopic } from '@/lib/help/topics';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
@@ -159,7 +160,7 @@ function FeatureTile({ topic }: { topic: HelpTopic }) {
       accessibilityLabel={`${topic.title}. ${topic.summary}`}
       style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
       <View style={styles.tileIcon}>
-        <AppIcon name={topic.icon} tintColor={C.accentInk} size={20} />
+        <AppIcon name={topic.icon} tintColor={C.brandInk} size={20} />
       </View>
       <Text numberOfLines={2} style={styles.tileTitle}>
         {topic.title}
@@ -306,6 +307,7 @@ export default function HelpScreen() {
           )
         ) : (
           <>
+            <TipBanner id="help.search" text="Not sure where to look? Type a word in the search box above, like “barcode” or “Excel”." />
             <View style={styles.switcher}>
               {PANES.map(({ id, label }) => {
                 const active = pane === id;
@@ -434,7 +436,7 @@ const styles = themedStyles((c, scheme) => ({
   switchLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: c.textMuted,
+    color: c.textSecondary,
   },
   switchLabelActive: {
     color: c.accentInk,
@@ -443,7 +445,7 @@ const styles = themedStyles((c, scheme) => ({
   switchCount: {
     fontSize: 12,
     fontWeight: '600',
-    color: c.textMuted,
+    color: c.textSecondary,
   },
   stack: {
     gap: 10,
@@ -555,7 +557,7 @@ const styles = themedStyles((c, scheme) => ({
   timelineDotText: {
     fontSize: 13,
     fontWeight: '800',
-    color: c.accentInk,
+    color: c.brandInk,
   },
   timelineLine: {
     flex: 1,

@@ -12,6 +12,7 @@ import Animated, {
 
 import { AppIcon } from '@/components/app-icon';
 import { Image } from 'expo-image';
+import { Skeleton } from '@/components/ui/skeleton';
 import { androidRipple, HomeLayout } from '@/constants/ui';
 import { openProductUrl } from '@/lib/shop/amazon-url';
 import { getBundledShopCatalog } from '@/lib/shop/load-catalog';
@@ -55,6 +56,7 @@ const PHOTO = TILE_W - 12;
 /** One product photo at an exact pixel size; a grey photo icon when the image fails to load. */
 function TilePhoto({ uri, id }: { uri: string; id: string }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   if (failed) {
     return (
       <View style={[styles.photoImage, styles.photoFallback]}>
@@ -63,17 +65,21 @@ function TilePhoto({ uri, id }: { uri: string; id: string }) {
     );
   }
   return (
+    <View style={styles.photoImage}>
     <Image
       source={{ uri }}
       recyclingKey={id}
       cachePolicy="memory-disk"
       contentFit="contain"
       style={styles.photoImage}
+      onLoad={() => setLoaded(true)}
       onError={(event) => {
         console.warn('[buy-strip] image failed', uri, event.error);
         setFailed(true);
       }}
     />
+    {loaded ? null : <Skeleton style={styles.photoSkeleton} />}
+    </View>
   );
 }
 
@@ -273,6 +279,10 @@ const styles = themedStyles((c, scheme) => ({
     borderRadius: 12,
     backgroundColor: '#FFFFFF', // theme-fixed: product photos are shot on white
   },
+  photoSkeleton: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 12,
+  },
   photoFallback: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -288,7 +298,7 @@ const styles = themedStyles((c, scheme) => ({
     backgroundColor: c.accentFill,
   },
   tagRoll: {
-    backgroundColor: c.successFill,
+    backgroundColor: c.neutralFill,
   },
   tagText: {
     fontSize: 10,

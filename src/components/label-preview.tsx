@@ -732,11 +732,11 @@ const styles = StyleSheet.create({
     borderColor: '#C8D0D8', // theme-fixed: label edge on the liner, same as the create-label preview
   },
   measureH: { position: 'absolute', height: 14, alignItems: 'center', justifyContent: 'center' },
-  measureLineH: { position: 'absolute', left: 0, right: 0, top: 6, height: 1, backgroundColor: '#9AA7B8' }, // theme-fixed: ruler ink on the liner
-  measureTickH: { position: 'absolute', top: 2, width: 1, height: 9, backgroundColor: '#9AA7B8' }, // theme-fixed: ruler ink on the liner
+  measureLineH: { position: 'absolute', left: 0, right: 0, top: 6, height: 1, backgroundColor: '#7F8EA3' }, // theme-fixed: ruler ink on the liner
+  measureTickH: { position: 'absolute', top: 2, width: 1, height: 9, backgroundColor: '#7F8EA3' }, // theme-fixed: ruler ink on the liner
   measureV: { position: 'absolute', width: 14, alignItems: 'center', justifyContent: 'center' },
-  measureLineV: { position: 'absolute', top: 0, bottom: 0, left: 6, width: 1, backgroundColor: '#9AA7B8' }, // theme-fixed: ruler ink on the liner
-  measureTickV: { position: 'absolute', left: 2, height: 1, width: 9, backgroundColor: '#9AA7B8' }, // theme-fixed: ruler ink on the liner
+  measureLineV: { position: 'absolute', top: 0, bottom: 0, left: 6, width: 1, backgroundColor: '#7F8EA3' }, // theme-fixed: ruler ink on the liner
+  measureTickV: { position: 'absolute', left: 2, height: 1, width: 9, backgroundColor: '#7F8EA3' }, // theme-fixed: ruler ink on the liner
   measureTag: { paddingHorizontal: 4, backgroundColor: CATALOG_STOCK_LINER },
   measureTagV: { transform: [{ rotate: '-90deg' }], width: 54, alignItems: 'center' },
   measureText: { fontSize: 9.5, fontWeight: '700', color: '#5B6B80' }, // theme-fixed: ruler text on the liner

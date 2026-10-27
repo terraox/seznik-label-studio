@@ -214,7 +214,7 @@ const styles = themedStyles((c, scheme) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepBadgeText: { color: c.accentInk, fontSize: 13, fontWeight: '800' },
+  stepBadgeText: { color: c.brandInk, fontSize: 13, fontWeight: '800' },
   railLine: { flex: 1, width: 2, marginVertical: 3, borderRadius: 1, backgroundColor: c.hairline },
   stepText: { paddingTop: 2, paddingBottom: 14 },
   stepTextLast: { paddingBottom: 0 },
