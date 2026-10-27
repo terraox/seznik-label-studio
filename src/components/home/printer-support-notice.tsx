@@ -30,7 +30,7 @@ export function PrinterSupportNotice({ visible, onClose }: { visible: boolean; o
                   <View style={styles.stage}>
                     <Image source={PRINTER_PHOTOS[p.id]} style={styles.photo} resizeMode="contain" fadeDuration={0} />
                   </View>
-                  <Text style={[styles.printerName, { color: p.accent }]} numberOfLines={1}>
+                  <Text style={styles.printerName} numberOfLines={1}>
                     {p.shortName}
                   </Text>
                 </View>
@@ -95,13 +95,13 @@ const styles = themedStyles((c) => ({
     width: '100%',
     height: 96,
     borderRadius: 14,
-    backgroundColor: '#050505', // theme-fixed: black backdrop for the printer photo
+    backgroundColor: '#FFFFFF', // theme-fixed: white backdrop for the printer photo
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   photo: { width: '100%', height: '100%' },
-  printerName: { fontSize: 13, fontWeight: '700' },
+  printerName: { fontSize: 13, fontWeight: '700', color: c.text },
   text: { fontSize: 14, lineHeight: 21, color: c.textSecondary, textAlign: 'center' },
   tip: {
     flexDirection: 'row',
