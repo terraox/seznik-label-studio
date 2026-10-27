@@ -69,7 +69,7 @@ import {
 } from "@/lib/barcode/barcode-snapping";
 import { encodeDataMatrix } from "@/lib/barcode/datamatrix";
 import { formatBarcodeHri } from "@/lib/barcode/hri";
-import { encodePdf417 } from "@/lib/barcode/pdf417";
+import { encodePdf417, PDF417_ROW_HEIGHT } from "@/lib/barcode/pdf417";
 import { formatDataSourceColumn } from "@/lib/editor/data-source-display";
 import {
   looksLikeImageUri,
@@ -1091,7 +1091,7 @@ function QrcodeContent({
     for (let r = 0; r < pdfMatrix.rows; r++) {
       for (let c = 0; c < pdfMatrix.cols; c++) {
         if (pdfMatrix.matrix[r][c]) {
-          d += `M${c + qzX},${(r + qzY) * 3}h1v3h-1Z `;
+          d += `M${c + qzX},${(r * PDF417_ROW_HEIGHT + qzY)}h1v${PDF417_ROW_HEIGHT}h-1Z `;
         }
       }
     }
@@ -1139,7 +1139,7 @@ function QrcodeContent({
     const qzX = Math.max(2, parseInt(element.zoneSize, 10) || 2);
     const qzY = Math.max(2, parseInt(element.zoneSize, 10) || 2);
     const totalW = pdfMatrix.cols + qzX * 2;
-    const totalH = (pdfMatrix.rows + qzY * 2) * 3;
+    const totalH = pdfMatrix.rows * PDF417_ROW_HEIGHT + qzY * 2;
 
     return (
       <View style={[styles.fill, styles.center, { backgroundColor: bgColor }]}>

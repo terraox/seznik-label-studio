@@ -6,7 +6,7 @@ import {
 } from '@/components/editor/types';
 import { barcodeModulesForMode } from '@/lib/barcode-code128';
 import { encodeDataMatrix } from '@/lib/barcode/datamatrix';
-import { encodePdf417 } from '@/lib/barcode/pdf417';
+import { encodePdf417, PDF417_ROW_HEIGHT } from '@/lib/barcode/pdf417';
 import {
   snap1DBarcodeModules,
   snap2DMatrixToHardwareDots,
@@ -892,7 +892,7 @@ function drawQr(
     if (!pdf) throw new Error('PDF417 encode failed');
     const snap = snap2DMatrixToHardwareDots(
       pdf.cols,
-      pdf.rows,
+      pdf.rows * PDF417_ROW_HEIGHT,
       el.width,
       el.height,
       dpi as HardwareDpi,
@@ -906,9 +906,9 @@ function drawQr(
         if (pdf.matrix[r][c]) {
           surface.fillRect(
             ox + (c + qzM) * snap.dotSize,
-            oy + (r + qzM) * snap.dotSize,
+            oy + qzM * snap.dotSize + r * PDF417_ROW_HEIGHT * snap.dotSize,
             snap.dotSize,
-            snap.dotSize,
+            PDF417_ROW_HEIGHT * snap.dotSize,
             ink,
           );
         }

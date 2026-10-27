@@ -47,6 +47,8 @@ import {
   formatLiveTime,
 } from '@/components/editor/types';
 import { barcodeBarsForMode } from '@/lib/barcode-code128';
+import { encodeDataMatrix } from '@/lib/barcode/datamatrix';
+import { encodePdf417, PDF417_ROW_HEIGHT } from '@/lib/barcode/pdf417';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
 import { generateQrMatrix } from '@/printing/renderer/qrcode';
 import { applySerialOffset, lineSpacingMultiplier } from '@/lib/serial-content';
@@ -322,17 +324,51 @@ export const SkiaQRCode = memo(function SkiaQRCode({
     );
   }
 
-  // Fallback 2D matrix (PDF417 / DataMatrix)
-  const cols = encodeMode === 'PDF417' ? 24 : 16;
-  const rows = encodeMode === 'PDF417' ? 10 : 16;
-  const cellW = widthPx / cols;
-  const cellH = heightPx / rows;
+  // PDF417 / DataMatrix: real module matrices, horizontal runs merged into one Rect each.
+  const grid = useMemo(() => {
+    if (encodeMode === 'PDF417') {
+      const pdf = encodePdf417(content || 'https://seznik.in', 2);
+      return pdf ? { matrix: pdf.matrix, rowH: PDF417_ROW_HEIGHT, qz: Math.max(2, quietZone / 2) } : null;
+    }
+    if (encodeMode === 'DataMatrix') {
+      const dm = encodeDataMatrix(content || 'https://seznik.in', widthPx > heightPx * 1.5);
+      return dm ? { matrix: dm.matrix, rowH: 1, qz: Math.max(1, quietZone / 2) } : null;
+    }
+    return null;
+  }, [encodeMode, content, widthPx, heightPx, quietZone]);
+
+  const gridRects = useMemo(() => {
+    if (!grid) return [];
+    const { matrix, rowH, qz } = grid;
+    const cols = matrix[0]?.length ?? 0;
+    const totalW = cols + qz * 2;
+    const totalH = matrix.length * rowH + qz * 2;
+    const unit = Math.min(widthPx / totalW, heightPx / totalH);
+    const ox = (widthPx - totalW * unit) / 2 + qz * unit;
+    const oy = (heightPx - totalH * unit) / 2 + qz * unit;
+    const out: { x: number; y: number; w: number; h: number }[] = [];
+    matrix.forEach((row, r) => {
+      let c = 0;
+      while (c < cols) {
+        if (!row[c]) {
+          c += 1;
+          continue;
+        }
+        let end = c;
+        while (end < cols && row[end]) end += 1;
+        out.push({ x: ox + c * unit, y: oy + r * rowH * unit, w: (end - c) * unit, h: rowH * unit });
+        c = end;
+      }
+    });
+    return out;
+  }, [grid, widthPx, heightPx]);
 
   return (
     <Group>
       {antiColor && <Rect x={0} y={0} width={widthPx} height={heightPx} color={bgColor} />}
-      <Rect x={0} y={0} width={cellW} height={heightPx} color={color} />
-      <Rect x={widthPx - cellW} y={0} width={cellW} height={heightPx} color={color} />
+      {gridRects.map((rc, i) => (
+        <Rect key={`m2d-${i}`} x={rc.x} y={rc.y} width={rc.w} height={rc.h} color={color} />
+      ))}
     </Group>
   );
 });
