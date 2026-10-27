@@ -4,6 +4,7 @@ import { JoshProgressCard } from '@/components/printers/josh-progress-card';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
+import { haptics } from '@/lib/haptics';
 import { EditableNumber } from '@/components/editable-number';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -498,9 +499,9 @@ export default function PrintScreen() {
     excelFileId?: string;
     scanType?: string;
     scanData?: string;
-  }>();
     /** Counter labels: the label shown on the editor canvas, which is the first one printed. */
     serialIndex?: string;
+  }>();
 
   const getDocument = useLabelStore((s) => s.getDocument);
   const storedLabel = useLabelStore((s) =>
@@ -1251,6 +1252,7 @@ export default function PrintScreen() {
           docName: jobName,
         });
 
+        haptics.success();
         // Josh shows its own "Print completed" card.
         if (!manager.isJosh) {
           Alert.alert(
@@ -1261,6 +1263,7 @@ export default function PrintScreen() {
         if (printingSettings.returnPrevious) goBack();
       } catch (error) {
         const message = formatPrintFailure(error);
+        haptics.error();
         // Josh's progress card already shows the failure.
         if (message && useJoshProgressStore.getState().phase !== 'failed') Alert.alert('Print Failed', message);
       } finally {
@@ -1366,10 +1369,10 @@ export default function PrintScreen() {
         Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
         return;
       }
+      // Counter labels print one at a time: the label on screen prints, then the next one is shown.
       const batch = serialInfo.mode === 'batch';
       const labelId = params.labelId;
       const hash = designHash(baseDocument);
-      // Counter labels print one at a time: the label on screen prints, then the next one is shown.
       const baseOffset = batch ? liveSerialOffset : 0;
       const startAt = batch ? Math.min(Math.max(0, pageIndex), serialInfo.count - 1) : 0;
       // Only the label being printed has to be valid; a bad later label must not block this one.
@@ -2405,9 +2408,6 @@ export default function PrintScreen() {
         });
       }
 
-      // Josh shows its own "Print completed" card.
-      if (!getPrinterManager().isJosh) {
-        Alert.alert('Print Sent', `${jobName} was sent to ${deviceName ?? 'the printer'}.`);
       // Counter labels: stay here and show the next label, ready to print.
       if (serialRun?.batch) {
         const continuing = Boolean(params.labelId && useSerialContinueStore.getState().byLabel[params.labelId]?.enabled);
@@ -2421,6 +2421,10 @@ export default function PrintScreen() {
         return;
       }
 
+      haptics.success();
+      // Josh shows its own "Print completed" card.
+      if (!getPrinterManager().isJosh) {
+        Alert.alert('Print Sent', `${jobName} was sent to ${deviceName ?? 'the printer'}.`);
       }
       if (printingSettings.returnPrevious) goBack();
     } catch (error) {
@@ -2449,6 +2453,7 @@ export default function PrintScreen() {
         );
       }
       const message = formatPrintFailure(error);
+      haptics.error();
       if (message) {
         const sent =
           bulkPlan != null
@@ -2504,12 +2509,12 @@ export default function PrintScreen() {
     paperType,
     printingSettings.recordHistory,
     printingSettings.returnPrevious,
+    pageIndex,
     addHistoryEntry,
     jobName,
     params.labelId,
     params.imageUri,
     historySource,
-    pageIndex,
     deviceName,
     jewelryDieCutJob,
     cableFlagJob,

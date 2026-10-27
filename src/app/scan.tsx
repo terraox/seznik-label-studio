@@ -328,7 +328,8 @@ export default function ScanScreen() {
 
         <View style={styles.permissionContent}>
           <View style={styles.permissionIconWrap}>
-            <Text style={styles.cameraEmoji}>📷</Text>
+            {/* theme-fixed: camera chrome */}
+            <AppIcon name="camera" size={40} tintColor="#FFFFFF" />
           </View>
           <Text style={styles.permissionHeading}>Camera Permission Needed</Text>
           <Text style={styles.permissionSub}>
@@ -638,9 +639,6 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
-  },
-  cameraEmoji: {
-    fontSize: 40,
   },
   permissionHeading: {
     color: c.onAccent,

@@ -17,7 +17,6 @@ import {
   StyleSheet,
   Text,
   UIManager,
-  Vibration,
   useWindowDimensions,
   View,
   type StyleProp,
@@ -50,8 +49,8 @@ import {
   fitTextDefaults,
   fitNewTextDefaults,
   fitTextBoxToContent,
-  fitCounterDefaults,
   fitTimeDefaults,
+  fitCounterDefaults,
   mergeTextElementPatch,
   growTextFrameHeightForWidth,
   NEW_TEXT_PLACEHOLDER,
@@ -154,6 +153,7 @@ import type {
 } from '@/components/editor/konva-transformer';
 import { CanvasPanelDivider } from '@/components/editor/canvas-panel-divider';
 import { StaticToolPalette } from '@/components/editor/static-tool-palette';
+import { haptics } from '@/lib/haptics';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -1420,6 +1420,8 @@ export default function EditScreen() {
 
   const hadSnapGuidesRef = useRef(false);
   const publishSnapGuides = useCallback((next: SnapGuide[]) => {
+    if (next.length > 0 && !hadSnapGuidesRef.current) haptics.snap();
+    hadSnapGuidesRef.current = next.length > 0;
     setSnapGuides((prev) => (guidesEqual(prev, next) ? prev : next));
   }, []);
 
@@ -1482,11 +1484,7 @@ export default function EditScreen() {
       splitDraggingRef.current = false;
       setSplitDragging(false);
       if (result.snapped) {
-        try {
-          Vibration.vibrate(8);
-        } catch {
-          // web / unsupported
-        }
+        haptics.snap();
         animateEditorSplit();
       }
       setCanvasFullscreen(result.fullscreen);
@@ -2140,9 +2138,9 @@ export default function EditScreen() {
             type: 'degrees',
             left: fit.left,
             top: fit.top,
-            ...(isCounter ? { autoWrapping: 'Close' as const } : {}),
             width: fit.width,
             fontSize: DEFAULT_DEGREES_STATE.fontSize,
+            ...(isCounter ? { autoWrapping: 'Close' as const } : {}),
             ...overrides,
           };
           break;
@@ -2557,6 +2555,7 @@ export default function EditScreen() {
       }
 
       const next = reduceTapSelect({ id, multipleMode, current });
+      if (source !== 'menu') haptics.select();
 
       // Refs update synchronously so a rapid next touch never reads the pre-render selection.
       selectedIdsRef.current = next.ids;
@@ -5327,8 +5326,8 @@ export default function EditScreen() {
           {showSerialBar ? (
             <SerialBar
               index={serialIdx}
-              value={describeSerialValues(doc, serialIdx + continueOffset)}
               total={serialCount}
+              value={describeSerialValues(doc, serialIdx + continueOffset)}
               onGo={(i) => setSerialPreviewIndex(Math.min(serialCount - 1, Math.max(0, i)))}
             />
           ) : null}

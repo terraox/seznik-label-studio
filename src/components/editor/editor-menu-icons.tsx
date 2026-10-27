@@ -161,14 +161,6 @@ export function ToolMenuIcon({
         </Svg>
       );
 
-    case 'Scan':
-      return (
-        <Svg width={size} height={size} viewBox="0 0 32 32">
-          <Path d="M 4.5 10 V 5.5 H 9 M 23 5.5 H 27.5 V 10 M 4.5 22 V 26.5 H 9 M 23 26.5 H 27.5 V 22" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          <Line x1="7.5" y1="16" x2="24.5" y2="16" stroke={accentColor} strokeWidth="2.2" strokeLinecap="round" />
-        </Svg>
-      );
-
     case 'OCR':
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32">

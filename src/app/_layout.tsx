@@ -15,6 +15,7 @@ import { NavigationBarScrim } from '@/components/navigation-bar-scrim';
 import { OfflineBanner } from '@/components/offline-banner';
 import { useNetworkMonitor } from '@/lib/network/monitor';
 import { IosAlertHost } from '@/components/ui/ios-alert-host';
+import { ToastHost } from '@/components/ui/toast-host';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { useIncomingSharedFile } from '@/lib/file-import/use-incoming-shared-file';
@@ -266,6 +267,7 @@ export default function RootLayout() {
           <AppThemeProvider>
             <AppRoot />
             <IosAlertHost />
+            <ToastHost />
           </AppThemeProvider>
         </KeyboardProvider>
       </GestureHandlerRootView>

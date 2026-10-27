@@ -12,6 +12,7 @@ import {
   type SeznikPrinterModelId,
 } from '@/constants/printer-models';
 import type { LastBridgeDevice } from '@/lib/printer/printer-bridge';
+import { haptics } from '@/lib/haptics';
 import { migrateLastDeviceForBridge } from '@/lib/printer/printer-bridge';
 import type { PrintHistoryEntry } from '@/lib/print-history/types';
 import { usePrintHistoryStore } from '@/stores/print-history-store';
@@ -153,7 +154,7 @@ export function usePrinterNickname(deviceId: string | null | undefined): string 
 
 export const usePrinterStore = create<PrinterStoreState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       status: 'disconnected',
       selectedPrinterModel: 'tejas',
       preferredPrinterModel: null,
@@ -200,6 +201,7 @@ export const usePrinterStore = create<PrinterStoreState>()(
         }),
 
       setConnectedDevice: (deviceId, deviceName, meta) => {
+        haptics.success();
         trackPrinterConnected(deviceName, meta?.transport ?? null, meta?.sdkId ?? null);
         set((state) => {
           const driver = resolvePinnedDriver(meta?.model, meta?.sdkId, state.selectedPrinterModel);
@@ -255,7 +257,8 @@ export const usePrinterStore = create<PrinterStoreState>()(
           },
         })),
 
-      clearConnection: () =>
+      clearConnection: () => {
+        if (get().status === 'connected' || get().status === 'printing') haptics.warning();
         set({
           status: 'disconnected',
           deviceId: null,
@@ -266,7 +269,8 @@ export const usePrinterStore = create<PrinterStoreState>()(
           batteryPercent: null,
           batteryBars: null,
           charging: false,
-        }),
+        });
+      },
 
       addHistoryEntry: (entry) => {
         usePrintHistoryStore.getState().addEntry(entry);

@@ -45,6 +45,8 @@ const ION: Record<string, IoniconsName> = {
   'arrowtriangle.right.fill': 'chevron-forward',
   'arrowtriangle.up.fill': 'chevron-up',
   bag: 'bag-outline',
+  camera: 'camera-outline',
+  lightbulb: 'bulb-outline',
   'bag.fill': 'bag',
   'bolt.fill': 'flash',
   'battery.0': 'battery-dead',
