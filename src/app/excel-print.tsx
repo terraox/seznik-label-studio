@@ -47,6 +47,7 @@ import {
 import { resolveProfile } from '@/printer-core/profiles';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore } from '@/stores/data-store';
+import { useIncomingFileStore, type IncomingFile } from '@/stores/incoming-file-store';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
@@ -59,7 +60,17 @@ export default function ExcelPrintScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
   const addExcelFile = useDataStore((s) => s.addExcelFile);
-  const { importExcel, excelImportModal, documentSourceSheet } = useExcelImportFlow();
+  const { importExcel, importExcelFromFile, excelImportModal, documentSourceSheet } = useExcelImportFlow();
+  // A spreadsheet sent here from another app ("Open with" / share). It is taken into this screen so a
+  // stale one never lingers; Continue then uses it instead of asking for a file.
+  const sharedFile = useIncomingFileStore((s) => s.pending);
+  const clearSharedFile = useIncomingFileStore((s) => s.clearPending);
+  const [received, setReceived] = useState<IncomingFile | null>(null);
+  useEffect(() => {
+    if (sharedFile?.kind !== 'excel') return;
+    setReceived(sharedFile);
+    clearSharedFile();
+  }, [sharedFile, clearSharedFile]);
   const [form, setForm] = useState<FormState>(() => initialFormState({}));
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [triedContinue, setTriedContinue] = useState(false);
@@ -137,7 +148,7 @@ export default function ExcelPrintScreen() {
 
     setPicking(true);
     try {
-      const picked = await importExcel();
+      const picked = received ? await importExcelFromFile(received) : await importExcel();
       if (!picked) return;
 
       const storedUri = await stageImportedFile('excel', picked.uri, picked.name);
@@ -207,6 +218,18 @@ export default function ExcelPrintScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 110 }]}
         bottomOffset={96}
         showsVerticalScrollIndicator={false}>
+        {received ? (
+          <View style={styles.receivedRow}>
+            <AppIcon name="doc.text" tintColor={C.accent} size={20} />
+            <Text style={styles.receivedName} numberOfLines={1}>
+              {received.name}
+            </Text>
+            <Pressable onPress={() => setReceived(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Use a different file">
+              <Text style={styles.receivedChange}>Change</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <LabelPreview shape={form.shape} columns={form.columns} cellW={cell.w} cellH={cell.h} gap={gapMm} />
 
         <View style={styles.section}>
@@ -488,4 +511,15 @@ const styles = themedStyles((c) => ({
   continueBtnDisabled: { opacity: 0.4 },
   continueText: { color: c.onAccent, fontSize: 17, fontWeight: '500' },
   pressed: { opacity: 0.75 },
+  receivedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: c.accentSoft,
+  },
+  receivedName: { flex: 1, fontSize: 14, fontWeight: '600', color: c.text },
+  receivedChange: { fontSize: 13, fontWeight: '700', color: c.link },
 }));

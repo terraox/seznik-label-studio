@@ -94,6 +94,8 @@ export default function PdfEditorScreen() {
     docName?: string;
     uri?: string;
     name?: string;
+    /** '1' when another app sent the PDF ("Open with" / share): ask what it is before opening it. */
+    received?: string;
   }>();
   const session = usePdfEditStore((s) => s.session);
   const startSession = usePdfEditStore((s) => s.startSession);
@@ -115,6 +117,8 @@ export default function PdfEditorScreen() {
   const setSmartCropHintSeen = useSettingsStore((s) => s.setSmartCropHintSeen);
 
   const [step, setStep] = useState<Step>('pick');
+  const receivedPdf = params.received === '1' && !!params.docUri;
+  const [anyPdfChosen, setAnyPdfChosen] = useState(false);
   const startWalkthrough = useWalkthroughStore((s) => s.start);
   const stopWalkthrough = useWalkthroughStore((s) => s.stop);
   const markPdfTourSeen = useSettingsStore((s) => s.markPdfTourSeen);
@@ -171,6 +175,8 @@ export default function PdfEditorScreen() {
     const rawUri = params.docUri || params.uri;
     const rawName = params.docName || params.name || 'document.pdf';
     if (!rawUri || session) return;
+    // A PDF sent from another app waits for the choice between shipping labels and any PDF.
+    if (receivedPdf && !anyPdfChosen) return;
 
     let cancelled = false;
     setLoading(true);
@@ -201,7 +207,7 @@ export default function PdfEditorScreen() {
     return () => {
       cancelled = true;
     };
-  }, [params.docUri, params.uri, params.docName, params.name, refinePageSizes, session, startSession]);
+  }, [params.docUri, params.uri, params.docName, params.name, refinePageSizes, session, startSession, receivedPdf, anyPdfChosen]);
 
   // On the print step, render the likely first pages now so Print starts sending at once.
   useEffect(() => {
@@ -690,10 +696,35 @@ export default function PdfEditorScreen() {
           showsVerticalScrollIndicator={false}>
           {loading ? <ActivityIndicator color={C.accent} style={styles.pickSpinner} /> : null}
           <WalkthroughTarget id="pdf.import" style={styles.pickTarget}>
+            {receivedPdf ? (
+              <View style={styles.fileRow}>
+                <View style={styles.fileIcon}>
+                  <AppIcon name="doc.text" size={22} tintColor={C.accent} />
+                </View>
+                <View style={styles.fileText}>
+                  <Text style={styles.fileName} numberOfLines={1}>
+                    {params.docName ?? 'document.pdf'}
+                  </Text>
+                  <Text style={styles.fileMeta}>Received from another app</Text>
+                </View>
+              </View>
+            ) : null}
             <PdfPickOptions
               disabled={loading}
-              onShippingLabels={() => router.replace('/ecommerce-label' as any)}
-              onPrintPdf={() => void importPdf()}
+              onShippingLabels={() =>
+                router.replace(
+                  (receivedPdf
+                    ? { pathname: '/ecommerce-label', params: { docUri: params.docUri, docName: params.docName } }
+                    : '/ecommerce-label') as any,
+                )
+              }
+              onPrintPdf={() => {
+                if (receivedPdf && !session) setAnyPdfChosen(true);
+                else if (receivedPdf) {
+                  resetSession();
+                  setAnyPdfChosen(true);
+                } else void importPdf();
+              }}
             />
           </WalkthroughTarget>
         </ScrollView>

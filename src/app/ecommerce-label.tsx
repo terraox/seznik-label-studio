@@ -54,7 +54,7 @@ const DEFAULT_SIZE: OutputSize = (() => {
 export default function EcommerceLabelScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ platform?: string | string[] }>();
+  const params = useLocalSearchParams<{ platform?: string | string[]; docUri?: string; docName?: string }>();
   const linkedPlatform = parsePlatformId(Array.isArray(params.platform) ? params.platform[0] : params.platform);
   const deviceName = usePrinterStore((s) => s.deviceName);
   const printerStatus = usePrinterStore((s) => s.status);
@@ -69,6 +69,11 @@ export default function EcommerceLabelScreen() {
   const [previewIndex, setPreviewIndex] = useState(0);
   const [size, setSize] = useState<OutputSize>(DEFAULT_SIZE);
   const [keepInvoice, setKeepInvoice] = useState(false);
+  // A PDF sent from another app: used for the first choose, then "Change" asks for a file as usual.
+  const [received, setReceived] = useState<{ uri: string; name: string } | null>(
+    params.docUri ? { uri: params.docUri, name: params.docName || 'label.pdf' } : null,
+  );
+  const autoOpened = useRef(false);
   const [file, setFile] = useState<PickedFile | null>(null);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
@@ -129,7 +134,9 @@ export default function EcommerceLabelScreen() {
   const chooseFile = useCallback(async () => {
     if (!platform || busy) return;
     try {
-      const picked = await pickDocumentWithSource({ preset: 'pdf' });
+      const picked = received
+        ? { ok: true as const, uri: received.uri, name: received.name }
+        : await pickDocumentWithSource({ preset: 'pdf' });
       if (!picked.ok) {
         if (picked.reason === 'invalid') Alert.alert('PDF', 'Please choose a PDF document.');
         return;
@@ -147,6 +154,7 @@ export default function EcommerceLabelScreen() {
       );
       if (cancelled.current) return;
       setFile({ uri, name: picked.name, pageCount: meta.pageCount, pageSizesPt: meta.pageSizesPt });
+      setReceived(null);
       setScan(result);
       setPreviewIndex(0);
       setStep('preview');
@@ -160,7 +168,14 @@ export default function EcommerceLabelScreen() {
     } finally {
       setProgress(null);
     }
-  }, [busy, clearFile, pickDocumentWithSource, platform]);
+  }, [busy, clearFile, pickDocumentWithSource, platform, received]);
+
+  // The received PDF is checked as soon as the platform is known; a failed check leaves it for another try.
+  useEffect(() => {
+    if (step !== 'setup' || !platform || !received || file || busy || autoOpened.current) return;
+    autoOpened.current = true;
+    void chooseFile();
+  }, [step, platform, received, file, busy, chooseFile]);
 
   const print = useCallback(
     async (selection: PdfPrintSelection, options: PdfPrintOptions) => {
@@ -252,20 +267,8 @@ export default function EcommerceLabelScreen() {
             </View>
           </View>
 
-          <View style={styles.note}>
-            <View style={styles.noteBar} />
-            <View style={styles.cardText}>
-              <Text style={styles.noteTitle}>Upload the PDF you downloaded</Text>
-              <Text style={styles.noteBody}>
-                Use the label PDF exactly as downloaded from your seller panel. A PDF saved again with
-                Ctrl+P, the browser Print dialog, System Print or Save as PDF, a screenshot or a photo
-                may not work.
-              </Text>
-            </View>
-          </View>
-
           <Text style={styles.heading}>Choose your platform</Text>
-          <View style={styles.tiles} /* layout-ok: tiles flex to share the row */>
+          <View style={styles.tiles}>
             {PLATFORMS.map((p) => (
               <PlatformTile
                 key={p.id}
@@ -277,6 +280,18 @@ export default function EcommerceLabelScreen() {
                 }}
               />
             ))}
+          </View>
+
+          <View style={styles.note}>
+            <View style={styles.noteBar} />
+            <View style={styles.cardText}>
+              <Text style={styles.noteTitle}>Upload the PDF you downloaded</Text>
+              <Text style={styles.noteBody}>
+                Use the label PDF exactly as downloaded from your seller panel. A PDF saved again with
+                Ctrl+P, the browser Print dialog, System Print or Save as PDF, a screenshot or a photo
+                may not work.
+              </Text>
+            </View>
           </View>
         </FormScrollView>
       ) : null}
@@ -339,7 +354,7 @@ export default function EcommerceLabelScreen() {
               ) : (
                 <Ionicons name="cloud-upload-outline" size={26} color={C.accent} />
               )}
-              <Text style={styles.cardTitle}>{progress ?? 'Choose PDF'}</Text>
+              <Text style={styles.cardTitle}>{progress ?? (received ? received.name : 'Choose PDF')}</Text>
             </Pressable>
           )}
         </FormScrollView>
@@ -531,7 +546,7 @@ const styles = themedStyles((c, scheme) => ({
   noteBar: { width: 4, borderRadius: 2, backgroundColor: c.warning },
   noteTitle: { fontSize: 14, fontWeight: '700', color: c.text },
   noteBody: { fontSize: 13, lineHeight: 19, color: c.textSecondary },
-  tiles: { flexDirection: 'row', gap: 12 },
+  tiles: { gap: 12 },
   cardText: { flex: 1, minWidth: 0, gap: 2 },
   cardTitle: { fontSize: 15, fontWeight: '600', color: c.text },
   cardSub: { fontSize: 12, color: c.textMuted },
