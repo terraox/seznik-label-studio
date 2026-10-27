@@ -6,6 +6,7 @@ import {
 } from '@/components/editor/types';
 import { barcodeModulesForMode } from '@/lib/barcode-code128';
 import { encodeDataMatrix } from '@/lib/barcode/datamatrix';
+import { linePatternForBox } from '@/lib/line-pattern';
 import { encodePdf417, PDF417_ROW_HEIGHT } from '@/lib/barcode/pdf417';
 import {
   snap1DBarcodeModules,
@@ -929,10 +930,24 @@ function drawLine(
   const { x0, y0, w, h } = box;
   const vertical = h >= w * 2;
   const stroke = Math.max(1, Math.round((vertical ? el.width : el.height) * dpm));
-  if (vertical) {
-    surface.fillRect(x0 + Math.floor(w / 2) - Math.floor(stroke / 2), y0, stroke, h, 0);
-  } else {
-    surface.fillRect(x0, y0 + Math.floor(h / 2) - Math.floor(stroke / 2), w, stroke, 0);
+  if (!el.lineStyle || el.lineStyle === 'solid') {
+    if (vertical) {
+      surface.fillRect(x0 + Math.floor(w / 2) - Math.floor(stroke / 2), y0, stroke, h, 0);
+    } else {
+      surface.fillRect(x0, y0 + Math.floor(h / 2) - Math.floor(stroke / 2), w, stroke, 0);
+    }
+    return;
+  }
+  // Same pattern geometry the editor draws, in dots.
+  const interval = Math.max(2, Math.round((el.virtualInterval || 1) * dpm));
+  const pattern = linePatternForBox(el.lineStyle, w, h, interval, 1, 1);
+  console.info(`[PRINT-LINE] ${el.id} style=${el.lineStyle} interval=${interval} pieces=${pattern.length}`);
+  for (const r of pattern) {
+    const rx0 = Math.round(x0 + r.x);
+    const ry0 = Math.round(y0 + r.y);
+    const rx1 = Math.max(rx0 + 1, Math.round(x0 + r.x + r.w));
+    const ry1 = Math.max(ry0 + 1, Math.round(y0 + r.y + r.h));
+    surface.fillRect(rx0, ry0, rx1 - rx0, ry1 - ry0, 0);
   }
 }
 

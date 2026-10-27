@@ -10,11 +10,12 @@ import {
   type LineStyle,
   normalizeRotation,
 } from '@/components/editor/types';
+import { lineStyleUsesInterval, linePatternRects, LINE_STYLE_IDS, minHeightMmForLineStyle, TALL_LINE_STYLES } from '@/lib/line-pattern';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 const TABS: LinePropertyTab[] = ['Regular', 'Position', 'Style'];
 
-const LINE_STYLES: LineStyle[] = ['solid', 'dashed', 'slash', 'backslash'];
+const LINE_STYLES: LineStyle[] = [...LINE_STYLE_IDS];
 
 function Divider() {
   useThemeRefresh();
@@ -112,25 +113,33 @@ function ToggleRow({
   );
 }
 
+const SWATCH_W = 30;
+const SWATCH_H = 14;
+
+/** Mini preview drawn from the same geometry as the canvas and the print. */
 function LineStylePreview({ style, active }: { style: LineStyle; active?: boolean }) {
   useThemeRefresh();
   const color = active ? C.onAccent : C.textSecondary;
-  if (style === 'slash') {
-    return <View style={[styles.slashLine, { backgroundColor: color, transform: [{ rotate: '-35deg' }] }]} />;
-  }
-  if (style === 'backslash') {
-    return <View style={[styles.slashLine, { backgroundColor: color, transform: [{ rotate: '35deg' }] }]} />;
-  }
-  if (style === 'dashed') {
-    return (
-      <View style={styles.dashedWrap} /* layout-ok: dash icon inside a fixed swatch */>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <View key={i} style={[styles.dashSegment, { backgroundColor: color }]} />
-        ))}
-      </View>
-    );
-  }
-  return <View style={[styles.solidLine, { backgroundColor: color }]} />;
+  const tall = TALL_LINE_STYLES.includes(style);
+  const h = tall ? SWATCH_H : 2;
+  const rects = linePatternRects(style, SWATCH_W, h, 4, 1, 1);
+  return (
+    <View style={{ width: SWATCH_W, height: SWATCH_H }} /* layout-ok: fixed swatch for the style icon */>
+      {rects.map((r, i) => (
+        <View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: r.x,
+            top: r.y + (SWATCH_H - h) / 2,
+            width: r.w,
+            height: r.h,
+            backgroundColor: color,
+          }}
+        />
+      ))}
+    </View>
+  );
 }
 
 function LineStyleRow({
@@ -263,11 +272,35 @@ export function LinePropertyPanel({
   elementHeightMm,
 }: LinePropertyPanelProps) {
   useThemeRefresh();
-  const showVirtualInterval = state.lineStyle === 'dashed';
+  const showVirtualInterval = lineStyleUsesInterval(state.lineStyle);
+  // Thickness is the cross size of the line: the height of a flat line, the width of an upright one.
+  const upright = state.height >= state.width * 2;
+  const thickness = upright ? state.width : state.height;
+  const setThickness = (mm: number) => patch(upright ? { width: mm } : { height: mm });
 
   const styleSection = (
     <>
-      <LineStyleRow selected={state.lineStyle} onSelect={(lineStyle) => patch({ lineStyle })} />
+      <LineStyleRow
+        selected={state.lineStyle}
+        onSelect={(lineStyle) => {
+          // Tall styles need some height to read; never shrink what the user set.
+          const minH = minHeightMmForLineStyle(lineStyle);
+          const vertical = state.height >= state.width * 2;
+          if (minH > 0 && !vertical && state.height < minH) patch({ lineStyle, height: minH });
+          else if (minH > 0 && vertical && state.width < minH) patch({ lineStyle, width: minH });
+          else patch({ lineStyle });
+        }}
+      />
+      <Divider />
+      <StepperRow
+        label="Thickness"
+        value={formatMm(thickness)}
+        onMinus={() => setThickness(Math.max(0.1, Math.round((thickness - 0.1) * 100) / 100))}
+        onPlus={() => setThickness(Math.round((thickness + 0.1) * 100) / 100)}
+      />
+      {TALL_LINE_STYLES.includes(state.lineStyle) && (
+        <PanelNote>This style scales with its thickness: thicker also means taller.</PanelNote>
+      )}
       {showVirtualInterval && (
         <>
           <Divider />

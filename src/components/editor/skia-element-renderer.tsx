@@ -47,6 +47,7 @@ import {
   formatLiveTime,
 } from '@/components/editor/types';
 import { barcodeBarsForMode } from '@/lib/barcode-code128';
+import { linePatternForBox } from '@/lib/line-pattern';
 import { encodeDataMatrix } from '@/lib/barcode/datamatrix';
 import { encodePdf417, PDF417_ROW_HEIGHT } from '@/lib/barcode/pdf417';
 import { formatBarcodeHri } from '@/lib/barcode/hri';
@@ -481,36 +482,17 @@ export const SkiaLine = memo(function SkiaLine({
   scale: number;
 }) {
   const color = inkColor(drawingColorIndex);
-  const vertical = heightPx >= widthPx * 2;
-  const strokeW = Math.max(1, lineWidth * scale);
-  const dashInterval = Math.max(3, virtualInterval * scale);
-
-  if (vertical) {
-    const midX = widthPx / 2;
-    return (
-      <Line
-        p1={vec(midX, 0)}
-        p2={vec(midX, heightPx)}
-        color={color}
-        strokeWidth={strokeW}
-        style="stroke"
-      >
-        {lineStyle === 'dashed' && <DashPathEffect intervals={[dashInterval, dashInterval]} />}
-      </Line>
-    );
-  }
-
-  const midY = heightPx / 2;
+  const interval = Math.max(3, virtualInterval * scale);
+  const rects = useMemo(
+    () => linePatternForBox(lineStyle, widthPx, heightPx, interval, 1, 1),
+    [lineStyle, widthPx, heightPx, interval],
+  );
   return (
-    <Line
-      p1={vec(0, midY)}
-      p2={vec(widthPx, midY)}
-      color={color}
-      strokeWidth={strokeW}
-      style="stroke"
-    >
-      {lineStyle === 'dashed' && <DashPathEffect intervals={[dashInterval, dashInterval]} />}
-    </Line>
+    <Group>
+      {rects.map((r, i) => (
+        <Rect key={`ln-${i}`} x={r.x} y={r.y} width={r.w} height={r.h} color={color} />
+      ))}
+    </Group>
   );
 });
 

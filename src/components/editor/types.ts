@@ -189,7 +189,16 @@ export const DEFAULT_QRCODE_STATE: QrcodeElementState = {
 };
 
 export type LinePropertyTab = 'Regular' | 'Position' | 'Style';
-export type LineStyle = 'solid' | 'dashed' | 'slash' | 'backslash';
+export type LineStyle =
+  | 'solid'
+  | 'dashed'
+  | 'dotted'
+  | 'dashdot'
+  | 'double'
+  | 'slash'
+  | 'backslash'
+  | 'zigzag'
+  | 'wave';
 
 export type LineElementState = {
   lineStyle: LineStyle;

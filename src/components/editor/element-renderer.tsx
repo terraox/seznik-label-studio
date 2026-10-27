@@ -69,6 +69,7 @@ import {
 } from "@/lib/barcode/barcode-snapping";
 import { encodeDataMatrix } from "@/lib/barcode/datamatrix";
 import { formatBarcodeHri } from "@/lib/barcode/hri";
+import { linePatternForBox } from "@/lib/line-pattern";
 import { encodePdf417, PDF417_ROW_HEIGHT } from "@/lib/barcode/pdf417";
 import { formatDataSourceColumn } from "@/lib/editor/data-source-display";
 import {
@@ -1174,72 +1175,11 @@ function LineContent({
   scale: number;
 }) {
   const color = inkColor(element.drawingColorIndex);
-  const vertical = heightPx >= widthPx * 2;
-  const strokeWidth = Math.max(
-    1,
-    (vertical ? element.width : element.height) * scale,
-  );
-  const midY = heightPx / 2;
-  const dash =
-    element.lineStyle === "dashed"
-      ? [
-          Math.max(3, element.virtualInterval * scale),
-          Math.max(3, element.virtualInterval * scale),
-        ]
-      : undefined;
-
-  if (element.lineStyle === "slash" || element.lineStyle === "backslash") {
-    const gap = Math.max(4, element.virtualInterval * scale * 2);
-    const count = Math.ceil(widthPx / gap) + 2;
-    const slashHeight = Math.min(heightPx, Math.max(6, strokeWidth * 4));
-    return (
-      <Svg
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${widthPx} ${heightPx}`}
-        preserveAspectRatio="none"
-      >
-        {Array.from({ length: count }).map((_, i) => {
-          const x = i * gap;
-          const up = element.lineStyle === "slash";
-          return (
-            <Line
-              key={i}
-              x1={x}
-              y1={up ? midY + slashHeight / 2 : midY - slashHeight / 2}
-              x2={x + gap * 0.6}
-              y2={up ? midY - slashHeight / 2 : midY + slashHeight / 2}
-              stroke={color}
-              strokeWidth={Math.max(1, strokeWidth / 2)}
-            />
-          );
-        })}
-      </Svg>
-    );
-  }
-
-  if (vertical) {
-    const midX = widthPx / 2;
-    return (
-      <Svg
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${widthPx} ${heightPx}`}
-        preserveAspectRatio="none"
-      >
-        <Line
-          x1={midX}
-          y1={0}
-          x2={midX}
-          y2={heightPx}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash}
-        />
-      </Svg>
-    );
-  }
-
+  const interval = Math.max(3, element.virtualInterval * scale);
+  const rects = linePatternForBox(element.lineStyle, widthPx, heightPx, interval, 1, 1);
+  const d = rects
+    .map((r) => `M${r.x},${r.y}h${r.w}v${r.h}h-${r.w}Z`)
+    .join(" ");
   return (
     <Svg
       width="100%"
@@ -1247,15 +1187,7 @@ function LineContent({
       viewBox={`0 0 ${widthPx} ${heightPx}`}
       preserveAspectRatio="none"
     >
-      <Line
-        x1={0}
-        y1={midY}
-        x2={widthPx}
-        y2={midY}
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeDasharray={dash}
-      />
+      <Path d={d} fill={color} />
     </Svg>
   );
 }

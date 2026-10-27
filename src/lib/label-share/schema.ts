@@ -140,7 +140,7 @@ export const ELEMENT_SPECS: Record<string, Record<string, Spec>> = {
   line: {
     ...COMMON,
     height: num(0, 2000),
-    lineStyle: oneOf(['solid', 'dashed', 'slash', 'backslash'], DEFAULT_LINE_STATE.lineStyle),
+    lineStyle: oneOf(['solid', 'dashed', 'dotted', 'dashdot', 'double', 'slash', 'backslash', 'zigzag', 'wave'], DEFAULT_LINE_STATE.lineStyle),
     virtualInterval: num(0, 100, DEFAULT_LINE_STATE.virtualInterval),
     ...inkFields(DEFAULT_LINE_STATE, false),
   },
