@@ -1,4 +1,5 @@
 import { ModedTileImage } from "@/components/editor/moded-tile-image";
+import { ItalicWrap } from "@/components/editor/italic-wrap";
 import { useModedTile } from "@/components/editor/use-moded-tile";
 import { usesModedPrint } from "@/printing/raster/image-element-settings";
 import { computeArcTextLayout } from "@/lib/editor/arctext-layout";
@@ -56,7 +57,6 @@ import {
 } from "@/lib/fonts/text-font-family";
 import {
   PREVIEW_ITALIC_SKEW_DEG,
-  previewItalicWrapStyle,
   previewFontStyle,
   previewSyntheticBoldStyle,
   resolvePreviewFontStyle,
@@ -400,7 +400,7 @@ function LiveTextLayers({
   scale,
   liveReflowSv,
   liveWidthSv,
-  wrapStyle,
+  italic,
   textStyle,
 }: {
   starts: number[];
@@ -410,7 +410,7 @@ function LiveTextLayers({
   scale: number;
   liveReflowSv: SharedValue<boolean>;
   liveWidthSv: SharedValue<number>;
-  wrapStyle: StyleProp<ViewStyle>;
+  italic?: boolean;
   textStyle: StyleProp<TextStyle>;
 }) {
   const active = useDerivedValue(() => {
@@ -431,11 +431,11 @@ function LiveTextLayers({
   });
   return (
     <Animated.View pointerEvents="none" style={[styles.liveReflowText, shiftStyle]}>
-      <View pointerEvents="none" style={[wrapStyle, { width: fixedWidthPx }]}>
+      <ItalicWrap pointerEvents="none" italic={italic} style={{ width: fixedWidthPx }}>
         {lines.map((layout, index) => (
           <LiveTextLayer key={index} index={index} active={active} text={layout.join("\n")} style={textStyle} />
         ))}
-      </View>
+      </ItalicWrap>
     </Animated.View>
   );
 }
@@ -597,8 +597,9 @@ function TextContent({
       ]}
     >
       {/* Italic skew on a View — Text fontStyle is ignored for expo-font cuts (same as print). */}
-      <View
-        style={[styles.textFill, previewItalicWrapStyle(element.italic)]}
+      <ItalicWrap
+        italic={element.italic}
+        style={styles.textFill}
         collapsable={false}
         onLayout={(e) => {
           const { x, y } = e.nativeEvent.layout;
@@ -655,7 +656,7 @@ function TextContent({
         >
           {formatted.text}
         </RestingText>
-      </View>
+      </ItalicWrap>
       {decoBars.length > 0 ? (
         // Hidden while the width handle reflows: the live text carries its own native line.
         <Animated.View
@@ -687,13 +688,14 @@ function TextContent({
           scale={scale}
           liveReflowSv={liveReflowSv}
           liveWidthSv={liveWidthSv}
-          wrapStyle={previewItalicWrapStyle(element.italic)}
+          italic={element.italic}
           textStyle={[style, { textAlign: align }, letterSpacingStyle(drawElement, raw, scale)]}
         />
       ) : liveReflowSv ? (
-        <View
+        <ItalicWrap
           pointerEvents="none"
-          style={[styles.liveReflowText, previewItalicWrapStyle(element.italic)]}
+          italic={element.italic}
+          style={styles.liveReflowText}
         >
           <Animated.Text
             pointerEvents="none"
@@ -722,7 +724,7 @@ function TextContent({
           >
             {element.autoWrapping === "Close" ? raw.replace(/\r?\n/g, " ") : raw}
           </Animated.Text>
-        </View>
+        </ItalicWrap>
       ) : null}
     </View>
   );
@@ -915,23 +917,21 @@ function BarcodeContent({
   }, [snapped, widthPx]);
 
   const label = showLabel ? (
-    <View
-      style={[
-        {
-          width: "100%",
-          height: labelHeight,
-          flexShrink: 0,
-          alignItems:
-            align === "center"
-              ? "center"
-              : align === "right"
-                ? "flex-end"
-                : "stretch",
-          justifyContent: "center",
-        },
-        // Italic is a wrapper skew (fontStyle does nothing on these cuts); print uses the same shear.
-        previewItalicWrapStyle(element.italic),
-      ]}
+    // Italic is a wrapper shear (fontStyle would swap the font); print uses the same slant.
+    <ItalicWrap
+      italic={element.italic}
+      style={{
+        width: "100%",
+        height: labelHeight,
+        flexShrink: 0,
+        alignItems:
+          align === "center"
+            ? "center"
+            : align === "right"
+              ? "flex-end"
+              : "stretch",
+        justifyContent: "center",
+      }}
     >
       <Text
         numberOfLines={1}
@@ -952,7 +952,7 @@ function BarcodeContent({
       >
         {hri}
       </Text>
-    </View>
+    </ItalicWrap>
   ) : null;
 
   return (
@@ -1534,10 +1534,11 @@ function TableContent({
             ]}
           >
             {cell && flat && style ? (
-              <View
+              <ItalicWrap
                 collapsable={false}
-                // Italic is a shear on a wrapper (Text fontStyle does nothing on these cuts), as in Text.
-                style={[{ width: "100%" }, previewItalicWrapStyle(cell.italic)]}
+                // Italic is a shear on a wrapper (Text fontStyle would swap the font), as in Text.
+                italic={cell.italic}
+                style={{ width: "100%" }}
               >
                 <Text
                   allowFontScaling={false}
@@ -1596,7 +1597,7 @@ function TableContent({
                       />
                     ));
                   })()}
-              </View>
+              </ItalicWrap>
             ) : null}
           </View>
         );

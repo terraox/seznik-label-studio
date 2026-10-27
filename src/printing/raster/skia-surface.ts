@@ -174,6 +174,7 @@ type SkiaFont = {
   measureText: (text: string) => { width: number };
   getGlyphIDs?: (text: string) => number[];
   getGlyphWidths?: (glyphIds: number[]) => number[];
+  setEmbolden?: (embolden: boolean) => void;
 };
 
 type SkiaImage = {
@@ -301,6 +302,11 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
         const face = printTypeface(style.family, style.bold);
         if (face) {
           font = Skia.Font(face, style.fontSizeDots);
+          // No heavier cut to swap to (single-weight, Indic, user fonts, already-bold faces): thicken the outline.
+          const { hasHeavierPrintFace } = require('./print-typeface-map') as {
+            hasHeavierPrintFace: (family?: string) => boolean;
+          };
+          if (style.bold && !hasHeavierPrintFace(style.family)) font.setEmbolden?.(true);
         }
       } catch {
         // Keep matchFont when the embedded face is not loaded yet.
