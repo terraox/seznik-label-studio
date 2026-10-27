@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { trackFeatureClick } from '@/lib/telemetry/events';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AppIcon } from '@/components/app-icon';
-import { ProductImage } from '@/components/shop/product-image';
+import { Image } from 'expo-image';
 import { androidRipple, HomeLayout } from '@/constants/ui';
 import { openProductUrl } from '@/lib/shop/amazon-url';
 import { getBundledShopCatalog } from '@/lib/shop/load-catalog';
@@ -19,7 +19,7 @@ import { productDisplayTitle } from '@/lib/shop/filter-catalog';
 import type { ShopProduct } from '@/lib/shop/types';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
-const TILE_W = 112;
+const TILE_W = 118;
 const TILE_GAP = 10;
 const TILE_STRIDE = TILE_W + TILE_GAP;
 const PAD = 14;
@@ -48,6 +48,33 @@ async function openProduct(product: ShopProduct) {
   if (!result.ok) {
     Alert.alert('Link unavailable', 'This product link could not be opened.');
   }
+}
+
+const PHOTO = TILE_W - 12;
+
+/** One product photo at an exact pixel size; a grey photo icon when the image fails to load. */
+function TilePhoto({ uri, id }: { uri: string; id: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <View style={[styles.photoImage, styles.photoFallback]}>
+        <AppIcon name="photo" tintColor={C.textMuted} size={26} />
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri }}
+      recyclingKey={id}
+      cachePolicy="memory-disk"
+      contentFit="contain"
+      style={styles.photoImage}
+      onError={(event) => {
+        console.warn('[buy-strip] image failed', uri, event.error);
+        setFailed(true);
+      }}
+    />
+  );
 }
 
 export function BuyFromUsStrip() {
@@ -88,8 +115,18 @@ export function BuyFromUsStrip() {
       accessibilityLabel="Buy from us — Shop from Seznik"
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.header}>
-        <View style={styles.badge}>
-          <AppIcon name="bag" tintColor={C.accent} size={20} />
+        <View style={styles.topRow}>
+          <Image
+            source={require('../../../assets/seznik-logo.png')}
+            contentFit="contain"
+            contentPosition="left"
+            style={styles.logo}
+            accessibilityLabel="Seznik"
+          />
+          <View style={styles.ctaWrap}>
+            <Text style={styles.cta}>Shop now</Text>
+            <AppIcon name="chevron.right" tintColor={C.onAccent} size={13} />
+          </View>
         </View>
         <View style={styles.headerText}>
           <Text
@@ -102,12 +139,8 @@ export function BuyFromUsStrip() {
             numberOfLines={1}
             maxFontSizeMultiplier={HomeLayout.labelMaxFontScale}
             style={styles.subtitle}>
-            Shop supplies from Seznik
+            Printers and label rolls
           </Text>
-        </View>
-        <View style={styles.ctaWrap}>
-          <Text style={styles.cta}>Shop</Text>
-          <AppIcon name="chevron.right" tintColor={C.accent} size={14} />
         </View>
       </View>
 
@@ -122,13 +155,22 @@ export function BuyFromUsStrip() {
                 accessibilityLabel={`Buy ${product.name}`}
                 style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
                 <View style={styles.photo}>
-                  <ProductImage uri={product.imageUrl} recyclingKey={product.id} />
+                  <TilePhoto uri={product.imageUrl} id={product.id} />
                 </View>
                 <Text numberOfLines={2} style={styles.tileName}>
                   {productDisplayTitle(product)}
                 </Text>
-                <View style={styles.tilePill}>
-                  <Text numberOfLines={1} style={styles.tileType}>
+                <View
+                  style={[
+                    styles.tag,
+                    product.category === 'printers' ? styles.tagPrinter : styles.tagRoll,
+                  ]}>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.tagText,
+                      product.category === 'printers' ? styles.tagTextPrinter : styles.tagTextRoll,
+                    ]}>
                     {product.category === 'printers' ? 'Printer' : 'Label roll'}
                   </Text>
                 </View>
@@ -146,7 +188,7 @@ const styles = themedStyles((c, scheme) => ({
   // Shadow stays on the outer view. overflow:hidden on the same view as the light-mode
   // Android boxShadow hides the whole strip.
   cardFrame: {
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: c.surface,
     ...cardElevation(c, scheme),
     ...(scheme === 'light'
@@ -155,58 +197,54 @@ const styles = themedStyles((c, scheme) => ({
   },
   card: {
     backgroundColor: c.surface,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
-    paddingTop: 14,
-    paddingBottom: 8,
-    gap: 12,
+    paddingTop: 16,
+    paddingBottom: 14,
+    gap: 14,
   },
   header: {
+    gap: 10,
+    paddingHorizontal: PAD,
+  },
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
-    paddingHorizontal: 14,
-  },
-  badge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: c.accentSoft,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: c.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerText: {
-    flex: 1,
-    minWidth: 0,
     gap: 2,
   },
+  logo: {
+    width: 72,
+    height: 30,
+  },
   title: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '800',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
     color: c.text,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '400',
     color: c.textMuted,
   },
   ctaWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingLeft: 14,
-    paddingRight: 10,
-    paddingVertical: 7,
+    gap: 4,
+    paddingLeft: 16,
+    paddingRight: 12,
+    paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: c.accentSoft,
+    backgroundColor: c.accentFill,
   },
   cta: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
-    color: c.accent,
+    color: c.onAccent,
   },
   track: {
     overflow: 'hidden',
@@ -219,37 +257,54 @@ const styles = themedStyles((c, scheme) => ({
   },
   tile: {
     width: TILE_W,
-    gap: 4,
-    alignItems: 'center',
+    gap: 8,
+    padding: 6,
+    paddingBottom: 10,
+    borderRadius: 16,
+    backgroundColor: c.fill,
   },
   photo: {
-    width: TILE_W,
-    height: TILE_W,
-    borderRadius: 14,
-    overflow: 'hidden',
+    width: PHOTO,
+    height: PHOTO,
+  },
+  photoImage: {
+    width: PHOTO,
+    height: PHOTO,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF', // theme-fixed: product photos are shot on white
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: c.hairline,
+  },
+  photoFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tag: {
+    alignSelf: 'flex-start',
+    marginLeft: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  tagPrinter: {
+    backgroundColor: c.accentFill,
+  },
+  tagRoll: {
+    backgroundColor: c.successFill,
+  },
+  tagText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  tagTextPrinter: {
+    color: c.onAccent,
+  },
+  tagTextRoll: {
+    color: c.onAccent,
   },
   tileName: {
     fontSize: 12,
     fontWeight: '700',
     color: c.text,
-    textAlign: 'center',
-  },
-  tilePill: {
-    alignSelf: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: c.accentSoft,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: c.hairline,
-  },
-  tileType: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: c.accent,
+    paddingHorizontal: 4,
   },
   pressed: {
     opacity: 0.85,

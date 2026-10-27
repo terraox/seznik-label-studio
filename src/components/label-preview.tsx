@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as FileSystem from 'expo-file-system/legacy';
 import { type ReactNode, useMemo, useState } from 'react';
-import { PixelRatio, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { PixelRatio, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { CableFlagDieCutOverlay } from '@/components/cable-flag-outline';
 import { PrintGridLayer } from '@/components/print-grid-layer';
@@ -151,6 +151,8 @@ type LabelPreviewProps = {
   showStage?: boolean;
   /** Template gallery: physical stock on a liner, not editor canvas chrome. */
   catalogStock?: boolean;
+  /** Catalog cards only: draw width and height rulers around the label, like a stock sheet. */
+  showMeasure?: boolean;
   style?: StyleProp<ViewStyle>;
   showArtboardBorder?: boolean;
   /** Omit elements with needPrinting === false (print capture only). */
@@ -249,12 +251,16 @@ function LabelElements({
               width: widthPx,
               height: heightPx,
               // Borders/shapes draw stroke inside the box — don't clip half the ink.
+              // Text is never clipped to its frame: print and the editor canvas draw every line
+              // and the label edge is the only cut.
               overflow:
-                printDpi != null
-                  ? 'hidden'
-                  : element.type === 'border' || element.type === 'shape' || element.type === 'line'
-                    ? 'visible'
-                    : 'hidden',
+                element.type === 'text' || element.type === 'degrees' || element.type === 'time'
+                  ? 'visible'
+                  : printDpi != null
+                    ? 'hidden'
+                    : element.type === 'border' || element.type === 'shape' || element.type === 'line'
+                      ? 'visible'
+                      : 'hidden',
               opacity: element.opacity ?? 1,
               // Paint order is `sortLayers` array order — the same thing the editor
               // canvas uses. Applying the raw numeric zIndex here overrode that, so a
@@ -495,16 +501,19 @@ function CatalogStockPreview({
   slotHeight,
   style,
   upsDividers,
+  showMeasure = false,
 }: {
   document: LabelDocument;
   slotHeight?: number;
   style?: StyleProp<ViewStyle>;
   upsDividers?: { columns: number; gapMm: number };
+  showMeasure?: boolean;
 }) {
   const [slotWidth, setSlotWidth] = useState(0);
   const height = slotHeight ?? catalogSlotHeight(document.widthMm, document.heightMm);
-  const padX = 10;
-  const padY = 14;
+  // The rulers need a margin on the right and underneath the label.
+  const padX = showMeasure ? 30 : 10;
+  const padY = showMeasure ? 26 : 14;
   const innerW = Math.max(0, slotWidth - padX * 2);
   const innerH = Math.max(0, height - padY * 2);
   const fit = fitLabelSize(document.widthMm, document.heightMm, innerW, innerH);
@@ -568,8 +577,35 @@ function CatalogStockPreview({
             );
           })
         : null}
+      {showMeasure && slotWidth > 0 && fitted.scale > 0 ? (
+        <>
+          <View
+            style={[styles.measureH, { left: labelLeft, top: labelTop + fitted.heightPx + 7, width: fitted.widthPx }]}>
+            <View style={styles.measureLineH} />
+            <View style={[styles.measureTickH, { left: 0 }]} />
+            <View style={[styles.measureTickH, { right: 0 }]} />
+            <View style={styles.measureTag}>
+              <Text style={styles.measureText}>{measureMm(document.widthMm)} mm</Text>
+            </View>
+          </View>
+          <View
+            style={[styles.measureV, { left: labelLeft + fitted.widthPx + 7, top: labelTop, height: fitted.heightPx }]}>
+            <View style={styles.measureLineV} />
+            <View style={[styles.measureTickV, { top: 0 }]} />
+            <View style={[styles.measureTickV, { bottom: 0 }]} />
+            <View style={[styles.measureTag, styles.measureTagV]}>
+              <Text style={styles.measureText}>{measureMm(document.heightMm)} mm</Text>
+            </View>
+          </View>
+        </>
+      ) : null}
     </View>
   );
+}
+
+function measureMm(n: number): string {
+  const rounded = Math.round(n * 10) / 10;
+  return Math.abs(rounded - Math.round(rounded)) < 0.05 ? String(Math.round(rounded)) : rounded.toFixed(1);
 }
 
 export function LabelPreview({
@@ -581,6 +617,7 @@ export function LabelPreview({
   printDpi,
   showStage = false,
   catalogStock = false,
+  showMeasure = false,
   style,
   showArtboardBorder = true,
   hideNonPrinting = false,
@@ -598,6 +635,7 @@ export function LabelPreview({
         slotHeight={maxHeight}
         style={style}
         upsDividers={upsDividers}
+        showMeasure={showMeasure}
       />
     );
   }
@@ -693,6 +731,15 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
     borderColor: '#C8D0D8', // theme-fixed: label edge on the liner, same as the create-label preview
   },
+  measureH: { position: 'absolute', height: 14, alignItems: 'center', justifyContent: 'center' },
+  measureLineH: { position: 'absolute', left: 0, right: 0, top: 6, height: 1, backgroundColor: '#9AA7B8' }, // theme-fixed: ruler ink on the liner
+  measureTickH: { position: 'absolute', top: 2, width: 1, height: 9, backgroundColor: '#9AA7B8' }, // theme-fixed: ruler ink on the liner
+  measureV: { position: 'absolute', width: 14, alignItems: 'center', justifyContent: 'center' },
+  measureLineV: { position: 'absolute', top: 0, bottom: 0, left: 6, width: 1, backgroundColor: '#9AA7B8' }, // theme-fixed: ruler ink on the liner
+  measureTickV: { position: 'absolute', left: 2, height: 1, width: 9, backgroundColor: '#9AA7B8' }, // theme-fixed: ruler ink on the liner
+  measureTag: { paddingHorizontal: 4, backgroundColor: CATALOG_STOCK_LINER },
+  measureTagV: { transform: [{ rotate: '-90deg' }], width: 54, alignItems: 'center' },
+  measureText: { fontSize: 9.5, fontWeight: '700', color: '#5B6B80' }, // theme-fixed: ruler text on the liner
   catalogSlot: {
     width: '100%',
     backgroundColor: CATALOG_STOCK_LINER,

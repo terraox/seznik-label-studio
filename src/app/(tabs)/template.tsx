@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { TextInput } from '@/components/ui/text-input';
+import { FadeInItem, PopOnActive } from '@/components/ui/motion';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 
@@ -126,7 +127,7 @@ const TemplatePreview = memo(function TemplatePreview({ item }: { item: CatalogT
     doc.elements = sampleToElements(layout, item.widthMm, item.heightMm);
     return doc;
   }, [item]);
-  if (sampleDoc) return <LabelPreview document={sampleDoc} catalogStock />;
+  if (sampleDoc) return <LabelPreview document={sampleDoc} catalogStock showMeasure />;
   return (
     <View style={styles.svgPreviewWrap}>
       <View style={{ width: '100%', aspectRatio: item.widthMm / item.heightMm, maxHeight: 220 }}>
@@ -170,7 +171,9 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
           accessibilityLabel={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
           onPress={() => onToggleFavorite(item.id)}
           style={({ pressed }) => [styles.favoriteBadge, pressed && styles.cardPressed]}>
-          <AppIcon name={isFavorite ? 'star.fill' : 'star'} tintColor={isFavorite ? C.warning : C.textMuted} size={18} />
+          <PopOnActive active={isFavorite}>
+            <AppIcon name={isFavorite ? 'star.fill' : 'star'} tintColor={isFavorite ? C.warning : C.textMuted} size={18} />
+          </PopOnActive>
         </Pressable>
       </View>
       <CatalogCardInfo
@@ -627,9 +630,9 @@ export default function TemplateScreen() {
               },
             ]}
             showsVerticalScrollIndicator={false}>
-            {filteredTemplates.map((item) => (
+            {filteredTemplates.map((item, index) => (
+              <FadeInItem key={`${activeCategoryId}-${item.id}`} index={index} style={styles.cardSlot}>
               <IndustryTemplateCard
-                key={item.id}
                 item={item}
                 category={item.categoryIds
                   .map((id) => categoryNames.get(id))
@@ -641,6 +644,7 @@ export default function TemplateScreen() {
                 onPress={handleSelectTemplate}
                 onToggleFavorite={onToggleFavorite}
               />
+              </FadeInItem>
             ))}
 
             {filteredTemplates.length === 0 && (
@@ -916,6 +920,10 @@ const styles = themedStyles((c, scheme) => ({
     borderRadius: 16,
     overflow: 'hidden',
     ...cardElevation(c, scheme),
+  },
+  cardSlot: {
+    width: '100%',
+    alignItems: 'center',
   },
   cardPressed: {
     opacity: 0.85,
