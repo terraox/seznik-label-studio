@@ -39,7 +39,6 @@
     "@react-native-ml-kit/text-recognition": "^2.0.0",
     "@shopify/react-native-skia": "2.2.12",
     "@twemoji/svg": "^15.0.0",
-    "@vardrz/react-native-bluetooth-escpos-printer": "^0.1.2",
     "@zxing/library": "^0.21.3",
     "dev-printer": "file:./modules/dev-printer",
     "emoji-regex": "^10.4.0",

@@ -672,7 +672,7 @@ export const KonvaCanvas = forwardRef<ViewShot, KonvaCanvasProps>(function Konva
           {doc.elements.length === 0 && !stockCut ? (
             <View pointerEvents="none" style={styles.emptyHintWrap}>
               <Image
-                source={require('../../../assets/images/logo.png')}
+                source={require('../../../assets/seznik-logo.png')}
                 contentFit="contain"
                 style={styles.emptyLogo}
               />

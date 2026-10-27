@@ -1,10 +1,13 @@
 import { router } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
-import { Alert, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type IconName = AppIconName;
+
+const MENU_EDGE = 8;
 
 type LabelSettingsMenuProps = {
   visible: boolean;
@@ -35,11 +38,6 @@ export function LabelSettingsMenu({
       label: 'Label Settings',
       icon: 'hexagon',
       onPress: onLabelSettings ?? (() => router.push('/label-settings')),
-    },
-    {
-      label: 'Skia Canvas Test (Dev)',
-      icon: 'sparkles',
-      onPress: () => router.push('/dev-skia-test' as any),
     },
     {
       label: 'Editing Settings',
@@ -78,8 +76,12 @@ export function LabelSettingsMenu({
     },
   ];
 
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const menuWidth = Math.min(Math.max(width * 0.46, 200), 260);
+  // Keep the menu fully on screen: never taller than the space below its anchor; it scrolls
+  // when short (landscape).
+  const maxMenuHeight = Math.max(120, height - topOffset - Math.max(insets.bottom, MENU_EDGE) - MENU_EDGE);
 
   if (!visible) return null;
 
@@ -92,26 +94,29 @@ export function LabelSettingsMenu({
           {
             top: topOffset,
             width: menuWidth,
+            maxHeight: maxMenuHeight,
           },
         ]}>
-        {MENU_ITEMS.map((item, index) => (
-          <Pressable
-            key={item.label}
-            onPress={() => {
-              onClose();
-              item.onPress?.();
-            }}
-            style={({ pressed }) => [
-              styles.menuRow,
-              index < MENU_ITEMS.length - 1 && styles.menuRowBorder,
-              pressed && styles.pressed,
-            ]}>
-            <View style={styles.menuIconWrap}>
-              <AppIcon name={item.icon} tintColor={C.textSecondary} size={20} />
-            </View>
-            <Text style={styles.menuLabel}>{item.label}</Text>
-          </Pressable>
-        ))}
+        <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+          {MENU_ITEMS.map((item, index) => (
+            <Pressable
+              key={item.label}
+              onPress={() => {
+                onClose();
+                item.onPress?.();
+              }}
+              style={({ pressed }) => [
+                styles.menuRow,
+                index < MENU_ITEMS.length - 1 && styles.menuRowBorder,
+                pressed && styles.pressed,
+              ]}>
+              <View style={styles.menuIconWrap}>
+                <AppIcon name={item.icon} tintColor={C.textSecondary} size={20} />
+              </View>
+              <Text style={styles.menuLabel}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
     </View>
   );
@@ -131,10 +136,9 @@ const styles = themedStyles((c, scheme) => ({
   },
   menu: {
     position: 'absolute',
-    left: 0,
+    left: MENU_EDGE,
     backgroundColor: c.surface,
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
+    borderRadius: 12,
     overflow: 'hidden',
     ...cardElevation(c, scheme),
   },
