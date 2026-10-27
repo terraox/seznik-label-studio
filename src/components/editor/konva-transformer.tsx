@@ -834,7 +834,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         element.type !== 'barcode' &&
         element.type !== 'text' &&
         element.type !== 'degrees' &&
-        element.type !== 'time' &&
         'fontSize' in element &&
         typeof element.fontSize === 'number'
       ) {
@@ -1823,8 +1822,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     element.type !== 'barcode' &&
     element.type !== 'qrcode' &&
     element.type !== 'text' &&
-    element.type !== 'degrees' &&
-    element.type !== 'time';
+    element.type !== 'degrees';
 
   // The glyph is laid out at this size. The scale must use the same number in
   // the same frame: startW stays at the gesture-start size until the commit

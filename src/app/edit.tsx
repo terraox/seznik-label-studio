@@ -382,8 +382,7 @@ function scaledFontSizeForResize(
   if (
     el.type === 'barcode' ||
     el.type === 'text' ||
-    el.type === 'degrees' ||
-    el.type === 'time'
+    el.type === 'degrees'
   ) {
     return undefined;
   }

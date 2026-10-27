@@ -582,12 +582,15 @@ export function fitTimeDefaults(widthMm: number, heightMm: number, existing: Lab
   const fromExisting = median(timeFonts);
   const labelCap = fitFontSizePt(widthMm, heightMm, 1);
   // WePrint uses compact body-sized time (12 pt), not label-fit title sizing from fitTextDefaults.
-  const fontSize = fromExisting
+  let fontSize = fromExisting
     ? Math.max(minPt, Math.min(28, Math.round(fromExisting * 2) / 2))
     : Math.max(minPt, Math.min(DEFAULT_TIME_STATE.fontSize, labelCap));
-  const measured = measureTextWidthMm(TIME_DISPLAY_SAMPLE, fontSize) + 1.5;
   const pad = padMm(widthMm, heightMm);
   const maxW = Math.max(4, widthMm - pad * 2);
+  // The whole date and time must fit the label: step the type down until it does.
+  const widthFor = (pt: number) => measureTextWidthMm(TIME_DISPLAY_SAMPLE, pt) + textHorizontalPaddingMm(pt) * 2 + 0.5;
+  while (fontSize > 4 && widthFor(fontSize) > maxW) fontSize = Math.max(4, fontSize - 0.5);
+  const measured = widthFor(fontSize);
   const boxW = Math.min(maxW, Math.max(4, measured));
   const boxH = textBlockHeightMm(fontSize, 1);
   const placed = placeInLabel(widthMm, heightMm, boxW, boxH, existing);

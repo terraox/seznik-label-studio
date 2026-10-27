@@ -464,6 +464,19 @@ const LiveTextLayer = memo(function LiveTextLayer({
   );
 });
 
+/** Wider than any label: a single line in it is never wrapped, and textAlign places it in the box. */
+const ONE_LINE_STRIP_PX = 4096;
+
+function oneLineStripStyle(boxWidthPx: number, align: string) {
+  const left =
+    align === "center"
+      ? (boxWidthPx - ONE_LINE_STRIP_PX) / 2
+      : align === "right"
+        ? boxWidthPx - ONE_LINE_STRIP_PX
+        : 0;
+  return { position: "absolute" as const, top: 0, left, width: ONE_LINE_STRIP_PX, flexShrink: 0 };
+}
+
 function TextContent({
   element,
   scale,
@@ -474,9 +487,12 @@ function TextContent({
   liveWidthSv,
   liveHeightSv,
   liveBank,
+  oneLineAt,
 }: {
   element: TextLayoutFields & { text: string };
   scale: number;
+  /** Draw on one line in an unbounded strip aligned to this box width, so no width can wrap or cut it. */
+  oneLineAt?: number;
   widthPx: number;
   heightPx?: number;
   layoutWidthMm?: number;
@@ -600,7 +616,7 @@ function TextContent({
       {/* Italic skew on a View — Text fontStyle is ignored for expo-font cuts (same as print). */}
       <ItalicWrap
         italic={element.italic}
-        style={styles.textFill}
+        style={oneLineAt != null ? oneLineStripStyle(oneLineAt, align) : styles.textFill}
         collapsable={false}
         onLayout={(e) => {
           const { x, y } = e.nativeEvent.layout;
@@ -788,6 +804,9 @@ function TimeContent({
       scale={scale}
       widthPx={widthPx}
       heightPx={heightPx}
+      // A layout width keeps the type at its full size: the time never shrinks to a box or wraps.
+      layoutWidthMm={element.width}
+      oneLineAt={widthPx}
     />
   );
 }
