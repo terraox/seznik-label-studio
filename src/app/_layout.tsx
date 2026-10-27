@@ -12,6 +12,8 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { preloadFeatureBanners } from '@/components/home/feature-banners';
 import { FeedbackPrompt } from '@/components/feedback-prompt';
 import { NavigationBarScrim } from '@/components/navigation-bar-scrim';
+import { OfflineBanner } from '@/components/offline-banner';
+import { useNetworkMonitor } from '@/lib/network/monitor';
 import { IosAlertHost } from '@/components/ui/ios-alert-host';
 import { APP_FONT_MAP } from '@/lib/app-fonts';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
@@ -81,6 +83,7 @@ function AppRoot() {
   const settingsHydrated = useSettingsHydrated();
   useFonts(APP_FONT_MAP);
 
+  useNetworkMonitor();
   useEffect(() => startInstalledFontHydration(), []);
   useEffect(() => {
     void preloadFeatureBanners();
@@ -244,6 +247,7 @@ function AppRoot() {
       ) : null}
       <FeedbackPrompt enabled={appReady && signedIn && !needsPrinter} />
       <NavigationBarScrim />
+      <OfflineBanner />
     </ThemeProvider>
   );
 }

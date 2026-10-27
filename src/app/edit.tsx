@@ -3372,17 +3372,10 @@ export default function EditScreen() {
     return () => sub.remove();
   }, [upsertDocument]);
 
-  /** Back (header or hardware): prompt Save / Discard / Cancel when there are unsaved edits. */
+  /** Back (header or hardware): unsaved edits are saved automatically, then the editor closes. */
   const requestLeave = useCallback(() => {
-    if (!dirtyRef.current) {
-      goBack();
-      return;
-    }
-    Alert.alert('Unsaved changes', 'Save this label before leaving?', [
-      { text: 'Save', onPress: () => { saveDocument(false); goBack(); } },
-      { text: 'Discard', style: 'destructive', onPress: () => goBack() },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    if (dirtyRef.current) saveDocument(false);
+    goBack();
   }, [saveDocument]);
 
   useFocusEffect(
