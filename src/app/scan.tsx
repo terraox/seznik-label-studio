@@ -22,11 +22,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppIcon } from '@/components/app-icon';
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { editorBridge } from '@/constants/editor-bridge';
 import { cloneLabelFromImage } from '@/lib/label-clone';
 import { clampLabelMm } from '@/lib/label-geometry';
-import { isScanEmptyError, payloadFromBarcodeResult, SCAN_CODE_TYPES } from '@/lib/scan-codes';
+import { isScanEmptyError, isScanUrl, payloadFromBarcodeResult, SCAN_CODE_TYPES, scanTypeName } from '@/lib/scan-codes';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { scanFrameSize, scanTopMaskHeight, ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 import { useLabelStore } from '@/stores/label-store';
@@ -256,6 +257,23 @@ export default function ScanScreen() {
     setTimeout(() => {
       setScanCooldown(false);
     }, 800);
+  };
+
+  const scannedIsUrl = scannedResult ? isScanUrl(scannedResult.data) : false;
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!scannedResult) setCopied(false);
+  }, [scannedResult]);
+
+  const handleCopyScanned = async () => {
+    if (!scannedResult) return;
+    try {
+      const clipboard = await import('expo-clipboard');
+      await clipboard.setStringAsync(scannedResult.data);
+      setCopied(true);
+    } catch {
+      Alert.alert('Could not copy', 'Select the text and copy it instead.');
+    }
   };
 
   const handleUseInEditor = () => {
@@ -504,17 +522,37 @@ export default function ScanScreen() {
         onRequestClose={handleScanAgain}>
         <View style={styles.resultBackdrop}>
           <View style={[styles.resultCard, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.resultGrabber} />
             <View style={styles.resultHeader}>
               <View style={styles.successBadge}>
-                <Text style={styles.successCheck}>✓</Text>
+                <AppIcon name="checkmark.circle.fill" tintColor={C.success} size={34} />
               </View>
-              <Text style={styles.resultHeading}>{isLabelClone ? 'Code Scanned' : 'Label Scanned'}</Text>
-              <Text style={styles.resultTypeTag}>{scannedResult?.type?.toUpperCase() ?? 'CODE'}</Text>
+              <View style={styles.resultHeaderText}>
+                <Text style={styles.resultHeading}>{isLabelClone ? 'Code scanned' : 'Label scanned'}</Text>
+                <Text style={styles.resultSub}>Check the content, then choose what to do.</Text>
+              </View>
             </View>
 
             <View style={styles.resultContentBox}>
-              <Text style={styles.resultLabel}>Scanned Content:</Text>
-              <Text style={styles.resultDataText} numberOfLines={3} selectable>
+              <View style={styles.resultMetaRow}>
+                <View style={styles.resultTypeChip}>
+                  <AppIcon name={scannedIsUrl ? 'link' : 'barcode'} tintColor={C.accent} size={14} />
+                  <Text style={styles.resultTypeTag} numberOfLines={1}>
+                    {scanTypeName(scannedResult?.type ?? '')}
+                  </Text>
+                </View>
+                <Text style={styles.resultCount}>{scannedResult?.data.length ?? 0} chars</Text>
+                <Pressable
+                  hitSlop={8}
+                  onPress={handleCopyScanned}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy scanned content"
+                  style={({ pressed }) => [styles.copyBtn, pressed && styles.btnPressed]}>
+                  <AppIcon name={copied ? 'checkmark' : 'square.on.square'} tintColor={C.accent} size={16} />
+                  <Text style={styles.copyBtnText}>{copied ? 'Copied' : 'Copy'}</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.resultDataText} numberOfLines={4} selectable>
                 {scannedResult?.data}
               </Text>
             </View>
@@ -523,7 +561,8 @@ export default function ScanScreen() {
               <Pressable
                 style={({ pressed }) => [styles.actionBtn, styles.primaryActionBtn, pressed && styles.btnPressed]}
                 onPress={handleUseInEditor}>
-                <Text style={styles.primaryActionText}>
+                <AppIcon name="square.and.pencil" tintColor={C.onAccent} size={18} />
+                <Text style={styles.primaryActionText} numberOfLines={1}>
                   {returnToEdit
                     ? 'Use in Label Editor'
                     : isLabelClone
@@ -532,17 +571,20 @@ export default function ScanScreen() {
                 </Text>
               </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [styles.actionBtn, styles.secondaryActionBtn, pressed && styles.btnPressed]}
-                onPress={handlePrintScanned}>
-                <Text style={styles.secondaryActionText}>Print Label</Text>
-              </Pressable>
-
-              <Pressable
-                style={({ pressed }) => [styles.actionBtn, styles.cancelActionBtn, pressed && styles.btnPressed]}
-                onPress={handleScanAgain}>
-                <Text style={styles.cancelActionText}>Scan Another</Text>
-              </Pressable>
+              <View style={styles.resultRow}>
+                <Pressable
+                  style={({ pressed }) => [styles.actionBtn, styles.rowBtn, styles.secondaryActionBtn, pressed && styles.btnPressed]}
+                  onPress={handlePrintScanned}>
+                  <AppIcon name="printer" tintColor={C.link} size={18} />
+                  <Text style={styles.secondaryActionText} numberOfLines={1}>Print</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.actionBtn, styles.rowBtn, styles.cancelActionBtn, pressed && styles.btnPressed]}
+                  onPress={handleScanAgain}>
+                  <AppIcon name="arrow.clockwise" tintColor={C.textSecondary} size={18} />
+                  <Text style={styles.cancelActionText} numberOfLines={1}>Scan another</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -938,79 +980,124 @@ const styles = themedStyles((c) => ({
   },
   resultCard: {
     backgroundColor: c.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingTop: 10,
+  },
+  resultGrabber: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: c.border,
+    marginBottom: 18,
   },
   resultHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 14,
+    marginBottom: 18,
+  },
+  resultHeaderText: {
+    flex: 1,
   },
   successBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: c.fill,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: c.successSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-  },
-  successCheck: {
-    color: c.success,
-    fontSize: 24,
-    fontWeight: '700',
   },
   resultHeading: {
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: '700',
     color: c.text,
-    marginBottom: 4,
   },
-  resultTypeTag: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: c.accent,
-    backgroundColor: c.fillStrong,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+  resultSub: {
+    fontSize: 13,
+    color: c.textSecondary,
+    marginTop: 2,
   },
   resultContentBox: {
     backgroundColor: c.fill,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: c.hairline,
     padding: 14,
-    marginBottom: 20,
+    marginBottom: 18,
   },
-  resultLabel: {
+  resultMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  resultTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: c.accentSoft,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    flexShrink: 1,
+  },
+  resultTypeTag: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: c.accent,
+    flexShrink: 1,
+  },
+  resultCount: {
+    flex: 1,
     fontSize: 12,
     color: c.textSecondary,
-    marginBottom: 4,
-    fontWeight: '500',
+  },
+  copyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  copyBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: c.accent,
   },
   resultDataText: {
-    fontSize: 16,
+    fontSize: 17,
     color: c.text,
     fontWeight: '600',
+    lineHeight: 24,
   },
   resultActions: {
     gap: 10,
   },
   actionBtn: {
-    height: 48,
-    borderRadius: 12,
+    height: 50,
+    borderRadius: 14,
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  resultRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  rowBtn: {
+    flex: 1,
   },
   primaryActionBtn: {
     backgroundColor: c.accentFill,
   },
   primaryActionText: {
     color: c.onAccent,
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+    flexShrink: 1,
   },
   secondaryActionBtn: {
     backgroundColor: c.accentSoft,
@@ -1021,6 +1108,7 @@ const styles = themedStyles((c) => ({
     color: c.link,
     fontSize: 15,
     fontWeight: '600',
+    flexShrink: 1,
   },
   cancelActionBtn: {
     backgroundColor: c.fill,
@@ -1028,7 +1116,8 @@ const styles = themedStyles((c) => ({
   cancelActionText: {
     color: c.textSecondary,
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
+    flexShrink: 1,
   },
   btnPressed: {
     opacity: 0.75,
