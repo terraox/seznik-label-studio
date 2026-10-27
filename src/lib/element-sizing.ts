@@ -454,6 +454,17 @@ export function fitTextDefaults(widthMm: number, heightMm: number, existing: Lab
   return { left: placed.left, top: placed.top, width: placed.width, fontSize };
 }
 
+/** A new Counter is a box just wide enough for its first value, not the whole label. */
+export function fitCounterDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = [], text = '001') {
+  const fontSize = DEFAULT_TEXT_FONT_PT;
+  const pad = padMm(widthMm, heightMm);
+  const maxW = Math.max(4, widthMm - pad * 2);
+  const boxW = Math.min(maxW, Math.max(6, measureTextWidthMm(text, fontSize) + textHorizontalPaddingMm(fontSize) * 2 + 1.5));
+  const boxH = textBlockHeightMm(fontSize, 1);
+  const placed = placeInLabel(widthMm, heightMm, boxW, boxH, existing);
+  return { left: placed.left, top: placed.top, width: placed.width, height: boxH, fontSize };
+}
+
 /**
  * New text box is one line of the placeholder, fully inside the label.
  * A font that would wrap into a frame taller than the label is reduced until

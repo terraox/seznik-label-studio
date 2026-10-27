@@ -75,7 +75,7 @@ test('a field that cannot produce a value shows a marker, never a stale number',
 });
 
 test('batch count is clamped and copies get fresh field ids', () => {
-  assert.equal(serialBatchCount({}), 10);
+  assert.equal(serialBatchCount({}), 5000); // no Count setting: as far as the engine goes
   assert.equal(serialBatchCount({ serialBatch: { v: 1, count: 99999 } }), 5000);
   assert.equal(serialBatchCount({ serialBatch: { v: 1, count: 0 } }), 1);
   const el = { ...DEFAULT_ELEMENT_STATE, id: 't', type: 'text', contentType: 'Degrees', serial: cfg({ id: 'same' }) } as unknown as LabelElement;

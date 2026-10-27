@@ -71,10 +71,9 @@ export const HELP_TOPICS: HelpTopic[] = [
           'Image and Clipart. Images can be set to Original, B & W or Halftone, with a Gray Threshold slider for black and white.',
           'Line, Shapes, Table and Border.',
           'Signature: draw your own.',
-          'Serial: numbers that count up on each label.',
+          'Counter: numbers that count up on each label.',
           'Excel: fields filled from a spreadsheet, one label per row.',
           'Scan reads a barcode with the camera. OCR reads text from a photo.',
-          'Label Clone copies this label design to start another.',
         ],
       },
       {

@@ -63,12 +63,9 @@ import { dataPageCount, resolveDocumentData } from '@/lib/data-binding';
 import {
   confirmLabel,
   designHash,
-  expandSerialBatch,
   markCancelled,
   markFailed,
-  newCursor,
   newJobId,
-  resumeInfo,
   serialPrintLogLine,
   type SerialJobCursor,
 } from '@/lib/serial/job';
@@ -502,6 +499,8 @@ export default function PrintScreen() {
     scanType?: string;
     scanData?: string;
   }>();
+    /** Counter labels: the label shown on the editor canvas, which is the first one printed. */
+    serialIndex?: string;
 
   const getDocument = useLabelStore((s) => s.getDocument);
   const storedLabel = useLabelStore((s) =>
@@ -706,7 +705,7 @@ export default function PrintScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hOffset, vOffset, calibrationKey]);
   const [zoom, setZoom] = useState(1);
-  const [pageIndex, setPageIndex] = useState(0);
+  const [pageIndex, setPageIndex] = useState(() => Math.max(0, parseInt(params.serialIndex ?? '', 10) || 0));
   const [printing, setPrinting] = useState(false);
   const [printSize, setPrintSize] = useState<LabelSizeMm>(defaultPrintSize);
   const [printPreset, setPrintPreset] = useState<PrintSizePreset | null>(defaultPreset);
@@ -1370,42 +1369,20 @@ export default function PrintScreen() {
       const batch = serialInfo.mode === 'batch';
       const labelId = params.labelId;
       const hash = designHash(baseDocument);
-      let baseOffset = batch ? liveSerialOffset : 0;
-      let startAt = 0;
-      if (batch && labelId) {
-        const info = resumeInfo(useSerialJobStore.getState().byLabel[labelId], hash);
-        if (info) {
-          const choice = await askChoice(
-            'Continue the earlier print?',
-            `The last print stopped at label ${info.resumeAt + 1} of ${info.total}. Label ${info.resumeAt + 1} may be half printed.` +
-              (info.designChanged ? '\n\nThe label design has changed since then. Continuing uses the current design.' : ''),
-            [
-              { text: `Reprint label ${info.resumeAt + 1}`, value: 'reprint' },
-              ...(info.skipTo < info.total ? [{ text: `Skip to label ${info.skipTo + 1}`, value: 'skip' }] : []),
-              { text: 'Start over', value: 'restart', style: 'destructive' as const },
-              { text: 'Cancel', value: 'cancel', style: 'cancel' as const },
-            ],
-          );
-          if (choice === 'cancel') {
-            printingLockRef.current = false;
-            return;
-          }
-          if (choice === 'reprint' || choice === 'skip') {
-            startAt = choice === 'reprint' ? info.resumeAt : info.skipTo;
-            baseOffset = info.baseOffset;
-          } else {
-            useSerialJobStore.getState().clear(labelId);
-          }
-        }
-      }
-      const gate = serialPrintGate(baseDocument, serialInfo.count, baseOffset, jobDpi);
+      // Counter labels print one at a time: the label on screen prints, then the next one is shown.
+      const baseOffset = batch ? liveSerialOffset : 0;
+      const startAt = batch ? Math.min(Math.max(0, pageIndex), serialInfo.count - 1) : 0;
+      // Only the label being printed has to be valid; a bad later label must not block this one.
+      const gate = batch
+        ? serialPrintGate(baseDocument, 1, baseOffset + startAt, jobDpi)
+        : serialPrintGate(baseDocument, serialInfo.count, baseOffset, jobDpi);
       if (gate.issues.length > 0) {
         printingLockRef.current = false;
         const lines = gate.issues.slice(0, 3).map((i) => i.message).join('\n\n');
         Alert.alert('Fix the serial before printing', `${lines}${gate.issues.length > 3 ? `\n\n...and ${gate.issues.length - 3} more.` : ''}\n\nNothing was sent.`);
         return;
       }
-      const physical = (serialInfo.count - startAt) * copies;
+      const physical = batch ? copies : (serialInfo.count - startAt) * copies;
       if (physical > SERIAL_CONFIRM_ABOVE) {
         const ok = await askChoice('Print many labels?', `This job prints ${physical} labels.`, [
           { text: `Print ${physical}`, value: 'yes' },
@@ -1417,11 +1394,7 @@ export default function PrintScreen() {
         }
       }
       const jobId = newJobId();
-      const cursor =
-        batch && labelId
-          ? newCursor({ jobId, labelId, designHash: hash, total: serialInfo.count, baseOffset, startAt })
-          : null;
-      if (cursor) useSerialJobStore.getState().save(cursor);
+      const cursor: SerialJobCursor | null = null;
       jobSerialOffsetRef.current = baseOffset;
       serialCancelRef.current = false;
       setSerialCancelAsked(false);
@@ -1475,7 +1448,7 @@ export default function PrintScreen() {
         `[print] Advanced params → density=${printDensity} speed=${printSpeed} threshold=${threshold} gap=${gapLength}mm offset=${printOffsetMm.x}x${printOffsetMm.y}mm (${bakeOffset ? 'bitmap' : 'REFERENCE'}) darknessUI=${darkness ?? 'Auto'} speedUI=${speed ?? 'Auto'} bridge=${jobBridge ?? 'none'} densityMode=${darkness == null ? 'auto' : 'manual'} speedMode=${speed == null ? 'auto' : 'manual'} inkSteps=${inkSteps}`,
       );
       const firstPageDoc =
-        applyDisplayTransforms(buildPageDocument(0)) ?? displayDocument ?? previewDocument;
+        applyDisplayTransforms(buildPageDocument(serialRun?.batch ? serialRun.startAt : 0)) ?? displayDocument ?? previewDocument;
       // Images set to a Dither mode are turned into finished dots once, here, so the headless raster
       // can draw them. TD-404 and Josh only: other bridges keep the old image path.
       const prepareModedImages = async (doc: LabelDocument | null | undefined) => {
@@ -1544,12 +1517,7 @@ export default function PrintScreen() {
             round: item.round,
           }))
         : serialRun?.batch
-          ? expandSerialBatch({ count: serialInfo!.count, copies, collate: false, startAt: serialRun.startAt }).map((item) => ({
-              page: item.labelIndex,
-              sendCopies: item.copies,
-              copyNumber: item.copyNumber,
-              round: item.round,
-            }))
+          ? [{ page: serialRun.startAt, sendCopies: copies, copyNumber: 1, round: 1 }]
           : Array.from({ length: pageCount }, (_, page) => ({
               page,
               sendCopies: copies,
@@ -1656,7 +1624,7 @@ export default function PrintScreen() {
             manager.isJosh ? joshConnectPromise : manager.ensureConnected().catch((err) => {
               return { error: err };
             }),
-            page === 0
+            page === (serialRun?.batch ? serialRun.startAt : 0)
               ? joshRasterPromise
               : joshHeadlessCandidate && pageDoc
                 ? rasterJoshMono(pageDoc)
@@ -2388,7 +2356,7 @@ export default function PrintScreen() {
             serialRun.cursor = confirmLabel(serialRun.cursor, page);
             useSerialJobStore.getState().save(serialRun.cursor);
           }
-          setPrintProgress(`Label ${page + 1} of ${pageCount}`);
+          if (!serialRun.batch) setPrintProgress(`Label ${page + 1} of ${pageCount}`);
         }
         if (bulkPlan) {
           setPrintProgress(`Printing ${labelsCompleted} of ${bulkPlan.totalPhysical}`);
@@ -2413,7 +2381,8 @@ export default function PrintScreen() {
         }
         const continueState = labelId ? useSerialContinueStore.getState().byLabel[labelId] : undefined;
         if (labelId && serialRun.batch && continueState?.enabled) {
-          useSerialContinueStore.getState().setOffset(labelId, serialRun.baseOffset + (serialCancelled ? confirmed : pageCount));
+          // Continue-from-last: the next label becomes label 1 of the next view.
+          useSerialContinueStore.getState().setOffset(labelId, serialRun.baseOffset + serialRun.startAt + 1);
         }
         if (serialCancelled) {
           Alert.alert('Print cancelled', `${confirmed} of ${pageCount} labels were printed. Print again to continue where it stopped.`);
@@ -2429,7 +2398,7 @@ export default function PrintScreen() {
         const docForHistory = displayDocument ?? previewDocument;
         addHistoryEntry({
           labelName: jobName,
-          copies: bulkPlan ? bulkPlan.totalPhysical : copies * pageCount,
+          copies: bulkPlan ? bulkPlan.totalPhysical : serialRun?.batch ? copies : copies * pageCount,
           documentId: params.labelId,
           source: historySource,
           documentSnapshot: docForHistory ?? undefined,
@@ -2439,6 +2408,19 @@ export default function PrintScreen() {
       // Josh shows its own "Print completed" card.
       if (!getPrinterManager().isJosh) {
         Alert.alert('Print Sent', `${jobName} was sent to ${deviceName ?? 'the printer'}.`);
+      // Counter labels: stay here and show the next label, ready to print.
+      if (serialRun?.batch) {
+        const continuing = Boolean(params.labelId && useSerialContinueStore.getState().byLabel[params.labelId]?.enabled);
+        if (continuing) {
+          setPageIndex(0);
+        } else if (serialRun.startAt + 1 < pageCount) {
+          setPageIndex(serialRun.startAt + 1);
+        } else {
+          Alert.alert('Last label printed', 'That was the last label the counter can make.');
+        }
+        return;
+      }
+
       }
       if (printingSettings.returnPrevious) goBack();
     } catch (error) {
@@ -2471,7 +2453,9 @@ export default function PrintScreen() {
         const sent =
           bulkPlan != null
             ? `\n\nSent ${labelsCompleted} of ${bulkPlan.totalPhysical} before the printer stopped.`
-            : serialRun
+            : serialRun?.batch
+              ? `\n\nLabel ${serialRun.current + 1} was not printed. Tap Print to try it again.`
+              : serialRun
               ? `\n\nPrinted ${serialRun.cursor ? Math.min(serialRun.cursor.total, serialRun.cursor.nextIndex) : labelsCompleted} of ${pageCount} labels. Print again to continue where it stopped.`
               : '';
         // Josh's progress card already shows the failure: add the count there instead of a second popup.
@@ -2525,6 +2509,7 @@ export default function PrintScreen() {
     params.labelId,
     params.imageUri,
     historySource,
+    pageIndex,
     deviceName,
     jewelryDieCutJob,
     cableFlagJob,
@@ -2695,7 +2680,9 @@ export default function PrintScreen() {
                 />
               </Pressable>
               <Text style={styles.pageNavText}>
-                {baseDocument?.bulk || serialInfo?.mode === 'batch' ? 'Label' : 'Row'} {pageIndex + 1} / {pageCount}
+                {serialInfo?.mode === 'batch'
+                  ? describeSerialValues(baseDocument!, pageIndex + liveSerialOffset)
+                  : `${baseDocument?.bulk ? 'Label' : 'Row'} ${pageIndex + 1} / ${pageCount}`}
               </Text>
               <Pressable
                 hitSlop={12}
@@ -2746,7 +2733,7 @@ export default function PrintScreen() {
             {serialInfo ? (
               <Text style={styles.serialTotal}>
                 {serialInfo.mode === 'batch'
-                  ? `${serialInfo.count} labels x ${copies} ${copies === 1 ? 'copy' : 'copies'} = ${serialInfo.count * copies} to print${liveSerialOffset > 0 ? `. Continues after ${liveSerialOffset} already printed.` : '.'}`
+                  ? `Prints the label shown (${copies} ${copies === 1 ? 'copy' : 'copies'}), then shows the next one.`
                   : `${serialInfo.count} rows x ${copies} ${copies === 1 ? 'copy' : 'copies'} = ${serialInfo.count * copies} to print.`}
               </Text>
             ) : null}
@@ -2872,9 +2859,12 @@ export default function PrintScreen() {
                 labelFor={paperTypeLabel}
               />
               {jewelryDieCutJob ? (
-                <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
-                  💡 Jewelry rolls print as Label. If prints skip or overlap, run “Calibrate Paper Sensor” in Printer Connect.
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 6 }}>
+                  <AppIcon name="lightbulb" size={14} tintColor={C.link} />
+                  <Text style={[styles.helperText, { color: C.link, flex: 1, marginTop: 0 }]}>
+                    Jewelry rolls print as Label. If prints skip or overlap, run “Calibrate Paper Sensor” in Printer Connect.
+                  </Text>
+                </View>
               ) : null}
             </View>
           </View>
@@ -3081,7 +3071,7 @@ export default function PrintScreen() {
       {!joshProgressLine && printProgress ? (
         <Text style={styles.printProgress}>{printProgress}</Text>
       ) : null}
-      {printing && serialInfo ? (
+      {printing && serialInfo && serialInfo.mode !== 'batch' ? (
         <Pressable
           onPress={() => {
             serialCancelRef.current = true;

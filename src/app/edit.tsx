@@ -50,6 +50,7 @@ import {
   fitTextDefaults,
   fitNewTextDefaults,
   fitTextBoxToContent,
+  fitCounterDefaults,
   fitTimeDefaults,
   mergeTextElementPatch,
   growTextFrameHeightForWidth,
@@ -273,6 +274,7 @@ import {
   resolveDocumentForIndex,
   serialMaps,
   serialBatchCount,
+  describeSerialValues,
 } from '@/lib/serial/resolve-document';
 import { defaultSerialConfig, newSerialFieldId } from '@/lib/serial/legacy';
 import { MAX_SERIAL_BATCH } from '@/lib/serial/types';
@@ -340,15 +342,13 @@ const TOOL_ROWS: { icon: IconName; label: string }[][] = [
     { icon: 'character', label: 'ArcText' },
   ],
   [
-    { icon: 'list.number', label: 'Serial' },
+    { icon: 'list.number', label: 'Counter' },
     { icon: 'tablecells.badge.ellipsis', label: 'Excel' },
-    { icon: 'viewfinder', label: 'Scan' },
     { icon: 'eye', label: 'OCR' },
     { icon: 'face.smiling', label: 'Line Emoji' },
+    { icon: 'square.dashed', label: 'Border' },
   ],
   [
-    { icon: 'square.on.square', label: 'Label Clone' },
-    { icon: 'square.dashed', label: 'Border' },
     { icon: 'signature', label: 'Signature' },
   ],
 ];
@@ -726,7 +726,9 @@ function paletteDefaultSizeMm(
           ? fitTimeDefaults(canvas.widthMm, canvas.heightMm, elements)
           : type === 'text'
             ? fitNewTextDefaults(canvas.widthMm, canvas.heightMm, elements)
-            : fitTextDefaults(canvas.widthMm, canvas.heightMm, elements);
+            : type === 'degrees'
+              ? fitCounterDefaults(canvas.widthMm, canvas.heightMm, elements)
+              : fitTextDefaults(canvas.widthMm, canvas.heightMm, elements);
       return {
         widthMm: fit.width,
         heightMm: 'height' in fit && typeof fit.height === 'number' ? fit.height : textBlockHeightMm(fit.fontSize, 1),
@@ -1028,7 +1030,7 @@ export default function EditScreen() {
       isBulk: Boolean(doc.bulk),
       blockedReason: doc.ups ? 'Serial labels are not available on multi-up labels yet.' : null,
       linkOptions: (excludeFieldId) => {
-        const names: Record<string, string> = { text: 'Text', barcode: 'Barcode', qrcode: 'QR code', degrees: 'Serial', arctext: 'ArcText', table: 'Table cell' };
+        const names: Record<string, string> = { text: 'Text', barcode: 'Barcode', qrcode: 'QR code', degrees: 'Counter', arctext: 'ArcText', table: 'Table cell' };
         const seen: Record<string, number> = {};
         return linkCandidates(doc, excludeFieldId).map((f) => {
           const base = names[f.type] ?? 'Field';
@@ -1416,6 +1418,7 @@ export default function EditScreen() {
     return windowPointToMm({ x: windowX, y: windowY }, padWindowOriginRef.current, view);
   }, []);
 
+  const hadSnapGuidesRef = useRef(false);
   const publishSnapGuides = useCallback((next: SnapGuide[]) => {
     setSnapGuides((prev) => (guidesEqual(prev, next) ? prev : next));
   }, []);
@@ -2128,13 +2131,16 @@ export default function EditScreen() {
           break;
         }
         case 'degrees': {
-          const fit = fitTextDefaults(maxW, maxH, elements);
+          // A new Counter (it carries a serial config) is a compact one-line box; an old one keeps the wide box.
+          const isCounter = Boolean((overrides as { serial?: unknown }).serial);
+          const fit = isCounter ? fitCounterDefaults(maxW, maxH, elements) : fitTextDefaults(maxW, maxH, elements);
           element = {
             ...DEFAULT_DEGREES_STATE,
             ...base,
             type: 'degrees',
             left: fit.left,
             top: fit.top,
+            ...(isCounter ? { autoWrapping: 'Close' as const } : {}),
             width: fit.width,
             fontSize: DEFAULT_DEGREES_STATE.fontSize,
             ...overrides,
@@ -3478,8 +3484,11 @@ export default function EditScreen() {
 
   const handlePrint = useCallback(() => {
     saveDocument(false);
-    router.push({ pathname: '/print', params: { labelId: docRef.current.id } });
-  }, [saveDocument]);
+    router.push({
+      pathname: '/print',
+      params: { labelId: docRef.current.id, ...(showSerialBar ? { serialIndex: String(serialIdx) } : {}) },
+    });
+  }, [saveDocument, showSerialBar, serialIdx]);
 
   const savedBulkCopies = doc.bulk?.rowCopiesOverrides?.[String(doc.bulk.activeRowIndex)];
   const bulkCopiesValue =
@@ -4181,7 +4190,7 @@ export default function EditScreen() {
           Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
           return;
         }
-        Object.assign(overrides, storedValuePatch(defaultSerialConfig(), 'content'));
+        Object.assign(overrides, storedValuePatch(defaultSerialConfig('001'), 'content'));
       }
       addElement(ghost.type, overrides);
       openAddedElementPanel(ghost.label === 'Serial' || ghost.label === 'Counter' ? 'Degrees' : ghost.label);
@@ -4307,7 +4316,7 @@ export default function EditScreen() {
           Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
           break;
         }
-        addElement('degrees', storedValuePatch(defaultSerialConfig(), 'content'));
+        addElement('degrees', storedValuePatch(defaultSerialConfig('001'), 'content'));
         openAddedElementPanel('Degrees');
         break;
       case 'Degrees':
@@ -4372,10 +4381,6 @@ export default function EditScreen() {
         clipartReplaceIdRef.current = null;
         clipartPendingPlacementRef.current = null;
         router.push({ pathname: '/clipart', params: { from: 'edit', mode: 'emoji' } });
-        break;
-      case 'Label Clone':
-        saveDocument(false);
-        router.push({ pathname: '/scan', params: { mode: 'labelClone' } });
         break;
       case 'Signature':
         signatureBoardIntentRef.current = 'create';
@@ -5322,12 +5327,9 @@ export default function EditScreen() {
           {showSerialBar ? (
             <SerialBar
               index={serialIdx}
+              value={describeSerialValues(doc, serialIdx + continueOffset)}
               total={serialCount}
               onGo={(i) => setSerialPreviewIndex(Math.min(serialCount - 1, Math.max(0, i)))}
-              continueEnabled={Boolean(continueEntry?.enabled)}
-              continueOffset={continueEntry?.offset ?? 0}
-              onContinueChange={(on) => useSerialContinueStore.getState().setEnabled(doc.id, on)}
-              onResetContinue={() => useSerialContinueStore.getState().reset(doc.id)}
             />
           ) : null}
 
@@ -5956,11 +5958,12 @@ const styles = themedStyles((c, scheme) => ({
     flexDirection: 'column',
     overflow: 'visible',
     backgroundColor: '#FFFFFF', // theme-fixed: light preview (flushCanvasAssembly)
-    shadowColor: '#0B1F33', // theme-fixed: light preview (flushCanvasAssembly)
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+    // Dark stage: a black shadow reads as a paper edge against the lifted stage colour.
+    shadowColor: scheme === 'dark' ? '#000000' : '#0B1F33', // theme-fixed: light preview (flushCanvasAssembly)
+    shadowOffset: scheme === 'dark' ? { width: 0, height: 4 } : { width: 0, height: 2 },
+    shadowOpacity: scheme === 'dark' ? 0.6 : 0.08,
+    shadowRadius: scheme === 'dark' ? 14 : 6,
+    elevation: scheme === 'dark' ? 8 : 2,
   },
   artboardSlot: {
     position: 'relative',

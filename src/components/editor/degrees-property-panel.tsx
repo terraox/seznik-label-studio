@@ -276,7 +276,7 @@ function ContentSection({
             value={state.content}
             onChangeText={(content) => patch({ content })}
             multiline
-            placeholder="Enter serial / degrees content"
+            placeholder="Enter counter content"
             placeholderTextColor={C.textMuted}
           />
         </>
