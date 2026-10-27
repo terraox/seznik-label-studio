@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
+import android.util.Log
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -55,6 +56,7 @@ class Td404RudraPrinterModule : Module() {
   private var connectedName: String? = null
   private var receiverRegistered = false
 
+
   private val discoveryReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
       when (intent?.action) {
@@ -68,6 +70,7 @@ class Td404RudraPrinterModule : Module() {
               intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
             }
           if (device != null) {
+            Log.i("Td404Scan", "found ${device.address} name=${intent.getStringExtra(BluetoothDevice.EXTRA_NAME)} type=${device.type} class=${device.bluetoothClass?.deviceClass}")
             // The name carried by the broadcast is more reliable than device.name for an unpaired printer.
             emitDevice(device, bonded = false, nameHint = intent.getStringExtra(BluetoothDevice.EXTRA_NAME))
           }
@@ -208,8 +211,16 @@ class Td404RudraPrinterModule : Module() {
 
       ioExecutor.execute {
         try {
+          // cancelDiscovery is asynchronous; starting a new inquiry before it ends can fail or be cut short.
           @SuppressLint("MissingPermission")
-          if (adapter.isDiscovering) adapter.cancelDiscovery()
+          if (adapter.isDiscovering) {
+            adapter.cancelDiscovery()
+            var waited = 0
+            while (adapter.isDiscovering && waited < 1500) {
+              Thread.sleep(100)
+              waited += 100
+            }
+          }
 
           @SuppressLint("MissingPermission")
           val bonded = adapter.bondedDevices ?: emptySet()
@@ -225,6 +236,7 @@ class Td404RudraPrinterModule : Module() {
 
           @SuppressLint("MissingPermission")
           val started = adapter.startDiscovery()
+          Log.i("Td404Scan", "classic discovery started=$started")
           if (!started) {
             sendEvent("onScanFinished", emptyMap<String, Any?>())
             promise.resolve(mapOf("discoveryStarted" to false, "bondedCount" to bonded.size))
@@ -1349,8 +1361,9 @@ class Td404RudraPrinterModule : Module() {
       }
     }
     val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+    // System BT broadcasts (bond state) require RECEIVER_EXPORTED on API 33+.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+      context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
     } else {
       context.registerReceiver(receiver, filter)
     }
@@ -1375,8 +1388,11 @@ class Td404RudraPrinterModule : Module() {
       addAction(BluetoothDevice.ACTION_NAME_CHANGED)
       addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
     }
+    // ACTION_FOUND / NAME_CHANGED / DISCOVERY_FINISHED are sent by the system Bluetooth
+    // stack. RECEIVER_NOT_EXPORTED drops them on API 33+, so unpaired printers never appear
+    // (bonded list still works via getBondedDevices). Match DevPrinterModule: EXPORTED.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+      context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_EXPORTED)
     } else {
       context.registerReceiver(discoveryReceiver, filter)
     }
@@ -1466,6 +1482,15 @@ class Td404RudraPrinterModule : Module() {
       "transport" to "bluetooth-spp",
       "sdkId" to "td404",
       "likelyTd404" to (isLikelyTd404(name) || isLikelyTd404(displayName)),
+      // Android's own view of the device: the real printer link is the classic one with the
+      // printer (imaging) class, whatever the name. A Low Energy twin has the same name stem.
+      "deviceType" to when (device.type) {
+        BluetoothDevice.DEVICE_TYPE_CLASSIC -> "classic"
+        BluetoothDevice.DEVICE_TYPE_LE -> "le"
+        BluetoothDevice.DEVICE_TYPE_DUAL -> "dual"
+        else -> "unknown"
+      },
+      "printerClass" to (device.bluetoothClass?.majorDeviceClass == android.bluetooth.BluetoothClass.Device.Major.IMAGING),
     )
   }
 

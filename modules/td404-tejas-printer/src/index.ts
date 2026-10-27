@@ -9,6 +9,10 @@ export type Td404Device = {
   transport?: 'bluetooth-spp';
   sdkId?: 'td404';
   likelyTd404?: boolean;
+  /** classic = serial printer link; le = Low Energy twin (not printable over SPP). */
+  deviceType?: 'classic' | 'le' | 'dual' | 'unknown';
+  /** Android reports the printer (imaging) device class. */
+  printerClass?: boolean;
 };
 
 export type Td404PngLabelResult = {

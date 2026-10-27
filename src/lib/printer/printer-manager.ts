@@ -76,6 +76,10 @@ export type DiscoveredPrinter = {
   likelyDev?: boolean;
   likelyLabelX?: boolean;
   bonded?: boolean;
+  /** From Android: classic (printable) or le (a Low Energy twin of the printer). */
+  deviceType?: 'classic' | 'le' | 'dual' | 'unknown';
+  /** Android reports the printer (imaging) device class. */
+  printerClass?: boolean;
   /** Heard over the air in this scan (not just listed from the paired devices). */
   live?: boolean;
 };
@@ -173,6 +177,8 @@ export class PrintTimingLogger {
 }
 
 const SCAN_TIMEOUT_MS = 8000;
+/** TD-404 (Tejas, Rudra) scans classic and Low Energy together; classic inquiry alone takes ~12 s. */
+const TD404_SCAN_TIMEOUT_MS = 14000;
 const BLE_SCAN_MS = 2500;
 /** Default BLE payload chunk (128 bytes allows fast bursts on standard BLE peripherals). */
 const BLE_DEFAULT_CHUNK = 128;
@@ -2197,11 +2203,13 @@ class PrinterManager {
             sdkId: 'td404',
             likelyTd404: device.likelyTd404 ?? isLikelyTd404Name(device.name),
             bonded: device.bonded,
+            deviceType: device.deviceType,
+            printerClass: device.printerClass,
           });
         }, (error) => finish(error));
         this.td404ScanStop = handle.stop;
         this.scanAbort = () => finish();
-        this.scanTimer = setTimeout(() => finish(), SCAN_TIMEOUT_MS);
+        this.scanTimer = setTimeout(() => finish(), TD404_SCAN_TIMEOUT_MS);
       } catch (error) {
         finish(error instanceof Error ? error : new Error('TD-404 scan failed to start.'));
       }
