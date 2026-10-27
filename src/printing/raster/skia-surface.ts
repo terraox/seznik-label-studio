@@ -174,7 +174,6 @@ type SkiaFont = {
   measureText: (text: string) => { width: number };
   getGlyphIDs?: (text: string) => number[];
   getGlyphWidths?: (glyphIds: number[]) => number[];
-  setEmbolden?: (embolden: boolean) => void;
 };
 
 type SkiaImage = {
@@ -302,11 +301,6 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
         const face = printTypeface(style.family, style.bold);
         if (face) {
           font = Skia.Font(face, style.fontSizeDots);
-          // No heavier cut to swap to (single-weight, Indic, user fonts, already-bold faces): thicken the outline.
-          const { hasHeavierPrintFace } = require('./print-typeface-map') as {
-            hasHeavierPrintFace: (family?: string) => boolean;
-          };
-          if (style.bold && !hasHeavierPrintFace(style.family)) font.setEmbolden?.(true);
         }
       } catch {
         // Keep matchFont when the embedded face is not loaded yet.
@@ -358,26 +352,59 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
     return total;
   }
 
+  /**
+   * Bold on a face with no heavier cut to swap to (single-weight, Indic, user fonts, already-bold
+   * faces): thicken by stroking the glyph outlines too. Returns the extra outline width in dots, or 0.
+   */
+  function boldOutlineDots(style: TextDrawStyle): number {
+    if (!style.bold) return 0;
+    try {
+      const { hasHeavierPrintFace } = require('./print-typeface-map') as {
+        hasHeavierPrintFace: (family?: string) => boolean;
+      };
+      if (hasHeavierPrintFace(style.family)) return 0;
+    } catch {
+      // map unavailable: thicken anyway
+    }
+    return Math.max(1, Math.round(style.fontSizeDots * 0.04));
+  }
+
   function drawPlainSegment(text: string, x: number, y: number, style: TextDrawStyle): void {
     if (!text) return;
+    const outline = boldOutlineDots(style);
     if (needsComplexTextShaping(text)) {
       const painted = drawShapedTextLine(skiaMod, canvas, text, x, y, style);
-      if (painted) return;
+      if (painted) {
+        // Shaped lines cannot be stroked, so lay a second copy a dot to the right.
+        if (outline > 0) drawShapedTextLine(skiaMod, canvas, text, x + outline, y, style);
+        return;
+      }
     }
     const font = fontForText(text, style);
     fillPaint.setColor(grayToColor(skiaMod, style.ink));
     fillPaint.setStyle(PaintStyle.Fill);
     fillPaint.setAntiAlias(true);
     const gap = style.letterSpacingDots ?? 0;
-    if (!gap) {
-      canvas.drawText(text, x, y + style.fontSizeDots, fillPaint, font);
-    } else {
-      let cursor = x;
-      for (let i = 0; i < text.length; i++) {
-        const ch = text.charAt(i);
-        canvas.drawText(ch, cursor, y + style.fontSizeDots, fillPaint, font);
-        cursor += advanceOf(font, ch) + gap;
+    const drawRun = (paint: SkiaPaint) => {
+      if (!gap) {
+        canvas.drawText(text, x, y + style.fontSizeDots, paint, font);
+      } else {
+        let cursor = x;
+        for (let i = 0; i < text.length; i++) {
+          const ch = text.charAt(i);
+          canvas.drawText(ch, cursor, y + style.fontSizeDots, paint, font);
+          cursor += advanceOf(font, ch) + gap;
+        }
       }
+    };
+    drawRun(fillPaint);
+    if (outline > 0) {
+      strokePaint.setColor(grayToColor(skiaMod, style.ink));
+      strokePaint.setStyle(PaintStyle.Stroke);
+      strokePaint.setStrokeWidth(outline);
+      strokePaint.setAntiAlias(true);
+      drawRun(strokePaint);
+      strokePaint.setAntiAlias(false);
     }
     fillPaint.setAntiAlias(false);
   }
