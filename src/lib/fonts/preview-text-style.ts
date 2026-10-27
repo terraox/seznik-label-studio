@@ -1,4 +1,4 @@
-import type { TextStyle, ViewStyle } from 'react-native';
+import { Platform, type TextStyle, type ViewStyle } from 'react-native';
 
 /**
  * Expo registers each cut as its own family (`Inter_400Regular`, `Inter_600SemiBold`).
@@ -63,8 +63,16 @@ export function boldPrintFamily(family: string | undefined, bold?: boolean): str
   return BOLD_FACE_BY_REGULAR[family] ?? family;
 }
 
+/**
+ * Android drops `skewX` on Views (only translate/scale/rotate survive), but it synthesises
+ * a slant for `fontStyle: 'italic'` on any face. iOS does the opposite, so it keeps the skew.
+ */
+export function previewFontStyle(italic: boolean | undefined): 'italic' | 'normal' {
+  return italic && Platform.OS === 'android' ? 'italic' : 'normal';
+}
+
 export function previewItalicWrapStyle(italic: boolean | undefined): ViewStyle | null {
-  if (!italic) return null;
+  if (!italic || Platform.OS === 'android') return null;
   return { transform: [{ skewX: `${PREVIEW_ITALIC_SKEW_DEG}deg` }] };
 }
 

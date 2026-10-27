@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -17,7 +17,7 @@ import Animated, {
 import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
 import { AppIcon } from '@/components/app-icon';
 import { type LiveRulerBounds } from '@/components/canvas-rulers';
-import { ElementContentView } from '@/components/editor/element-renderer';
+import { ElementContentView, type LiveTextBank } from '@/components/editor/element-renderer';
 import {
   ensureTableCells,
   hitTestTableCell,
@@ -45,8 +45,9 @@ import {
 import { computeTextElementHeightMm } from '@/lib/text-metrics';
 import {
   buildLiveLayoutBank,
+  rememberVisibleLines,
   useVisibleTextRevision,
-  visibleTextHeightMm,
+  visibleTextKey,
 } from '@/lib/visible-text-layout';
 import {
   CHROME_HANDLE_FILL,
@@ -338,6 +339,9 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const liveHeightStartsSv = useSharedValue<number[]>([]);
   const liveHeightValuesSv = useSharedValue<number[]>([]);
   const liveHeightReadySv = useSharedValue(false);
+  // The same bank as JS data: the live text shows its lines, the commit keeps the one on screen.
+  const [liveBank, setLiveBank] = useState<LiveTextBank | null>(null);
+  const liveBankRef = useRef<LiveTextBank | null>(null);
   const lastLiveLogTickSv = useSharedValue(0);
   const textLiveReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearTextLiveTimer = useCallback(() => {
@@ -357,9 +361,12 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   useEffect(() => clearTextLiveTimer, [clearTextLiveTimer]);
   // The committed size is on screen: hand back to the resting, print-accurate lines.
   useEffect(() => {
+    // A size change while the finger is still down (a late layout-cache publish, a font
+    // load) must not hand the content back to the stale resting lines mid-drag.
+    if (isInteracting.value && textLiveSv.value) return;
     clearTextLiveTimer();
     textLiveSv.value = false;
-  }, [sizeMm.width, sizeMm.height, clearTextLiveTimer, textLiveSv]);
+  }, [sizeMm.width, sizeMm.height, clearTextLiveTimer, textLiveSv, isInteracting]);
 
   // When native wrap lays out taller than the Skia estimate, grow the live frame immediately
   // even if the finger is still — otherwise the last lines stay clipped until the next move.
@@ -378,10 +385,14 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   useEffect(() => {
     if (!isTextElement || !selected) {
       liveHeightReadySv.value = false;
+      liveBankRef.current = null;
+      setLiveBank(null);
       return;
     }
     if (textVerticalDisplay || textAlign === 'justify' || textAlign === 'spacing') {
       liveHeightReadySv.value = false;
+      liveBankRef.current = null;
+      setLiveBank(null);
       return;
     }
     let cancelled = false;
@@ -408,6 +419,9 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       liveHeightStartsSv.value = bank.starts;
       liveHeightValuesSv.value = bank.heights;
       liveHeightReadySv.value = bank.starts.length > 0;
+      const shown = bank.starts.length > 0 && textAutoWrapping !== 'Close' ? { starts: bank.starts, lines: bank.lines, maxWidthMm: bank.maxWidthMm } : null;
+      liveBankRef.current = shown;
+      setLiveBank(shown);
     });
     return () => {
       cancelled = true;
@@ -851,11 +865,21 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           verticalDisplay: textVerticalDisplay,
           fontFamily: textFontFamily || undefined,
         };
-        // Prefer the taller of Skia wrap and the native live layout so a narrow drag never
-        // commits a frame that clips the last line on screen.
-        const skiaH = visibleTextHeightMm(wrapParams);
-        const nativeH = liveNativeHeightSv.value > 0 ? liveNativeHeightSv.value / pxPerMMSafe : 0;
-        next.height = roundMm(Math.max(skiaH, nativeH));
+        // The layout on screen at release is the one the bank holds for this width. Storing it
+        // makes the resting text (and print) draw those lines instead of re-wrapping.
+        const bank = liveBankRef.current;
+        if (bank && textAutoWrapping !== 'Close' && !textVerticalDisplay) {
+          let idx = 0;
+          for (let i = 0; i < bank.starts.length; i += 1) {
+            if (bank.starts[i] <= next.width + 0.0001) idx = i;
+            else break;
+          }
+          const seen = bank.lines[idx];
+          if (seen && seen.length > 0) rememberVisibleLines(visibleTextKey(wrapParams), seen);
+        }
+        // The box is the frame the finger last saw (already the taller of the live Skia bank and
+        // the native layout), not a fresh estimate that could land a few pixels off.
+        next.height = roundMm(pxToMm(nextHPx, pxPerMMSafe));
       }
 
       const rotation = ((Math.round(rot / 90) * 90) % 360 + 360) % 360;
@@ -1932,6 +1956,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 liveReflowSv={isTextElement ? textLiveSv : undefined}
                 liveWidthSv={isTextElement ? animW : undefined}
                 liveHeightSv={isTextElement ? liveNativeHeightSv : undefined}
+                liveBank={isTextElement ? liveBank ?? undefined : undefined}
                 frameWidth={lineEmojiFrame ? animW : undefined}
                 frameHeight={lineEmojiFrame ? animH : undefined}
               />

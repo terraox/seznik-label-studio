@@ -2,9 +2,22 @@ import { ModedTileImage } from "@/components/editor/moded-tile-image";
 import { useModedTile } from "@/components/editor/use-moded-tile";
 import { usesModedPrint } from "@/printing/raster/image-element-settings";
 import { computeArcTextLayout } from "@/lib/editor/arctext-layout";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Platform, StyleSheet, Text, View } from "react-native";
-import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useDerivedValue,
+  type SharedValue,
+} from "react-native-reanimated";
 import Svg, {
   Circle,
   Ellipse,
@@ -44,6 +57,7 @@ import {
 import {
   PREVIEW_ITALIC_SKEW_DEG,
   previewItalicWrapStyle,
+  previewFontStyle,
   previewSyntheticBoldStyle,
   resolvePreviewFontStyle,
 } from "@/lib/fonts/preview-text-style";
@@ -147,7 +161,15 @@ type ContentProps = {
   liveWidthSv?: SharedValue<number>;
   /** Written with the native live-text laid-out height in px while reflowing. */
   liveHeightSv?: SharedValue<number>;
+  /**
+   * Wrapped lines for every reachable width (smallest width each layout starts at, mm). While a
+   * width drag is live the matching layout is shown on the UI thread: the same lines the resting
+   * text and print use, so nothing re-wraps on release. Without it the native live text is used.
+   */
+  liveBank?: LiveTextBank;
 };
+
+export type LiveTextBank = { starts: number[]; lines: string[][]; maxWidthMm: number };
 
 function textStyleFor(
   state: Pick<
@@ -184,9 +206,9 @@ function textStyleFor(
     includeFontPadding: false,
     fontFamily: preview.fontFamily,
     // Named expo faces ignore fontWeight; system default still uses it.
-    // Italic is a wrapper skew (print ITALIC_SKEW) — fontStyle italic is a no-op on these cuts.
+    // iOS: italic is a wrapper skew (print ITALIC_SKEW). Android drops View skew, so it uses fontStyle.
     fontWeight: preview.fontWeight,
-    fontStyle: "normal" as const,
+    fontStyle: previewFontStyle(state.italic),
     textDecorationLine: (decorations.join(" ") || "none") as
       | "none"
       | "underline"
@@ -286,7 +308,7 @@ function formatTextForRender(
     return {
       text: raw.replace(/\r?\n/g, " "),
       numberOfLines: 1 as number | undefined,
-      ellipsizeMode: "tail" as const,
+      ellipsizeMode: "clip" as const,
       layoutKey: "",
     };
   }
@@ -339,7 +361,7 @@ function letterSpacingStyle(
  * is still fitting, the box is laid out at a throw-away size, the text no longer fits and React
  * Native breaks it mid-word; caching that would freeze the broken lines for good.
  */
-function useSettledLineMemory(scale: number) {
+function useSettledLineMemory(scale: number, liveReflowSv?: SharedValue<boolean>) {
   const pendingLines = useRef<{ key: string; lines: string[] } | null>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -357,10 +379,89 @@ function useSettledLineMemory(scale: number) {
       settleTimer.current = null;
       const pending = pendingLines.current;
       pendingLines.current = null;
+      // A drag that started after this was scheduled would re-render the frame mid-drag.
+      if (liveReflowSv?.value) return;
       if (pending) rememberVisibleLines(pending.key, pending.lines);
     }, 250);
   };
 }
+
+/**
+ * Every wrapped layout of a text, stacked; only the one whose width range holds the live width
+ * is visible. The layers have a fixed width, so a width drag never makes native re-measure any
+ * of them (that was the cost): the frame's width only moves one transform for centre/right
+ * alignment, one derived index picks the layer, and each layer flips an opacity on the UI thread.
+ */
+function LiveTextLayers({
+  starts,
+  lines,
+  fixedWidthPx,
+  align,
+  scale,
+  liveReflowSv,
+  liveWidthSv,
+  wrapStyle,
+  textStyle,
+}: {
+  starts: number[];
+  lines: string[][];
+  fixedWidthPx: number;
+  align: "left" | "center" | "right" | "justify";
+  scale: number;
+  liveReflowSv: SharedValue<boolean>;
+  liveWidthSv: SharedValue<number>;
+  wrapStyle: StyleProp<ViewStyle>;
+  textStyle: StyleProp<TextStyle>;
+}) {
+  const active = useDerivedValue(() => {
+    if (!liveReflowSv.value) return -1;
+    const widthMm = liveWidthSv.value / Math.max(0.0001, scale);
+    let index = 0;
+    for (let i = 1; i < starts.length; i += 1) {
+      if (starts[i] - 0.0001 <= widthMm) index = i;
+      else break;
+    }
+    return index;
+  });
+  const shiftStyle = useAnimatedStyle(() => {
+    const spare = liveWidthSv.value - fixedWidthPx;
+    return {
+      transform: [{ translateX: align === "center" ? spare / 2 : align === "right" ? spare : 0 }],
+    };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[styles.liveReflowText, shiftStyle]}>
+      <View pointerEvents="none" style={[wrapStyle, { width: fixedWidthPx }]}>
+        {lines.map((layout, index) => (
+          <LiveTextLayer key={index} index={index} active={active} text={layout.join("\n")} style={textStyle} />
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
+const LiveTextLayer = memo(function LiveTextLayer({
+  index,
+  active,
+  text,
+  style,
+}: {
+  index: number;
+  active: SharedValue<number>;
+  text: string;
+  style: StyleProp<TextStyle>;
+}) {
+  const animated = useAnimatedStyle(() => ({ opacity: active.value === index ? 1 : 0 }));
+  return (
+    <Animated.Text
+      pointerEvents="none"
+      allowFontScaling={false}
+      style={[style, { position: "absolute", left: 0, top: 0, width: "100%" }, animated]}
+    >
+      {text}
+    </Animated.Text>
+  );
+});
 
 function TextContent({
   element,
@@ -371,6 +472,7 @@ function TextContent({
   liveReflowSv,
   liveWidthSv,
   liveHeightSv,
+  liveBank,
 }: {
   element: TextLayoutFields & { text: string };
   scale: number;
@@ -381,6 +483,7 @@ function TextContent({
   liveReflowSv?: SharedValue<boolean>;
   liveWidthSv?: SharedValue<number>;
   liveHeightSv?: SharedValue<number>;
+  liveBank?: LiveTextBank;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -415,7 +518,7 @@ function TextContent({
   const align = element.align === "spacing" ? "justify" : element.align;
   const swap = useReflowSwapStyles(liveReflowSv, liveWidthSv);
   const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
-  const rememberWhenSettled = useSettledLineMemory(scale);
+  const rememberWhenSettled = useSettledLineMemory(scale, liveReflowSv);
   // Native underlines sit on the font descent and overlap between lines, so draw the bars at
   // the same offsets as print (em box centred in the line, bar just below the em).
   const hasDecoration = !!(element.underline || element.strikethrough);
@@ -485,8 +588,9 @@ function TextContent({
               : align === "right"
                 ? "flex-end"
                 : "stretch",
-          // Text is never clipped (print does not clip). A frame a line short shows the line.
-          overflow: autoHeight ? "visible" : "hidden",
+          // Text is never clipped (print does not clip): a frame a line short, or a Close line
+          // wider than the box, shows all of it.
+          overflow: "visible",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
@@ -574,7 +678,19 @@ function TextContent({
           ))}
         </Animated.View>
       ) : null}
-      {liveReflowSv ? (
+      {liveReflowSv && liveWidthSv && liveBank && liveBank.starts.length > 0 ? (
+        <LiveTextLayers
+          starts={liveBank.starts}
+          lines={liveBank.lines}
+          fixedWidthPx={Math.max(1, liveBank.maxWidthMm * scale)}
+          align={align}
+          scale={scale}
+          liveReflowSv={liveReflowSv}
+          liveWidthSv={liveWidthSv}
+          wrapStyle={previewItalicWrapStyle(element.italic)}
+          textStyle={[style, { textAlign: align }, letterSpacingStyle(drawElement, raw, scale)]}
+        />
+      ) : liveReflowSv ? (
         <View
           pointerEvents="none"
           style={[styles.liveReflowText, previewItalicWrapStyle(element.italic)]}
@@ -589,13 +705,22 @@ function TextContent({
               letterSpacingStyle(element, raw, scale),
               swap.live,
             ]}
+            numberOfLines={element.autoWrapping === "Close" ? 1 : undefined}
+            ellipsizeMode={element.autoWrapping === "Close" ? "clip" : undefined}
             onLayout={(e) => {
               if (!liveHeightSv) return;
-              const h = e.nativeEvent.layout.height;
+              const { width: w, height: h } = e.nativeEvent.layout;
+              // Layouts arrive a frame or two late. One measured at an older width (taller when
+              // the box is being widened) must not hold the frame up: fall back to the Skia bank.
+              const liveW = liveWidthSv?.value ?? 0;
+              if (liveW > 0 && Math.abs(w - liveW) > 1.5) {
+                liveHeightSv.value = 0;
+                return;
+              }
               if (h > 0) liveHeightSv.value = h;
             }}
           >
-            {raw}
+            {element.autoWrapping === "Close" ? raw.replace(/\r?\n/g, " ") : raw}
           </Animated.Text>
         </View>
       ) : null}
@@ -617,6 +742,7 @@ function DegreesContent({
   liveReflowSv?: SharedValue<boolean>;
   liveWidthSv?: SharedValue<number>;
   liveHeightSv?: SharedValue<number>;
+  liveBank?: LiveTextBank;
 }) {
   return <TextContent element={{ ...element, text: element.content }} {...rest} />;
 }
@@ -1711,6 +1837,7 @@ export function ElementContentView({
   liveReflowSv,
   liveWidthSv,
   liveHeightSv,
+  liveBank,
 }: ContentProps) {
   useInstalledFontStore((state) => state.revision);
   useUserClipartStore((state) => state.revision);
@@ -1725,6 +1852,7 @@ export function ElementContentView({
           liveReflowSv={liveReflowSv}
           liveWidthSv={liveWidthSv}
           liveHeightSv={liveHeightSv}
+          liveBank={liveBank}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />
@@ -1739,6 +1867,7 @@ export function ElementContentView({
           liveReflowSv={liveReflowSv}
           liveWidthSv={liveWidthSv}
           liveHeightSv={liveHeightSv}
+          liveBank={liveBank}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />

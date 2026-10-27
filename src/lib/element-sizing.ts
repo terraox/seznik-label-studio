@@ -118,7 +118,7 @@ export function fitTextBoxToContent(
       ? el.autoWrapping === 'Close'
         ? 'Word'
         : el.autoWrapping ?? 'Word'
-      : 'Close',
+      : 'Word',
     lineSpacing: el.lineSpacing ?? '1.0',
     charSpacing,
     bold,
@@ -196,6 +196,34 @@ function mergeTextElementPatchCore(
 
   const widthInPatch = 'width' in updates && typeof updates.width === 'number';
   const heightInPatch = 'height' in updates && typeof updates.height === 'number';
+
+  // Close is one line, never wrapped: the frame hugs that line (a dragged width is kept) and
+  // is exactly one line tall, instead of keeping the multi-line shape it had before.
+  if (merged.autoWrapping === 'Close' && !merged.verticalDisplay && !heightInPatch) {
+    const raw = textRawContent(merged).replace(/\r?\n/g, ' ');
+    const fontSize = merged.fontSize;
+    const insetX = textHorizontalPaddingMm(fontSize);
+    let width = merged.width;
+    if (!widthInPatch) {
+      const lineMm = measureTextWidthMm(raw, fontSize, merged.charSpacing ?? 0, merged.bold ?? false, merged.fontFamily);
+      const minW = Math.max(4, ptToMm(fontSize) * 1.4 + insetX * 2);
+      const room = canvas ? Math.max(minW, canvas.widthMm - Math.max(0, merged.left)) : Infinity;
+      width = roundMm(Math.min(room, Math.max(minW, lineMm + insetX * 2 + TEXT_FIT_SLACK_MM)));
+    }
+    const height = visibleTextHeightMm({
+      text: raw,
+      fontSize,
+      widthMm: width,
+      autoWrapping: 'Close',
+      lineSpacing: merged.lineSpacing ?? '1.0',
+      charSpacing: merged.charSpacing ?? 0,
+      bold: merged.bold ?? false,
+      verticalDisplay: false,
+      fontFamily: merged.fontFamily,
+    });
+    return { ...merged, width, height, autoTextHeight: false } as LabelElement;
+  }
+
   const fontSizeInPatch = 'fontSize' in updates && typeof updates.fontSize === 'number';
 
   if (fontSizeInPatch && !widthInPatch) {
@@ -220,7 +248,7 @@ function mergeTextElementPatchCore(
   }
 
   if (widthInPatch && Math.abs((updates.width as number) - el.width) > 0.02) {
-    const wrapping = merged.autoWrapping === 'Close' ? 'Word' : merged.autoWrapping ?? 'Word';
+    const wrapping = merged.autoWrapping ?? 'Word';
     const autoHeight = merged.autoTextHeight !== false && wrapping !== 'Close';
     const withWrap = { ...merged, autoWrapping: wrapping } as TextLikeElement;
     if (autoHeight) {
