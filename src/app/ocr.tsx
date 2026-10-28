@@ -1,3 +1,4 @@
+import { useStepBack } from '@/lib/use-step-back';
 import { goBack } from '@/lib/go-back';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -147,6 +148,8 @@ export default function OcrScreen() {
     }
     goBack();
   }, [cancelIdentify, step]);
+
+  useStepBack(step === 'identify', handleBack);
 
   const startWalkthrough = useWalkthroughStore((s) => s.start);
   const stopWalkthrough = useWalkthroughStore((s) => s.stop);

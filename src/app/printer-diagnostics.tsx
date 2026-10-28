@@ -23,17 +23,12 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
-import { GRID_SPACING_PRESETS_MM } from '@/lib/editor/canvas-grid';
 import {
-  DIAGNOSTIC_GAP_PRESETS_MM,
   DIAGNOSTIC_GRID_SIZE_PRESETS,
   defaultDiagnosticGapMm,
-  parseGapMm,
-  parseGridSpacingMm,
   parseLabelSizeMm,
   printDiagnosticGridTest,
   printDiagnosticRulerTest,
-  suggestedDiagnosticGridSpacingMm,
 } from '@/lib/printer/diagnostic-grid-print';
 import {
   joshCharging,
@@ -45,6 +40,9 @@ import {
 import { JOSH_BATTERY_CALIBRATED, joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
 import { usePrinterStore } from '@/stores/printer-store';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
+
+/** The grid test is always a 1 mm grid. */
+const GRID_TEST_SPACING_MM = 1;
 
 function statusLook(state: string): { label: string; color: string; bg: string } {
   if (state === 'connected') return { label: 'Connected', color: C.success, bg: C.successSoft };
@@ -105,10 +103,6 @@ export default function PrinterDiagnosticsScreen() {
   const [gridPresetId, setGridPresetId] = useState(DIAGNOSTIC_GRID_SIZE_PRESETS[0].id);
   const [labelWidthMm, setLabelWidthMm] = useState(String(DIAGNOSTIC_GRID_SIZE_PRESETS[0].widthMm));
   const [labelHeightMm, setLabelHeightMm] = useState(String(DIAGNOSTIC_GRID_SIZE_PRESETS[0].heightMm));
-  const [gridSpacingMm, setGridSpacingMm] = useState(
-    String(suggestedDiagnosticGridSpacingMm(DIAGNOSTIC_GRID_SIZE_PRESETS[0].widthMm, DIAGNOSTIC_GRID_SIZE_PRESETS[0].heightMm)),
-  );
-  const [gapMmText, setGapMmText] = useState(() => String(defaultDiagnosticGapMm()));
   const [gridTestOpen, setGridTestOpen] = useState(false);
   const [joshStatus, setJoshStatus] = useState<JoshPrinterStatus | null>(null);
   /** PrinterParam gap fields, read once per visit. 'missing' = no report from this build or printer. */
@@ -126,7 +120,6 @@ export default function PrinterDiagnosticsScreen() {
     if (id !== 'custom') {
       setLabelWidthMm(String(preset.widthMm));
       setLabelHeightMm(String(preset.heightMm));
-      setGridSpacingMm(String(suggestedDiagnosticGridSpacingMm(preset.widthMm, preset.heightMm)));
     }
   };
 
@@ -241,21 +234,9 @@ export default function PrinterDiagnosticsScreen() {
       Alert.alert('Label size', parsed.error);
       return;
     }
-    const gapParsed = parseGapMm(gapMmText);
-    if ('error' in gapParsed) {
-      Alert.alert('Label gap', gapParsed.error);
-      return;
-    }
-    const { gapMm } = gapParsed;
-    let gridSpacing = 5;
-    if (kind === 'grid') {
-      const spacingParsed = parseGridSpacingMm(gridSpacingMm);
-      if ('error' in spacingParsed) {
-        Alert.alert('Grid spacing', spacingParsed.error);
-        return;
-      }
-      gridSpacing = spacingParsed.spacingMm;
-    }
+    // Fixed: the test always uses a 1 mm grid and the default gap, so only the size is asked.
+    const gapMm = defaultDiagnosticGapMm();
+    const gridSpacing = GRID_TEST_SPACING_MM;
 
     setBusy(busyKey);
     try {
@@ -492,8 +473,7 @@ export default function PrinterDiagnosticsScreen() {
             {gridTestOpen ? (
               <>
                 <Text style={styles.help}>
-                  Choose label size, then print either a grid or an mm scale ruler — not both, and no label
-                  border.
+                  Choose the label size, then tap a print button. The grid is 1 mm and prints right away.
                 </Text>
                 <Text style={styles.fieldLabel}>Label size</Text>
                 <View style={styles.presetWrap}>
@@ -547,66 +527,6 @@ export default function PrinterDiagnosticsScreen() {
                   Active: {labelWidthMm || '—'} × {labelHeightMm || '—'} mm
                   {gridPreset.id !== 'custom' ? ` (${gridPreset.label})` : ''}
                 </Text>
-                <Text style={styles.fieldLabel}>Grid spacing (mm)</Text>
-                <View style={styles.presetWrap}>
-                  {GRID_SPACING_PRESETS_MM.map((mm) => {
-                    const selected = gridSpacingMm === String(mm);
-                    return (
-                      <Pressable
-                        key={mm}
-                        onPress={() => setGridSpacingMm(String(mm))}
-                        style={({ pressed }) => [
-                          styles.presetChip,
-                          selected && styles.presetChipOn,
-                          pressed && styles.pressed,
-                        ]}>
-                        <Text style={[styles.presetChipText, selected && styles.presetChipTextOn]}>
-                          {mm} mm
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <View style={styles.mmField}>
-                  <Text style={styles.fieldLabel}>Custom spacing (0.5–20 mm)</Text>
-                  <TextInput
-                    value={gridSpacingMm}
-                    onChangeText={setGridSpacingMm}
-                    keyboardType="decimal-pad"
-                    style={styles.mmInput}
-                    placeholder="5"
-                  />
-                </View>
-                <Text style={styles.fieldLabel}>Gap between labels (mm)</Text>
-                <View style={styles.presetWrap}>
-                  {DIAGNOSTIC_GAP_PRESETS_MM.map((mm) => {
-                    const selected = Number.parseFloat(gapMmText.replace(',', '.')) === mm;
-                    return (
-                      <Pressable
-                        key={mm}
-                        onPress={() => setGapMmText(String(mm))}
-                        style={({ pressed }) => [
-                          styles.presetChip,
-                          selected && styles.presetChipOn,
-                          pressed && styles.pressed,
-                        ]}>
-                        <Text style={[styles.presetChipText, selected && styles.presetChipTextOn]}>
-                          {mm} mm
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <View style={styles.mmField}>
-                  <Text style={styles.fieldLabel}>Custom gap (0–20 mm)</Text>
-                  <TextInput
-                    value={gapMmText}
-                    onChangeText={setGapMmText}
-                    keyboardType="decimal-pad"
-                    style={styles.mmInput}
-                    placeholder="3"
-                  />
-                </View>
                 <ActionButton
                   label="Print grid test"
                   icon="square.grid.3x3"
@@ -624,7 +544,7 @@ export default function PrinterDiagnosticsScreen() {
               </>
             ) : (
               <Text style={styles.collapsedHint}>
-                Tap to set label size, grid spacing, and print grid or scale tests.
+                Tap to set the label size and print the grid or scale test.
               </Text>
             )}
           </View>

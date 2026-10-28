@@ -1,4 +1,5 @@
 import { goBack } from '@/lib/go-back';
+import { useStepBack } from '@/lib/use-step-back';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -143,6 +144,8 @@ export default function EcommerceLabelScreen() {
       setStep('platform');
     } else goBack();
   };
+
+  useStepBack(step !== 'platform' || busy, handleBack);
 
   const chooseFile = useCallback(async () => {
     if (!platform || busy) return;

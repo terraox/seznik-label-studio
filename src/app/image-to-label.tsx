@@ -4,6 +4,7 @@
  */
 
 import { goBack } from '@/lib/go-back';
+import { useStepBack } from '@/lib/use-step-back';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -139,6 +140,8 @@ export default function ImageToLabelScreen() {
     goBack();
   };
 
+  useStepBack(step === 'size' && !opening, handleBack);
+
   const sizePreview = imageUri ? (
     <View style={[StyleSheet.absoluteFill, styles.previewClip]}>
       <Image
@@ -194,8 +197,9 @@ export default function ImageToLabelScreen() {
           <View style={styles.tipCard}>
             <AppIcon name="lightbulb" tintColor={C.textMuted} size={16} />
             <Text style={styles.tipText}>
-              Crop tightly to the label's edges, and measure the label itself, not the gap between
-              labels on the roll.
+              <Text style={styles.tipStrong}>Use an accurately designed label photo. </Text>
+              It should be sharp, flat and straight, with nothing cut off. Crop tightly to the
+              label's edges, and measure the label itself, not the gap between labels on the roll.
             </Text>
           </View>
         </ScrollView>
@@ -376,6 +380,7 @@ const styles = themedStyles((c) => ({
     gap: 8,
     paddingHorizontal: 4,
   },
+  tipStrong: { fontWeight: '700', color: c.text },
   tipText: { flex: 1, fontSize: 12.5, color: c.textMuted, lineHeight: 18 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, gap: 12 },

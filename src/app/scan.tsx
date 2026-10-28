@@ -134,7 +134,7 @@ export default function ScanScreen() {
   };
 
   const openLabelFromImage = async (uri: string, width: number, height: number) => {
-    router.replace({
+    router.push({
       pathname: '/new-label-setup',
       params: {
         importImageUri: uri,
@@ -295,7 +295,7 @@ export default function ScanScreen() {
 
     const payload = scannedResult;
     setScannedResult(null);
-    router.replace({
+    router.push({
       pathname: '/print',
       params: {
         scanType: payload.type,

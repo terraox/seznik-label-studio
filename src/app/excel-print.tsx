@@ -168,7 +168,7 @@ export default function ExcelPrintScreen() {
         hasHeaderRow: picked.hasHeaderRow,
         dataStartRow: picked.dataStartRow,
       });
-      router.replace({
+      router.push({
         pathname: '/excel-data-preview',
         params: {
           excelFileId: entry.id,

@@ -1,4 +1,5 @@
 import { goBack as leaveScreen } from '@/lib/go-back';
+import { useStepBack } from '@/lib/use-step-back';
 import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -369,6 +370,8 @@ export default function PdfEditorScreen() {
     leaveScreen();
   };
 
+  useStepBack(step !== 'pick', goBack);
+
   const metaPageSize = session?.pageSizesPt[session.currentPageIndex] ?? { w: 612, h: 792 };
   const pageSize =
     rasterPt && session && rasterPt.index === session.currentPageIndex
@@ -734,7 +737,7 @@ export default function PdfEditorScreen() {
             <PdfPickOptions
               disabled={loading}
               onShippingLabels={() =>
-                router.replace(
+                router.push(
                   (receivedPdf
                     ? { pathname: '/ecommerce-label', params: { docUri: params.docUri, docName: params.docName } }
                     : '/ecommerce-label') as any,
