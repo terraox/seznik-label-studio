@@ -2816,6 +2816,19 @@ export default function EditScreen() {
     ],
   );
 
+  /** OCR from the quick-edit card: read text / barcode / QR from a photo into this element. */
+  const handleQuickEditOcr = useCallback(() => {
+    if (!quickEditTarget) return;
+    const type =
+      quickEditTarget.type === 'barcode' ? 'Barcode' : quickEditTarget.type === 'qrcode' ? 'QRCode' : 'Text';
+    const cell = quickEditTarget.tableCell;
+    editorBridge.scanConsumer = cell
+      ? { kind: 'tableCell', tableId: cell.tableId, row: cell.row, col: cell.col }
+      : { kind: 'element', elementId: quickEditTarget.id };
+    setQuickEditTarget(null);
+    router.push({ pathname: '/ocr', params: { from: 'edit', type } });
+  }, [quickEditTarget]);
+
   const handleQuickEditCancel = useCallback(() => {
     setQuickEditTarget(null);
   }, []);
@@ -5759,6 +5772,12 @@ export default function EditScreen() {
         title={quickEditTarget ? getQuickEditTitle(quickEditTarget.type) : undefined}
         placeholder={quickEditTarget ? getQuickEditPlaceholder(quickEditTarget.type) : undefined}
         anchorRect={quickEditTarget?.anchorRect}
+        onOcr={
+          quickEditTarget &&
+          (quickEditTarget.tableCell || ['text', 'barcode', 'qrcode'].includes(quickEditTarget.type))
+            ? handleQuickEditOcr
+            : undefined
+        }
         onCancel={handleQuickEditCancel}
         onConfirm={handleQuickEditConfirm}
       />

@@ -119,9 +119,13 @@ export default function OcrScreen() {
   const win = useWindowDimensions();
   // Also capped by height so the form and the Add button keep room on short screens.
   const previewSize = Math.min(ocrPreviewSize(win.width), Math.round(win.height * 0.26));
-  const params = useLocalSearchParams<{ from?: string | string[] }>();
+  const params = useLocalSearchParams<{ from?: string | string[]; type?: string | string[] }>();
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
   const returnToEdit = fromParam === 'edit';
+  const typeParam = Array.isArray(params.type) ? params.type[0] : params.type;
+  // Double-tap OCR on a text / barcode / QR element: read that format straight from the photo.
+  const presetType: OcrResultType | null =
+    typeParam === 'Text' || typeParam === 'Barcode' || typeParam === 'QRCode' ? typeParam : null;
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
   const ocr = useOcrSession();
 
@@ -135,7 +139,8 @@ export default function OcrScreen() {
   const [cameraReady, setCameraReady] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [recognitionType, setRecognitionType] = useState<OcrResultType>('Text');
+  const [recognitionType, setRecognitionType] = useState<OcrResultType>(presetType ?? 'Text');
+  const [autoRead, setAutoRead] = useState(false);
   const [previewText, setPreviewText] = useState('');
   const [identifying, setIdentifying] = useState(false);
 
@@ -215,7 +220,8 @@ export default function OcrScreen() {
     cancelIdentify();
     setImageUri(uri);
     setPreviewText('');
-    setRecognitionType('Text');
+    setRecognitionType(presetType ?? 'Text');
+    setAutoRead(presetType !== null);
     setStep('identify');
   };
 
@@ -346,6 +352,13 @@ export default function OcrScreen() {
       }
     }
   };
+
+  useEffect(() => {
+    if (!autoRead || step !== 'identify' || !imageUri) return;
+    setAutoRead(false);
+    void handleIdentify();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRead, step, imageUri]);
 
   const handleConfirm = () => {
     if (identifying || ocr.running) return;
@@ -543,10 +556,14 @@ export default function OcrScreen() {
           style={styles.formArea}
           contentContainerStyle={styles.formContent}
           showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionLabel}>What is in the photo?</Text>
-          <WalkthroughTarget id="ocr.type">
-            <TypeSegments value={recognitionType} onChange={setRecognitionType} />
-          </WalkthroughTarget>
+          {presetType === null ? (
+            <>
+              <Text style={styles.sectionLabel}>What is in the photo?</Text>
+              <WalkthroughTarget id="ocr.type">
+                <TypeSegments value={recognitionType} onChange={setRecognitionType} />
+              </WalkthroughTarget>
+            </>
+          ) : null}
 
           <WalkthroughTarget id="ocr.read" style={styles.readSlot}>
             <Pressable

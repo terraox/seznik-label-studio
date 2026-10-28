@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { AppIcon } from '@/components/app-icon';
 import { TextInput } from '@/components/ui/text-input';
 import type { ElementAnchorRect } from '@/lib/editor/quick-value';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
@@ -22,6 +23,8 @@ export type QuickValueModalProps = {
   title?: string;
   placeholder?: string;
   anchorRect?: ElementAnchorRect;
+  /** Shown when the value can be read from a photo; closes the modal and opens OCR / scan. */
+  onOcr?: () => void;
   onCancel: () => void;
   onConfirm: (newValue: string) => void;
 };
@@ -32,6 +35,7 @@ export function QuickValueModal({
   title,
   placeholder,
   anchorRect,
+  onOcr,
   onCancel,
   onConfirm,
 }: QuickValueModalProps) {
@@ -179,6 +183,17 @@ export function QuickValueModal({
           />
         </View>
 
+        {onOcr ? (
+          <Pressable
+            onPress={onOcr}
+            accessibilityRole="button"
+            accessibilityLabel="OCR: read from a photo"
+            style={({ pressed }) => [styles.ocrBtn, pressed && styles.btnPressed]}>
+            <AppIcon name="viewfinder" tintColor={C.accent} size={18} />
+            <Text style={styles.ocrText}>OCR</Text>
+          </Pressable>
+        ) : null}
+
         <View style={styles.buttonRow}>
           <Pressable
             onPress={onCancel}
@@ -245,7 +260,24 @@ const styles = themedStyles((c) => ({
     borderColor: c.hairline,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 18,
+    marginBottom: 12,
+  },
+  ocrBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: c.accent,
+    marginBottom: 14,
+  },
+  ocrText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: c.accent,
   },
   input: {
     fontSize: 16,
