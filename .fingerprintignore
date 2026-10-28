@@ -1,0 +1,17 @@
+# Local Gradle / IDE output inside installed packages. EAS installs clean, so these must not
+# change the fingerprint (and with it the OTA runtime version).
+node_modules/**/android/build/**
+node_modules/**/android/.gradle/**
+node_modules/**/android/.cxx/**
+node_modules/**/android/.settings/**
+node_modules/**/android/.project
+node_modules/**/android/.classpath
+node_modules/**/android/local.properties
+node_modules/**/android/.idea/**
+node_modules/**/.cxx/**
+node_modules/**/*gradle-plugin/build/**
+node_modules/**/*gradle-plugin/bin/**
+node_modules/**/*gradle-plugin/.gradle/**
+node_modules/**/*gradle-plugin/.settings/**
+node_modules/**/*gradle-plugin/.project
+node_modules/**/*gradle-plugin/.classpath
