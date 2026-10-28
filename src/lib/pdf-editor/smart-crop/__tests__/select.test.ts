@@ -17,7 +17,9 @@ import {
   fxGrid2x2,
   fxGutterOnly,
   fxNoiseSpecks,
+  boxBorder,
   fxTableGrid,
+  hDashed,
   hRule,
   textBlock,
   textLine,
@@ -280,4 +282,20 @@ test('select: tapping nothing changes nothing', () => {
   const r = applyTap(sel, [], { x: 0.5, y: 0.5, at: 0 }, SLOP);
   assert.strictEqual(r.outcome.kind, 'nothing');
   assert.strictEqual(r.sel.items.length, 1);
+});
+
+test('grow: never crosses a dashed cut line sitting a few px from the content', () => {
+  const p = blank();
+  boxBorder(p, 60, 60, 640, 380);
+  textBlock(p, 80, 80, 600, 340, 7);
+  hDashed(p, 40, 448, 680);
+  boxBorder(p, 60, 456, 640, 380);
+  textBlock(p, 80, 476, 600, 340, 9);
+  const ctx = prepareAnalysis(p);
+  const upper = growRegionAt(ctx, { x: 0.5, y: ny(439) });
+  assert.ok(upper);
+  assert.ok(upper.rect.y + upper.rect.h <= ny(448) + 0.002, `upper block stops at the line: ${fmt(upper.rect)}`);
+  const lower = growRegionAt(ctx, { x: 0.5, y: ny(458) });
+  assert.ok(lower);
+  assert.ok(lower.rect.y >= ny(450) - 0.002, `lower block starts below the line: ${fmt(lower.rect)}`);
 });

@@ -35,6 +35,11 @@ export type LocatedPage = {
 
 /** Keeps the label's own border inside the crop. */
 const PAD = 0.008;
+/**
+ * Meesho's label sits directly above the invoice's title band, a few px under its bottom border,
+ * so a wider margin would cut into the band's text. The detector's rect is already at the border.
+ */
+export const MEESHO_PAD = 0.002;
 
 function pad(r: NormRect, p = PAD): NormRect {
   const x = Math.max(0, r.x - p);
@@ -91,7 +96,7 @@ function locateMeeshoLabelOnly(sorted: LeafLike[]): LocatedPage | null {
   // Amazon's two-column page also spans the width; its sections are cut by dashed lines.
   const edges = (s: LeafLike) => Object.values(s.boundedBy);
   if (sorted.some((s) => edges(s).includes('dashed'))) return null;
-  return { label: pad(label), invoice: null };
+  return { label: pad(label, MEESHO_PAD), invoice: null };
 }
 
 function locateMeesho(leaves: LeafLike[]): LocatedPage | null {
@@ -102,7 +107,7 @@ function locateMeesho(leaves: LeafLike[]): LocatedPage | null {
   const label = unionRects(above.map((s) => s.rect));
   if (!label || label.y > 0.06 || label.w < 0.9 || !above.some((s) => s.hasCodeLike)) return null;
   const rest = sorted.filter((s) => s.rect.y >= invoiceStart.rect.y - 0.02);
-  return { label: pad(label), invoice: unionRects(rest.map((s) => s.rect)) };
+  return { label: pad(label, MEESHO_PAD), invoice: unionRects(rest.map((s) => s.rect)) };
 }
 
 export function locatePage(platform: PlatformId, leaves: LeafLike[]): LocatedPage | null {

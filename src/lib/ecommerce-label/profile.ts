@@ -10,7 +10,7 @@
  */
 
 import type { NormRect } from '@/lib/pdf-editor/smart-crop';
-import type { LocatedPage, PlatformId } from '@/lib/ecommerce-label/platforms';
+import { MEESHO_PAD, type LocatedPage, type PlatformId } from '@/lib/ecommerce-label/platforms';
 
 /** Ink percent (0–100) of the label column, one entry per pixel row of the page. */
 export type RowProfile = Uint8Array;
@@ -111,7 +111,7 @@ function meesho(t: PageTemplate, profile: RowProfile): LocatedPage | null {
   }
 
   const y = t.label.y;
-  const label = { ...t.label, h: Math.min(1, bottom + PAD) - y };
+  const label = { ...t.label, h: Math.min(1, bottom + MEESHO_PAD) - y };
   if (invoiceTop < 0 || !t.invoice) return { label, invoice: null };
   const invoiceBottom = Math.min(1, lastInkRow(profile, invoiceTop) + 0.004);
   return {
