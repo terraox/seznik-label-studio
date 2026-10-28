@@ -4,10 +4,12 @@
       Makes the app appear in "Open with" and in the share sheet for the files it supports:
       spreadsheets (Excel, CSV), PDFs and .seznik label files. The alias forwards the intent to
       the app's MainActivity, where the ShareTarget module copies the file into the app cache.
+      The target uses ${applicationId} so it follows the app's package name; a hard-coded name made
+      the package unparseable ("problem parsing the package") after the package was renamed.
     -->
     <activity-alias
       android:name="expo.modules.sharetarget.ShareTargetAlias"
-      android:targetActivity="com.sezprint.app.MainActivity"
+      android:targetActivity="${applicationId}.MainActivity"
       android:exported="true"
       android:icon="@mipmap/ic_launcher"
       android:roundIcon="@mipmap/ic_launcher_round"
