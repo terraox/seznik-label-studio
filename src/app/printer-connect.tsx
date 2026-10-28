@@ -40,10 +40,13 @@ import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { useAuthStore } from '@/stores/auth-store';
 import { JOSH_LID_MESSAGE, joshLidOpen } from '@/lib/printer/josh-status';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
-import { normalizePrinterMac, usePrinterNickname, usePrinterStore } from '@/stores/printer-store';
+import { isAutoConnectEnabled, normalizePrinterMac, usePrinterNickname, usePrinterStore } from '@/stores/printer-store';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 const ANDROID_BLUETOOTH_SETTINGS = 'android.settings.BLUETOOTH_SETTINGS';
+// Discovery restarts as soon as it ends.
+const RESCAN_INTERVAL_MS = 1_000;
+const PROBE_INTERVAL_MS = 8_000;
 
 async function openPhoneBluetoothSettings() {
   try {
@@ -66,6 +69,34 @@ async function openPhoneBluetoothSettings() {
       );
     }
   }
+}
+
+/** Letters and digits of a Bluetooth MAC, without the last byte. */
+function macStem(id: string): string {
+  return id.replace(/[^0-9A-F]/gi, '').toUpperCase().slice(0, -2);
+}
+
+/** How printable a sighting is: the classic printer-class entry beats its Low Energy twin. */
+function printableRank(d: DiscoveredPrinter): number {
+  return (d.printerClass ? 4 : 0) + (d.deviceType === 'classic' || d.deviceType === 'dual' ? 2 : 0) + (d.bonded ? 1 : 0);
+}
+
+/**
+ * One printer can show up twice: a classic entry (the one that prints) and a Low Energy twin whose
+ * address and name differ only in the last character. Keep the better of each pair, judged from
+ * what Android reports, never from a model's name.
+ */
+function collapseTwins(list: DiscoveredPrinter[]): DiscoveredPrinter[] {
+  const twins = (a: DiscoveredPrinter, b: DiscoveredPrinter) => {
+    if (a.id.toUpperCase() === b.id.toUpperCase()) return false;
+    const sameMac = macStem(a.id).length >= 8 && macStem(a.id) === macStem(b.id);
+    const an = (a.name ?? '').toUpperCase();
+    const bn = (b.name ?? '').toUpperCase();
+    const sameName =
+      an.length >= 6 && an.length === bn.length && an.slice(0, -1) === bn.slice(0, -1) && !isPlaceholderName(an, a.id);
+    return sameMac || sameName;
+  };
+  return list.filter((d) => !list.some((o) => o !== d && twins(d, o) && printableRank(o) > printableRank(d)));
 }
 
 function mergeDevice(existing: DiscoveredPrinter, device: DiscoveredPrinter): DiscoveredPrinter {
@@ -134,10 +165,10 @@ function isPlaceholderName(name: string | null | undefined, id: string): boolean
 }
 
 /** Bluetooth name prefix each printer family advertises (matched case-insensitively). */
-const PRINTER_NAME_PREFIX: Record<string, string> = {
-  tejas: 'B15',
-  rudra: 'B17',
-  josh: 'LD0801',
+const PRINTER_NAME_PREFIXES: Record<string, string[]> = {
+  tejas: ['B15', 'THERMAL'],
+  rudra: ['B17', 'THERMAL'],
+  josh: ['LD0801'],
 };
 
 export default function PrinterConnectScreen() {
@@ -201,7 +232,8 @@ export default function PrinterConnectScreen() {
     async (device?: DiscoveredPrinter) => {
       const mgr = getPrinterManager();
       if (mgr.isConnectionHealthy()) return;
-      if (mgr.isAutoReconnectSuppressed()) return;
+      // Only the user's Disconnect blocks this screen; a dropped session reconnects when the printer is back.
+      if (mgr.isUserDisconnected()) return;
       if (connectingId || autoConnectingRef.current) return;
       const store = usePrinterStore.getState();
       if (store.status === 'connecting' || store.status === 'printing') return;
@@ -216,7 +248,7 @@ export default function PrinterConnectScreen() {
       if (autoConnectKeyRef.current === sessionKey) return;
       autoConnectingRef.current = true;
       try {
-        const ok = await mgr.reconnectLastForConsumer(selectedModel);
+        const ok = await mgr.reconnectLastForConsumer(selectedModel, { screenProbe: true });
         if (ok && userTargetRef.current == null) autoConnectKeyRef.current = sessionKey;
       } finally {
         autoConnectingRef.current = false;
@@ -337,7 +369,7 @@ export default function PrinterConnectScreen() {
         }
         const begin = () => {
           if (cancelled) return;
-          if (!mgr.isAutoReconnectSuppressed()) {
+          if (!mgr.isUserDisconnected() && isAutoConnectEnabled(usePrinterStore.getState().autoConnectByModel, usePrinterStore.getState().selectedPrinterModel)) {
             void attemptAutoConnectLastRef.current().catch(() => {});
           }
           void startScanRef.current(usePrinterStore.getState().selectedPrinterModel).catch(() => {});
@@ -367,6 +399,37 @@ export default function PrinterConnectScreen() {
       };
     }, []),
   );
+
+  // Presence goes stale the moment a scan ends, so rescan on a timer while this screen is up
+  // and no printer is linked. Same path for Josh and Tejas/Rudra (keep discovery running).
+  const lastProbeAtRef = useRef(0);
+  const scanningRef = useRef(false);
+  scanningRef.current = scanning;
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!mountedRef.current || scanningRef.current || AppState.currentState !== 'active') return;
+      const store = usePrinterStore.getState();
+      if (store.status === 'connecting' || store.status === 'connected' || store.status === 'printing') return;
+      if (getPrinterManager().isConnectionHealthy()) return;
+      if (!getPrinterManager().isBluetoothEnabled()) return;
+      // A connect attempt and discovery fight over the radio; never start a scan under one.
+      if (autoConnectingRef.current) return;
+      const t = Date.now();
+      if (t - lastProbeAtRef.current >= PROBE_INTERVAL_MS) {
+        lastProbeAtRef.current = t;
+        // Paired printers are always in the list, so only a real connect attempt tells whether
+        // the last printer is reachable. Success lands on the connected view.
+        const mgr = getPrinterManager();
+        if (!mgr.isAutoReconnectSuppressed() && lastDeviceForConsumer(store, store.selectedPrinterModel)?.id) {
+          mgr.stopScan();
+          void attemptAutoConnectLastRef.current().catch(() => {});
+          return;
+        }
+      }
+      void startScanRef.current(store.selectedPrinterModel).catch(() => {});
+    }, RESCAN_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const appSub = AppState.addEventListener('change', (next) => {
@@ -401,26 +464,26 @@ export default function PrinterConnectScreen() {
     setShowAllDevices(false);
   }, [selectedModel]);
 
-  const namePrefix = PRINTER_NAME_PREFIX[selectedModel];
+  const namePrefixes = PRINTER_NAME_PREFIXES[selectedModel] ?? [];
+  const namePrefix = namePrefixes.join(' / ');
   const sortedDevices = useMemo(
     () =>
-      [...devices].sort((a, b) => {
+      collapseTwins(devices).sort((a, b) => {
         if (Boolean(a.bonded) !== Boolean(b.bonded)) return a.bonded ? -1 : 1;
         return (b.rssi ?? -999) - (a.rssi ?? -999);
       }),
     [devices],
   );
+  // Nearby list: only this family's advertised name prefixes (B15 / B17 / THERMAL / LD0801).
+  // Unnamed MAC placeholders are excluded so phones/headphones do not flood the scan.
+  // "Show all devices" still lists everything else.
   const matchingDevices = useMemo(
     () =>
       sortedDevices.filter((d) => {
         const name = (d.name ?? '').toUpperCase();
-        if (name.startsWith(namePrefix)) return true;
-        // An unpaired printer is often seen before its name resolves (only the MAC shows).
-        // Keep it listed so it can be paired from here.
-        const unnamed = isPlaceholderName(name, d.id);
-        return (selectedModel === 'josh' || selectedModel === 'tejas' || selectedModel === 'rudra') && !d.bonded && unnamed;
+        return namePrefixes.some((prefix) => name.startsWith(prefix));
       }),
-    [sortedDevices, namePrefix, selectedModel],
+    [sortedDevices, namePrefixes],
   );
   // Show all: printers matching this family's name first, everything else below them.
   const allDevicesMatchFirst = useMemo(() => {
@@ -429,18 +492,19 @@ export default function PrinterConnectScreen() {
   }, [matchingDevices, sortedDevices]);
   const listedDevices = showAllDevices ? allDevicesMatchFirst : matchingDevices;
 
+  const autoConnectOn = usePrinterStore((s) => isAutoConnectEnabled(s.autoConnectByModel, selectedModel));
+  const setAutoConnect = usePrinterStore((s) => s.setAutoConnect);
   const lastConsumer = lastForBridge?.consumer ?? selectedModel;
+  // A printer unpaired in phone settings must not stay in Quick reconnect. Judged once a clean
+  // scan has finished: the paired list is part of every scan, so a missing or unbonded row is unpaired.
+  const lastPrinterStillPaired = useMemo(() => {
+    if (!lastForBridge) return false;
+    if (scanning || !scanCleanDone) return true;
+    const mac = normalizePrinterMac(lastForBridge.id);
+    const found = devices.find((d) => normalizePrinterMac(d.id) === mac);
+    return Boolean(found?.bonded);
+  }, [lastForBridge, scanning, scanCleanDone, devices]);
   const lastPrinterMeta = CONSUMER_PRINTERS[lastConsumer] ?? printer;
-  const lastNearby = useMemo(() => {
-    if (!lastForBridge?.id) return false;
-    const key = normalizePrinterMac(lastForBridge.id);
-    return listedDevices.some((d) => normalizePrinterMac(d.id) === key);
-  }, [lastForBridge?.id, listedDevices]);
-
-  // Paired printers are always listed (in range or not), so a clean scan that lacks the last
-  // printer means it was unpaired from Android Bluetooth settings.
-  const lastUnpaired = Boolean(lastForBridge?.id) && scanCleanDone && !scanning && !lastNearby;
-
   const connectWith = async (target: ConsumerPrinterId, device: DiscoveredPrinter) => {
     if (target !== usePrinterStore.getState().selectedPrinterModel) {
       setSelectedPrinterModel(target);
@@ -485,9 +549,12 @@ export default function PrinterConnectScreen() {
     setConnectingId(device.id);
     usePrinterStore.getState().setStatus('connecting');
     try {
-      // Unpaired Josh printer: open the system pairing dialog first, then connect.
-      if (selectedModel === 'josh' && !device.bonded) {
-        const paired = await mgr.pairJoshDevice(device.id);
+      // Unpaired Josh / Tejas / Rudra printer: open the system pairing dialog first, then connect.
+      if ((selectedModel === 'josh' || selectedModel === 'tejas' || selectedModel === 'rudra') && !device.bonded) {
+        const paired =
+          selectedModel === 'josh'
+            ? await mgr.pairJoshDevice(device.id)
+            : await mgr.pairTd404Device(device.id);
         if (request !== connectRequestRef.current) return;
         if (!paired) {
           usePrinterStore.getState().setStatus('disconnected');
@@ -664,10 +731,9 @@ export default function PrinterConnectScreen() {
             deviceId={lastForBridge?.id ?? ''}
             connectedAt={lastForBridge?.connectedAt}
             connecting={Boolean(lastForBridge && connectingId === lastForBridge.id)}
-            visible={Boolean(lastForBridge && caps.canScan && bluetoothOn && !lastUnpaired)}
-            nearby={lastNearby}
-            scanning={scanning}
-            autoConnectPaused={autoConnectPaused}
+            visible={Boolean(lastForBridge && caps.canScan && bluetoothOn && lastPrinterStillPaired)}
+            autoConnect={autoConnectOn}
+            onAutoConnectChange={(on) => setAutoConnect(selectedModel, on)}
             onConnect={() => void handleReconnectLast()}
           />
           <BluetoothBlockers

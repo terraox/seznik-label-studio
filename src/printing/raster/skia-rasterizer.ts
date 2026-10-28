@@ -6,7 +6,8 @@ import {
 } from '@/components/editor/types';
 import { barcodeModulesForMode } from '@/lib/barcode-code128';
 import { encodeDataMatrix } from '@/lib/barcode/datamatrix';
-import { encodePdf417 } from '@/lib/barcode/pdf417';
+import { linePatternForBox } from '@/lib/line-pattern';
+import { encodePdf417, PDF417_ROW_HEIGHT } from '@/lib/barcode/pdf417';
 import {
   snap1DBarcodeModules,
   snap2DMatrixToHardwareDots,
@@ -795,8 +796,7 @@ function drawBarcode(
   const snapped = snap1DBarcodeModules(rawModules, el.width, 203, false);
   if (!snapped) throw new Error('Barcode snap failed');
   const { x0, y0, w: boxW, h: boxH } = box;
-  const ink = inkValue(el.antiColor);
-  if (el.antiColor) surface.fillRect(x0, y0, boxW, boxH, 0);
+  const ink = inkValue(false);
   const fontH = Math.max(8, Math.round(ptToMm(el.fontSize) * dpm));
   const showLabel = el.textFlag !== 'Hide';
   const labelH = showLabel ? Math.max(8, Math.round(fontH * 1.2)) : 0;
@@ -813,8 +813,7 @@ function drawBarcode(
       fontSizeDots: fontH,
       bold: el.bold,
       italic: el.italic,
-      underline: el.underline,
-      strikethrough: el.strikethrough,
+      // Barcode digits take bold and italic only.
       family: resolvePrintFontFamily(hri, el.fontFamily),
       ink,
     };
@@ -894,7 +893,7 @@ function drawQr(
     if (!pdf) throw new Error('PDF417 encode failed');
     const snap = snap2DMatrixToHardwareDots(
       pdf.cols,
-      pdf.rows,
+      pdf.rows * PDF417_ROW_HEIGHT,
       el.width,
       el.height,
       dpi as HardwareDpi,
@@ -908,9 +907,9 @@ function drawQr(
         if (pdf.matrix[r][c]) {
           surface.fillRect(
             ox + (c + qzM) * snap.dotSize,
-            oy + (r + qzM) * snap.dotSize,
+            oy + qzM * snap.dotSize + r * PDF417_ROW_HEIGHT * snap.dotSize,
             snap.dotSize,
-            snap.dotSize,
+            PDF417_ROW_HEIGHT * snap.dotSize,
             ink,
           );
         }
@@ -931,11 +930,37 @@ function drawLine(
   const { x0, y0, w, h } = box;
   const vertical = h >= w * 2;
   const stroke = Math.max(1, Math.round((vertical ? el.width : el.height) * dpm));
-  if (vertical) {
-    surface.fillRect(x0 + Math.floor(w / 2) - Math.floor(stroke / 2), y0, stroke, h, 0);
-  } else {
-    surface.fillRect(x0, y0 + Math.floor(h / 2) - Math.floor(stroke / 2), w, stroke, 0);
+  if (!el.lineStyle || el.lineStyle === 'solid') {
+    if (vertical) {
+      surface.fillRect(x0 + Math.floor(w / 2) - Math.floor(stroke / 2), y0, stroke, h, 0);
+    } else {
+      surface.fillRect(x0, y0 + Math.floor(h / 2) - Math.floor(stroke / 2), w, stroke, 0);
+    }
+    return;
   }
+  // Same pattern geometry the editor draws, in dots.
+  const interval = Math.max(2, Math.round((el.virtualInterval || 1) * dpm));
+  const pattern = linePatternForBox(el.lineStyle, w, h, interval, 1, 1);
+  console.info(`[PRINT-LINE] ${el.id} style=${el.lineStyle} interval=${interval} pieces=${pattern.length}`);
+  for (const r of pattern) {
+    const rx0 = Math.round(x0 + r.x);
+    const ry0 = Math.round(y0 + r.y);
+    const rx1 = Math.max(rx0 + 1, Math.round(x0 + r.x + r.w));
+    const ry1 = Math.max(ry0 + 1, Math.round(y0 + r.y + r.h));
+    surface.fillRect(rx0, ry0, rx1 - rx0, ry1 - ry0, 0);
+  }
+}
+
+/** Print gray (0 ink .. 255 paper) for a shape's fill, matching what the editor paints. */
+function shapeFillGray(el: Extract<LabelElement, { type: 'shape' }>): number {
+  const hex = (el.fillColor ?? '').trim();
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return 0; // no explicit colour: the editor fills with the ink colour
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return Math.round(0.299 * r + 0.587 * g + 0.114 * b);
 }
 
 function drawShape(
@@ -946,14 +971,32 @@ function drawShape(
 ): void {
   const { x0, y0, w, h } = box;
   const stroke = Math.max(1, Math.round(el.lineWidth * dpm));
-  if (el.figureShape === 'oval' || el.figureShape === 'circle') {
-    const rx = el.figureShape === 'circle' ? Math.min(w, h) / 2 : w / 2;
-    const ry = el.figureShape === 'circle' ? Math.min(w, h) / 2 : h / 2;
-    surface.fillEllipse(x0 + w / 2, y0 + h / 2, rx, ry, el.fill ? 0 : 255);
+  const curved = el.figureShape === 'oval' || el.figureShape === 'circle' || el.figureShape === 'roundedRectangle';
+  if (!curved) {
+    if (el.fill) surface.fillRect(x0, y0, w, h, shapeFillGray(el));
+    surface.strokeRect(x0, y0, w, h, stroke, 0);
     return;
   }
-  if (el.fill) surface.fillRect(x0, y0, w, h, 0);
-  else surface.strokeRect(x0, y0, w, h, stroke, 0);
+  let sx = x0;
+  let sy = y0;
+  let sw = w;
+  let sh = h;
+  let kind: 'roundRect' | 'ellipse' = 'ellipse';
+  if (el.figureShape === 'circle') {
+    // A circle is the largest square that fits, centred in the box, like the editor draws it.
+    const side = Math.min(w, h);
+    sx = x0 + (w - side) / 2;
+    sy = y0 + (h - side) / 2;
+    sw = side;
+    sh = side;
+  } else if (el.figureShape === 'roundedRectangle') {
+    kind = 'roundRect';
+  }
+  const radius = Math.max(0, el.roundRadius * dpm);
+  if (el.fill) {
+    surface.paintShape({ kind, x: sx, y: sy, w: sw, h: sh, radius, stroke: null }, shapeFillGray(el));
+  }
+  surface.paintShape({ kind, x: sx, y: sy, w: sw, h: sh, radius, stroke }, 0);
 }
 
 /** Frozen 50×30 mm fixture from PHASE_4_PLAN.md Part 1. */

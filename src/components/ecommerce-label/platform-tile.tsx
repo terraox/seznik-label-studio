@@ -1,17 +1,26 @@
 import { Image } from 'expo-image';
 import { Pressable, Text, View } from 'react-native';
 
+import { AppIcon } from '@/components/app-icon';
 import { androidRipple } from '@/constants/ui';
 import type { PlatformId } from '@/lib/ecommerce-label/platforms';
-import { cardElevation, themedStyles, useThemeRefresh } from '@/theme';
+import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 /** Marketplace logos, shown only to tell the user which marketplace's PDF to upload. */
 const LOGO: Record<PlatformId, number> = {
-  amazon: require('../../../assets/images/platforms/amazon.png'),
-  flipkart: require('../../../assets/images/platforms/flipkart.png'),
-  meesho: require('../../../assets/images/platforms/meesho.png'),
+  amazon: require('../../../assets/amazon.png'),
+  flipkart: require('../../../assets/flipkart.png'),
+  meesho: require('../../../assets/meesho.png'),
 };
 
+/** Where the seller downloads the label PDF from. */
+const SOURCE: Record<PlatformId, string> = {
+  amazon: 'Label PDF from Seller Central',
+  flipkart: 'Label PDF from Seller Hub',
+  meesho: 'Label PDF from the Supplier panel',
+};
+
+/** One full-width card per marketplace: its logo, its name and where the PDF comes from. */
 export function PlatformTile({
   id,
   name,
@@ -29,16 +38,20 @@ export function PlatformTile({
         onPress={onPress}
         android_ripple={androidRipple}
         accessibilityRole="button"
-        accessibilityLabel={name}
-        style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
-        <View style={styles.top}>
-          <Image source={LOGO[id]} style={styles.logo} contentFit="contain" />
+        accessibilityLabel={`${name}. ${SOURCE[id]}`}
+        style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+        <View style={styles.logoWrap}>
+          <Image source={LOGO[id]} style={styles.logo} contentFit="cover" />
         </View>
-        <View style={styles.bottom}>
+        <View style={styles.text}>
           <Text style={styles.name} numberOfLines={1}>
             {name}
           </Text>
+          <Text style={styles.source} numberOfLines={2}>
+            {SOURCE[id]}
+          </Text>
         </View>
+        <AppIcon name="chevron.right" size={16} tintColor={C.accent} />
       </Pressable>
     </View>
   );
@@ -46,21 +59,31 @@ export function PlatformTile({
 
 const styles = themedStyles((c, scheme) => ({
   outer: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: 20,
+    width: '100%',
+    borderRadius: 18,
     backgroundColor: c.surface,
     ...cardElevation(c, scheme),
   },
-  tile: { borderRadius: 20, overflow: 'hidden' },
-  top: {
-    height: 112,
+  card: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF', // theme-fixed: the logos are drawn for a white ground
+    gap: 14,
+    padding: 14,
+    borderRadius: 18,
+    overflow: 'hidden',
   },
-  logo: { width: 68, height: 68 },
-  bottom: { paddingVertical: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: c.hairline },
-  name: { fontSize: 14, fontWeight: '700', color: c.text },
-  pressed: { opacity: 0.88, transform: [{ scale: 0.97 }] },
+  logoWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: c.hairline,
+    backgroundColor: '#FFFFFF', // theme-fixed: the Amazon logo is drawn on white
+  },
+  logo: { width: '100%', height: '100%' },
+  text: { flex: 1, minWidth: 0, gap: 2 },
+  name: { fontSize: 18, fontWeight: '700', color: c.text },
+  source: { fontSize: 13, lineHeight: 18, color: c.textMuted },
+  pressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
 }));

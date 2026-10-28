@@ -477,7 +477,7 @@ export default function LabelSettingsScreen() {
             patchSettings({ antiColor });
             commit({
               elements: doc.elements.map((el) =>
-                'antiColor' in el ? ({ ...el, antiColor } as typeof el) : el,
+                'antiColor' in el && el.type !== 'barcode' ? ({ ...el, antiColor } as typeof el) : el,
               ),
             });
           }}

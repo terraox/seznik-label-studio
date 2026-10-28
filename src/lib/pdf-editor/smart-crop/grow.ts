@@ -19,6 +19,8 @@ import { codeTilesInside } from './codes';
 import type { AnalysisContext } from './detector';
 import { inkBounds, padRect, toNorm } from './gray';
 import { containsPoint, iou } from './hit-test';
+import { lineProfile } from './profile';
+import { findSeparators, type Separator } from './rules';
 import type { DetectResult, GrowNote, PxRect, Section } from './types';
 
 export type GrowOptions = {
@@ -164,6 +166,51 @@ function smallestDetectedLeafAt(result: DetectResult | null | undefined, p: { x:
   );
 }
 
+const cutCache = new WeakMap<AnalysisContext, Separator[]>();
+
+/**
+ * Dashed rules across the page — the cut lines between label and invoice.
+ * Ink is bridged across them (the gap is a few px), so the flood fill needs
+ * them stated outright to know it must stop.
+ */
+function cutLines(ctx: AnalysisContext): Separator[] {
+  const hit = cutCache.get(ctx);
+  if (hit) return hit;
+  const out: Separator[] = [];
+  if (ctx.content && ctx.scale && ctx.asH && ctx.asV) {
+    const { page, mask, it, codes, content, scale, opts } = ctx;
+    for (const as of [ctx.asH, ctx.asV]) {
+      const p = lineProfile(page, mask, content, as.axis, as.dashGapPx, opts.toneTol);
+      out.push(...findSeparators(page, mask, it, codes, content, p, as, scale, opts).accepted.filter((s) => s.kind === 'dashed'));
+    }
+  }
+  cutCache.set(ctx, out);
+  return out;
+}
+
+/** Keep only the side of every cut line that `seed` (analysis px) is on. */
+function clampToCuts(ctx: AnalysisContext, rect: PxRect, seed: { x: number; y: number }): PxRect {
+  let { x, y, w, h } = rect;
+  for (const s of cutLines(ctx)) {
+    const at = s.axis === 'h' ? seed.y : seed.x;
+    if (at >= s.start && at < s.end) continue;
+    if (s.axis === 'h') {
+      if (at < s.start) h = Math.min(y + h, s.start) - y;
+      else {
+        const b = y + h;
+        y = Math.max(y, s.end);
+        h = b - y;
+      }
+    } else if (at < s.start) w = Math.min(x + w, s.start) - x;
+    else {
+      const r = x + w;
+      x = Math.max(x, s.end);
+      w = r - x;
+    }
+  }
+  return { x, y, w: Math.max(1, w), h: Math.max(1, h) };
+}
+
 function grownSection(ctx: AnalysisContext, px: PxRect, confidence: number, note?: GrowNote): Section | null {
   const tight =
     inkBounds(
@@ -219,6 +266,8 @@ export function growRegionAt(
   const seed = seedCell(grid, c, r, Math.ceil((o.seedRadius * unit) / cellPx));
   if (!seed) return null;
 
+  const seedPx = { x: seed.c * cellPx + cellPx / 2, y: seed.r * cellPx + cellPx / 2 };
+
   let blob = flood(grid, seed, baseReach, maxCells);
   let usedGrid = grid;
 
@@ -231,7 +280,7 @@ export function growRegionAt(
     if (!retry || retry.capped) {
       const enclosing = smallestDetectedLeafAt(detected, at);
       if (enclosing) return { ...enclosing, note: 'capped' };
-      return grownSection(ctx, ctx.content, CAPPED_CONFIDENCE, 'capped');
+      return grownSection(ctx, clampToCuts(ctx, ctx.content, seedPx), CAPPED_CONFIDENCE, 'capped');
     }
     blob = retry;
     usedGrid = strict;
@@ -251,7 +300,7 @@ export function growRegionAt(
 
   const grown = grownSection(
     ctx,
-    blobRect(usedGrid, blob, ctx),
+    clampToCuts(ctx, blobRect(usedGrid, blob, ctx), seedPx),
     tooSmall ? TOO_SMALL_CONFIDENCE : GROWN_CONFIDENCE,
     tooSmall ? 'too-small' : undefined,
   );

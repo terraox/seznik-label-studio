@@ -427,7 +427,7 @@ const styles = themedStyles((c) => ({
   },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 16 },
   sectionGap: { height: 8, backgroundColor: c.fillStrong },
-  graySection: { backgroundColor: c.fillStrong },
+  graySection: { backgroundColor: c.surface },
   segmentRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   segmentChip: {
     flex: 1,

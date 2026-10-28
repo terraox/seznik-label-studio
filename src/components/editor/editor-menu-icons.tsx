@@ -32,13 +32,13 @@ export function ToolMenuIcon({
     case 'Barcode':
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32">
-          <Line x1="5.5" y1="6" x2="5.5" y2="26" stroke={color} strokeWidth="2" strokeLinecap="round" />
-          <Line x1="9.5" y1="6" x2="9.5" y2="26" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
-          <Line x1="13" y1="6" x2="13" y2="26" stroke={color} strokeWidth="2.6" strokeLinecap="round" />
-          <Line x1="16.5" y1="6" x2="16.5" y2="26" stroke={accentColor} strokeWidth="1.4" strokeLinecap="round" />
-          <Line x1="19.5" y1="6" x2="19.5" y2="26" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
-          <Line x1="23" y1="6" x2="23" y2="26" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
-          <Line x1="26.5" y1="6" x2="26.5" y2="26" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <Line x1="5.5" y1="4" x2="5.5" y2="28" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <Line x1="9.5" y1="4" x2="9.5" y2="28" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+          <Line x1="13" y1="4" x2="13" y2="28" stroke={color} strokeWidth="2.6" strokeLinecap="round" />
+          <Line x1="16.5" y1="4" x2="16.5" y2="28" stroke={accentColor} strokeWidth="1.4" strokeLinecap="round" />
+          <Line x1="19.5" y1="4" x2="19.5" y2="28" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
+          <Line x1="23" y1="4" x2="23" y2="28" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+          <Line x1="26.5" y1="4" x2="26.5" y2="28" stroke={color} strokeWidth="2" strokeLinecap="round" />
         </Svg>
       );
 
@@ -158,14 +158,6 @@ export function ToolMenuIcon({
           <Path d="M 6 4 H 19 L 26.5 11.5 V 27 C 26.5 28 25.5 28.5 24.5 28.5 H 6 C 5 28.5 4 28 4 27 V 5.5 C 4 4.5 5 4 6 4 Z" stroke={color} strokeWidth="1.8" fill="none" />
           <Path d="M 19 4 V 11.5 H 26.5" stroke={color} strokeWidth="1.5" fill="none" />
           <Path d="M 9.5 15.5 L 16.5 23.5 M 16.5 15.5 L 9.5 23.5" stroke={accentColor} strokeWidth="2.4" strokeLinecap="round" />
-        </Svg>
-      );
-
-    case 'Scan':
-      return (
-        <Svg width={size} height={size} viewBox="0 0 32 32">
-          <Path d="M 4.5 10 V 5.5 H 9 M 23 5.5 H 27.5 V 10 M 4.5 22 V 26.5 H 9 M 23 26.5 H 27.5 V 22" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          <Line x1="7.5" y1="16" x2="24.5" y2="16" stroke={accentColor} strokeWidth="2.2" strokeLinecap="round" />
         </Svg>
       );
 

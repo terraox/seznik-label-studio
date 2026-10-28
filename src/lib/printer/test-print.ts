@@ -1,12 +1,15 @@
 import { CONSUMER_PRINTERS, type ConsumerPrinterId } from '@/constants/printer-models';
-import { qualityCapsFor, resolveQualityBridge } from '@/lib/printer/bridge-quality-caps';
+import { resolveQualityBridge } from '@/lib/printer/bridge-quality-caps';
 import { buildDiagnosticCompactLabelDocument } from '@/lib/printer/diagnostic-test-label';
+import { JOSH_DENSITY_MAX, JOSH_SPEED_MIN } from '@/lib/printer/josh-job-params';
 import { usePrinterStore } from '@/stores/printer-store';
 import type { LabelDocument } from '@/lib/label-document';
 
-/** Josh prints everything on a 25x15 mm label; the others on a 50x15 mm strip. */
-const JOSH_LABEL = { widthMm: 25, heightMm: 15 };
-const STRIP_LABEL = { widthMm: 50, heightMm: 15 };
+/**
+ * Same 50×15 strip for every bridge. Josh's old 25 mm canvas clipped long Bluetooth
+ * names and forced tiny/bold type; the head is ~48 mm and already prints 50 mm jobs.
+ */
+const TEST_LABEL = { widthMm: 50, heightMm: 15 };
 
 /** Name of the printer bridge in use: Tejas, Rudra or Josh. */
 export function testPrintBridgeName(): string {
@@ -15,12 +18,12 @@ export function testPrintBridgeName(): string {
   return (CONSUMER_PRINTERS[id] ?? CONSUMER_PRINTERS.tejas).shortName;
 }
 
-/** The four facts on the label. Josh's narrow label wraps them over six short lines. */
-export function testPrintLines(bridgeName: string, bluetoothName: string, narrow: boolean): string[] {
-  if (narrow) {
-    return ['Test print by', 'Seznik Label Studio', 'Software by', 'Seznik India', bridgeName, bluetoothName];
-  }
-  return ['Test print by Seznik Label Studio', 'Software by Seznik India', bridgeName, bluetoothName];
+/** 2 mm from the left die-cut edge in label coords. */
+export const TEST_PRINT_DIE_CUT_INSET_MM = 2;
+
+/** Studio / bridge / Bluetooth name — three single lines, never wrapped. */
+export function testPrintLines(bridgeName: string, bluetoothName: string, _narrow?: boolean): string[] {
+  return ['seznik label studio', bridgeName, bluetoothName];
 }
 
 export function buildTestPrintDocument(): { doc: LabelDocument; lines: string[] } {
@@ -29,26 +32,34 @@ export function buildTestPrintDocument(): { doc: LabelDocument; lines: string[] 
   const bluetoothName = store.deviceName?.trim() || store.deviceId || 'Unknown';
   const josh = bridgeName === CONSUMER_PRINTERS.josh.shortName;
   const lines = testPrintLines(bridgeName, bluetoothName, josh);
-  const size = josh ? JOSH_LABEL : STRIP_LABEL;
-  const doc = buildDiagnosticCompactLabelDocument(lines, size.widthMm, size.heightMm, josh
-    ? { marginMm: 0, marginTopMm: 2, lineHeightMm: 2.1, fontPt: 5.5, maxLines: 6 }
-    : { marginMm: 1, marginTopMm: 1, lineHeightMm: 3.4, fontPt: 6, maxLines: 4, bold: true });
+  // Regular 7 pt on 50 mm: full BT name on one line, no bold, no shrink-to-fit.
+  const doc = buildDiagnosticCompactLabelDocument(lines, TEST_LABEL.widthMm, TEST_LABEL.heightMm, {
+    marginMm: TEST_PRINT_DIE_CUT_INSET_MM,
+    marginTopMm: josh ? TEST_PRINT_DIE_CUT_INSET_MM : 0,
+    marginRightMm: 1,
+    lineHeightMm: 3.6,
+    fontPt: 7,
+    maxLines: 3,
+    bold: false,
+  });
   return { doc, lines };
 }
 
-/** Darkness and speed a normal Auto print uses. Undefined lets the pipeline pick that default. */
+/**
+ * Tejas/Rudra: Auto (null) — max heat fattens TD-404 bitmap strokes.
+ * Josh: LPAPI max darkness 14 + slowest speed 1 (no bitmap ink grow).
+ */
 export function testPrintQuality(
   activeTransport: Parameters<typeof resolveQualityBridge>[0]['activeTransport'],
-): { darkness: number | undefined; speed: number | undefined } {
+): { darkness: number | null; speed: number | null } {
   const state = usePrinterStore.getState();
   const bridge = resolveQualityBridge({
     activeTransport,
     storeTransport: state.transport,
     sdkId: state.sdkId,
   });
-  const caps = qualityCapsFor(bridge);
-  return {
-    darkness: caps.density === 'legacy' ? undefined : caps.density.default,
-    speed: caps.speed === 'legacy' ? undefined : caps.speed.default,
-  };
+  const isJosh =
+    bridge === 'josh-lpapi' || state.sdkId === 'josh' || activeTransport === 'josh-lpapi';
+  if (!isJosh) return { darkness: null, speed: null };
+  return { darkness: JOSH_DENSITY_MAX, speed: JOSH_SPEED_MIN };
 }

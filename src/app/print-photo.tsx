@@ -1,8 +1,10 @@
 import { goBack } from '@/lib/go-back';
 import { AppIcon } from '@/components/app-icon';
 import { EditableNumber } from '@/components/editable-number';
+import { GrayThresholdSlider } from '@/components/editor/gray-threshold-slider';
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
+import { editorBridge } from '@/constants/editor-bridge';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +21,7 @@ import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 
+import { StatusChip } from '@/components/home/status-chip';
 import { PhotoFramePreview } from '@/components/photo-frame-preview';
 import { getPhotoFrame } from '@/constants/photo-frames';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -31,6 +34,7 @@ import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { createPrintGeometry, rectMmToDots } from '@/lib/printer/print-spec';
 import {
   bridgeSupportsImageModes,
+  useImageModesSupported,
   modedJobDpi,
   printGrayWithImageMode,
 } from '@/lib/printer/image-mode-print';
@@ -77,6 +81,31 @@ type ColorMode = (typeof COLOR_MODES)[number];
 function containWidth(boxW: number, boxH: number, contentW: number, contentH: number) {
   const scale = Math.min(boxW / Math.max(contentW, 0.01), boxH / Math.max(contentH, 0.01));
   return Math.max(1, Math.round(contentW * scale));
+}
+
+function SliderRow({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (next: number) => void;
+}) {
+  useThemeRefresh();
+  return (
+    <View style={styles.sliderBlock}>
+      <View style={styles.sliderHead}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.sliderValue}>{value}</Text>
+      </View>
+      <GrayThresholdSlider value={value} min={min} max={max} onChange={onChange} />
+    </View>
+  );
 }
 
 function StepperRow({
@@ -182,6 +211,8 @@ function ChipGroup<T extends string>({
   );
 }
 
+const PRINT_PHOTO_CROP_ID = 'print-photo';
+
 export default function PrintPhotoScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
@@ -192,6 +223,10 @@ export default function PrintPhotoScreen() {
     imageUri?: string;
     imageWidth?: string;
     imageHeight?: string;
+    widthMm?: string;
+    heightMm?: string;
+    shape?: string;
+    autoCrop?: string;
   }>();
 
   const defaults = useSettingsStore((s) => s.defaults);
@@ -229,13 +264,24 @@ export default function PrintPhotoScreen() {
   const [vOffset, setVOffset] = useState(0);
   const [flipH, setFlipH] = useState(false);
   const [antiColor, setAntiColor] = useState(false);
-  // Image print modes (TD-404 and Josh). Photos default to Floyd-Steinberg on this screen only.
+  // Image print modes (not on Josh). Photos default to Photo (Floyd-Steinberg) on this screen only.
   const [printMode, setPrintMode] = useState<ImageMode>('floyd');
   const [brightness, setBrightness] = useState(0);
   const [contrast, setContrast] = useState(0);
-  const modesAvailable = connected && !isFrame && bridgeSupportsImageModes();
+  const imageModesSupported = useImageModesSupported();
+  const modesAvailable = !isFrame && imageModesSupported;
+  // "Standard" is the normal print (Original / B & W / Halftone) next to the Solid and dither modes.
+  const [standard, setStandard] = useState(false);
+  const modesActive = modesAvailable && !standard;
   const [printing, setPrinting] = useState(false);
   const [footerHeight, setFooterHeight] = useState(72);
+  // Print Image asks for the size before the photo; it wins over the size suggested from the photo.
+  const chosenSize = useMemo<LabelSizeMm | null>(() => {
+    const w = Number(params.widthMm);
+    const h = Number(params.heightMm);
+    return w > 0 && h > 0 ? { widthMm: w, heightMm: h } : null;
+  }, [params.widthMm, params.heightMm]);
+  const roundLabel = params.shape === 'circle';
   const [printSize, setPrintSize] = useState<LabelSizeMm | null>(null);
   const [suggestedSize, setSuggestedSize] = useState<LabelSizeMm | null>(() => {
     const w = Number(params.imageWidth);
@@ -272,6 +318,47 @@ export default function PrintPhotoScreen() {
       () => undefined,
     );
   }, [params.imageUri, suggestedSize]);
+
+  const openCrop = useCallback(() => {
+    const uri = photos.find((p) => !!p);
+    if (!uri) return;
+    router.push({
+      pathname: '/image-crop',
+      params: {
+        uri,
+        width: String(photoPixels?.width ?? 0),
+        height: String(photoPixels?.height ?? 0),
+        mode: 'replace',
+        elementId: PRINT_PHOTO_CROP_ID,
+      },
+    });
+  }, [photos, photoPixels]);
+
+  // Print Image: right after the photo is chosen, open the crop window once. Cancelling it
+  // leaves the photo as picked on this print page.
+  const autoCropped = useRef(false);
+  useEffect(() => {
+    if (params.autoCrop !== '1' || autoCropped.current || !primaryPhoto) return;
+    autoCropped.current = true;
+    openCrop();
+  }, [params.autoCrop, primaryPhoto, openCrop]);
+
+  // Back from the crop screen: the cropped photo replaces the current one.
+  useFocusEffect(
+    useCallback(() => {
+      const result = editorBridge.imageCropResult;
+      if (!result || result.elementId !== PRINT_PHOTO_CROP_ID) return;
+      editorBridge.imageCropResult = null;
+      setPhotoPixels({ width: result.width, height: result.height });
+      setSuggestedSize(suggestPrintSizeFromAspect(result.width, result.height));
+      setPhotos((prev) => {
+        const next = [...prev];
+        const at = next.findIndex((p) => !!p);
+        next[at >= 0 ? at : 0] = result.uri;
+        return next;
+      });
+    }, []),
+  );
 
   const pickPhoto = useCallback(async () => {
     try {
@@ -318,8 +405,8 @@ export default function PrintPhotoScreen() {
       return;
     }
 
-    const widthMm = printSize?.widthMm ?? suggestedSize?.widthMm ?? frame?.widthMm ?? defaults.labelWidth;
-    const heightMm = printSize?.heightMm ?? suggestedSize?.heightMm ?? frame?.heightMm ?? defaults.labelHeight;
+    const widthMm = printSize?.widthMm ?? chosenSize?.widthMm ?? suggestedSize?.widthMm ?? frame?.widthMm ?? defaults.labelWidth;
+    const heightMm = printSize?.heightMm ?? chosenSize?.heightMm ?? suggestedSize?.heightMm ?? frame?.heightMm ?? defaults.labelHeight;
     const orientationDeg = parseInt(orientation.replace('°', ''), 10) as 0 | 90 | 180 | 270;
     // Die-cut photos print at the selected stock mm. Do not swap width/height for
     // 90°/270° — that sends a landscape SIZE onto portrait jewellery rolls.
@@ -441,7 +528,7 @@ export default function PrintPhotoScreen() {
         fit: 'stretch',
       });
       let printed: Awaited<ReturnType<typeof printArtworkJob>> | null = null;
-      if (modesAvailable && bridgeSupportsImageModes()) {
+      if (modesActive && bridgeSupportsImageModes()) {
         // Finished dots at the label's dot size, sent as-is. The preview above is the same pipeline.
         await printGrayWithImageMode({
           gray,
@@ -540,9 +627,10 @@ export default function PrintPhotoScreen() {
     addHistoryEntry,
     deviceName,
     printSize,
+    chosenSize,
     suggestedSize,
     photoRotation,
-    modesAvailable,
+    modesActive,
     printMode,
     brightness,
     contrast,
@@ -560,8 +648,8 @@ export default function PrintPhotoScreen() {
     };
   }, [printSize, handlePrint]);
 
-  const jobWidthMm = printSize?.widthMm ?? suggestedSize?.widthMm ?? frame?.widthMm ?? defaults.labelWidth;
-  const jobHeightMm = printSize?.heightMm ?? suggestedSize?.heightMm ?? frame?.heightMm ?? defaults.labelHeight;
+  const jobWidthMm = printSize?.widthMm ?? chosenSize?.widthMm ?? suggestedSize?.widthMm ?? frame?.widthMm ?? defaults.labelWidth;
+  const jobHeightMm = printSize?.heightMm ?? chosenSize?.heightMm ?? suggestedSize?.heightMm ?? frame?.heightMm ?? defaults.labelHeight;
   const jobDpi = getPrinterManager().getPrintDpi();
   const printCaptureSize = useMemo(
     () => printCaptureLayout(jobWidthMm, jobHeightMm, jobDpi).content,
@@ -583,7 +671,7 @@ export default function PrintPhotoScreen() {
   const decodedRef = useRef<{ uri: string; gray: GrayRaster } | null>(null);
   const [modePreview, setModePreview] = useState<string | null>(null);
   useEffect(() => {
-    if (!modesAvailable || !primaryPhoto) {
+    if (!modesActive || !primaryPhoto) {
       setModePreview(null);
       return;
     }
@@ -623,7 +711,7 @@ export default function PrintPhotoScreen() {
       clearTimeout(timer);
     };
   }, [
-    modesAvailable,
+    modesActive,
     primaryPhoto,
     flipH,
     antiColor,
@@ -645,18 +733,7 @@ export default function PrintPhotoScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
         </Pressable>
-        <Pressable
-          onPress={() => router.push('/printer-connect')}
-          style={({ pressed }) => [
-            styles.connection,
-            connected && styles.connectionConnected,
-            pressed && styles.pressed,
-          ]}>
-          <Text numberOfLines={1} style={styles.connectionText}>
-            {connected ? deviceName ?? 'Connected' : 'Not connected'}
-          </Text>
-          <AppIcon name="link" tintColor="#FFFFFF" size={14} /* theme-fixed: white icon on status fill */ />
-        </Pressable>
+        <StatusChip poll={false} keepLive={printing} />
       </View>
 
       <FormScrollView
@@ -678,12 +755,13 @@ export default function PrintPhotoScreen() {
                     width: previewWidth,
                     height: previewWidth * (jobHeightMm / Math.max(jobWidthMm, 1)),
                   },
+                  roundLabel && { borderRadius: previewWidth },
                 ]}>
                 <Image
-                  source={{ uri: modesAvailable && modePreview ? modePreview : primaryPhoto }}
+                  source={{ uri: modesActive && modePreview ? modePreview : primaryPhoto }}
                   style={[
                     StyleSheet.absoluteFillObject,
-                    modesAvailable && modePreview ? null : { transform: [{ rotate: `${photoRotation}deg` }] },
+                    modesActive && modePreview ? null : { transform: [{ rotate: `${photoRotation}deg` }] },
                   ]}
                   contentFit="fill"
                 />
@@ -698,6 +776,12 @@ export default function PrintPhotoScreen() {
 
         {primaryPhoto ? (
           <View style={[styles.photoActionRow, { width: contentWidth - 24 }]}>
+            <Pressable
+              onPress={openCrop}
+              style={({ pressed }) => [styles.photoRotateBtn, pressed && styles.pressed]}>
+              <AppIcon name="rectangle.dashed" tintColor={C.link} size={16} />
+              <Text style={styles.photoRotateBtnText}>Crop Photo</Text>
+            </Pressable>
             <Pressable
               onPress={() => setPhotoRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
               style={({ pressed }) => [styles.photoRotateBtn, pressed && styles.pressed]}>
@@ -747,38 +831,36 @@ export default function PrintPhotoScreen() {
           <View style={[styles.card, { width: contentWidth - 24 }]}>
             <Text style={styles.groupLabel}>Print mode</Text>
             <ChipGroup
-              options={IMAGE_MODES.map((m) => IMAGE_MODE_LABEL[m])}
-              selected={IMAGE_MODE_LABEL[printMode]}
+              options={['Standard', ...IMAGE_MODES.map((m) => IMAGE_MODE_LABEL[m])]}
+              selected={standard ? 'Standard' : IMAGE_MODE_LABEL[printMode]}
               onSelect={(label) => {
+                if (label === 'Standard') {
+                  setStandard(true);
+                  return;
+                }
                 const next = IMAGE_MODES.find((m) => IMAGE_MODE_LABEL[m] === label);
-                if (next) setPrintMode(next);
+                if (next) {
+                  setStandard(false);
+                  setPrintMode(next);
+                }
               }}
             />
-            <Text style={styles.hint}>{IMAGE_MODE_HELP[printMode]}</Text>
-            {printMode === 'solid' ? (
-              <StepperRow
-                label="Threshold"
-                value={String(grayThreshold)}
-                onMinus={() => setGrayThreshold((v) => Math.max(1, v - 8))}
-                onPlus={() => setGrayThreshold((v) => Math.min(254, v + 8))}
-                bordered
-              />
+            <Text style={styles.hint}>
+              {standard ? 'Normal printing: Original, B & W or Halftone, set below.' : IMAGE_MODE_HELP[printMode]}
+            </Text>
+            {standard ? null : printMode === 'solid' ? (
+              <SliderRow label="Threshold" value={grayThreshold} min={1} max={254} onChange={setGrayThreshold} />
             ) : null}
-            <StepperRow
-              label="Brightness"
-              value={String(brightness)}
-              onMinus={() => setBrightness((v) => Math.max(-100, v - 10))}
-              onPlus={() => setBrightness((v) => Math.min(100, v + 10))}
-              bordered
-            />
-            <StepperRow
-              label="Contrast"
-              value={String(contrast)}
-              onMinus={() => setContrast((v) => Math.max(-100, v - 10))}
-              onPlus={() => setContrast((v) => Math.min(100, v + 10))}
-            />
+            {standard ? null : (
+              <>
+            <SliderRow label="Brightness" value={brightness} min={-100} max={100} onChange={setBrightness} />
+            <SliderRow label="Contrast" value={contrast} min={-100} max={100} onChange={setContrast} />
+              </>
+            )}
           </View>
-        ) : (
+        ) : null}
+
+        {!modesActive ? (
         <View style={[styles.card, { width: contentWidth - 24 }]}>
           <Text style={styles.groupLabel}>Color Mode</Text>
           <ChipGroup options={COLOR_MODES} selected={colorMode} onSelect={setColorMode} />
@@ -806,7 +888,7 @@ export default function PrintPhotoScreen() {
             </Pressable>
           </View>
         </View>
-        )}
+        ) : null}
 
         <View style={[styles.card, { width: contentWidth - 24 }]}>
           <StepperRow
@@ -931,11 +1013,6 @@ export default function PrintPhotoScreen() {
         style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}
         onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}>
         <Pressable
-          onPress={() => router.push('/printing-settings')}
-          style={({ pressed }) => [styles.gearBtn, pressed && styles.pressed]}>
-          <AppIcon name="gearshape.fill" tintColor="#FFFFFF" size={22} /* theme-fixed: white icon on a coloured button */ />
-        </Pressable>
-        <Pressable
           disabled={printing}
           onPress={() => {
             pendingPrintRef.current = true;
@@ -966,18 +1043,6 @@ const styles = themedStyles((c, scheme) => ({
     paddingBottom: 12,
   },
   backBtn: { padding: 4 },
-  connection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: c.dangerFill,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    maxWidth: 180,
-  },
-  connectionConnected: { backgroundColor: c.successFill },
-  connectionText: { color: c.onAccent, fontSize: 13, fontWeight: '500', flexShrink: 1 },
   scroll: { flex: 1, width: '100%' },
   previewArea: {
     width: '100%',
@@ -1010,6 +1075,7 @@ const styles = themedStyles((c, scheme) => ({
   photoActionRow: {
     marginTop: 10,
     flexDirection: 'row',
+    gap: 10,
   },
   photoRotateBtn: {
     flex: 1,
@@ -1105,6 +1171,8 @@ const styles = themedStyles((c, scheme) => ({
     marginTop: 14,
     marginBottom: 8,
   },
+  sliderBlock: { paddingTop: 12, paddingBottom: 6 },
+  sliderHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 },
   sliderValue: { fontSize: 14, fontWeight: '500', color: c.accent, flexShrink: 1 },
   sliderTrack: {
     height: 4,
@@ -1189,14 +1257,6 @@ const styles = themedStyles((c, scheme) => ({
     paddingHorizontal: 16,
     paddingTop: 10,
     backgroundColor: c.fill,
-  },
-  gearBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: c.accentFill,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   printBtn: {
     flex: 1,

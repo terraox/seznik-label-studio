@@ -37,10 +37,20 @@ export type ImageCropResult = {
   crop?: import('@/lib/editor/image-crop-math').NormalizedCrop;
 };
 
+/** Where a returning Scan / OCR / ASR result should land in the editor. */
+export type ScanConsumer =
+  | { kind: 'tableCell'; tableId: string; row: number; col: number }
+  | { kind: 'element'; elementId: string };
+
 export const editorBridge = {
   columnNameResult: null as string | null,
   columnNameConsumer: null as 'qrcode' | 'arctext' | 'degrees' | 'text' | 'barcode' | 'image' | null,
   scanResult: null as ScanResult | null,
+  /**
+   * Stashed before navigating to /scan (or OCR/ASR). Survives an edit-screen remount so a
+   * table-cell Content scan writes into that cell instead of spawning a new barcode/QR.
+   */
+  scanConsumer: null as ScanConsumer | null,
   ocrResult: null as OcrResult | null,
   asrResult: null as OcrResult | null,
   clipartResult: null as ClipartResult | null,

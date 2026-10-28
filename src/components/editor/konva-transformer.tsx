@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -17,13 +17,15 @@ import Animated, {
 import Svg, { Path as SvgPath, Line as SvgLine } from 'react-native-svg';
 import { AppIcon } from '@/components/app-icon';
 import { type LiveRulerBounds } from '@/components/canvas-rulers';
-import { ElementContentView } from '@/components/editor/element-renderer';
+import { ElementContentView, type LiveTextBank } from '@/components/editor/element-renderer';
 import {
   ensureTableCells,
-  hitTestTableCell,
   hitTestTableCellFromViewPoint,
+  hitTestTableTarget,
+  hitTestTableTargetFromViewPoint,
   pointerMmToTableLocal,
   sameTableCellSelection,
+  type TablePointerTarget,
 } from '@/lib/editor/table-cells';
 import { elementSizeMm, type LabelElement, type MediaShape } from '@/lib/label-document';
 import { clampToLabelBounds } from '@/lib/editor/label-bounds';
@@ -45,8 +47,9 @@ import {
 import { computeTextElementHeightMm } from '@/lib/text-metrics';
 import {
   buildLiveLayoutBank,
+  rememberVisibleLines,
   useVisibleTextRevision,
-  visibleTextHeightMm,
+  visibleTextKey,
 } from '@/lib/visible-text-layout';
 import {
   CHROME_HANDLE_FILL,
@@ -338,6 +341,9 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   const liveHeightStartsSv = useSharedValue<number[]>([]);
   const liveHeightValuesSv = useSharedValue<number[]>([]);
   const liveHeightReadySv = useSharedValue(false);
+  // The same bank as JS data: the live text shows its lines, the commit keeps the one on screen.
+  const [liveBank, setLiveBank] = useState<LiveTextBank | null>(null);
+  const liveBankRef = useRef<LiveTextBank | null>(null);
   const lastLiveLogTickSv = useSharedValue(0);
   const textLiveReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearTextLiveTimer = useCallback(() => {
@@ -357,9 +363,12 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   useEffect(() => clearTextLiveTimer, [clearTextLiveTimer]);
   // The committed size is on screen: hand back to the resting, print-accurate lines.
   useEffect(() => {
+    // A size change while the finger is still down (a late layout-cache publish, a font
+    // load) must not hand the content back to the stale resting lines mid-drag.
+    if (isInteracting.value && textLiveSv.value) return;
     clearTextLiveTimer();
     textLiveSv.value = false;
-  }, [sizeMm.width, sizeMm.height, clearTextLiveTimer, textLiveSv]);
+  }, [sizeMm.width, sizeMm.height, clearTextLiveTimer, textLiveSv, isInteracting]);
 
   // When native wrap lays out taller than the Skia estimate, grow the live frame immediately
   // even if the finger is still — otherwise the last lines stay clipped until the next move.
@@ -378,10 +387,14 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   useEffect(() => {
     if (!isTextElement || !selected) {
       liveHeightReadySv.value = false;
+      liveBankRef.current = null;
+      setLiveBank(null);
       return;
     }
     if (textVerticalDisplay || textAlign === 'justify' || textAlign === 'spacing') {
       liveHeightReadySv.value = false;
+      liveBankRef.current = null;
+      setLiveBank(null);
       return;
     }
     let cancelled = false;
@@ -408,6 +421,9 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       liveHeightStartsSv.value = bank.starts;
       liveHeightValuesSv.value = bank.heights;
       liveHeightReadySv.value = bank.starts.length > 0;
+      const shown = bank.starts.length > 0 && textAutoWrapping !== 'Close' ? { starts: bank.starts, lines: bank.lines, maxWidthMm: bank.maxWidthMm } : null;
+      liveBankRef.current = shown;
+      setLiveBank(shown);
     });
     return () => {
       cancelled = true;
@@ -819,7 +835,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         element.type !== 'barcode' &&
         element.type !== 'text' &&
         element.type !== 'degrees' &&
-        element.type !== 'time' &&
         'fontSize' in element &&
         typeof element.fontSize === 'number'
       ) {
@@ -851,11 +866,21 @@ export const KonvaTransformer = memo(function KonvaTransformer({
           verticalDisplay: textVerticalDisplay,
           fontFamily: textFontFamily || undefined,
         };
-        // Prefer the taller of Skia wrap and the native live layout so a narrow drag never
-        // commits a frame that clips the last line on screen.
-        const skiaH = visibleTextHeightMm(wrapParams);
-        const nativeH = liveNativeHeightSv.value > 0 ? liveNativeHeightSv.value / pxPerMMSafe : 0;
-        next.height = roundMm(Math.max(skiaH, nativeH));
+        // The layout on screen at release is the one the bank holds for this width. Storing it
+        // makes the resting text (and print) draw those lines instead of re-wrapping.
+        const bank = liveBankRef.current;
+        if (bank && textAutoWrapping !== 'Close' && !textVerticalDisplay) {
+          let idx = 0;
+          for (let i = 0; i < bank.starts.length; i += 1) {
+            if (bank.starts[i] <= next.width + 0.0001) idx = i;
+            else break;
+          }
+          const seen = bank.lines[idx];
+          if (seen && seen.length > 0) rememberVisibleLines(visibleTextKey(wrapParams), seen);
+        }
+        // The box is the frame the finger last saw (already the taller of the live Skia bank and
+        // the native layout), not a fresh estimate that could land a few pixels off.
+        next.height = roundMm(pxToMm(nextHPx, pxPerMMSafe));
       }
 
       const rotation = ((Math.round(rot / 90) * 90) % 360 + 360) % 360;
@@ -934,13 +959,19 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     lastTapViewRef.current = { x, y };
   }, []);
 
-  const resolveTableCellHitJS = useCallback(
+  /** Live transformer box size for table hit-tests (gesture coords are in this space). */
+  const tableViewSizeRef = useRef({ w: baseWidthPx, h: baseHeightPx });
+  tableViewSizeRef.current = { w: baseWidthPx, h: baseHeightPx };
+
+  const resolveTableTargetHitJS = useCallback(
     (
       viewX?: number,
       viewY?: number,
       windowX?: number,
       windowY?: number,
-    ): { row: number; col: number } | null => {
+      viewWidthPx?: number,
+      viewHeightPx?: number,
+    ): TablePointerTarget | null => {
       if (element.type !== 'table') return null;
       const box = elementBoxRef.current;
       const table = ensureTableCells({
@@ -952,8 +983,17 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       });
       const vx = Number.isFinite(viewX) ? viewX! : lastTapViewRef.current.x;
       const vy = Number.isFinite(viewY) ? viewY! : lastTapViewRef.current.y;
-      if (Number.isFinite(vx) && Number.isFinite(vy) && baseWidthPx > 0 && baseHeightPx > 0) {
-        const hit = hitTestTableCellFromViewPoint(table, vx, vy, baseWidthPx, baseHeightPx);
+      // Prefer the live transformer box (animW/H) — hit-slop coords are in that space.
+      const vw =
+        Number.isFinite(viewWidthPx) && (viewWidthPx as number) > 0
+          ? (viewWidthPx as number)
+          : baseWidthPx;
+      const vh =
+        Number.isFinite(viewHeightPx) && (viewHeightPx as number) > 0
+          ? (viewHeightPx as number)
+          : baseHeightPx;
+      if (Number.isFinite(vx) && Number.isFinite(vy) && vw > 0 && vh > 0) {
+        const hit = hitTestTableTargetFromViewPoint(table, vx, vy, vw, vh);
         if (hit) return hit;
       }
       const wx = Number.isFinite(windowX) ? windowX! : lastTapAbsRef.current.x;
@@ -961,19 +1001,75 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       const pt = pointerToMmRef.current?.(wx, wy);
       if (!pt) return null;
       const local = pointerMmToTableLocal(table, pt);
-      return hitTestTableCell(table, local.x, local.y);
+      return hitTestTableTarget(table, local.x, local.y);
     },
     [element, baseWidthPx, baseHeightPx],
   );
 
+  /** Apply table vs cell menu from the finger point (lines → table adjust, interior → cell text). */
+  const applyTablePointerHitJS = useCallback(
+    (
+      viewX?: number,
+      viewY?: number,
+      windowX?: number,
+      windowY?: number,
+      viewWidthPx?: number,
+      viewHeightPx?: number,
+    ): TablePointerTarget | null => {
+      if (element.type !== 'table' || !callbacksRef.current.onTableCellPress) return null;
+      const hit = resolveTableTargetHitJS(viewX, viewY, windowX, windowY, viewWidthPx, viewHeightPx);
+      if (!hit) {
+        // Last resort: open cell at clamped fraction so the text menu always appears.
+        const vw = viewWidthPx && viewWidthPx > 0 ? viewWidthPx : baseWidthPx;
+        const vh = viewHeightPx && viewHeightPx > 0 ? viewHeightPx : baseHeightPx;
+        const vx = Number.isFinite(viewX) ? viewX! : lastTapViewRef.current.x;
+        const vy = Number.isFinite(viewY) ? viewY! : lastTapViewRef.current.y;
+        if (Number.isFinite(vx) && Number.isFinite(vy) && vw > 0 && vh > 0) {
+          const box = elementBoxRef.current;
+          const table = ensureTableCells({
+            ...element,
+            left: box.left,
+            top: box.top,
+            width: box.width,
+            height: box.height,
+          });
+          const cell = hitTestTableCellFromViewPoint(table, vx, vy, vw, vh);
+          if (cell) {
+            callbacksRef.current.onTableCellPress(element.id, cell);
+            return { kind: 'cell', ...cell };
+          }
+        }
+        return null;
+      }
+      if (hit.kind === 'line') {
+        callbacksRef.current.onTableCellPress(element.id, null);
+      } else {
+        callbacksRef.current.onTableCellPress(element.id, { row: hit.row, col: hit.col });
+      }
+      return hit;
+    },
+    [element, baseWidthPx, baseHeightPx, resolveTableTargetHitJS],
+  );
+
   /** Highlight the cell under the finger on touch-down, before the gesture ends. */
   const highlightTableCellJS = useCallback(
-    (viewX?: number, viewY?: number, windowX?: number, windowY?: number) => {
-      if (element.type !== 'table' || !callbacksRef.current.onTableCellPress) return;
-      const hit = resolveTableCellHitJS(viewX, viewY, windowX, windowY);
-      if (hit) callbacksRef.current.onTableCellPress(element.id, hit);
+    (
+      viewX?: number,
+      viewY?: number,
+      windowX?: number,
+      windowY?: number,
+      viewWidthPx?: number,
+      viewHeightPx?: number,
+    ) => {
+      if (Number.isFinite(viewWidthPx) && (viewWidthPx as number) > 0) {
+        tableViewSizeRef.current.w = viewWidthPx as number;
+      }
+      if (Number.isFinite(viewHeightPx) && (viewHeightPx as number) > 0) {
+        tableViewSizeRef.current.h = viewHeightPx as number;
+      }
+      applyTablePointerHitJS(viewX, viewY, windowX, windowY, viewWidthPx, viewHeightPx);
     },
-    [element.id, element.type, resolveTableCellHitJS],
+    [applyTablePointerHitJS],
   );
 
   const notifyGroupResizeHandleBeginJS = useCallback(
@@ -1016,15 +1112,21 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
     const openWithAnchor = (anchor?: ElementAnchorRect) => {
       if (element.type === 'table') {
-        const hit = resolveTableCellHitJS(viewX, viewY, windowX, windowY);
+        const hit = resolveTableTargetHitJS(viewX, viewY, windowX, windowY);
         console.log(
-          `[table-cell] double-tap tableId=${element.id} view=${viewX},${viewY} window=${windowX},${windowY} hit=${JSON.stringify(hit)} handler=${hit ? 'per-cell-quick-edit' : 'whole-table-onOpenPanel'}`,
+          `[table-cell] double-tap tableId=${element.id} view=${viewX},${viewY} window=${windowX},${windowY} hit=${JSON.stringify(hit)} handler=${hit?.kind === 'cell' ? 'per-cell-quick-edit' : 'whole-table-onOpenPanel'}`,
         );
-        if (hit && callbacksRef.current.onTableCellQuickEdit) {
-          callbacksRef.current.onTableCellPress?.(element.id, hit);
-          callbacksRef.current.onTableCellQuickEdit(element.id, hit, anchor);
+        if (hit?.kind === 'cell' && callbacksRef.current.onTableCellQuickEdit) {
+          callbacksRef.current.onTableCellPress?.(element.id, { row: hit.row, col: hit.col });
+          callbacksRef.current.onTableCellQuickEdit(
+            element.id,
+            { row: hit.row, col: hit.col },
+            anchor,
+          );
           return;
         }
+        // Grid/border lines (or unknown) keep the table adjust panel — not cell text.
+        callbacksRef.current.onTableCellPress?.(element.id, null);
         callbacksRef.current.onOpenPanel(element.id);
         return;
       }
@@ -1059,7 +1161,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       openWithAnchor();
     }
   },
-  [element.id, element.type, lastTapTimeSv, cancelPendingRemoveJS, resolveTableCellHitJS],
+  [element.id, element.type, lastTapTimeSv, cancelPendingRemoveJS, resolveTableTargetHitJS],
   );
 
   const triggerSingleTapJS = useCallback(
@@ -1079,13 +1181,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     }
 
     if (element.type === 'table' && callbacksRef.current.onTableCellPress) {
-      const hit = resolveTableCellHitJS(viewX, viewY, windowX, windowY);
+      const { w, h } = tableViewSizeRef.current;
+      const hit = applyTablePointerHitJS(viewX, viewY, windowX, windowY, w, h);
       console.log(
-        `[table-cell] single-tap tableId=${element.id} wasSelected=${wasSelectedAtTouchRef.current} view=${viewX},${viewY} window=${windowX},${windowY} computedHit=${JSON.stringify(hit)}`,
+        `[table-cell] single-tap tableId=${element.id} wasSelected=${wasSelectedAtTouchRef.current} view=${viewX},${viewY} window=${windowX},${windowY} size=${w}x${h} computedHit=${JSON.stringify(hit)}`,
       );
-      if (hit) {
-        callbacksRef.current.onTableCellPress(element.id, hit);
-      }
       return;
     }
 
@@ -1099,7 +1199,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       }, DOUBLE_TAP_MAX_GAP_MS);
     }
   },
-  [element.id, element.type, triggerDoubleTapJS, cancelPendingRemoveJS, resolveTableCellHitJS],
+  [element.id, element.type, triggerDoubleTapJS, cancelPendingRemoveJS, applyTablePointerHitJS],
   );
 
   const bodyDragGesture = useMemo(() => {
@@ -1137,7 +1237,14 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         }
         runOnJS(notifySelectJS)(element.id);
         if (element.type === 'table') {
-          runOnJS(highlightTableCellJS)(_e.x, _e.y, _e.absoluteX, _e.absoluteY);
+          runOnJS(highlightTableCellJS)(
+            _e.x,
+            _e.y,
+            _e.absoluteX,
+            _e.absoluteY,
+            animW.value,
+            animH.value,
+          );
         }
         originLeftSv.value = originLeftSv.value + transX.value;
         originTopSv.value = originTopSv.value + transY.value;
@@ -1764,14 +1871,19 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   // as the box grows. The frame's own width/height is the size instead.
   const lineEmojiFrame =
     element.type === 'clipart' && element.clipartId.startsWith('le-') && element.tile !== true;
+  // The Android hardware layer keeps a bitmap of the shape; a new key on a style change drops it,
+  // otherwise toggling Fill leaves the old picture on the canvas.
+  const shapePaintKey =
+    element.type === 'shape'
+      ? `${element.fill ? 1 : 0}|${element.fillColor ?? ''}|${element.drawingColorIndex}|${element.figureShape}`
+      : undefined;
   const liveScaleContent =
     !lineEmojiFrame &&
     element.type !== 'border' &&
     element.type !== 'barcode' &&
     element.type !== 'qrcode' &&
     element.type !== 'text' &&
-    element.type !== 'degrees' &&
-    element.type !== 'time';
+    element.type !== 'degrees';
 
   // The glyph is laid out at this size. The scale must use the same number in
   // the same frame: startW stays at the gesture-start size until the commit
@@ -1825,8 +1937,8 @@ export const KonvaTransformer = memo(function KonvaTransformer({
   });
 
   // Borders are display-only on the canvas: edit them via the Border tool in the menu.
-  // Non-printing chrome is also non-interactive.
-  if (element.type === 'border' || element.needPrinting === false) {
+  // An element that is set not to print stays fully editable (move, resize, select).
+  if (element.type === 'border') {
     return (
       <View
         pointerEvents="none"
@@ -1847,11 +1959,11 @@ export const KonvaTransformer = memo(function KonvaTransformer({
             heightPx={baseHeightPx}
             scale={pxPerMMSafe}
             mediaShape={borderMediaShape}
-            selectedTableCell={element.type === 'table' ? selectedTableCell : null}
+            selectedTableCell={null}
             tableSelectionColor={tableSelectionColor}
           />
         </View>
-        {element.type === 'border' && selected ? (
+        {selected ? (
           <View
             pointerEvents="none"
             style={{
@@ -1891,6 +2003,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
               }
             : {})}>
           <Animated.View
+            key={shapePaintKey}
             pointerEvents="none"
             collapsable={false}
             renderToHardwareTextureAndroid={liveScaleContent}
@@ -1925,6 +2038,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 liveReflowSv={isTextElement ? textLiveSv : undefined}
                 liveWidthSv={isTextElement ? animW : undefined}
                 liveHeightSv={isTextElement ? liveNativeHeightSv : undefined}
+                liveBank={isTextElement ? liveBank ?? undefined : undefined}
                 frameWidth={lineEmojiFrame ? animW : undefined}
                 frameHeight={lineEmojiFrame ? animH : undefined}
               />

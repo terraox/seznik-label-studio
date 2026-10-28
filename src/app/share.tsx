@@ -2,7 +2,7 @@ import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { AppIcon } from '@/components/app-icon';
+import { NewLabelArt, SeznikFileMark, ToolArt } from '@/components/home/tool-art';
 import { useMemo, useRef, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Alert, Platform, StyleSheet, Pressable, Switch, Text, View } from 'react-native';
@@ -21,14 +21,12 @@ import { themedStyles, useThemeRefresh } from '@/theme';
 const CAPTURE_WIDTH = 720;
 
 function ShareOption({
-  icon,
+  art,
   label,
-  color,
   onPress,
 }: {
-  icon: 'square.grid.2x2' | 'photo' | 'doc.text';
+  art: React.ReactNode;
   label: string;
-  color: string;
   onPress?: () => void;
 }) {
   useThemeRefresh();
@@ -36,9 +34,7 @@ function ShareOption({
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.option, pressed && styles.pressed]}>
-      <View style={[styles.optionIcon, { backgroundColor: color }]}>
-        <AppIcon name={icon} tintColor="#FFFFFF" size={30} pointerEvents="none" /* theme-fixed: white icon on category tile */ />
-      </View>
+      <View style={styles.optionIcon}>{art}</View>
       <Text style={styles.optionLabel}>{label}</Text>
     </Pressable>
   );
@@ -155,7 +151,7 @@ export default function ShareModal() {
 
       {/* Off-screen render target for image capture */}
       {doc ? (
-        <View style={styles.captureHost} pointerEvents="none">
+        <View style={styles.captureHost} pointerEvents="none" collapsable={false}>
           <ViewShot ref={shotRef} options={{ format: 'png', quality: 1 }}>
             <LabelPreview document={doc} width={CAPTURE_WIDTH} />
           </ViewShot>
@@ -206,26 +202,9 @@ export default function ShareModal() {
             </View>
           ) : doc ? (
             <View style={styles.options}>
-              <ShareOption
-                icon="square.grid.2x2"
-                label="As .seznik"
-                color="#3498DB" // theme-fixed: category tile colour
-                onPress={() => setView('file')}
-              />
-              <ShareOption
-                icon="photo"
-                label="As image"
-                color="#8BC34A" // theme-fixed: category tile colour
-                onPress={() => void handleShareImage()}
-              />
-              {params.from === 'canvas' ? (
-                <ShareOption
-                  icon="doc.text"
-                  label="As PDF"
-                  color="#E74C3C" // theme-fixed: category tile colour
-                  onPress={() => void handleSharePdf()}
-                />
-              ) : null}
+              <ShareOption art={<SeznikFileMark size={56} />} label="As .seznik" onPress={() => setView('file')} />
+              <ShareOption art={<NewLabelArt kind="upload" size={56} />} label="As image" onPress={() => void handleShareImage()} />
+              <ShareOption art={<ToolArt id="pdf" size={56} />} label="As PDF" onPress={() => void handleSharePdf()} />
             </View>
           ) : (
             <Text style={styles.emptyHint}>
@@ -254,11 +233,10 @@ const styles = themedStyles((c) => ({
     backgroundColor: c.scrim,
   },
   captureHost: {
+    // Fully off screen: at left 0 the 720px render showed up zoomed behind the sheet.
     position: 'absolute',
-    left: 0,
+    left: -CAPTURE_WIDTH * 3,
     top: 0,
-    zIndex: -999,
-    opacity: 1,
     pointerEvents: 'none',
   },
   bottom: {
@@ -298,7 +276,8 @@ const styles = themedStyles((c) => ({
   optionIcon: {
     width: 72,
     height: 72,
-    borderRadius: 36,
+    borderRadius: 20,
+    backgroundColor: c.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

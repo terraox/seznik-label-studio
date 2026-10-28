@@ -4,6 +4,7 @@
  */
 
 import { goBack } from '@/lib/go-back';
+import { useStepBack } from '@/lib/use-step-back';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -20,6 +21,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
+import { ToolArt } from '@/components/home/tool-art';
+import { UploadHero, UploadSteps } from '@/components/upload-label/upload-hero';
 import { LabelSizeSetupSection } from '@/components/label-size-setup-section';
 import type { Rotation } from '@/components/editor/types';
 import { Spacing } from '@/constants/theme';
@@ -38,11 +41,6 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 type Step = 'upload' | 'size';
-
-const MEASURE_POINTS = [
-  'Measure the true width and height of the label itself.',
-  'Do not include the vertical gap between labels on the roll.',
-];
 
 const ROTATIONS: readonly Rotation[] = [0, 90, 180, 270];
 
@@ -133,7 +131,7 @@ export default function ImageToLabelScreen() {
     widthMm,
   ]);
 
-  const goBack = () => {
+  const handleBack = () => {
     if (opening) return;
     if (step === 'size') {
       setStep('upload');
@@ -141,6 +139,8 @@ export default function ImageToLabelScreen() {
     }
     goBack();
   };
+
+  useStepBack(step === 'size' && !opening, handleBack);
 
   const sizePreview = imageUri ? (
     <View style={[StyleSheet.absoluteFill, styles.previewClip]}>
@@ -155,7 +155,7 @@ export default function ImageToLabelScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={goBack} hitSlop={12} style={styles.backBtn}>
+        <Pressable onPress={handleBack} hitSlop={12} style={styles.backBtn}>
           <Text style={styles.backChevron}>‹</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Upload label</Text>
@@ -163,30 +163,54 @@ export default function ImageToLabelScreen() {
       </View>
 
       {step === 'upload' || !imageUri ? (
-        <View style={styles.empty}>
-          <View style={styles.emptyIcon}>
-            <AppIcon name="photo.on.rectangle" tintColor={C.accent} size={32} />
-          </View>
-          <Text style={styles.emptyTitle}>Upload a soft copy</Text>
-          <Text style={styles.emptyBody}>
-            Photograph or scan one label, cropped tightly to its outer edges. PNG or JPG.
-          </Text>
-          <View style={styles.guide}>
-            <Text style={styles.guideTitle}>How to measure</Text>
-            {MEASURE_POINTS.map((point) => (
-              <View key={point} style={styles.guideRow}>
-                <View style={styles.guideDot} />
-                <Text style={styles.guideText}>{point}</Text>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+          showsVerticalScrollIndicator={false}>
+          <UploadHero />
+          <UploadSteps current={0} />
+
+          <Pressable
+            onPress={() => void pickImage()}
+            accessibilityRole="button"
+            accessibilityLabel="Upload image"
+            style={({ pressed }) => [styles.uploadCard, pressed && styles.pressed]}>
+            <View style={styles.uploadIcon}>
+              <ToolArt id="imageToLabel" size={116} />
+            </View>
+            <Text style={styles.uploadTitle}>Upload your label</Text>
+            <Text style={styles.uploadSub}>
+              Tap here to pick a photo or scan of one label.
+            </Text>
+            <View style={styles.uploadChips}>
+              {['Gallery', 'Files'].map((label) => (
+                <View key={label} style={styles.uploadChip}>
+                  <Text style={styles.uploadChipText}>{label}</Text>
+                </View>
+              ))}
+              <View style={[styles.uploadChip, styles.uploadChipAccent]}>
+                <Text style={[styles.uploadChipText, styles.uploadChipTextAccent]}>PNG · JPG</Text>
               </View>
-            ))}
+            </View>
+          </Pressable>
+
+          <View style={styles.tipCard}>
+            <AppIcon name="lightbulb" tintColor={C.textMuted} size={16} />
+            <Text style={styles.tipText}>
+              <Text style={styles.tipStrong}>Use an accurately designed label photo. </Text>
+              It should be sharp, flat and straight, with nothing cut off. Crop tightly to the
+              label's edges, and measure the label itself, not the gap between labels on the roll.
+            </Text>
           </View>
-        </View>
+        </ScrollView>
       ) : (
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
+          <UploadSteps current={1} />
+
           <View style={styles.fileRow}>
             <Image source={{ uri: imageUri }} style={styles.fileLogo} contentFit="cover" />
             <View style={styles.fileText}>
@@ -204,36 +228,7 @@ export default function ImageToLabelScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.optionCard}>
-            <Text style={styles.optionLabel}>Rotation</Text>
-            <View style={styles.rotationRow}>
-              {ROTATIONS.map((angle) => {
-                const active = angle === rotation;
-                return (
-                  <Pressable
-                    key={angle}
-                    onPress={() => setRotation(angle)}
-                    style={[styles.rotationChip, active && styles.rotationChipActive]}>
-                    <Text style={[styles.rotationText, active && styles.rotationTextActive]}>{angle}°</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <View style={styles.printRow}>
-              <View style={styles.printText}>
-                <Text style={styles.optionLabel}>Need Printing</Text>
-                <Text style={styles.optionHint}>Turn this on when the photo should print.</Text>
-              </View>
-              <Switch
-                value={needPrinting}
-                onValueChange={setNeedPrinting}
-                trackColor={{ false: C.border, true: C.accent }}
-                thumbColor="#FFFFFF" // theme-fixed: white switch thumb
-                ios_backgroundColor={C.border}
-              />
-            </View>
-          </View>
-
+          <Text style={styles.sectionTitle}>Label size</Text>
           <Text style={styles.sizeNote}>
             Choose the label's own width and height. Leave out the gap between labels.
           </Text>
@@ -251,6 +246,37 @@ export default function ImageToLabelScreen() {
             onUnitChange={setLabelUnit}
             preview={sizePreview}
           />
+
+          <Text style={styles.sectionTitle}>Options</Text>
+          <View style={styles.optionCard}>
+            <Text style={styles.optionLabel}>Turn the photo</Text>
+            <View style={styles.rotationRow}>
+              {ROTATIONS.map((angle) => {
+                const active = angle === rotation;
+                return (
+                  <Pressable
+                    key={angle}
+                    onPress={() => setRotation(angle)}
+                    style={[styles.rotationChip, active && styles.rotationChipActive]}>
+                    <Text style={[styles.rotationText, active && styles.rotationTextActive]}>{angle}°</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={styles.printRow}>
+              <View style={styles.printText}>
+                <Text style={styles.optionLabel}>Print this photo</Text>
+                <Text style={styles.optionHint}>Off: the photo is only a guide to trace over. On: it prints with your label.</Text>
+              </View>
+              <Switch
+                value={needPrinting}
+                onValueChange={setNeedPrinting}
+                trackColor={{ false: C.border, true: C.accent }}
+                thumbColor="#FFFFFF" // theme-fixed: white switch thumb
+                ios_backgroundColor={C.border}
+              />
+            </View>
+          </View>
 
           {proportionWarn ? (
             <Text style={styles.warn}>
@@ -280,7 +306,7 @@ export default function ImageToLabelScreen() {
             <ActivityIndicator color="#FFFFFF" size="small" /* theme-fixed: on accent button */ />
           ) : (
             <Text style={styles.openButtonText}>
-              {step === 'upload' || !imageUri ? 'Upload image' : 'Create label'}
+              {step === 'upload' || !imageUri ? 'Choose image' : 'Create label'}
             </Text>
           )}
         </Pressable>
@@ -309,44 +335,53 @@ const styles = themedStyles((c) => ({
     fontWeight: '500',
   },
   headerSpacer: { width: 36 },
-  empty: {
-    flex: 1,
+  uploadCard: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: c.accent,
+    backgroundColor: c.surface,
+  },
+  uploadIcon: {
+    width: 148,
+    height: 148,
+    borderRadius: 38,
+    backgroundColor: c.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 28,
-    gap: 12,
+    marginBottom: 6,
   },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: c.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
+  uploadTitle: { fontSize: 22, fontWeight: '800', color: c.text, textAlign: 'center' },
+  uploadSub: {
+    fontSize: 14.5,
+    color: c.textSecondary,
+    lineHeight: 21,
+    textAlign: 'center',
+    maxWidth: 320,
   },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: c.text },
-  emptyBody: { fontSize: 14, color: c.textMuted, textAlign: 'center', lineHeight: 20 },
-  guide: {
-    alignSelf: 'stretch',
-    marginTop: 8,
-    backgroundColor: c.surface,
+  uploadChips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 6 },
+  uploadChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: c.hairline,
-    padding: 14,
-    gap: 10,
+    backgroundColor: c.fill,
   },
-  guideTitle: { fontSize: 14, fontWeight: '700', color: c.text },
-  guideRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  guideDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: c.accentFill,
-    marginTop: 6,
+  uploadChipAccent: { backgroundColor: c.accentSoft },
+  uploadChipText: { fontSize: 12.5, fontWeight: '700', color: c.textSecondary },
+  uploadChipTextAccent: { color: c.accentInk },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: c.text, marginLeft: 2 },
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 4,
   },
-  guideText: { flex: 1, fontSize: 13, color: c.textSecondary, lineHeight: 18 },
+  tipStrong: { fontWeight: '700', color: c.text },
+  tipText: { flex: 1, fontSize: 12.5, color: c.textMuted, lineHeight: 18 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, gap: 12 },
   fileRow: {

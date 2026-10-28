@@ -2,9 +2,10 @@ import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppIcon } from '@/components/app-icon';
+import { FadeInItem } from '@/components/ui/motion';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PrintHistoryEntryPreview } from '@/components/print-history-entry-preview';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -235,15 +236,17 @@ export default function PrintingHistoryScreen() {
       ? '1 label was printed this day'
       : `${dayEntries.length} labels were printed this day`;
 
-  const renderTile = ({ item }: { item: PrintHistoryEntry }) => (
-    <HistoryDayTile
-      entry={item}
-      width={tileColumnWidth}
-      getDocument={getDocument}
-      upsertDocument={upsertDocument}
-      onReprint={handleReprint}
-      onDelete={handleDeleteOne}
-    />
+  const renderTile = ({ item, index }: { item: PrintHistoryEntry; index: number }) => (
+    <FadeInItem index={index}>
+      <HistoryDayTile
+        entry={item}
+        width={tileColumnWidth}
+        getDocument={getDocument}
+        upsertDocument={upsertDocument}
+        onReprint={handleReprint}
+        onDelete={handleDeleteOne}
+      />
+    </FadeInItem>
   );
 
   return (
@@ -285,8 +288,13 @@ export default function PrintingHistoryScreen() {
       </View>
 
       {!ready ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={C.accent} />
+        <View style={[styles.list, styles.listContent, styles.skeletonGrid]}>
+          {[0, 1, 2, 3].map((n) => (
+            <View key={n} style={[styles.tileCard, { width: tileColumnWidth }]}>
+              <Skeleton style={styles.skeletonPreview} />
+              <Skeleton style={styles.skeletonLine} />
+            </View>
+          ))}
         </View>
       ) : entries.length === 0 ? (
         <View style={styles.emptyWrap}>
@@ -386,11 +394,13 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 13,
     color: c.textMuted,
   },
-  loadingWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: TILE_GAP,
   },
+  skeletonPreview: { height: 96, borderRadius: 6 },
+  skeletonLine: { height: 12, width: '60%', marginTop: Spacing.two },
   list: {
     flex: 1,
     width: '100%',

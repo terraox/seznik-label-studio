@@ -6,6 +6,7 @@ import {
   CREATE_HERO_TOOL,
   FILE_TOOLS,
   HOME_TOOLS,
+  TOOL_GRID_COLUMNS,
   TOOL_GRID_GROUPS,
   type HomeTool,
   type HomeToolId,
@@ -17,10 +18,9 @@ const LEGACY_HOME_HREFS = [
   '/excel-print',
   '/pdf',
   '/ecommerce-label',
+  '/new-label-setup?printImage=1',
   '/new-label-setup?serialEditor=1',
 ];
-
-const GRID_COLUMNS = 3;
 
 const allIds = Object.keys(HOME_TOOLS) as HomeToolId[];
 
@@ -52,6 +52,12 @@ test('every tool either links somewhere or runs an action', () => {
   }
 });
 
+test('Image tile asks for the label size first', () => {
+  const tool: HomeTool = HOME_TOOLS.printImage;
+  assert.equal(tool.href, '/new-label-setup?printImage=1');
+  assert.ok(FILE_TOOLS.includes('printImage'));
+});
+
 test('PDF tile keeps pointing at /pdf', () => {
   assert.equal(HOME_TOOLS.pdf.href, '/pdf');
 });
@@ -72,8 +78,9 @@ test('section membership matches each tool group', () => {
   for (const id of FILE_TOOLS) assert.equal(HOME_TOOLS[id].group, 'file');
 });
 
-test('3-column ToolGrid groups have length 3', () => {
+test('each ToolGrid group fills whole rows', () => {
   for (const [name, ids] of Object.entries(TOOL_GRID_GROUPS)) {
-    assert.equal(ids.length, GRID_COLUMNS, `${name} grid has ${ids.length} tiles`);
+    const columns = TOOL_GRID_COLUMNS[name as keyof typeof TOOL_GRID_COLUMNS];
+    assert.equal(ids.length, columns, `${name} grid has ${ids.length} tiles`);
   }
 });

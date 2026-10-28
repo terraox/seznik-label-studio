@@ -17,7 +17,6 @@ import {
   StyleSheet,
   Text,
   UIManager,
-  Vibration,
   useWindowDimensions,
   View,
   type StyleProp,
@@ -33,6 +32,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
 
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
+import { snapshotSetup } from '@/lib/saved-setup';
+import { useSavedSetupStore } from '@/stores/saved-setup-store';
 import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
 import { CANVAS_WALKTHROUGH } from '@/lib/walkthrough/canvas-steps';
 import { registerWalkthroughTarget } from '@/lib/walkthrough/registry';
@@ -51,6 +52,7 @@ import {
   fitNewTextDefaults,
   fitTextBoxToContent,
   fitTimeDefaults,
+  fitCounterDefaults,
   mergeTextElementPatch,
   growTextFrameHeightForWidth,
   NEW_TEXT_PLACEHOLDER,
@@ -82,7 +84,6 @@ import {
 } from '@/lib/editor/resize-policy';
 import {
   BULK_LABEL_NAV_HEIGHT_PX,
-  BULK_PANEL_DEFAULT_HEIGHT_PX,
   SPLIT_GAP_PX,
   NUDGE_PAD_SPLIT_EXTRA_PX,
   PANEL_DEFAULT_HEIGHT_PX,
@@ -111,10 +112,13 @@ import {
   type NormalizedCrop,
 } from '@/lib/editor/image-crop-math';
 import {
+  applyTableStructureAction,
+  createDefaultTableCell,
   ensureTableCells,
   patchTableCellInElement,
   tableCellToEditorState,
   type SelectedTableCell,
+  type TableStructureAction,
 } from '@/lib/editor/table-cells';
 import {
   isPaletteDropOnArtboard,
@@ -131,6 +135,7 @@ import { DegreesPropertyPanel } from '@/components/editor/degrees-property-panel
 import { ArcTextPropertyPanel } from '@/components/editor/arctext-property-panel';
 import { BarcodePropertyPanel } from '@/components/editor/barcode-property-panel';
 import { ImagePropertyPanel, type ImagePropertyTab } from '@/components/editor/image-property-panel';
+import { collectReferenceImageKeepUris } from '@/lib/reference-image';
 import { ReferenceImagePanel } from '@/components/editor/reference-image-panel';
 import {
   ClipartPropertyPanel,
@@ -152,6 +157,7 @@ import type {
 } from '@/components/editor/konva-transformer';
 import { CanvasPanelDivider } from '@/components/editor/canvas-panel-divider';
 import { StaticToolPalette } from '@/components/editor/static-tool-palette';
+import { haptics } from '@/lib/haptics';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -272,6 +278,7 @@ import {
   resolveDocumentForIndex,
   serialMaps,
   serialBatchCount,
+  describeSerialValues,
 } from '@/lib/serial/resolve-document';
 import { defaultSerialConfig, newSerialFieldId } from '@/lib/serial/legacy';
 import { MAX_SERIAL_BATCH } from '@/lib/serial/types';
@@ -339,15 +346,13 @@ const TOOL_ROWS: { icon: IconName; label: string }[][] = [
     { icon: 'character', label: 'ArcText' },
   ],
   [
-    { icon: 'list.number', label: 'Serial' },
+    { icon: 'list.number', label: 'Counter' },
     { icon: 'tablecells.badge.ellipsis', label: 'Excel' },
-    { icon: 'viewfinder', label: 'Scan' },
     { icon: 'eye', label: 'OCR' },
     { icon: 'face.smiling', label: 'Line Emoji' },
+    { icon: 'square.dashed', label: 'Border' },
   ],
   [
-    { icon: 'square.on.square', label: 'Label Clone' },
-    { icon: 'square.dashed', label: 'Border' },
     { icon: 'signature', label: 'Signature' },
   ],
 ];
@@ -381,8 +386,7 @@ function scaledFontSizeForResize(
   if (
     el.type === 'barcode' ||
     el.type === 'text' ||
-    el.type === 'degrees' ||
-    el.type === 'time'
+    el.type === 'degrees'
   ) {
     return undefined;
   }
@@ -726,7 +730,9 @@ function paletteDefaultSizeMm(
           ? fitTimeDefaults(canvas.widthMm, canvas.heightMm, elements)
           : type === 'text'
             ? fitNewTextDefaults(canvas.widthMm, canvas.heightMm, elements)
-            : fitTextDefaults(canvas.widthMm, canvas.heightMm, elements);
+            : type === 'degrees'
+              ? fitCounterDefaults(canvas.widthMm, canvas.heightMm, elements)
+              : fitTextDefaults(canvas.widthMm, canvas.heightMm, elements);
       return {
         widthMm: fit.width,
         heightMm: 'height' in fit && typeof fit.height === 'number' ? fit.height : textBlockHeightMm(fit.fontSize, 1),
@@ -949,6 +955,8 @@ export default function EditScreen() {
   const [sizeModalVisible, setSizeModalVisible] = useState(false);
   const [saveAsVisible, setSaveAsVisible] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
+  const [setupPromptVisible, setSetupPromptVisible] = useState(false);
+  const [setupName, setSetupName] = useState('');
   const [bulkScopeApplyAll, setBulkScopeApplyAll] = useState(true);
   const bulkApplyAllRef = useRef(true);
   bulkApplyAllRef.current = bulkScopeApplyAll;
@@ -983,6 +991,7 @@ export default function EditScreen() {
       viewportPx: editorFallbackViewportPx(windowHeight),
       panelMinPx: PANEL_MIN_HEIGHT_PX,
       panelDefaultPx: PANEL_DEFAULT_HEIGHT_PX,
+      fitMenu: true,
     }),
   );
 
@@ -1028,7 +1037,7 @@ export default function EditScreen() {
       isBulk: Boolean(doc.bulk),
       blockedReason: doc.ups ? 'Serial labels are not available on multi-up labels yet.' : null,
       linkOptions: (excludeFieldId) => {
-        const names: Record<string, string> = { text: 'Text', barcode: 'Barcode', qrcode: 'QR code', degrees: 'Serial', arctext: 'ArcText', table: 'Table cell' };
+        const names: Record<string, string> = { text: 'Text', barcode: 'Barcode', qrcode: 'QR code', degrees: 'Counter', arctext: 'ArcText', table: 'Table cell' };
         const seen: Record<string, number> = {};
         return linkCandidates(doc, excludeFieldId).map((f) => {
           const base = names[f.type] ?? 'Field';
@@ -1049,7 +1058,8 @@ export default function EditScreen() {
     (showBulkCopies ? BULK_COPIES_BAR_HEIGHT_PX : 0) +
     (showSerialBar ? SERIAL_BAR_HEIGHT_PX : 0);
   const splitViewportForCanvas = Math.max(0, splitViewportH - bulkNavReservePx);
-  const panelDefaultBase = showBulkNav ? BULK_PANEL_DEFAULT_HEIGHT_PX : PANEL_DEFAULT_HEIGHT_PX;
+  // Excel keeps the full tool menu visible by default; the canvas fits what is left above it.
+  const panelDefaultBase = PANEL_DEFAULT_HEIGHT_PX;
   const panelDefaultForSplit =
     panelDefaultBase +
     (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0) +
@@ -1194,6 +1204,7 @@ export default function EditScreen() {
           viewportPx: splitViewportForCanvas,
           panelMinPx: panelMinForSplit,
           panelDefaultPx: panelDefaultForSplit,
+          fitMenu: true,
         }),
       );
       return;
@@ -1416,7 +1427,10 @@ export default function EditScreen() {
     return windowPointToMm({ x: windowX, y: windowY }, padWindowOriginRef.current, view);
   }, []);
 
+  const hadSnapGuidesRef = useRef(false);
   const publishSnapGuides = useCallback((next: SnapGuide[]) => {
+    if (next.length > 0 && !hadSnapGuidesRef.current) haptics.snap();
+    hadSnapGuidesRef.current = next.length > 0;
     setSnapGuides((prev) => (guidesEqual(prev, next) ? prev : next));
   }, []);
 
@@ -1448,6 +1462,7 @@ export default function EditScreen() {
       viewportPx: viewport,
       panelMinPx: panelMinForSplit,
       panelDefaultPx: panelDefaultForSplit,
+      fitMenu: true,
     });
     setCanvasFullscreen(next);
     setCanvasSplitH(height);
@@ -1479,11 +1494,7 @@ export default function EditScreen() {
       splitDraggingRef.current = false;
       setSplitDragging(false);
       if (result.snapped) {
-        try {
-          Vibration.vibrate(8);
-        } catch {
-          // web / unsupported
-        }
+        haptics.snap();
         animateEditorSplit();
       }
       setCanvasFullscreen(result.fullscreen);
@@ -1859,8 +1870,25 @@ export default function EditScreen() {
     [patchTableCellAt],
   );
 
+  const ensureTablePanelOpen = useCallback(() => {
+    topBarSelectionVisibleSv.value = 1;
+    bottomPanelVisibleSv.value = 1;
+    setPanelOpen(true);
+  }, [topBarSelectionVisibleSv, bottomPanelVisibleSv]);
+
+  /**
+   * Cell vs whole-table menu. Sticky while a cell is active: grid-line hits do not
+   * bounce back to the table panel (that was the main menu glitch). Pass
+   * `forceClear` from Select Table to leave cell mode on purpose.
+   */
   const handleTableCellPress = useCallback(
-    (tableId: string, cell: { row: number; col: number } | null) => {
+    (
+      tableId: string,
+      cell: { row: number; col: number } | null,
+      opts?: { forceClear?: boolean },
+    ) => {
+      const prev = selectedTableCellRef.current;
+
       if (cell) {
         const tableEl = docRef.current.elements.find(
           (el): el is Extract<LabelElement, { type: 'table' }> =>
@@ -1873,27 +1901,87 @@ export default function EditScreen() {
           cell.row >= tableEl.rowCount ||
           cell.col >= tableEl.columnCount
         ) {
-          console.log(
-            `[table-cell] select-rejected tableId=${tableId} cell=${JSON.stringify(cell)} rowCount=${tableEl?.rowCount} colCount=${tableEl?.columnCount}`,
-          );
+          return;
+        }
+        // Same cell already active — keep the panel, skip React churn.
+        if (prev?.tableId === tableId && prev.row === cell.row && prev.col === cell.col) {
+          ensureTablePanelOpen();
           return;
         }
         commitSelectedTableCell({ tableId, row: cell.row, col: cell.col });
-        setTextTab('Regular');
-        console.log(
-          `[table-cell] select-highlight tableId=${tableId} row=${cell.row} col=${cell.col} panel=TextPropertyPanel`,
-        );
-      } else {
-        commitSelectedTableCell(null);
-        setTableTab('Regular');
-        console.log(`[table-cell] clear-cell tableId=${tableId} panel=TablePropertyPanel`);
+        // Keep Content/Font while hopping cells of the same table.
+        if (!prev || prev.tableId !== tableId) setTextTab('Content');
+        ensureTablePanelOpen();
+        return;
       }
-      topBarSelectionVisibleSv.value = 1;
-      bottomPanelVisibleSv.value = 1;
-      setPanelOpen(true);
+
+      // Line / clear
+      if (prev == null) {
+        ensureTablePanelOpen();
+        return;
+      }
+      // Sticky cell mode: ignore accidental grid-line hits while editing a cell.
+      if (prev.tableId === tableId && !opts?.forceClear) {
+        ensureTablePanelOpen();
+        return;
+      }
+      commitSelectedTableCell(null);
+      setTableTab('Regular');
+      ensureTablePanelOpen();
     },
-    [commitSelectedTableCell, topBarSelectionVisibleSv, bottomPanelVisibleSv],
+    [commitSelectedTableCell, ensureTablePanelOpen],
   );
+
+  const handleTableStructureAction = useCallback(
+    (action: TableStructureAction) => {
+      const cell = selectedTableCellRef.current;
+      if (!cell) return;
+      const tableEl = docRef.current.elements.find(
+        (el): el is Extract<LabelElement, { type: 'table' }> =>
+          el.id === cell.tableId && el.type === 'table',
+      );
+      if (!tableEl) return;
+      const next = applyTableStructureAction(tableEl, action, cell.row, cell.col);
+      if (!next) return;
+      setElements(
+        (els) => els.map((el) => (el.id === cell.tableId ? { ...el, ...next, id: el.id, type: 'table' } : el)),
+        true,
+      );
+      const row = Math.min(cell.row, next.rowCount - 1);
+      const col = Math.min(cell.col, next.columnCount - 1);
+      commitSelectedTableCell({ tableId: cell.tableId, row, col });
+      setPanelOpen(true);
+      bottomPanelVisibleSv.value = 1;
+    },
+    [commitSelectedTableCell, setElements, bottomPanelVisibleSv],
+  );
+
+  const handleSelectWholeTable = useCallback(() => {
+    const cell = selectedTableCellRef.current;
+    if (!cell) return;
+    handleTableCellPress(cell.tableId, null, { forceClear: true });
+  }, [handleTableCellPress]);
+
+  /** Stash the scan target before leaving so a remounted edit screen still fills the right cell. */
+  const handleContentScanPress = useCallback(() => {
+    const cell = selectedTableCellRef.current;
+    if (cell) {
+      editorBridge.scanConsumer = {
+        kind: 'tableCell',
+        tableId: cell.tableId,
+        row: cell.row,
+        col: cell.col,
+      };
+    } else if (selectedIdsRef.current.length === 1) {
+      editorBridge.scanConsumer = {
+        kind: 'element',
+        elementId: selectedIdsRef.current[0],
+      };
+    } else {
+      editorBridge.scanConsumer = null;
+    }
+    router.push({ pathname: '/scan', params: { from: 'edit' } });
+  }, []);
 
   const handleTableCellQuickEdit = useCallback(
     (tableId: string, cell: { row: number; col: number }, anchorRect?: ElementAnchorRect) => {
@@ -2103,7 +2191,9 @@ export default function EditScreen() {
           break;
         }
         case 'degrees': {
-          const fit = fitTextDefaults(maxW, maxH, elements);
+          // A new Counter (it carries a serial config) is a compact one-line box; an old one keeps the wide box.
+          const isCounter = Boolean((overrides as { serial?: unknown }).serial);
+          const fit = isCounter ? fitCounterDefaults(maxW, maxH, elements) : fitTextDefaults(maxW, maxH, elements);
           element = {
             ...DEFAULT_DEGREES_STATE,
             ...base,
@@ -2112,6 +2202,7 @@ export default function EditScreen() {
             top: fit.top,
             width: fit.width,
             fontSize: DEFAULT_DEGREES_STATE.fontSize,
+            ...(isCounter ? { autoWrapping: 'Close' as const } : {}),
             ...overrides,
           };
           break;
@@ -2266,9 +2357,9 @@ export default function EditScreen() {
 
     setElements((elements) => elements.filter((el) => !ids.includes(el.id)), true);
 
-    // Prefer a remaining canvas-selectable element (not border / non-printing chrome).
+    // Prefer a remaining canvas-selectable element (not a border).
     const candidates = sortLayers(remaining).filter(
-      (el) => el.type !== 'border' && el.needPrinting !== false && isEditorVisible(el),
+      (el) => el.type !== 'border' && isEditorVisible(el),
     );
     const next = candidates.length > 0 ? candidates[candidates.length - 1] : null;
 
@@ -2480,7 +2571,7 @@ export default function EditScreen() {
   const handleSelect = useCallback(
     (id: string, source: SelectSource = 'touch') => {
       const element = docRef.current.elements.find((el) => el.id === id);
-      if (!element || element.needPrinting === false) return;
+      if (!element) return;
       if (!mountedRef.current) return;
       // Borders are not canvas-selectable — only the Border menu may open their panel.
       if (element.type === 'border' && source !== 'menu') return;
@@ -2526,6 +2617,7 @@ export default function EditScreen() {
       }
 
       const next = reduceTapSelect({ id, multipleMode, current });
+      if (source !== 'menu') haptics.select();
 
       // Refs update synchronously so a rapid next touch never reads the pre-render selection.
       selectedIdsRef.current = next.ids;
@@ -2542,9 +2634,19 @@ export default function EditScreen() {
         return;
       }
 
-      if (
-        !next.primaryId ||
-        next.primaryId !== selectedTableCellRef.current?.tableId
+      // Table touch: cell/line is resolved in onTableCellPress right after this. Clearing the
+      // cell here (or leaving the previous element's panel open) flashes the wrong menu.
+      const tableTouch = element.type === 'table' && source === 'touch';
+      if (!tableTouch) {
+        if (
+          !next.primaryId ||
+          next.primaryId !== selectedTableCellRef.current?.tableId
+        ) {
+          commitSelectedTableCell(null);
+        }
+      } else if (
+        selectedTableCellRef.current &&
+        selectedTableCellRef.current.tableId !== id
       ) {
         commitSelectedTableCell(null);
       }
@@ -2556,8 +2658,18 @@ export default function EditScreen() {
         docRef.current.elements.find((el) => el.id === next.primaryId) ?? element;
 
       // Lightweight open on touch-down — no ensurePanelMounted / full tab reset (those stall drag).
+      // Tables: panel opens from onTableCellPress after the hit is known (avoids table↔cell flash).
       if (!multipleMode) {
-        if (element.type === 'image') {
+        if (tableTouch) {
+          // Close a stale non-table panel so we don't show Table↔Text for one frame.
+          if (
+            panelOpen &&
+            (!selectedTableCellRef.current ||
+              selectedTableCellRef.current.tableId !== id)
+          ) {
+            setPanelOpen(false);
+          }
+        } else if (element.type === 'image') {
           setImageTab('Regular');
           setPanelOpen(true);
         } else if (element.type === 'clipart') {
@@ -2566,7 +2678,7 @@ export default function EditScreen() {
         } else {
           setPanelOpen(true);
         }
-      } else {
+      } else if (!tableTouch) {
         setPanelOpen(true);
       }
     },
@@ -2703,6 +2815,19 @@ export default function EditScreen() {
       commitSelectedTableCell,
     ],
   );
+
+  /** OCR from the quick-edit card: read text / barcode / QR from a photo into this element. */
+  const handleQuickEditOcr = useCallback(() => {
+    if (!quickEditTarget) return;
+    const type =
+      quickEditTarget.type === 'barcode' ? 'Barcode' : quickEditTarget.type === 'qrcode' ? 'QRCode' : 'Text';
+    const cell = quickEditTarget.tableCell;
+    editorBridge.scanConsumer = cell
+      ? { kind: 'tableCell', tableId: cell.tableId, row: cell.row, col: cell.col }
+      : { kind: 'element', elementId: quickEditTarget.id };
+    setQuickEditTarget(null);
+    router.push({ pathname: '/ocr', params: { from: 'edit', type } });
+  }, [quickEditTarget]);
 
   const handleQuickEditCancel = useCallback(() => {
     setQuickEditTarget(null);
@@ -3372,17 +3497,10 @@ export default function EditScreen() {
     return () => sub.remove();
   }, [upsertDocument]);
 
-  /** Back (header or hardware): prompt Save / Discard / Cancel when there are unsaved edits. */
+  /** Back (header or hardware): unsaved edits are saved automatically, then the editor closes. */
   const requestLeave = useCallback(() => {
-    if (!dirtyRef.current) {
-      goBack();
-      return;
-    }
-    Alert.alert('Unsaved changes', 'Save this label before leaving?', [
-      { text: 'Save', onPress: () => { saveDocument(false); goBack(); } },
-      { text: 'Discard', style: 'destructive', onPress: () => goBack() },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    if (dirtyRef.current) saveDocument(false);
+    goBack();
   }, [saveDocument]);
 
   useFocusEffect(
@@ -3458,10 +3576,39 @@ export default function EditScreen() {
     });
   }, []);
 
-  const handlePrint = useCallback(() => {
+  const goToPrint = useCallback(() => {
     saveDocument(false);
-    router.push({ pathname: '/print', params: { labelId: docRef.current.id } });
-  }, [saveDocument]);
+    router.push({
+      pathname: '/print',
+      params: { labelId: docRef.current.id, ...(showSerialBar ? { serialIndex: String(serialIdx) } : {}) },
+    });
+  }, [saveDocument, showSerialBar, serialIdx]);
+
+  // An Excel label offers to become a saved setup the first time it is printed, once per label.
+  const handlePrint = useCallback(() => {
+    const current = docRef.current;
+    if (current.bulk && !useSavedSetupStore.getState().wasAsked(current.id)) {
+      setSetupName(current.name.split(' · ')[0] || current.name);
+      setSetupPromptVisible(true);
+      return;
+    }
+    goToPrint();
+  }, [goToPrint]);
+
+  const finishSetupPrompt = useCallback(
+    (save: boolean) => {
+      const current = docRef.current;
+      setSetupPromptVisible(false);
+      useSavedSetupStore.getState().markAsked(current.id);
+      if (save) {
+        const sheet = current.bulk ? resolveBulkSheet(useDataStore.getState().excelFiles, current.bulk) : null;
+        const setup = snapshotSetup(current, sheet, setupName);
+        if (setup) useSavedSetupStore.getState().add(setup);
+      }
+      goToPrint();
+    },
+    [goToPrint, setupName],
+  );
 
   const savedBulkCopies = doc.bulk?.rowCopiesOverrides?.[String(doc.bulk.activeRowIndex)];
   const bulkCopiesValue =
@@ -3654,8 +3801,10 @@ export default function EditScreen() {
       ...historyRef.current.retainedSnapshots(),
       ...savedDocuments.map((item) => item.elements),
     ]);
-    void sweepEditorImageFiles(keep);
-  }, [doc.elements, historyRev, savedDocuments]);
+    // The Upload label guide photo is not an element; without this the sweep deletes it on open.
+    const keepRefs = collectReferenceImageKeepUris([{ referenceImage: doc.referenceImage }, ...savedDocuments]);
+    void sweepEditorImageFiles([...keep, ...keepRefs]);
+  }, [doc.elements, doc.referenceImage, historyRev, savedDocuments]);
 
   useEffect(() => {
     const rehydrateBulk = () => {
@@ -3704,22 +3853,42 @@ export default function EditScreen() {
       }
 
       const applyCapture = (kind: 'Text' | 'Barcode' | 'QRCode', data: string, encodeMode?: string) => {
+        // Prefer the stashed scanConsumer (survives remount), then the live cell selection.
+        const consumer = editorBridge.scanConsumer;
+        editorBridge.scanConsumer = null;
+        const cellTarget: SelectedTableCell | null =
+          consumer?.kind === 'tableCell'
+            ? { tableId: consumer.tableId, row: consumer.row, col: consumer.col }
+            : selectedTableCellRef.current;
+        const preferredElementId =
+          consumer?.kind === 'element' ? consumer.elementId : null;
+
         // A table cell only ever holds text, so a decoded scan lands as plain Manual
         // content there — never as a barcode/QR graphic, whatever the symbology was.
-        const cellTarget = selectedTableCellRef.current;
         if (cellTarget) {
           const written = patchTableCellAt(cellTarget, { text: data, contentType: 'Manual' });
           console.log(
             `[table-cell] scan-write kind=${kind} target=${JSON.stringify(cellTarget)} textLen=${data.length} written=${written} as=Manual-text`,
           );
           if (written) {
+            // Restore selection chrome after /scan (edit may have remounted).
+            selectedIdsRef.current = [cellTarget.tableId];
+            primaryIdRef.current = cellTarget.tableId;
+            setSelectedIds([cellTarget.tableId]);
+            setPrimaryId(cellTarget.tableId);
+            commitSelectedTableCell(cellTarget);
+            activeSelectedIdSv.value = cellTarget.tableId;
+            topBarSelectionVisibleSv.value = 1;
+            bottomPanelVisibleSv.value = 1;
             setTextTab('Content');
             setPanelOpen(true);
             return;
           }
         }
         // A scan into a selected barcode / QR code updates its value instead of adding another.
-        const pickedId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+        const pickedId =
+          preferredElementId ??
+          (selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null);
         const picked =
           pickedId != null ? docRef.current.elements.find((el) => el.id === pickedId) : undefined;
         if (kind === 'QRCode' && picked?.type === 'qrcode') {
@@ -3953,8 +4122,12 @@ export default function EditScreen() {
       patchElement,
       setElements,
       patchTableCellAt,
+      commitSelectedTableCell,
       placeIngestedImageOnCanvas,
       applyCroppedImageToElement,
+      activeSelectedIdSv,
+      topBarSelectionVisibleSv,
+      bottomPanelVisibleSv,
     ]),
   );
 
@@ -4139,7 +4312,7 @@ export default function EditScreen() {
           Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
           return;
         }
-        Object.assign(overrides, storedValuePatch(defaultSerialConfig(), 'content'));
+        Object.assign(overrides, storedValuePatch(defaultSerialConfig('001'), 'content'));
       }
       addElement(ghost.type, overrides);
       openAddedElementPanel(ghost.label === 'Serial' || ghost.label === 'Counter' ? 'Degrees' : ghost.label);
@@ -4265,7 +4438,7 @@ export default function EditScreen() {
           Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
           break;
         }
-        addElement('degrees', storedValuePatch(defaultSerialConfig(), 'content'));
+        addElement('degrees', storedValuePatch(defaultSerialConfig('001'), 'content'));
         openAddedElementPanel('Degrees');
         break;
       case 'Degrees':
@@ -4304,19 +4477,32 @@ export default function EditScreen() {
         void importExcelFromCanvas();
         break;
       case 'Scan':
-        router.push({ pathname: '/scan', params: { from: 'edit' } });
+        handleContentScanPress();
         break;
-      case 'OCR':
+      case 'OCR': {
+        const cell = selectedTableCellRef.current;
+        if (cell) {
+          editorBridge.scanConsumer = {
+            kind: 'tableCell',
+            tableId: cell.tableId,
+            row: cell.row,
+            col: cell.col,
+          };
+        } else if (selectedIdsRef.current.length === 1) {
+          editorBridge.scanConsumer = {
+            kind: 'element',
+            elementId: selectedIdsRef.current[0],
+          };
+        } else {
+          editorBridge.scanConsumer = null;
+        }
         router.push({ pathname: '/ocr', params: { from: 'edit' } });
         break;
+      }
       case 'Line Emoji':
         clipartReplaceIdRef.current = null;
         clipartPendingPlacementRef.current = null;
         router.push({ pathname: '/clipart', params: { from: 'edit', mode: 'emoji' } });
-        break;
-      case 'Label Clone':
-        saveDocument(false);
-        router.push({ pathname: '/scan', params: { mode: 'labelClone' } });
         break;
       case 'Signature':
         signatureBoardIntentRef.current = 'create';
@@ -4721,6 +4907,7 @@ export default function EditScreen() {
             labelHeightMm={labelBounds.heightMm}
             elementHeightMm={selectedElementHeightMm}
             contentFocusRequest={focusRequest}
+            onScanPress={handleContentScanPress}
           />
         );
       case 'barcode':
@@ -4782,35 +4969,50 @@ export default function EditScreen() {
           selectedTableCell.col < table.columnCount
             ? selectedTableCell
             : null;
-        if (activeCell) {
-          const cell = table.cells![activeCell.row][activeCell.col];
-          const cellState = tableCellToEditorState(cell, table, activeCell.row, activeCell.col);
-          const cellHeightMm = table.rowHeights[activeCell.row] ?? table.height / table.rowCount;
-          return (
-            <TextPropertyPanel
-              activeTab={textTab}
-              onTabChange={setTextTab}
-              state={cellState}
-              patch={patchTableCellSelected}
-              onColumnNamePress={handleColumnNamePress}
-              labelWidthMm={labelBounds.widthMm}
-              labelHeightMm={labelBounds.heightMm}
-              elementHeightMm={cellHeightMm}
-              contentFocusRequest={focusRequest}
-              panelScope="tableCell"
-            />
-          );
-        }
+        // Keep both panels mounted so line↔cell taps do not cold-mount the menu each time.
+        const cell =
+          activeCell != null
+            ? table.cells![activeCell.row][activeCell.col]
+            : createDefaultTableCell();
+        const cellRow = activeCell?.row ?? 0;
+        const cellCol = activeCell?.col ?? 0;
+        const cellState = tableCellToEditorState(cell, table, cellRow, cellCol);
+        const cellHeightMm = table.rowHeights[cellRow] ?? table.height / table.rowCount;
         return (
-          <TablePropertyPanel
-            activeTab={tableTab}
-            onTabChange={setTableTab}
-            state={targetEl}
-            patch={patchSelected}
-            labelWidthMm={labelBounds.widthMm}
-            labelHeightMm={labelBounds.heightMm}
-            elementHeightMm={selectedElementHeightMm}
-          />
+          <View style={{ flex: 1, minHeight: 0 }}>
+            <View
+              style={activeCell ? panelSlotHidden : panelSlotVisible}
+              pointerEvents={activeCell ? 'none' : 'auto'}>
+              <TablePropertyPanel
+                activeTab={tableTab}
+                onTabChange={setTableTab}
+                state={targetEl}
+                patch={patchSelected}
+                labelWidthMm={labelBounds.widthMm}
+                labelHeightMm={labelBounds.heightMm}
+                elementHeightMm={selectedElementHeightMm}
+              />
+            </View>
+            <View
+              style={activeCell ? panelSlotVisible : panelSlotHidden}
+              pointerEvents={activeCell ? 'auto' : 'none'}>
+              <TextPropertyPanel
+                activeTab={textTab}
+                onTabChange={setTextTab}
+                state={cellState}
+                patch={patchTableCellSelected}
+                onColumnNamePress={handleColumnNamePress}
+                labelWidthMm={labelBounds.widthMm}
+                labelHeightMm={labelBounds.heightMm}
+                elementHeightMm={cellHeightMm}
+                contentFocusRequest={activeCell ? focusRequest : 0}
+                panelScope="tableCell"
+                onScanPress={handleContentScanPress}
+                onTableStructureAction={handleTableStructureAction}
+                onSelectTable={handleSelectWholeTable}
+              />
+            </View>
+          </View>
         );
       }
       case 'time':
@@ -5250,11 +5452,8 @@ export default function EditScreen() {
             <SerialBar
               index={serialIdx}
               total={serialCount}
+              value={describeSerialValues(doc, serialIdx + continueOffset)}
               onGo={(i) => setSerialPreviewIndex(Math.min(serialCount - 1, Math.max(0, i)))}
-              continueEnabled={Boolean(continueEntry?.enabled)}
-              continueOffset={continueEntry?.offset ?? 0}
-              onContinueChange={(on) => useSerialContinueStore.getState().setEnabled(doc.id, on)}
-              onResetContinue={() => useSerialContinueStore.getState().reset(doc.id)}
             />
           ) : null}
 
@@ -5453,6 +5652,24 @@ export default function EditScreen() {
         />
       </IosAlertModal>
 
+      <IosAlertModal
+        visible={setupPromptVisible}
+        onClose={() => finishSetupPrompt(false)}
+        title="Save this setup?"
+        plainScroll
+        cardAlign="center"
+        message={
+          'Saving keeps this label\'s size, paper and layout, and which column goes where.\n\n' +
+          'Next time: open Excel, tap this setup, and pick a new sheet with the same column names. The label opens already set up.\n\n' +
+          'It is also kept in Templates, Local, marked "Saved setup". Your sheet\'s data is not saved.'
+        }
+        buttons={[
+          { text: 'Not now', style: 'cancel', onPress: () => finishSetupPrompt(false) },
+          { text: 'Save', style: 'default', bold: true, onPress: () => finishSetupPrompt(true) },
+        ]}>
+        <IosAlertInput value={setupName} onChangeText={setSetupName} placeholder="Setup name" />
+      </IosAlertModal>
+
       <GridSpacingPopover
         visible={gridSpacingPopoverVisible}
         spacingMm={gridSpacingMm}
@@ -5555,6 +5772,12 @@ export default function EditScreen() {
         title={quickEditTarget ? getQuickEditTitle(quickEditTarget.type) : undefined}
         placeholder={quickEditTarget ? getQuickEditPlaceholder(quickEditTarget.type) : undefined}
         anchorRect={quickEditTarget?.anchorRect}
+        onOcr={
+          quickEditTarget &&
+          (quickEditTarget.tableCell || ['text', 'barcode', 'qrcode'].includes(quickEditTarget.type))
+            ? handleQuickEditOcr
+            : undefined
+        }
         onCancel={handleQuickEditCancel}
         onConfirm={handleQuickEditConfirm}
       />
@@ -5883,11 +6106,12 @@ const styles = themedStyles((c, scheme) => ({
     flexDirection: 'column',
     overflow: 'visible',
     backgroundColor: '#FFFFFF', // theme-fixed: light preview (flushCanvasAssembly)
-    shadowColor: '#0B1F33', // theme-fixed: light preview (flushCanvasAssembly)
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+    // Dark stage: a black shadow reads as a paper edge against the lifted stage colour.
+    shadowColor: scheme === 'dark' ? '#000000' : '#0B1F33', // theme-fixed: light preview (flushCanvasAssembly)
+    shadowOffset: scheme === 'dark' ? { width: 0, height: 4 } : { width: 0, height: 2 },
+    shadowOpacity: scheme === 'dark' ? 0.6 : 0.08,
+    shadowRadius: scheme === 'dark' ? 14 : 6,
+    elevation: scheme === 'dark' ? 8 : 2,
   },
   artboardSlot: {
     position: 'relative',

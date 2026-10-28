@@ -27,7 +27,7 @@ export function SupportedPrintersSection() {
             <View style={styles.stage}>
               <Image source={PHOTOS[p.id]} style={styles.photo} contentFit="contain" cachePolicy="memory" />
             </View>
-            <Text style={[styles.name, { color: p.accent }]} numberOfLines={1}>
+            <Text style={styles.name} numberOfLines={1}>
               {p.shortName}
             </Text>
           </View>
@@ -46,7 +46,7 @@ const useStyles = makeStyles((c, scheme) => ({
     padding: Spacing.three,
     gap: Spacing.two,
   },
-  title: { fontSize: 16, fontWeight: '600', color: c.text },
+  title: { fontSize: 16, fontWeight: '700', color: c.brandInk },
   note: { fontSize: 13, lineHeight: 19, color: c.textSecondary },
   row: { flexDirection: 'row', gap: 10, marginTop: Spacing.one },
   printer: { flex: 1, gap: 6, alignItems: 'center' },
@@ -60,5 +60,5 @@ const useStyles = makeStyles((c, scheme) => ({
     overflow: 'hidden',
   },
   photo: { width: '100%', height: '100%' },
-  name: { fontSize: 13, fontWeight: '700' },
+  name: { fontSize: 13, fontWeight: '700', color: c.brandInk },
 }));

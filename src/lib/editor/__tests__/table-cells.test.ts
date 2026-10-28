@@ -5,8 +5,13 @@ import { createTableState } from '../../../components/editor/types';
 import {
   hitTestTableCellByFraction,
   hitTestTableCellFromViewPoint,
+  hitTestTableTargetByFraction,
+  hitTestTableTargetFromViewPoint,
   patchTableCellInElement,
   sameTableCellSelection,
+  tableColumnLineFractions,
+  tableLineToleranceFractions,
+  tableRowLineFractions,
 } from '../table-cells';
 import { isQuickEditableType } from '../quick-value';
 import { measureTextWidthMm, singleLineSqueezeSpacingMm } from '../../text-metrics';
@@ -50,6 +55,61 @@ test('hit-test follows visual row/col fractions after resize mismatch', () => {
     col: 1,
   });
   assert.deepEqual(hitTestTableCellByFraction(table, 0.55, 0.55), { row: 1, col: 1 });
+});
+
+test('grid and border taps target the table, not a cell', () => {
+  const table = createTableState(2, 2);
+  const tol = tableLineToleranceFractions(table, 200, 100);
+  assert.deepEqual(tableColumnLineFractions(table), [0, 0.5, 1]);
+  assert.deepEqual(tableRowLineFractions(table), [0, 0.5, 1]);
+
+  // Outer border and inner divider → table adjust menu.
+  for (const [fx, fy] of [
+    [0, 0.25],
+    [1, 0.25],
+    [0.25, 0],
+    [0.25, 1],
+    [0.5, 0.25],
+    [0.25, 0.5],
+  ] as const) {
+    assert.deepEqual(
+      hitTestTableTargetByFraction(table, fx, fy, tol),
+      { kind: 'line' },
+      `line at ${fx},${fy}`,
+    );
+  }
+
+  // Cell interiors stay cell taps for the text menu.
+  assert.deepEqual(hitTestTableTargetByFraction(table, 0.25, 0.25, tol), {
+    kind: 'cell',
+    row: 0,
+    col: 0,
+  });
+  assert.deepEqual(hitTestTableTargetByFraction(table, 0.75, 0.75, tol), {
+    kind: 'cell',
+    row: 1,
+    col: 1,
+  });
+
+  const w = 200;
+  const h = 100;
+  assert.deepEqual(hitTestTableTargetFromViewPoint(table, w * 0.5, h * 0.25, w, h), {
+    kind: 'line',
+  });
+  assert.deepEqual(hitTestTableTargetFromViewPoint(table, w * 0.25, h * 0.25, w, h), {
+    kind: 'cell',
+    row: 0,
+    col: 0,
+  });
+
+  // Hit-slop coords slightly outside the box still resolve (clamped).
+  assert.deepEqual(hitTestTableTargetFromViewPoint(table, -8, h * 0.25, w, h), {
+    kind: 'line',
+  });
+  assert.deepEqual(hitTestTableTargetFromViewPoint(table, w + 12, h * 0.75, w, h), {
+    kind: 'line',
+  });
+  assert.deepEqual(hitTestTableTargetFromViewPoint(table, w * 0.25, -4, w, h)?.kind, 'line');
 });
 
 test('patching one cell does not change another cell', () => {
@@ -106,4 +166,16 @@ test('a scanned code lands in a cell as manual text, never as a graphic', () => 
   });
   assert.equal(after.cells![0][1].text, scanned);
   assert.equal(after.cells![1][0].text, '8859126000508');
+});
+
+test('scanConsumer table-cell target is enough to write without a live selection', () => {
+  // Mirrors edit.tsx applyCapture: the bridge target survives a remount; patch uses it.
+  const table = createTableState(2, 2);
+  const consumer = { kind: 'tableCell' as const, tableId: 'tbl-1', row: 1, col: 0 };
+  const written = patchTableCellInElement(table, consumer.row, consumer.col, {
+    text: 'SCAN-991',
+    contentType: 'Manual',
+  });
+  assert.equal(written.cells![1][0].text, 'SCAN-991');
+  assert.equal(written.cells![0][0].text, '');
 });

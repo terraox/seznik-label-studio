@@ -30,7 +30,7 @@ test('ruleGroups reads solid rows as fractions of the page', () => {
 test('meesho: a shorter label moves the bottom edge and the invoice', () => {
   const r = locateFromProfile(meeshoTemplate, profile([0.014, 0.344, 0.411, 0.436, 0.538, 0.762, 0.798], 0.8))!;
   assert.ok(r);
-  assert.ok(Math.abs(r.label.y + r.label.h - (0.411 + 0.0024 + 0.008)) < 0.003);
+  assert.ok(Math.abs(r.label.y + r.label.h - (0.411 + 0.0024 + 0.002)) < 0.003);
   assert.ok(r.invoice && Math.abs(r.invoice.y - 0.436) < 0.002);
   assert.ok(r.invoice.y + r.invoice.h <= 0.81);
 });

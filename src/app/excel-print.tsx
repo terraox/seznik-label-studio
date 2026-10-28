@@ -1,3 +1,4 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -45,8 +46,12 @@ import {
   type Shape,
 } from '@/lib/new-label-form';
 import { resolveProfile } from '@/printer-core/profiles';
+import { applySetupToSheet, type SavedSetup } from '@/lib/saved-setup';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useDataStore } from '@/stores/data-store';
+import { useLabelStore } from '@/stores/label-store';
+import { useSavedSetupStore } from '@/stores/saved-setup-store';
+import { useIncomingFileStore, type IncomingFile } from '@/stores/incoming-file-store';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
@@ -59,7 +64,21 @@ export default function ExcelPrintScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
   const addExcelFile = useDataStore((s) => s.addExcelFile);
-  const { importExcel, excelImportModal, documentSourceSheet } = useExcelImportFlow();
+  const { importExcel, importExcelFromFile, excelImportModal, documentSourceSheet } = useExcelImportFlow();
+  // A spreadsheet sent here from another app ("Open with" / share). It is taken into this screen so a
+  // stale one never lingers; Continue then uses it instead of asking for a file.
+  const sharedFile = useIncomingFileStore((s) => s.pending);
+  const clearSharedFile = useIncomingFileStore((s) => s.clearPending);
+  const [received, setReceived] = useState<IncomingFile | null>(null);
+  useEffect(() => {
+    if (sharedFile?.kind !== 'excel') return;
+    setReceived(sharedFile);
+    clearSharedFile();
+  }, [sharedFile, clearSharedFile]);
+  const setups = useSavedSetupStore((s) => s.setups);
+  const removeSetup = useSavedSetupStore((s) => s.remove);
+  const touchSetup = useSavedSetupStore((s) => s.touch);
+  const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const [form, setForm] = useState<FormState>(() => initialFormState({}));
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [triedContinue, setTriedContinue] = useState(false);
@@ -94,7 +113,7 @@ export default function ExcelPrintScreen() {
   const total = cell.w != null ? totalWidthMm(cell.w, form.columns, gapMm) : null;
   const warning = multi && total != null ? widthWarning(total, printerMaxMm) : null;
   const presetValue = presetLabelFor(form.shape, cell.w, cell.h);
-  const err = (key: keyof typeof errors) => (triedContinue ? errors[key] ?? 'Enter a number' : errors[key]);
+  const err = (key: keyof typeof errors) => errors[key];
 
   useEffect(() => {
     setWalkthroughScroller((dy) =>
@@ -137,7 +156,7 @@ export default function ExcelPrintScreen() {
 
     setPicking(true);
     try {
-      const picked = await importExcel();
+      const picked = received ? await importExcelFromFile(received) : await importExcel();
       if (!picked) return;
 
       const storedUri = await stageImportedFile('excel', picked.uri, picked.name);
@@ -149,7 +168,7 @@ export default function ExcelPrintScreen() {
         hasHeaderRow: picked.hasHeaderRow,
         dataStartRow: picked.dataStartRow,
       });
-      router.replace({
+      router.push({
         pathname: '/excel-data-preview',
         params: {
           excelFileId: entry.id,
@@ -171,6 +190,65 @@ export default function ExcelPrintScreen() {
       setPicking(false);
     }
   };
+
+  // Saved setup: pick the sheet, lay it out like last time, and go straight to the label.
+  const useSetup = async (setup: SavedSetup) => {
+    if (picking) return;
+    setPicking(true);
+    try {
+      const picked = received ? await importExcelFromFile(received) : await importExcel();
+      if (!picked) return;
+      const sheetIndex = Math.max(
+        0,
+        picked.sheets.findIndex((s) => s.rows.length > 0),
+      );
+      const sheet = picked.sheets[sheetIndex];
+      const storedUri = await stageImportedFile('excel', picked.uri, picked.name);
+      const entry = addExcelFile({
+        name: picked.name,
+        uri: storedUri,
+        sheets: picked.sheets,
+        activeSheetIndex: sheetIndex,
+        hasHeaderRow: picked.hasHeaderRow,
+        dataStartRow: picked.dataStartRow,
+      });
+      const applied = applySetupToSheet(setup, sheet, { id: entry.id, name: picked.name }, sheetIndex);
+      if (!applied) {
+        Alert.alert(
+          'Columns do not match',
+          `None of the columns in "${setup.name}" (${setup.columns.join(', ')}) are in this sheet.`,
+        );
+        return;
+      }
+      const open = () => {
+        upsertDocument(applied.doc);
+        touchSetup(setup.id);
+        router.replace({ pathname: '/edit', params: { labelId: applied.doc.id } });
+      };
+      if (applied.missing.length === 0) {
+        open();
+        return;
+      }
+      Alert.alert(
+        'Some columns are missing',
+        `Not found in this sheet: ${applied.missing.join(', ')}.\n\nContinue without them?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: open },
+        ],
+      );
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Unable to open this setup.');
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  const confirmDeleteSetup = (setup: SavedSetup) =>
+    Alert.alert('Delete setup?', `"${setup.name}" will be removed. Labels already made from it stay.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => removeSetup(setup.id) },
+    ]);
 
   const sizeTitle = multi ? 'Size of each label' : 'Size';
 
@@ -207,6 +285,55 @@ export default function ExcelPrintScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 110 }]}
         bottomOffset={96}
         showsVerticalScrollIndicator={false}>
+        {received ? (
+          <View style={styles.receivedRow}>
+            <AppIcon name="doc.text" tintColor={C.accent} size={20} />
+            <Text style={styles.receivedName} numberOfLines={1}>
+              {received.name}
+            </Text>
+            <Pressable onPress={() => setReceived(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Use a different file">
+              <Text style={styles.receivedChange}>Change</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {setups.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading}>Saved setups</Text>
+            {setups.map((setup) => (
+              <View key={setup.id} style={styles.setupRow}>
+                <Pressable
+                  disabled={picking}
+                  onPress={() => void useSetup(setup)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use saved setup ${setup.name}`}
+                  style={({ pressed }) => [styles.setupMain, pressed && styles.pressed]}>
+                  <View style={styles.setupIcon}>
+                    <MaterialCommunityIcons name="file-excel-outline" color={C.accent} size={20} />
+                  </View>
+                  <View style={styles.setupText}>
+                    <Text style={styles.setupName} numberOfLines={1}>
+                      {setup.name}
+                    </Text>
+                    <Text style={styles.setupMeta} numberOfLines={1}>
+                      {fmtMm(setup.doc.widthMm)} × {fmtMm(setup.doc.heightMm)} mm · {setup.columns.join(', ')}
+                    </Text>
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={() => confirmDeleteSetup(setup)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete saved setup ${setup.name}`}
+                  style={({ pressed }) => [styles.setupDelete, pressed && styles.pressed]}>
+                  <AppIcon name="trash" tintColor={C.textMuted} size={18} />
+                </Pressable>
+              </View>
+            ))}
+            <Text style={styles.note}>Pick one, choose your sheet, and the label is laid out like last time.</Text>
+          </View>
+        ) : null}
+
         <LabelPreview shape={form.shape} columns={form.columns} cellW={cell.w} cellH={cell.h} gap={gapMm} />
 
         <View style={styles.section}>
@@ -488,4 +615,29 @@ const styles = themedStyles((c) => ({
   continueBtnDisabled: { opacity: 0.4 },
   continueText: { color: c.onAccent, fontSize: 17, fontWeight: '500' },
   pressed: { opacity: 0.75 },
+  receivedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: c.accentSoft,
+  },
+  setupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.hairline,
+  },
+  setupMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 12, minWidth: 0 },
+  setupIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  setupText: { flex: 1, minWidth: 0, gap: 1 },
+  setupName: { fontSize: 15, fontWeight: '700', color: c.text },
+  setupMeta: { fontSize: 12, color: c.textMuted },
+  setupDelete: { width: 44, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
+  receivedName: { flex: 1, fontSize: 14, fontWeight: '600', color: c.text },
+  receivedChange: { fontSize: 13, fontWeight: '700', color: c.link },
 }));

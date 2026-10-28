@@ -24,7 +24,8 @@ android {
 
 dependencies {
   implementation 'androidx.core:core-ktx:1.13.1'
-  // No vendor SDK: the module writes its own TSPL over a raw SPP socket (fully independent of Tejas).
+  // Ninestar / TD-404 LabelCommand + BitmapUtils (same JAR as Tejas / vendor demo).
+  implementation files('libs/labelprinter.jar')
 }
 
 // Classic Bluetooth SPP matches Ninestar TD-404 SppBluetoothPort transport.

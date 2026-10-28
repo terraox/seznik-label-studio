@@ -1,9 +1,10 @@
 import { goBack } from '@/lib/go-back';
 import { StatusChip } from '@/components/home/status-chip';
-import { JoshProgressCard } from '@/components/printers/josh-progress-card';
+import { PrintProgressCard } from '@/components/printers/print-progress-card';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
+import { haptics } from '@/lib/haptics';
 import { EditableNumber } from '@/components/editable-number';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -12,12 +13,16 @@ import {
   AppState,
   PixelRatio,
   Pressable,
+  type ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { TextInput } from '@/components/ui/text-input';
+import { CollapsibleBar } from '@/components/new-label/new-label-parts';
+import { parseRowText, rowSelectionSummary, type RowSelection } from '@/lib/bulk-row-filter';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 
@@ -31,14 +36,8 @@ import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { Type } from '@/constants/ui';
 import {
-  JEWELRY_DIECUT,
-  JEWELRY_DIECUT_PRINT_PRESET_2UP,
-  JEWELRY_DIECUT_PRINT_PRESET_3UP,
-  JEWELRY_DIECUT_PRINT_PRESET_SINGLE,
-  extractJewelryFirstColumnDocument,
   isJewelryDieCutDocument,
 } from '@/constants/jewelry-diecut';
-import { canonicalizeJewelryDieCutDocument } from '@/constants/jewelry-template-elements';
 import { resolvePrintQuality } from '@/lib/printer/print-quality';
 import {
   calibrationQualityWarning,
@@ -65,12 +64,9 @@ import { dataPageCount, resolveDocumentData } from '@/lib/data-binding';
 import {
   confirmLabel,
   designHash,
-  expandSerialBatch,
   markCancelled,
   markFailed,
-  newCursor,
   newJobId,
-  resumeInfo,
   serialPrintLogLine,
   type SerialJobCursor,
 } from '@/lib/serial/job';
@@ -83,7 +79,7 @@ import {
 import { serialPrintGate } from '@/lib/serial/symbology-validate';
 import { SERIAL_CONFIRM_ABOVE } from '@/lib/serial/types';
 import { joshStatusAlert } from '@/lib/printer/josh-status';
-import { useJoshProgressStore } from '@/stores/josh-progress-store';
+import { usePrintProgressStore } from '@/stores/print-progress-store';
 import { useSerialContinueStore } from '@/stores/serial-continue-store';
 import { useSerialJobStore } from '@/stores/serial-job-store';
 import { projectBulkDocument, resolveBulkSheet } from '@/lib/bulk-labels';
@@ -159,13 +155,17 @@ import { warmupPrintRasterSurface } from '@/printing/raster/skia-surface';
 import { prepareImageTiles } from '@/printing/raster/image-tiles';
 import { TD404_HEADLESS_SKIA_PRINT } from '@/printing/raster/td404-headless-flag';
 import { loadInstalledFontsIntoRuntime } from '@/lib/fonts/runtime';
-import { turnDocumentContents, type ContentTurn } from '@/lib/turn-document';
 import { ensurePrintTypefacesForDocument, missingPrintTypefaces } from '@/printing/raster/print-typeface';
 import { useDataStore, type ExcelSheet } from '@/stores/data-store';
 import { useLabelStore } from '@/stores/label-store';
 import { usePrinterStore, type PrintHistoryEntry } from '@/stores/printer-store';
 import { usePrintStatsStore } from '@/stores/print-stats-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useWalkthroughStore } from '@/stores/walkthrough-store';
+import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
+import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
+import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
+import { PRINT_ORDER_WALKTHROUGH } from '@/lib/walkthrough/print-order-steps';
 import { applyPaperType, defaultLabelSettings, resolveLabelSettings } from '@/lib/label-settings';
 import {
   clampLayerOffsetMm,
@@ -203,8 +203,6 @@ import {
   applyPrintSize,
   formatPrintSize,
   PRINT_SIZE_PRESETS,
-  tileDocumentThreeUpDieCut54,
-  tileDocumentTwoUpDieCut37,
   type PrintSizePreset,
 } from '@/lib/print-sizes';
 import { logCaptureSha1 } from '@/lib/debug/capture-hash';
@@ -501,6 +499,8 @@ export default function PrintScreen() {
     excelFileId?: string;
     scanType?: string;
     scanData?: string;
+    /** Counter labels: the label shown on the editor canvas, which is the first one printed. */
+    serialIndex?: string;
   }>();
 
   const getDocument = useLabelStore((s) => s.getDocument);
@@ -596,10 +596,10 @@ export default function PrintScreen() {
   // and rat-tail keep their own canvases.
   const baseDocument = useMemo<LabelDocument | null>(() => {
     if (!sourceDocument) return null;
-    if (jewelryDieCutJob || cableFlagJob || ratTail143Job) return sourceDocument;
+    if (cableFlagJob || ratTail143Job) return sourceDocument;
     if ((sourceDocument.ups?.columns ?? 0) >= 2) return composeUpsDocument(sourceDocument);
     return sourceDocument;
-  }, [sourceDocument, jewelryDieCutJob, cableFlagJob, ratTail143Job]);
+  }, [sourceDocument, cableFlagJob, ratTail143Job]);
   // Always use the connected printer's real DPI — a hardcoded 304 blurs 203 DPI
   // Josh/Dev/Tez heads (already fixed for jewelry; cable-flag/rat-tail-143 had the same bug).
   const jewelryJobDpi = null;
@@ -610,9 +610,8 @@ export default function PrintScreen() {
     if (cableFlagJob) {
       return PRINT_SIZE_PRESETS.find((p) => p.id === CABLE_FLAG_PRINT_PRESET_SINGLE) ?? null;
     }
-    if (!jewelryDieCutJob) return null;
-    return PRINT_SIZE_PRESETS.find((p) => p.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) ?? null;
-  }, [cableFlagJob, jewelryDieCutJob]);
+    return null;
+  }, [cableFlagJob]);
 
   const defaultPrintSize = useMemo<LabelSizeMm>(() => {
     if (!baseDocument) return { widthMm: defaults.labelWidth, heightMm: defaults.labelHeight };
@@ -620,18 +619,23 @@ export default function PrintScreen() {
     if (cableFlagJob) {
       return { widthMm: CABLE_FLAG_DIECUT.widthMm, heightMm: CABLE_FLAG_DIECUT.heightMm };
     }
-    if (defaultPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) {
-      return { widthMm: JEWELRY_DIECUT.sheetWidthMm, heightMm: JEWELRY_DIECUT.sheetHeightMm };
-    }
     return printMediaSizeMm(baseDocument.widthMm, baseDocument.heightMm);
   }, [baseDocument, defaultPreset, defaults.labelWidth, defaults.labelHeight, cableFlagJob, ratTail143Job]);
 
   const [copies, setCopies] = useState(1);
+  const [rowsOpen, setRowsOpen] = useState(false);
+  const [rowMode, setRowMode] = useState<RowSelection['mode']>('all');
+  const [rowText, setRowText] = useState('');
+  const rowSelection = useMemo<RowSelection>(
+    () => (rowMode === 'custom' ? { mode: 'custom', text: rowText } : { mode: rowMode } as RowSelection),
+    [rowMode, rowText],
+  );
+  const rowError = rowMode === 'custom' ? parseRowText(rowText, baseDocument?.bulk?.rowCount ?? 0).error : null;
   const [collate, setCollate] = useState(false);
   const [printProgress, setPrintProgress] = useState<string | null>(null);
   // A boolean, not the text: the text changes with every printer event and would re-render this whole screen.
-  const joshProgressLine = useJoshProgressStore((s) => s.phase !== 'idle');
-  const joshStatusWarning = useJoshProgressStore((s) => joshStatusAlert(s.deviceStatus));
+  const printProgressActive = usePrintProgressStore((s) => s.phase !== 'idle');
+  const joshStatusWarning = usePrintProgressStore((s) => joshStatusAlert(s.deviceStatus));
   useEffect(() => {
     if (printerSdkId !== 'josh') return;
     return getPrinterManager().watchJoshStatus();
@@ -702,7 +706,7 @@ export default function PrintScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hOffset, vOffset, calibrationKey]);
   const [zoom, setZoom] = useState(1);
-  const [pageIndex, setPageIndex] = useState(0);
+  const [pageIndex, setPageIndex] = useState(() => Math.max(0, parseInt(params.serialIndex ?? '', 10) || 0));
   const [printing, setPrinting] = useState(false);
   const [printSize, setPrintSize] = useState<LabelSizeMm>(defaultPrintSize);
   const [printPreset, setPrintPreset] = useState<PrintSizePreset | null>(defaultPreset);
@@ -837,13 +841,39 @@ export default function PrintScreen() {
       baseDocument.bulk.copiesColumnIndex ?? null,
       copies,
       baseDocument.bulk.rowCopiesOverrides,
+      rowSelection,
     );
-  }, [baseDocument, excelFiles, copies]);
+  }, [baseDocument, excelFiles, copies, rowSelection]);
 
   const showCollate = Boolean(baseDocument?.bulk && bulkPrintPlan);
   // Collate only changes anything once the job repeats.
   const collateEnabled = Boolean(
     bulkPrintPlan && collateChangesOrder(bulkPrintPlan.rows, bulkPrintPlan.multiply),
+  );
+
+  // Explain Print order the first time the count goes above 1; the ? beside it replays the tour.
+  const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const stopWalkthrough = useWalkthroughStore((s) => s.stop);
+  const setPrintOrderTourSeen = useSettingsStore((s) => s.setPrintOrderTourSeen);
+  const printScrollRef = useRef<ScrollView>(null);
+  const printScrollY = useRef(0);
+  useEffect(() => {
+    setWalkthroughScroller((dy) =>
+      printScrollRef.current?.scrollTo({ y: Math.max(0, printScrollY.current + dy), animated: false }),
+    );
+    return () => setWalkthroughScroller(null);
+  }, []);
+  useEffect(() => {
+    if (!collateEnabled || useSettingsStore.getState().printOrderTourSeen) return;
+    const timer = setTimeout(() => startWalkthrough('printOrder'), 400);
+    return () => clearTimeout(timer);
+  }, [collateEnabled, startWalkthrough]);
+  useEffect(
+    () => () => {
+      const { active, tour } = useWalkthroughStore.getState();
+      if (active && tour === 'printOrder') useWalkthroughStore.getState().stop();
+    },
+    [],
   );
 
   const buildBasePageDocument = useCallback(
@@ -892,23 +922,9 @@ export default function PrintScreen() {
     [buildBasePageDocument, serialInfo, liveSerialOffset],
   );
 
-  // A turned job keeps the label as it is and turns what is printed on it, so the document itself is
-  // turned here and every printer path then prints an ordinary un-turned job (what the preview shows).
-  // Photo / PDF jobs, Fit Label, cable flags, jewellery and rat-tail keep the old bitmap rotation.
-  const requestedTurn = (
-    ratTail143Job ? 0 : parseInt(orientation.replace('°', ''), 10)
-  ) as ContentTurn;
-  const turnsContents = useCallback(
-    (doc: LabelDocument | null | undefined): boolean =>
-      doc != null &&
-      requestedTurn !== 0 &&
-      !cableFlagJob &&
-      !jewelryDieCutJob &&
-      !doc.ups &&
-      !doc.upsTile &&
-      !isFitLabelImageOnlyDocument(doc),
-    [requestedTurn, cableFlagJob, jewelryDieCutJob],
-  );
+  // The whole label turns with everything on it: the paper size swaps on a quarter turn and the bitmap
+  // is rotated once in JS for every printer (rotatePngBase64 / rotateGray), so the print matches the
+  // turned preview. Contents are never turned inside the document.
 
   const applyDisplayTransforms = useCallback(
     (preview: LabelDocument | null): LabelDocument | null => {
@@ -919,27 +935,12 @@ export default function PrintScreen() {
       if (cableFlagJob) {
         return cableFlagPrintDocument(preview);
       }
-      if (jewelryDieCutJob && sourceDocument) {
-        // Freeze author mm positions — no softFit/refit on the print path.
-        const frozen = canonicalizeJewelryDieCutDocument(sourceDocument);
-        if (printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) {
-          return tileDocumentThreeUpDieCut54(frozen);
-        }
-        if (printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_2UP) {
-          return tileDocumentTwoUpDieCut37(frozen);
-        }
-        // Single Label Tag: crop leftmost 14×96 column (not full sheet SIZE).
-        return extractJewelryFirstColumnDocument(frozen);
-      }
       if (isFitLabelImageOnlyDocument(preview)) {
         return refitFitLabelDocument(preview, printSize.widthMm, printSize.heightMm);
       }
-      const sized = applyPrintSize(preview, printPreset, printSize);
-      return turnsContents(preview) ? turnDocumentContents(sized, requestedTurn) : sized;
+      return applyPrintSize(preview, printPreset, printSize);
     },
     [
-      turnsContents,
-      requestedTurn,
       printSize,
       printPreset,
       jewelryDieCutJob,
@@ -953,8 +954,6 @@ export default function PrintScreen() {
     () => buildPageDocument(Math.min(pageIndex, pageCount - 1)),
     [buildPageDocument, pageIndex, pageCount],
   );
-
-  const turnedInDoc = turnsContents(previewDocument);
 
   const displayDocument = useMemo(
     () => applyDisplayTransforms(previewDocument),
@@ -1078,7 +1077,7 @@ export default function PrintScreen() {
     const doc = layerPreviewDocument ?? displayDocument ?? previewDocument;
     return !!doc && canvasFillFromDocument(doc) === 'transparent';
   }, [layerPreviewDocument, displayDocument, previewDocument]);
-  const orientationDegNow = turnedInDoc ? 0 : parseInt(orientation.replace('°', ''), 10);
+  const orientationDegNow = parseInt(orientation.replace('°', ''), 10);
   const layerWarning = useMemo(() => {
     if (!layerOffsetsUsable) return null;
     const baked =
@@ -1178,11 +1177,9 @@ export default function PrintScreen() {
   );
   const previewAreaMinHeight = maxPreviewHeight + 56; // 28 px padding each side
 
-  // A turned label job is turned inside its document (see `turnsContents`), so the preview just shows
-  // that document. Jobs that still rotate the bitmap (photo, PDF, Fit Label, cable flag, rat-tail,
-  // jewellery) show the whole label turned the same way, clockwise like rotateGray; quarter turns
-  // swap the box the label is fitted into.
-  const previewTurn = ratTail143Job || turnedInDoc ? 0 : parseInt(orientation.replace('°', ''), 10);
+  // Every job rotates the bitmap, so the preview shows the whole label turned the same way, clockwise
+  // like rotateGray; quarter turns swap the box the label is fitted into.
+  const previewTurn = ratTail143Job ? 0 : parseInt(orientation.replace('°', ''), 10);
   const previewQuarter = previewTurn === 90 || previewTurn === 270;
   const turned = fitLabelSize(
     previewQuarter ? (activeDoc?.heightMm ?? 44) : (activeDoc?.widthMm ?? 80),
@@ -1255,6 +1252,7 @@ export default function PrintScreen() {
           docName: jobName,
         });
 
+        haptics.success();
         // Josh shows its own "Print completed" card.
         if (!manager.isJosh) {
           Alert.alert(
@@ -1265,8 +1263,9 @@ export default function PrintScreen() {
         if (printingSettings.returnPrevious) goBack();
       } catch (error) {
         const message = formatPrintFailure(error);
+        haptics.error();
         // Josh's progress card already shows the failure.
-        if (message && useJoshProgressStore.getState().phase !== 'failed') Alert.alert('Print Failed', message);
+        if (message && usePrintProgressStore.getState().phase !== 'failed') Alert.alert('Print Failed', message);
       } finally {
         printingLockRef.current = false;
         setPrinting(false);
@@ -1294,9 +1293,7 @@ export default function PrintScreen() {
     const orientationDeg = (
       ratTail143Job
         ? RAT_TAIL_143_PRINT.captureOrientation
-        : turnedInDoc
-          ? 0
-          : parseInt(orientation.replace('°', ''), 10)
+        : parseInt(orientation.replace('°', ''), 10)
     ) as LabelOrientation;
     const paper = ratTail143Job
       ? ratTail143PrintPaper()
@@ -1316,11 +1313,17 @@ export default function PrintScreen() {
             baseDocument.bulk.copiesColumnIndex ?? null,
             copies,
             baseDocument.bulk.rowCopiesOverrides,
+            rowSelection,
           )
         : null;
+    if (rowError) {
+      printingLockRef.current = false;
+      Alert.alert('Rows to print', rowError);
+      return;
+    }
     if (bulkPlan?.allZero) {
       printingLockRef.current = false;
-      Alert.alert('Nothing to print', 'Every row has 0 copies, so nothing was sent.');
+      Alert.alert('Nothing to print', 'No row is selected with at least 1 copy, so nothing was sent.');
       return;
     }
     if (bulkPlan?.overCap) {
@@ -1366,45 +1369,23 @@ export default function PrintScreen() {
         Alert.alert('Serial labels', 'Serial labels are not available on multi-up labels yet.');
         return;
       }
+      // Counter labels print one at a time: the label on screen prints, then the next one is shown.
       const batch = serialInfo.mode === 'batch';
       const labelId = params.labelId;
       const hash = designHash(baseDocument);
-      let baseOffset = batch ? liveSerialOffset : 0;
-      let startAt = 0;
-      if (batch && labelId) {
-        const info = resumeInfo(useSerialJobStore.getState().byLabel[labelId], hash);
-        if (info) {
-          const choice = await askChoice(
-            'Continue the earlier print?',
-            `The last print stopped at label ${info.resumeAt + 1} of ${info.total}. Label ${info.resumeAt + 1} may be half printed.` +
-              (info.designChanged ? '\n\nThe label design has changed since then. Continuing uses the current design.' : ''),
-            [
-              { text: `Reprint label ${info.resumeAt + 1}`, value: 'reprint' },
-              ...(info.skipTo < info.total ? [{ text: `Skip to label ${info.skipTo + 1}`, value: 'skip' }] : []),
-              { text: 'Start over', value: 'restart', style: 'destructive' as const },
-              { text: 'Cancel', value: 'cancel', style: 'cancel' as const },
-            ],
-          );
-          if (choice === 'cancel') {
-            printingLockRef.current = false;
-            return;
-          }
-          if (choice === 'reprint' || choice === 'skip') {
-            startAt = choice === 'reprint' ? info.resumeAt : info.skipTo;
-            baseOffset = info.baseOffset;
-          } else {
-            useSerialJobStore.getState().clear(labelId);
-          }
-        }
-      }
-      const gate = serialPrintGate(baseDocument, serialInfo.count, baseOffset, jobDpi);
+      const baseOffset = batch ? liveSerialOffset : 0;
+      const startAt = batch ? Math.min(Math.max(0, pageIndex), serialInfo.count - 1) : 0;
+      // Only the label being printed has to be valid; a bad later label must not block this one.
+      const gate = batch
+        ? serialPrintGate(baseDocument, 1, baseOffset + startAt, jobDpi)
+        : serialPrintGate(baseDocument, serialInfo.count, baseOffset, jobDpi);
       if (gate.issues.length > 0) {
         printingLockRef.current = false;
         const lines = gate.issues.slice(0, 3).map((i) => i.message).join('\n\n');
         Alert.alert('Fix the serial before printing', `${lines}${gate.issues.length > 3 ? `\n\n...and ${gate.issues.length - 3} more.` : ''}\n\nNothing was sent.`);
         return;
       }
-      const physical = (serialInfo.count - startAt) * copies;
+      const physical = batch ? copies : (serialInfo.count - startAt) * copies;
       if (physical > SERIAL_CONFIRM_ABOVE) {
         const ok = await askChoice('Print many labels?', `This job prints ${physical} labels.`, [
           { text: `Print ${physical}`, value: 'yes' },
@@ -1416,11 +1397,7 @@ export default function PrintScreen() {
         }
       }
       const jobId = newJobId();
-      const cursor =
-        batch && labelId
-          ? newCursor({ jobId, labelId, designHash: hash, total: serialInfo.count, baseOffset, startAt })
-          : null;
-      if (cursor) useSerialJobStore.getState().save(cursor);
+      const cursor: SerialJobCursor | null = null;
       jobSerialOffsetRef.current = baseOffset;
       serialCancelRef.current = false;
       setSerialCancelAsked(false);
@@ -1474,7 +1451,7 @@ export default function PrintScreen() {
         `[print] Advanced params → density=${printDensity} speed=${printSpeed} threshold=${threshold} gap=${gapLength}mm offset=${printOffsetMm.x}x${printOffsetMm.y}mm (${bakeOffset ? 'bitmap' : 'REFERENCE'}) darknessUI=${darkness ?? 'Auto'} speedUI=${speed ?? 'Auto'} bridge=${jobBridge ?? 'none'} densityMode=${darkness == null ? 'auto' : 'manual'} speedMode=${speed == null ? 'auto' : 'manual'} inkSteps=${inkSteps}`,
       );
       const firstPageDoc =
-        applyDisplayTransforms(buildPageDocument(0)) ?? displayDocument ?? previewDocument;
+        applyDisplayTransforms(buildPageDocument(serialRun?.batch ? serialRun.startAt : 0)) ?? displayDocument ?? previewDocument;
       // Images set to a Dither mode are turned into finished dots once, here, so the headless raster
       // can draw them. TD-404 and Josh only: other bridges keep the old image path.
       const prepareModedImages = async (doc: LabelDocument | null | undefined) => {
@@ -1543,12 +1520,7 @@ export default function PrintScreen() {
             round: item.round,
           }))
         : serialRun?.batch
-          ? expandSerialBatch({ count: serialInfo!.count, copies, collate: false, startAt: serialRun.startAt }).map((item) => ({
-              page: item.labelIndex,
-              sendCopies: item.copies,
-              copyNumber: item.copyNumber,
-              round: item.round,
-            }))
+          ? [{ page: serialRun.startAt, sendCopies: copies, copyNumber: 1, round: 1 }]
           : Array.from({ length: pageCount }, (_, page) => ({
               page,
               sendCopies: copies,
@@ -1582,10 +1554,10 @@ export default function PrintScreen() {
           console.info(
             `[print] label ${page} copy ${copyNumber} round ${round} total ${labelsCompleted}/${bulkPlan.totalPhysical} copies ${sendCopies}`,
           );
-          // Josh progress line: the app's own send count; the SDK events fill in the state of each send.
-          useJoshProgressStore.getState().setBulk(labelsCompleted + 1, bulkPlan.totalPhysical);
+          // Bulk line on the shared progress card; per-copy events fill in Sending/Printing/Done.
+          usePrintProgressStore.getState().setBulk(labelsCompleted + 1, bulkPlan.totalPhysical);
         } else {
-          useJoshProgressStore.getState().setBulk(null, null);
+          usePrintProgressStore.getState().setBulk(null, null);
         }
         const pageStart = Date.now();
         const cachedRow = bulkPlan ? rowRasters.get(page) : undefined;
@@ -1655,7 +1627,7 @@ export default function PrintScreen() {
             manager.isJosh ? joshConnectPromise : manager.ensureConnected().catch((err) => {
               return { error: err };
             }),
-            page === 0
+            page === (serialRun?.batch ? serialRun.startAt : 0)
               ? joshRasterPromise
               : joshHeadlessCandidate && pageDoc
                 ? rasterJoshMono(pageDoc)
@@ -2387,7 +2359,7 @@ export default function PrintScreen() {
             serialRun.cursor = confirmLabel(serialRun.cursor, page);
             useSerialJobStore.getState().save(serialRun.cursor);
           }
-          setPrintProgress(`Label ${page + 1} of ${pageCount}`);
+          if (!serialRun.batch) setPrintProgress(`Label ${page + 1} of ${pageCount}`);
         }
         if (bulkPlan) {
           setPrintProgress(`Printing ${labelsCompleted} of ${bulkPlan.totalPhysical}`);
@@ -2412,7 +2384,8 @@ export default function PrintScreen() {
         }
         const continueState = labelId ? useSerialContinueStore.getState().byLabel[labelId] : undefined;
         if (labelId && serialRun.batch && continueState?.enabled) {
-          useSerialContinueStore.getState().setOffset(labelId, serialRun.baseOffset + (serialCancelled ? confirmed : pageCount));
+          // Continue-from-last: the next label becomes label 1 of the next view.
+          useSerialContinueStore.getState().setOffset(labelId, serialRun.baseOffset + serialRun.startAt + 1);
         }
         if (serialCancelled) {
           Alert.alert('Print cancelled', `${confirmed} of ${pageCount} labels were printed. Print again to continue where it stopped.`);
@@ -2428,13 +2401,27 @@ export default function PrintScreen() {
         const docForHistory = displayDocument ?? previewDocument;
         addHistoryEntry({
           labelName: jobName,
-          copies: bulkPlan ? bulkPlan.totalPhysical : copies * pageCount,
+          copies: bulkPlan ? bulkPlan.totalPhysical : serialRun?.batch ? copies : copies * pageCount,
           documentId: params.labelId,
           source: historySource,
           documentSnapshot: docForHistory ?? undefined,
         });
       }
 
+      // Counter labels: stay here and show the next label, ready to print.
+      if (serialRun?.batch) {
+        const continuing = Boolean(params.labelId && useSerialContinueStore.getState().byLabel[params.labelId]?.enabled);
+        if (continuing) {
+          setPageIndex(0);
+        } else if (serialRun.startAt + 1 < pageCount) {
+          setPageIndex(serialRun.startAt + 1);
+        } else {
+          Alert.alert('Last label printed', 'That was the last label the counter can make.');
+        }
+        return;
+      }
+
+      haptics.success();
       // Josh shows its own "Print completed" card.
       if (!getPrinterManager().isJosh) {
         Alert.alert('Print Sent', `${jobName} was sent to ${deviceName ?? 'the printer'}.`);
@@ -2466,17 +2453,20 @@ export default function PrintScreen() {
         );
       }
       const message = formatPrintFailure(error);
+      haptics.error();
       if (message) {
         const sent =
           bulkPlan != null
             ? `\n\nSent ${labelsCompleted} of ${bulkPlan.totalPhysical} before the printer stopped.`
-            : serialRun
+            : serialRun?.batch
+              ? `\n\nLabel ${serialRun.current + 1} was not printed. Tap Print to try it again.`
+              : serialRun
               ? `\n\nPrinted ${serialRun.cursor ? Math.min(serialRun.cursor.total, serialRun.cursor.nextIndex) : labelsCompleted} of ${pageCount} labels. Print again to continue where it stopped.`
               : '';
-        // Josh's progress card already shows the failure: add the count there instead of a second popup.
-        const joshCard = useJoshProgressStore.getState();
-        if (joshCard.phase === 'failed') {
-          if (sent) joshCard.fail(`${joshCard.failure ?? message}${sent}`);
+        // Progress card already shows the failure: add the count there instead of a second popup.
+        const progressCard = usePrintProgressStore.getState();
+        if (progressCard.phase === 'failed') {
+          if (sent) progressCard.fail(`${progressCard.failure ?? message}${sent}`);
         } else {
           Alert.alert('Print Failed', `${message}${sent}`);
         }
@@ -2506,7 +2496,6 @@ export default function PrintScreen() {
     defaults.colorMode,
     defaults.grayThreshold,
     orientation,
-    turnedInDoc,
     effLayerOffsets,
     darkness,
     speed,
@@ -2520,6 +2509,7 @@ export default function PrintScreen() {
     paperType,
     printingSettings.recordHistory,
     printingSettings.returnPrevious,
+    pageIndex,
     addHistoryEntry,
     jobName,
     params.labelId,
@@ -2535,7 +2525,7 @@ export default function PrintScreen() {
     calibrationKey,
   ]);
 
-  const unrotatedJob = !ratTail143Job && (turnedInDoc || orientation === '0°');
+  const unrotatedJob = !ratTail143Job && orientation === '0°';
   const captureShiftMm = useMemo(() => {
     if (!unrotatedJob) return undefined;
     if (printerSdkId === 'josh') {
@@ -2559,6 +2549,11 @@ export default function PrintScreen() {
       </View>
 
       <FormScrollView
+        ref={printScrollRef}
+        onScroll={(e) => {
+          printScrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: footerHeight + Spacing.three }}
         showsVerticalScrollIndicator={false}>
@@ -2677,32 +2672,48 @@ export default function PrintScreen() {
           ) : null}
 
           {pageCount > 1 ? (
-            <View style={styles.pageNav}>
-              <Pressable
-                hitSlop={12}
-                disabled={pageIndex <= 0}
-                onPress={() => setPageIndex((p) => Math.max(0, p - 1))}
-                style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
-                <AppIcon
-                  name="chevron.left"
-                  tintColor={pageIndex <= 0 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
-                  size={16}
-                />
-              </Pressable>
-              <Text style={styles.pageNavText}>
-                {baseDocument?.bulk || serialInfo?.mode === 'batch' ? 'Label' : 'Row'} {pageIndex + 1} / {pageCount}
-              </Text>
-              <Pressable
-                hitSlop={12}
-                disabled={pageIndex >= pageCount - 1}
-                onPress={() => setPageIndex((p) => Math.min(pageCount - 1, p + 1))}
-                style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
-                <AppIcon
-                  name="chevron.right"
-                  tintColor={pageIndex >= pageCount - 1 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
-                  size={16}
-                />
-              </Pressable>
+            <View style={styles.pageNavDock} pointerEvents="box-none">
+              <View style={styles.pageNav}>
+                <Pressable
+                  hitSlop={12}
+                  disabled={pageIndex <= 0}
+                  onPress={() => setPageIndex((p) => Math.max(0, p - 1))}
+                  style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
+                  <AppIcon
+                    name="chevron.left"
+                    tintColor={pageIndex <= 0 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
+                    size={13}
+                  />
+                </Pressable>
+                {serialInfo?.mode === 'batch' ? (
+                  <Text style={styles.pageNavText}>
+                    {describeSerialValues(baseDocument!, pageIndex + liveSerialOffset)}
+                  </Text>
+                ) : (
+                  <View style={styles.pageNumber}>
+                    <Text style={styles.pageNavText}>{baseDocument?.bulk ? 'Label ' : 'Row '}</Text>
+                    <EditableNumber
+                      value={pageIndex + 1}
+                      min={1}
+                      max={pageCount}
+                      onCommit={(next) => setPageIndex(next - 1)}
+                      style={[styles.pageNavText, styles.pageInput, { minWidth: 8 + String(pageCount).length * 8 }]}
+                    />
+                    <Text style={styles.pageNavText}> / {pageCount}</Text>
+                  </View>
+                )}
+                <Pressable
+                  hitSlop={12}
+                  disabled={pageIndex >= pageCount - 1}
+                  onPress={() => setPageIndex((p) => Math.min(pageCount - 1, p + 1))}
+                  style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
+                  <AppIcon
+                    name="chevron.right"
+                    tintColor={pageIndex >= pageCount - 1 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
+                    size={13}
+                  />
+                </Pressable>
+              </View>
             </View>
           ) : null}
 
@@ -2741,32 +2752,83 @@ export default function PrintScreen() {
             {serialInfo ? (
               <Text style={styles.serialTotal}>
                 {serialInfo.mode === 'batch'
-                  ? `${serialInfo.count} labels x ${copies} ${copies === 1 ? 'copy' : 'copies'} = ${serialInfo.count * copies} to print${liveSerialOffset > 0 ? `. Continues after ${liveSerialOffset} already printed.` : '.'}`
+                  ? `Prints the label shown (${copies} ${copies === 1 ? 'copy' : 'copies'}), then shows the next one.`
                   : `${serialInfo.count} rows x ${copies} ${copies === 1 ? 'copy' : 'copies'} = ${serialInfo.count * copies} to print.`}
               </Text>
             ) : null}
+            {showCollate && baseDocument?.bulk ? (
+              <View style={styles.cardSection}>
+                <CollapsibleBar
+                  title="Rows to print"
+                  value={rowSelectionSummary(rowSelection, baseDocument.bulk.rowCount)}
+                  open={rowsOpen}
+                  onToggle={() => setRowsOpen((o) => !o)}>
+                  <ChipGroup
+                    options={['All', 'Even', 'Odd', 'Custom']}
+                    selected={rowMode[0].toUpperCase() + rowMode.slice(1)}
+                    onSelect={(opt) => setRowMode(opt.toLowerCase() as RowSelection['mode'])}
+                  />
+                  {rowMode === 'custom' ? (
+                    <TextInput
+                      value={rowText}
+                      onChangeText={setRowText}
+                      placeholder="e.g. 1-5, 8, 12-"
+                      placeholderTextColor={C.textMuted}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      accessibilityLabel="Rows to print"
+                      style={styles.rowsInput}
+                    />
+                  ) : null}
+                  <Text style={[styles.helperText, rowText.trim() && rowError ? { color: C.danger } : null]}>
+                    {rowMode === 'custom'
+                      ? rowText.trim() && rowError
+                        ? rowError
+                        : 'Row 1 is the first row under the header. Commas for single rows (3, 7), a dash for a range (10-20), "30-" for row 30 to the end.'
+                      : rowMode === 'all'
+                        ? 'Every row prints.'
+                        : `Only ${rowMode} row numbers print.`}
+                  </Text>
+                </CollapsibleBar>
+              </View>
+            ) : null}
             {showCollate ? (
               <View style={styles.collateWrap}>
-                <Text style={styles.collateLabel}>Print order</Text>
+                <View style={styles.collateHead}>
+                  <Text style={styles.collateLabel}>Print order</Text>
+                  <Pressable
+                    onPress={() => startWalkthrough('printOrder')}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel="What do Collated and Uncollated mean?">
+                    <AppIcon name="questionmark.circle.fill" tintColor={C.textSecondary} size={18} />
+                  </Pressable>
+                </View>
                 <View style={styles.collateSeg}>
                   {([false, true] as const).map((on) => {
                     const selected = collateEnabled && collate === on;
+                    // One target per button so each tour step rings only the option it explains.
                     return (
-                      <Pressable
+                      <WalkthroughTarget
                         key={String(on)}
-                        disabled={printing || !collateEnabled}
-                        onPress={() => setCollate(on)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected, disabled: !collateEnabled }}
-                        style={[
-                          styles.collateOpt,
-                          selected && styles.collateOptOn,
-                          !collateEnabled && styles.collateOptOff,
-                        ]}>
-                        <Text style={[styles.collateOptText, selected && styles.collateOptTextOn]}>
-                          {on ? 'Collated' : 'Uncollated'}
-                        </Text>
-                      </Pressable>
+                        id={on ? 'print.order.collated' : 'print.order.uncollated'}
+                        style={styles.collateOptTarget}>
+                        <Pressable
+                          disabled={printing || !collateEnabled}
+                          onPress={() => setCollate(on)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected, disabled: !collateEnabled }}
+                          style={[
+                            styles.collateOpt,
+                            styles.collateOptFill,
+                            selected && styles.collateOptOn,
+                            !collateEnabled && styles.collateOptOff,
+                          ]}>
+                          <Text style={[styles.collateOptText, selected && styles.collateOptTextOn]}>
+                            {on ? 'Collated' : 'Uncollated'}
+                          </Text>
+                        </Pressable>
+                      </WalkthroughTarget>
                     );
                   })}
                 </View>
@@ -2774,8 +2836,8 @@ export default function PrintScreen() {
                   {!collateEnabled
                     ? 'Set the count above 1 to choose how repeats are ordered.'
                     : collate
-                      ? `Collated: the whole job prints once, rows 1 to ${baseDocument?.bulk?.rowCount ?? 'N'}, then again, ${copies} times in all.`
-                      : `Uncollated: row by row from the first, each row prints all its labels at once (its count × ${copies}).`}
+                      ? `Collated: the full set prints, then the whole set again (A B C, A B C), ${copies} times in all.`
+                      : `Uncollated: each label prints all its copies together (A A, B B, C C), ${copies} per label.`}
                 </Text>
               </View>
             ) : null}
@@ -2784,46 +2846,6 @@ export default function PrintScreen() {
                 {bulkPrintPlan.totalPhysical} {bulkPrintPlan.totalPhysical === 1 ? 'label' : 'labels'} from{' '}
                 {baseDocument.bulk.rowCount} {baseDocument.bulk.rowCount === 1 ? 'design' : 'designs'}
               </Text>
-            ) : null}
-
-            {jewelryDieCutJob ? (
-              <View style={styles.cardSection}>
-                <Text style={styles.groupLabel}>Jewelry Print Mode</Text>
-                <ChipGroup
-                  options={['3-Across (54×96 Sheet)', 'Single Label Tag']}
-                  selected={
-                    printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP
-                      ? '3-Across (54×96 Sheet)'
-                      : 'Single Label Tag'
-                  }
-                  onSelect={(opt) => {
-                    if (opt === '3-Across (54×96 Sheet)') {
-                      const p =
-                        PRINT_SIZE_PRESETS.find((preset) => preset.id === JEWELRY_DIECUT_PRINT_PRESET_3UP) ??
-                        null;
-                      setPrintPreset(p);
-                      setPrintSize({
-                        widthMm: JEWELRY_DIECUT.sheetWidthMm,
-                        heightMm: JEWELRY_DIECUT.sheetHeightMm,
-                      });
-                    } else {
-                      setPrintPreset(
-                        PRINT_SIZE_PRESETS.find((preset) => preset.id === JEWELRY_DIECUT_PRINT_PRESET_SINGLE) ??
-                          null,
-                      );
-                      setPrintSize({
-                        widthMm: JEWELRY_DIECUT.tagWidthMm,
-                        heightMm: JEWELRY_DIECUT.tagHeightMm,
-                      });
-                    }
-                  }}
-                />
-                <Text style={styles.helperText}>
-                  {printPreset?.id === JEWELRY_DIECUT_PRINT_PRESET_3UP
-                    ? 'Prints across all 3 labels on the 54 × 96 mm backing sheet (3 mm gaps).'
-                    : `Prints one 14 × 96 mm tag (left column). SIZE 14.00 mm,96.00 mm.`}
-                </Text>
-              </View>
             ) : null}
 
             {cableFlagJob ? (
@@ -2856,9 +2878,12 @@ export default function PrintScreen() {
                 labelFor={paperTypeLabel}
               />
               {jewelryDieCutJob ? (
-                <Text style={[styles.helperText, { color: C.link, marginTop: 6 }]}>
-                  💡 Jewelry rolls print as Label. If prints skip or overlap, run “Calibrate Paper Sensor” in Printer Connect.
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 6 }}>
+                  <AppIcon name="lightbulb" size={14} tintColor={C.link} />
+                  <Text style={[styles.helperText, { color: C.link, flex: 1, marginTop: 0 }]}>
+                    Jewelry rolls print as Label. If prints skip or overlap, run “Calibrate Paper Sensor” in Printer Connect.
+                  </Text>
+                </View>
               ) : null}
             </View>
           </View>
@@ -3061,11 +3086,11 @@ export default function PrintScreen() {
       </FormScrollView>
 
       {joshStatusWarning ? <Text style={styles.printerWarning}>{joshStatusWarning}</Text> : null}
-      <JoshProgressCard />
-      {!joshProgressLine && printProgress ? (
+      <PrintProgressCard />
+      {!printProgressActive && printProgress ? (
         <Text style={styles.printProgress}>{printProgress}</Text>
       ) : null}
-      {printing && serialInfo ? (
+      {printing && serialInfo && serialInfo.mode !== 'batch' ? (
         <Pressable
           onPress={() => {
             serialCancelRef.current = true;
@@ -3094,6 +3119,14 @@ export default function PrintScreen() {
           )}
         </Pressable>
       </View>
+      <WalkthroughOverlay
+        tour="printOrder"
+        steps={PRINT_ORDER_WALKTHROUGH}
+        onFinish={() => {
+          setPrintOrderTourSeen(true);
+          stopWalkthrough();
+        }}
+      />
     </View>
   );
 }
@@ -3201,25 +3234,27 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 12,
     color: c.textSecondary,
   },
+  pageNavDock: { position: 'absolute', left: 0, right: 0, bottom: 14, height: 34, alignItems: 'center', justifyContent: 'center' },
   pageNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    marginTop: 14,
+    gap: 6,
     backgroundColor: c.neutralFill,
     borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
   },
+  pageNumber: { flexDirection: 'row', alignItems: 'center' },
+  pageInput: { textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 4, paddingVertical: 1 }, // theme-fixed: field highlight on the dark pill
   pageNavText: {
     color: c.onAccent,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     flexShrink: 1,
   },
   pageNavBtn: {
-    minWidth: 32,
-    minHeight: 32,
+    minWidth: 26,
+    minHeight: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3269,6 +3304,11 @@ const styles = themedStyles((c, scheme) => ({
     paddingTop: 4,
     paddingBottom: 8,
   },
+  collateHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   collateSeg: {
     flexDirection: 'row',
     gap: 8,
@@ -3281,6 +3321,13 @@ const styles = themedStyles((c, scheme) => ({
     borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  collateOptTarget: {
+    flex: 1,
+  },
+  collateOptFill: {
+    flex: 0,
+    alignSelf: 'stretch',
   },
   collateOptOn: {
     borderColor: c.accent,
@@ -3306,6 +3353,16 @@ const styles = themedStyles((c, scheme) => ({
     color: c.textSecondary,
     fontSize: 12,
     lineHeight: 16,
+  },
+  rowsInput: {
+    minHeight: 48,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.hairline,
+    fontSize: 16,
+    color: c.text,
   },
   bulkTotal: {
     color: c.textSecondary,

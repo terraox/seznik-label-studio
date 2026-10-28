@@ -612,12 +612,9 @@ export function elementSizeMm(element: LabelElement): { width: number; height: n
       return frame;
     }
     case 'time': {
-      const width = Math.max(0.5, element.width);
-      if (typeof element.height === 'number' && element.height > 0) {
-        return { width, height: element.height };
-      }
+      // One line at any width: height follows the font, never a stored box (there is no height handle).
       return {
-        width,
+        width: Math.max(0.5, element.width),
         height: textBlockHeightMm(element.fontSize, 1),
       };
     }

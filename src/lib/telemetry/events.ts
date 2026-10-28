@@ -296,7 +296,7 @@ export function trackProductClick(productKey: string, productName: string, categ
 export type FeatureKey =
   | 'tab.home' | 'tab.templates' | 'tab.shop' | 'tab.help' | 'tab.settings'
   | 'home.new_label' | 'home.upload_label' | 'home.serial_labels' | 'home.shipping_labels'
-  | 'home.excel' | 'home.pdf' | 'home.import' | 'home.banner' | 'home.shop_strip' | 'home.continue'
+  | 'home.excel' | 'home.pdf' | 'home.print_image' | 'home.import' | 'home.banner' | 'home.shop_strip' | 'home.continue'
   | 'templates.open' | 'templates.favourite' | 'templates.request'
   | 'settings.printer' | 'settings.language' | 'settings.fonts' | 'settings.clipart' | 'settings.borders'
   | 'settings.data_file' | 'settings.history' | 'settings.appearance' | 'settings.advanced'

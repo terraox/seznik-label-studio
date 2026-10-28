@@ -1,3 +1,6 @@
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useStepBack } from '@/lib/use-step-back';
 import { goBack } from '@/lib/go-back';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -8,19 +11,25 @@ import {
   type BarcodeType,
 } from 'expo-camera';
 import { AppIcon } from '@/components/app-icon';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
+import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
+import { OCR_WALKTHROUGHS } from '@/lib/walkthrough/ocr-steps';
+import { useSettingsStore } from '@/stores/settings-store';
+import { useWalkthroughStore } from '@/stores/walkthrough-store';
 
 import { editorBridge, type OcrResultType } from '@/constants/editor-bridge';
 import { isScanEmptyError, payloadFromBarcodeResult } from '@/lib/scan-codes';
@@ -51,33 +60,72 @@ const QR_TYPES: BarcodeType[] = ['qr', 'aztec', 'datamatrix', 'pdf417'];
 
 type OcrStep = 'capture' | 'identify';
 
-function RadioOption({
-  label,
-  selected,
-  onPress,
+const TYPE_OPTIONS: { value: OcrResultType; label: string }[] = [
+  { value: 'Text', label: 'Text' },
+  { value: 'Barcode', label: 'Barcode' },
+  { value: 'QRCode', label: 'QR code' },
+];
+
+const HEADING: Record<OcrResultType, string> = {
+  Text: 'Scan text',
+  Barcode: 'Scan barcode',
+  QRCode: 'Scan QR code',
+};
+
+const READ_LABEL: Record<OcrResultType, string> = {
+  Text: 'Read text',
+  Barcode: 'Read barcode',
+  QRCode: 'Read QR code',
+};
+
+const RESULT_PLACEHOLDER: Record<OcrResultType, string> = {
+  Text: 'The text from your photo will show here. You can edit it.',
+  Barcode: 'The barcode number will show here.',
+  QRCode: 'The QR code content will show here.',
+};
+
+function TypeSegments({
+  value,
+  onChange,
 }: {
-  label: OcrResultType;
-  selected: boolean;
-  onPress: () => void;
+  value: OcrResultType;
+  onChange: (next: OcrResultType) => void;
 }) {
   useThemeRefresh();
   return (
-    <Pressable onPress={onPress} style={styles.radioRow} hitSlop={6}>
-      <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
-        {selected ? <View style={styles.radioInner} /> : null}
-      </View>
-      <Text style={[styles.radioLabel, selected && styles.radioLabelActive]}>{label}</Text>
-    </Pressable>
+    <View style={styles.segments}>
+      {TYPE_OPTIONS.map((opt) => {
+        const selected = opt.value === value;
+        return (
+          <Pressable
+            key={opt.value}
+            onPress={() => onChange(opt.value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            style={[styles.segment, selected && styles.segmentActive]}>
+            <Text style={[styles.segmentText, selected && styles.segmentTextActive]}>
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
 export default function OcrScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
-  const previewSize = ocrPreviewSize(useWindowDimensions().width);
-  const params = useLocalSearchParams<{ from?: string | string[] }>();
+  const win = useWindowDimensions();
+  // Also capped by height so the form and the Add button keep room on short screens.
+  const previewSize = Math.min(ocrPreviewSize(win.width), Math.round(win.height * 0.26));
+  const params = useLocalSearchParams<{ from?: string | string[]; type?: string | string[] }>();
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
   const returnToEdit = fromParam === 'edit';
+  const typeParam = Array.isArray(params.type) ? params.type[0] : params.type;
+  // Double-tap OCR on a text / barcode / QR element: read that format straight from the photo.
+  const presetType: OcrResultType | null =
+    typeParam === 'Text' || typeParam === 'Barcode' || typeParam === 'QRCode' ? typeParam : null;
   const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
   const ocr = useOcrSession();
 
@@ -91,7 +139,8 @@ export default function OcrScreen() {
   const [cameraReady, setCameraReady] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [recognitionType, setRecognitionType] = useState<OcrResultType>('Text');
+  const [recognitionType, setRecognitionType] = useState<OcrResultType>(presetType ?? 'Text');
+  const [autoRead, setAutoRead] = useState(false);
   const [previewText, setPreviewText] = useState('');
   const [identifying, setIdentifying] = useState(false);
 
@@ -101,7 +150,7 @@ export default function OcrScreen() {
     ocr.reset();
   }, [ocr.reset]);
 
-  const goBack = useCallback(() => {
+  const handleBack = useCallback(() => {
     if (step === 'identify') {
       cancelIdentify();
       setStep('capture');
@@ -111,11 +160,68 @@ export default function OcrScreen() {
     goBack();
   }, [cancelIdentify, step]);
 
+  useStepBack(step === 'identify', handleBack);
+
+  const startWalkthrough = useWalkthroughStore((s) => s.start);
+  const stopWalkthrough = useWalkthroughStore((s) => s.stop);
+  const markOcrTourSeen = useSettingsStore((s) => s.markOcrTourSeen);
+  const tourScreen = step === 'capture' ? 'capture' : 'result';
+  const cameraAllowed = Boolean(permission?.granted);
+
+  // Each screen has its own tour: it opens the first time that screen is shown.
+  useEffect(() => {
+    const running = useWalkthroughStore.getState();
+    if (running.active && running.tour === 'ocr') running.stop();
+    if (tourScreen === 'capture' && !cameraAllowed) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const maybeStart = () => {
+      if (useSettingsStore.getState().ocrTourSeen.includes(tourScreen)) return;
+      timer = setTimeout(() => startWalkthrough('ocr'), 600);
+    };
+    if (useSettingsStore.persist.hasHydrated()) maybeStart();
+    const unsub = useSettingsStore.persist.onFinishHydration(maybeStart);
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
+  }, [tourScreen, cameraAllowed, startWalkthrough]);
+
+  useEffect(
+    () => () => {
+      const { active, tour } = useWalkthroughStore.getState();
+      if (active && tour === 'ocr') useWalkthroughStore.getState().stop();
+    },
+    [],
+  );
+
+  const tourOverlay = (
+    <WalkthroughOverlay
+      tour="ocr"
+      steps={OCR_WALKTHROUGHS[tourScreen]}
+      onFinish={() => {
+        markOcrTourSeen(tourScreen);
+        stopWalkthrough();
+      }}
+    />
+  );
+
+  const helpButton = (
+    <Pressable
+      onPress={() => startWalkthrough('ocr')}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel="Help for this screen"
+      style={[styles.headerSide, styles.headerSideRight]}>
+      <AppIcon name="info.circle" tintColor={C.onAccent} size={22} />
+    </Pressable>
+  );
+
   const openIdentifyStep = (uri: string) => {
     cancelIdentify();
     setImageUri(uri);
     setPreviewText('');
-    setRecognitionType('Text');
+    setRecognitionType(presetType ?? 'Text');
+    setAutoRead(presetType !== null);
     setStep('identify');
   };
 
@@ -154,18 +260,9 @@ export default function OcrScreen() {
     setStep('capture');
   };
 
-  const handleChooseType = () => {
-    Alert.alert('Choose Type', 'Select what you want to identify in the photo.', [
-      { text: 'Text', onPress: () => setRecognitionType('Text') },
-      { text: 'Barcode', onPress: () => setRecognitionType('Barcode') },
-      { text: 'QRCode', onPress: () => setRecognitionType('QRCode') },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
   const handleIdentify = async () => {
     if (!imageUri) {
-      Alert.alert('No Image', 'Capture or choose a photo first.');
+      Alert.alert('No photo', 'Take or choose a photo first.');
       return;
     }
     if (identifying || ocr.running) return;
@@ -256,11 +353,18 @@ export default function OcrScreen() {
     }
   };
 
+  useEffect(() => {
+    if (!autoRead || step !== 'identify' || !imageUri) return;
+    setAutoRead(false);
+    void handleIdentify();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRead, step, imageUri]);
+
   const handleConfirm = () => {
     if (identifying || ocr.running) return;
     const value = previewText.trim();
     if (!value) {
-      Alert.alert('Required', 'Identify content first or enter text in the preview field.');
+      Alert.alert('Nothing to add', 'Tap the read button first, or type the text in the box.');
       return;
     }
 
@@ -289,27 +393,45 @@ export default function OcrScreen() {
     return (
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom + 20 }]}>
         <View style={styles.header}>
-          <Pressable onPress={() => goBack()} hitSlop={12} style={styles.headerSide}>
+          <Pressable onPress={handleBack} hitSlop={12} style={styles.headerSide}>
             <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
           </Pressable>
-          <Text style={styles.headerTitle}>OCR</Text>
+          <Text style={styles.headerTitle}>Scan text</Text>
           <View style={styles.headerSide} />
         </View>
 
         <View style={styles.permissionBody}>
-          <Text style={styles.permissionTitle}>Camera Permission Needed</Text>
+          <View style={styles.permissionIcon}>
+            <AppIcon name="camera" tintColor={C.onAccent} size={40} />
+          </View>
+          <Text style={styles.permissionTitle}>Allow the camera</Text>
           <Text style={styles.permissionSub}>
-            Allow camera access to capture label text, barcodes, and QR codes for OCR.
+            The camera is used only to take the photo you want to read. Nothing is saved or sent.
           </Text>
+          <View style={styles.permissionList}>
+            {['Printed text', 'Barcodes', 'QR codes'].map((item) => (
+              <View key={item} style={styles.permissionItem}>
+                <AppIcon name="checkmark" tintColor={C.onAccent} size={16} />
+                <Text style={styles.permissionItemText}>{item}</Text>
+              </View>
+            ))}
+          </View>
           <Pressable
             style={({ pressed }) => [styles.permissionBtn, pressed && styles.pressed]}
-            onPress={requestPermission}>
-            <Text style={styles.permissionBtnText}>Allow Camera Access</Text>
+            onPress={permission.canAskAgain ? requestPermission : () => void Linking.openSettings()}>
+            <Text style={styles.permissionBtnText}>
+              {permission.canAskAgain ? 'Allow camera' : 'Open Settings'}
+            </Text>
           </Pressable>
+          {!permission.canAskAgain ? (
+            <Text style={styles.permissionNote}>
+              Camera access was turned off. Switch it on in Settings, then come back.
+            </Text>
+          ) : null}
           <Pressable
             style={({ pressed }) => [styles.permissionSecondaryBtn, pressed && styles.pressed]}
             onPress={handleGalleryPick}>
-            <Text style={styles.permissionSecondaryText}>Choose Photo Instead</Text>
+            <Text style={styles.permissionSecondaryText}>Choose a photo instead</Text>
           </Pressable>
         </View>
         {imageSourceSheet}
@@ -329,132 +451,162 @@ export default function OcrScreen() {
         />
 
         <View style={[styles.header, styles.captureHeader, { paddingTop: insets.top + 8 }]}>
-          <Pressable onPress={() => goBack()} hitSlop={12} style={styles.headerSide}>
+          <Pressable onPress={handleBack} hitSlop={12} style={styles.headerSide}>
             <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
           </Pressable>
-          <Text style={styles.headerTitle}>OCR</Text>
-          <View style={styles.headerSide} />
+          <Text style={styles.headerTitle}>Scan text</Text>
+          {helpButton}
+        </View>
+
+        <View style={styles.frameArea} pointerEvents="none">
+          <WalkthroughTarget id="ocr.frame" style={styles.frame}>
+            <View style={[styles.corner, styles.cornerTL]} />
+            <View style={[styles.corner, styles.cornerTR]} />
+            <View style={[styles.corner, styles.cornerBL]} />
+            <View style={[styles.corner, styles.cornerBR]} />
+          </WalkthroughTarget>
+          <Text style={styles.frameHint}>Point at text, a barcode or a QR code</Text>
         </View>
 
         <View style={[styles.captureControls, { paddingBottom: insets.bottom + 28 }]}>
-          <Pressable
-            onPress={() => setTorch((prev) => !prev)}
-            style={({ pressed }) => [styles.captureSideBtn, pressed && styles.pressed]}
-            hitSlop={10}>
-            <AppIcon
-              name={torch ? 'flashlight.on.fill' : 'flashlight.off.fill'}
-              tintColor={C.onAccent}
-              size={28}
-            />
-          </Pressable>
+          <WalkthroughTarget id="ocr.torch">
+            <Pressable
+              onPress={() => setTorch((prev) => !prev)}
+              style={({ pressed }) => [styles.captureSideBtn, pressed && styles.pressed]}
+              accessibilityLabel="Flashlight"
+              hitSlop={10}>
+              <AppIcon
+                name={torch ? 'flashlight.on.fill' : 'flashlight.off.fill'}
+                tintColor={C.onAccent}
+                size={26}
+              />
+              <Text style={styles.captureSideLabel}>{torch ? 'Light on' : 'Light'}</Text>
+            </Pressable>
+          </WalkthroughTarget>
 
-          <Pressable
-            onPress={handleCapture}
-            disabled={!cameraReady || capturing}
-            style={({ pressed }) => [styles.shutterOuter, pressed && styles.pressed]}>
-            {capturing ? (
-              <ActivityIndicator color={C.brandInk} />
-            ) : (
-              <View style={styles.shutterInner} />
-            )}
-          </Pressable>
+          <WalkthroughTarget id="ocr.shutter">
+            <Pressable
+              onPress={handleCapture}
+              disabled={!cameraReady || capturing}
+              accessibilityLabel="Take photo"
+              style={({ pressed }) => [styles.shutterOuter, pressed && styles.pressed]}>
+              {capturing ? (
+                <ActivityIndicator color={C.brandInk} />
+              ) : (
+                <View style={styles.shutterInner} />
+              )}
+            </Pressable>
+          </WalkthroughTarget>
 
-          <Pressable
-            onPress={handleGalleryPick}
-            style={({ pressed }) => [styles.captureSideBtn, pressed && styles.pressed]}
-            hitSlop={10}>
-            <AppIcon name="photo.on.rectangle" tintColor={C.onAccent} size={28} />
-          </Pressable>
+          <WalkthroughTarget id="ocr.gallery">
+            <Pressable
+              onPress={handleGalleryPick}
+              style={({ pressed }) => [styles.captureSideBtn, pressed && styles.pressed]}
+              accessibilityLabel="Choose from gallery"
+              hitSlop={10}>
+              <AppIcon name="photo.on.rectangle" tintColor={C.onAccent} size={26} />
+              <Text style={styles.captureSideLabel}>Gallery</Text>
+            </Pressable>
+          </WalkthroughTarget>
         </View>
         {imageSourceSheet}
+        {tourOverlay}
       </View>
     );
   }
 
+  const busy = identifying || ocr.running;
+  const heading = HEADING[recognitionType];
+  const canAdd = !busy && previewText.trim().length > 0;
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={goBack} hitSlop={12} style={styles.headerSide}>
+        <Pressable onPress={handleBack} hitSlop={12} style={styles.headerSide}>
           <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
         </Pressable>
-        <Text style={styles.headerTitle}>OCR</Text>
-        <Pressable
-          onPress={handleConfirm}
-          disabled={identifying || ocr.running}
-          hitSlop={10}
-          style={[styles.headerSide, styles.headerSideRight]}>
-          <Text style={styles.confirmText}>Confirm</Text>
-        </Pressable>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {heading}
+        </Text>
+        {helpButton}
       </View>
 
       <View style={styles.identifyBlueSection}>
-        <View style={[styles.imageFrame, { width: previewSize, height: previewSize }]}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.previewImage} contentFit="cover" />
-          ) : (
-            <View style={styles.previewPlaceholder} />
-          )}
-        </View>
-
-        <View style={styles.actionRow}>
-          <Pressable
-            onPress={handleIdentify}
-            disabled={identifying || ocr.running}
-            style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}>
-            {identifying || ocr.running ? (
-              <ActivityIndicator size="small" color={C.accent} />
+        <WalkthroughTarget id="ocr.photo">
+          <View style={[styles.imageFrame, { width: previewSize, height: previewSize }]}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.previewImage} contentFit="cover" />
             ) : (
-              <Text style={styles.actionIdentifyText}>Identify</Text>
+              <View style={styles.previewPlaceholder} />
             )}
-          </Pressable>
-
-          <Pressable
-            onPress={handleClear}
-            style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}>
-            <Text style={styles.actionClearText}>Clear</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleChooseType}
-            style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}>
-            <Text style={styles.actionIdentifyText}>Choose Type</Text>
-          </Pressable>
-        </View>
+          </View>
+        </WalkthroughTarget>
+        <Pressable
+          onPress={handleClear}
+          hitSlop={8}
+          style={({ pressed }) => [styles.retakeBtn, pressed && styles.pressed]}>
+          <Text style={styles.retakeText}>Retake</Text>
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView
         behavior="padding"
-        style={[styles.identifyWhiteSection, { paddingBottom: insets.bottom + 24 }]}>
-        <View style={styles.typeRow}>
-          <RadioOption
-            label="Text"
-            selected={recognitionType === 'Text'}
-            onPress={() => setRecognitionType('Text')}
-          />
-          <RadioOption
-            label="Barcode"
-            selected={recognitionType === 'Barcode'}
-            onPress={() => setRecognitionType('Barcode')}
-          />
-          <RadioOption
-            label="QRCode"
-            selected={recognitionType === 'QRCode'}
-            onPress={() => setRecognitionType('QRCode')}
-          />
-        </View>
+        style={styles.identifyWhiteSection}>
+        <FormScrollView
+          style={styles.formArea}
+          contentContainerStyle={styles.formContent}
+          showsVerticalScrollIndicator={false}>
+          {presetType === null ? (
+            <>
+              <Text style={styles.sectionLabel}>What is in the photo?</Text>
+              <WalkthroughTarget id="ocr.type">
+                <TypeSegments value={recognitionType} onChange={setRecognitionType} />
+              </WalkthroughTarget>
+            </>
+          ) : null}
 
-        <OcrResultPanel
-          inputRef={previewInputRef}
-          value={previewText}
-          onChangeText={setPreviewText}
-          identifying={identifying || ocr.running}
-          errorMessage={recognitionType === 'Text' ? ocr.error?.message : null}
-          onCopy={() => ocr.copy(previewText)}
-          onCopyError={(error) => Alert.alert('Copy Failed', ocrErrorMessage(error))}
-        />
+          <WalkthroughTarget id="ocr.read" style={styles.readSlot}>
+            <Pressable
+              onPress={handleIdentify}
+              disabled={busy}
+              style={({ pressed }) => [styles.readBtn, pressed && styles.pressed]}>
+              {busy ? (
+                <ActivityIndicator size="small" color={C.onAccent} />
+              ) : (
+                <Text style={styles.readBtnText}>{READ_LABEL[recognitionType]}</Text>
+              )}
+            </Pressable>
+          </WalkthroughTarget>
 
-        <Text style={styles.effectPreviewLabel}>Effect Preview</Text>
+          <Text style={styles.sectionLabel}>Result</Text>
+          <WalkthroughTarget id="ocr.result">
+            <OcrResultPanel
+              inputRef={previewInputRef}
+              value={previewText}
+              onChangeText={setPreviewText}
+              placeholder={RESULT_PLACEHOLDER[recognitionType]}
+              identifying={busy}
+              errorMessage={recognitionType === 'Text' ? ocr.error?.message : null}
+              onCopy={() => ocr.copy(previewText)}
+              onCopyError={(error) => Alert.alert('Copy Failed', ocrErrorMessage(error))}
+            />
+          </WalkthroughTarget>
+        </FormScrollView>
+
+        <WalkthroughTarget id="ocr.add" style={[styles.addSlot, { paddingBottom: insets.bottom + 14 }]}>
+          <Pressable
+            onPress={handleConfirm}
+            disabled={!canAdd}
+            style={({ pressed }) => [
+              styles.addBtn,
+              !canAdd && styles.addBtnDisabled,
+              pressed && styles.pressed,
+            ]}>
+            <Text style={styles.addBtnText}>Add to label</Text>
+          </Pressable>
+        </WalkthroughTarget>
       </KeyboardAvoidingView>
+      {tourOverlay}
     </View>
   );
 }
@@ -495,6 +647,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'flex-end',
   },
   headerTitle: {
+    flexShrink: 1,
     color: c.onAccent,
     fontSize: 18,
     fontWeight: '600',
@@ -511,47 +664,79 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
-    gap: 16,
+    gap: 14,
+  },
+  permissionIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(255,255,255,0.14)', // theme-fixed: white tint on the blue header
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
   },
   permissionTitle: {
     color: c.onAccent,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     textAlign: 'center',
   },
   permissionSub: {
-    color: 'rgba(255,255,255,0.75)', // theme-fixed: white on photo / dark overlay
-    fontSize: 14,
-    lineHeight: 20,
+    color: 'rgba(255,255,255,0.8)', // theme-fixed: white on the blue header
+    fontSize: 15,
+    lineHeight: 22,
     textAlign: 'center',
-    marginBottom: 8,
+  },
+  permissionList: {
+    alignSelf: 'stretch',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)', // theme-fixed: white tint on the blue header
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 6,
+  },
+  permissionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 7,
+  },
+  permissionItemText: {
+    flexShrink: 1,
+    color: c.onAccent,
+    fontSize: 15,
+    fontWeight: '500',
   },
   permissionBtn: {
     width: '100%',
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: c.accentFill,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   permissionBtnText: {
-    color: c.onAccent,
+    color: c.brandInk,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  permissionNote: {
+    color: 'rgba(255,255,255,0.75)', // theme-fixed: white on the blue header
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   permissionSecondaryBtn: {
     width: '100%',
     height: 48,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)', // theme-fixed: white on photo / dark overlay
     alignItems: 'center',
     justifyContent: 'center',
   },
   permissionSecondaryText: {
-    color: 'rgba(255,255,255,0.85)', // theme-fixed: white on photo / dark overlay
+    color: c.onAccent,
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   captureControls: {
     position: 'absolute',
@@ -565,8 +750,8 @@ const styles = themedStyles((c) => ({
     zIndex: 10,
   },
   captureSideBtn: {
-    width: 52,
-    height: 52,
+    width: 64,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -606,82 +791,128 @@ const styles = themedStyles((c) => ({
     flex: 1,
     backgroundColor: c.surface,
   },
-  actionRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 18,
-    paddingHorizontal: 4,
-  },
-  actionBtn: {
-    minWidth: 88,
+  retakeBtn: {
+    marginTop: 12,
     minHeight: 36,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
   },
-  actionIdentifyText: {
-    color: c.accent,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  actionClearText: {
-    color: c.danger,
-    fontSize: 16,
-    fontWeight: '500',
+  retakeText: {
+    color: c.onAccent,
+    fontSize: 15,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   identifyWhiteSection: {
     flex: 1,
     backgroundColor: c.surface,
     paddingHorizontal: 16,
     paddingTop: 18,
+  },
+  formArea: {
+    flex: 1,
+  },
+  formContent: {
     paddingBottom: 24,
   },
-  typeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    paddingHorizontal: 4,
+  addSlot: {
+    paddingTop: 10,
   },
-  radioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  sectionLabel: {
+    color: c.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
   },
-  radioOuter: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    borderColor: c.border,
+  segments: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    backgroundColor: c.fillStrong,
+    padding: 3,
+  },
+  segment: {
+    flex: 1,
+    height: 38,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioOuterActive: {
-    borderColor: c.accent,
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  segmentActive: {
     backgroundColor: c.accentFill,
   },
-  radioLabel: {
-    fontSize: 15,
+  segmentText: {
     color: c.textSecondary,
+    fontSize: 15,
     fontWeight: '500',
-    flexShrink: 1,
   },
-  radioLabelActive: {
-    color: c.accent,
+  segmentTextActive: {
+    color: c.onAccent,
     fontWeight: '600',
   },
-  effectPreviewLabel: {
-    textAlign: 'center',
-    color: c.textMuted,
-    fontSize: 14,
+  readSlot: {
+    marginTop: 14,
+    marginBottom: 18,
+  },
+  readBtn: {
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: c.accentFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readBtnText: {
+    color: c.onAccent,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  addBtn: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: c.accentFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtnDisabled: {
+    opacity: 0.4,
+  },
+  addBtnText: {
+    color: c.onAccent,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  frameArea: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 60,
+  },
+  frame: {
+    width: '78%',
+    aspectRatio: 1.3,
+  },
+  frameHint: {
+    marginTop: 18,
+    color: '#FFFFFF', // theme-fixed: white on camera feed
+    fontSize: 15,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0,0,0,0.6)', // theme-fixed: legibility on camera feed
+    textShadowRadius: 4,
+  },
+  corner: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderColor: '#FFFFFF', // theme-fixed: white on camera feed
+  },
+  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 8 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 8 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 8 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 8 },
+  captureSideLabel: {
+    marginTop: 4,
+    color: c.onAccent,
+    fontSize: 12,
     fontWeight: '500',
   },
   pressed: {

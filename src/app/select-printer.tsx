@@ -81,7 +81,7 @@ export default function SelectPrinterScreen() {
   return (
     <AuthScreen
       title="Which printer did you buy?"
-      subtitle="We'll select it automatically when you connect over Bluetooth"
+      subtitle="Choose the printer you bought so Seznik is set up for it and prints at its best. We'll select it automatically when you connect over Bluetooth."
     >
       <View style={styles.list}>
         {CONSUMER_PRINTER_LIST.map((printer) => {

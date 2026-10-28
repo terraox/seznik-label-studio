@@ -1,9 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
+import { IosAlertModal } from '@/components/ui/ios-alert-modal';
 import { Spacing } from '@/constants/theme';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
-import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 type BluetoothBlockersProps = {
   canScan: boolean;
@@ -67,27 +67,16 @@ export function BluetoothOffDialog({
 }: BluetoothOffDialogProps) {
   useThemeRefresh();
   return (
-    <Modal supportedOrientations={ALL_ORIENTATIONS} visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={styles.dialog}>
-          <View style={styles.iconWrap}>
-            <Ionicons name="bluetooth" size={28} color={C.accentInk} />
-            <View style={styles.slash} />
-          </View>
-          <Text style={styles.title}>Bluetooth is off</Text>
-          <Text style={styles.body}>Turn Bluetooth on to search for printers nearby.</Text>
-          <Pressable
-            onPress={onOpenSettings}
-            style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-            <Text style={styles.buttonText}>{settingsLabel}</Text>
-          </Pressable>
-          <Pressable onPress={onClose} style={({ pressed }) => [styles.dismiss, pressed && styles.pressed]}>
-            <Text style={styles.dismissText}>Not now</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
+    <IosAlertModal
+      visible={visible}
+      title="Bluetooth is off"
+      message="Turn Bluetooth on to search for printers nearby."
+      onRequestClose={onClose}
+      buttons={[
+        { text: 'Not now', style: 'cancel', onPress: onClose },
+        { text: settingsLabel, style: 'default', bold: true, onPress: onOpenSettings },
+      ]}
+    />
   );
 }
 
@@ -99,28 +88,6 @@ const styles = themedStyles((c, scheme) => ({
     borderColor: c.hairline,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.four,
-    alignItems: 'center',
-    gap: 8,
-    ...cardElevation(c, scheme),
-  },
-  overlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.four,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: c.scrim,
-  },
-  dialog: {
-    width: '100%',
-    maxWidth: 320,
-    backgroundColor: c.surface,
-    borderRadius: 20,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
-    paddingBottom: Spacing.three,
     alignItems: 'center',
     gap: 8,
     ...cardElevation(c, scheme),
@@ -170,12 +137,5 @@ const styles = themedStyles((c, scheme) => ({
     paddingHorizontal: Spacing.three,
   },
   buttonText: { color: c.onAccent, fontSize: 16, fontWeight: '700' },
-  dismiss: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.three,
-  },
-  dismissText: { color: c.textMuted, fontSize: 15, fontWeight: '600' },
   pressed: { opacity: 0.85 },
 }));

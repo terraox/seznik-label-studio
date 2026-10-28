@@ -1,4 +1,4 @@
-import type { TextStyle, ViewStyle } from 'react-native';
+import { Platform, type TextStyle, type ViewStyle } from 'react-native';
 
 /**
  * Expo registers each cut as its own family (`Inter_400Regular`, `Inter_600SemiBold`).
@@ -12,7 +12,7 @@ const BOLD_FACE_BY_REGULAR: Readonly<Record<string, string>> = {
   Poppins_400Regular: 'Poppins_700Bold',
 };
 
-/** Faces that are already a bold/semibold cut — bold toggle needs no extra thickening. */
+/** Faces that are already a bold/semibold cut: there is no heavier cut to swap to, so the bold toggle thickens them. */
 const ALREADY_BOLD_FACES = new Set<string>([
   'Inter_600SemiBold',
   'Poppins_700Bold',
@@ -51,7 +51,7 @@ export function resolvePreviewFontStyle(
     return { fontFamily: boldFace, fontWeight: undefined, syntheticBold: false };
   }
   if (ALREADY_BOLD_FACES.has(family)) {
-    return { fontFamily: family, fontWeight: undefined, syntheticBold: false };
+    return { fontFamily: family, fontWeight: undefined, syntheticBold: true };
   }
   // Single-weight custom / Indic / downloaded face: keep the face, thicken with shadow.
   return { fontFamily: family, fontWeight: undefined, syntheticBold: true };
@@ -63,20 +63,33 @@ export function boldPrintFamily(family: string | undefined, bold?: boolean): str
   return BOLD_FACE_BY_REGULAR[family] ?? family;
 }
 
+/**
+ * Never set `fontStyle: 'italic'` on a named expo face: Android has no italic cut registered for it
+ * and swaps to the phone's own font. iOS slants with a wrapper skew (see previewItalicWrapStyle).
+ * Android drops `skewX` on Views, so its preview keeps the face upright; print still slants it.
+ */
+export function previewFontStyle(_italic: boolean | undefined): 'italic' | 'normal' {
+  return 'normal';
+}
+
 export function previewItalicWrapStyle(italic: boolean | undefined): ViewStyle | null {
-  if (!italic) return null;
+  if (!italic || Platform.OS === 'android') return null;
   return { transform: [{ skewX: `${PREVIEW_ITALIC_SKEW_DEG}deg` }] };
 }
 
-/** Horizontal smear that reads as bold when the TTF has no heavy cut. */
+/**
+ * Horizontal smear that reads as bold when the TTF has no heavy cut.
+ * Android clears the shadow when its radius is exactly 0, so the smear never drew there; a tiny
+ * radius keeps it sharp but present.
+ */
 export function previewSyntheticBoldStyle(
   color: string,
   fontSizePx: number,
 ): TextStyle | null {
-  const dx = Math.max(0.4, Math.min(1.2, fontSizePx * 0.045));
+  const dx = Math.max(0.6, Math.min(1.6, fontSizePx * 0.06));
   return {
     textShadowColor: color,
     textShadowOffset: { width: dx, height: 0 },
-    textShadowRadius: 0,
+    textShadowRadius: 0.1,
   };
 }

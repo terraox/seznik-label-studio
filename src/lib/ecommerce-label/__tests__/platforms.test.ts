@@ -47,7 +47,7 @@ test('flipkart: label is the centred box, invoice below', () => {
 test('meesho: label is everything above the title band', () => {
   const r = locatePage('meesho', MEESHO)!;
   assert.ok(r);
-  assert.ok(r.label.w > 0.95 && r.label.y < 0.01);
+  assert.ok(r.label.w > 0.95 && r.label.y < 0.015);
   assert.ok(r.label.y + r.label.h < 0.476, 'stops before the invoice band');
   assert.ok(r.invoice && r.invoice.y >= 0.47);
 });

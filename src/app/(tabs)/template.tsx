@@ -1,3 +1,4 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { composeUpsDocument, createLabelDocument, type LabelElement } from '@/lib/label-document';
 import type { AcrossMode } from '@/lib/across';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -14,13 +15,18 @@ import {
   Alert,
 } from 'react-native';
 import { TextInput } from '@/components/ui/text-input';
+import { FadeInItem, PopOnActive } from '@/components/ui/motion';
+import { EmptyState } from '@/components/ui/empty-state';
+import { TipBanner } from '@/components/ui/tip-banner';
+import { TemplateQuickView } from '@/components/template-quick-view';
+import { useTipsStore } from '@/stores/tips-store';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Rect as SvgRect, Stop, SvgXml } from 'react-native-svg';
+import { SvgXml } from 'react-native-svg';
 
 import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { TemplateRequestModal, type TemplateRequestDraft } from '@/components/template-request-form';
 import { trackFeatureClick, trackTemplateRequest } from '@/lib/telemetry/events';
-import { ShareNodeIcon } from '@/components/home-icons';
 import { LabelPreview } from '@/components/label-preview';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTabBarPadding } from '@/hooks/use-tab-bar-padding';
@@ -31,6 +37,7 @@ import { sampleToElements } from '@/lib/template-sample-elements';
 import type { SampleElement } from '@/lib/template-sample';
 import { useAuthStore } from '@/stores/auth-store';
 import { useLabelStore } from '@/stores/label-store';
+import { useSavedSetupStore } from '@/stores/saved-setup-store';
 import { useOpenLabelFile } from '@/lib/label-share/use-open-label-file';
 import { useTranslation } from '@/lib/i18n';
 import { templateLayout } from '@/lib/layout/screen-sizes';
@@ -46,15 +53,13 @@ function catalogDimensions(widthMm: number, heightMm: number): string {
   return `${formatCatalogMm(widthMm)} x ${formatCatalogMm(heightMm)}`;
 }
 
-const CatalogCardBanner = memo(function CatalogCardBanner({
-  id,
+const CatalogCardInfo = memo(function CatalogCardInfo({
   name,
   widthMm,
   heightMm,
   category,
   showCategory,
 }: {
-  id: string;
   name: string;
   widthMm: number;
   heightMm: number;
@@ -62,43 +67,21 @@ const CatalogCardBanner = memo(function CatalogCardBanner({
   showCategory: boolean;
 }) {
   useThemeRefresh();
-  const [bannerSize, setBannerSize] = useState({ w: 0, h: 38 });
-  const gradientId = `catalog-hdr-${id}`;
   return (
-    <View
-      style={styles.cardHeaderBanner}
-      onLayout={(event) => {
-        const { width, height } = event.nativeEvent.layout;
-        if (Math.abs(width - bannerSize.w) > 1 || Math.abs(height - bannerSize.h) > 1) {
-          setBannerSize({ w: width, h: height });
-        }
-      }}>
-      {bannerSize.w > 0 ? (
-        <Svg
-          pointerEvents="none"
-          width={bannerSize.w}
-          height={bannerSize.h}
-          style={StyleSheet.absoluteFillObject}>
-          <Defs>
-            <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor="#1EB8C8" /* theme-fixed: card banner gradient, white text */ />
-              <Stop offset="1" stopColor="#2E78B8" /* theme-fixed: card banner gradient, white text */ />
-            </LinearGradient>
-          </Defs>
-          <SvgRect width={bannerSize.w} height={bannerSize.h} fill={`url(#${gradientId})`} />
-        </Svg>
-      ) : null}
-      <View style={styles.bannerLeft}>
-        {showCategory ? (
-          <Text numberOfLines={1} style={styles.bannerCategory}>
+    <View style={styles.cardInfo}>
+      <View style={styles.infoText}>
+        {showCategory && category ? (
+          <Text numberOfLines={1} style={styles.infoCategory}>
             {category}
           </Text>
         ) : null}
-        <Text numberOfLines={1} style={styles.bannerTitle}>
+        <Text numberOfLines={1} style={styles.infoTitle}>
           {name}
         </Text>
       </View>
-      <Text style={styles.bannerDimensions}>{catalogDimensions(widthMm, heightMm)}</Text>
+      <View style={styles.sizeChip}>
+        <Text style={styles.sizeChipText}>{catalogDimensions(widthMm, heightMm)} mm</Text>
+      </View>
     </View>
   );
 });
@@ -114,9 +97,9 @@ function isTwoUpTemplate(t: CatalogTemplate): boolean {
   return /2up|two up/i.test(t.name) && !/cable|jewel/i.test(t.name);
 }
 
-/** The 3-up jewellery sheet uses the built-in rat-tail die-cut; other jewellery templates use their admin SVG and design. */
-function isJewellerySheetTemplate(t: CatalogTemplate): boolean {
-  return /jewel/i.test(t.name) && /3\s*-?\s*up|three up/i.test(t.name);
+/** Off: the built-in rat-tail die-cut forced 54 x 96 mm, so jewellery now opens at the size set in the admin panel, drawn from its own SVG. */
+function isJewellerySheetTemplate(_t: CatalogTemplate): boolean {
+  return false;
 }
 
 function templateSampleLayout(t: CatalogTemplate): SampleElement[] {
@@ -151,7 +134,7 @@ const TemplatePreview = memo(function TemplatePreview({ item }: { item: CatalogT
     doc.elements = sampleToElements(layout, item.widthMm, item.heightMm);
     return doc;
   }, [item]);
-  if (sampleDoc) return <LabelPreview document={sampleDoc} catalogStock />;
+  if (sampleDoc) return <LabelPreview document={sampleDoc} catalogStock showMeasure />;
   return (
     <View style={styles.svgPreviewWrap}>
       <View style={{ width: '100%', aspectRatio: item.widthMm / item.heightMm, maxHeight: 220 }}>
@@ -168,6 +151,7 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
   cardMaxWidth,
   isFavorite,
   onPress,
+  onLongPress,
   onToggleFavorite,
 }: {
   item: CatalogTemplate;
@@ -176,40 +160,40 @@ const IndustryTemplateCard = memo(function IndustryTemplateCard({
   cardMaxWidth: number;
   isFavorite: boolean;
   onPress: (item: CatalogTemplate) => void;
+  onLongPress: (item: CatalogTemplate) => void;
   onToggleFavorite: (id: string) => void;
 }) {
   useThemeRefresh();
   return (
     <Pressable
       onPress={() => onPress(item)}
+      onLongPress={() => onLongPress(item)}
+      delayLongPress={350}
       style={({ pressed }) => [
         styles.templateCard,
         { maxWidth: cardMaxWidth, width: '100%' },
         pressed && styles.cardPressed,
       ]}>
-      <CatalogCardBanner
-        id={item.id}
+      <View>
+        <TemplatePreview item={item} />
+        <Pressable
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
+          onPress={() => onToggleFavorite(item.id)}
+          style={({ pressed }) => [styles.favoriteBadge, pressed && styles.cardPressed]}>
+          <PopOnActive active={isFavorite}>
+            <AppIcon name={isFavorite ? 'star.fill' : 'star'} tintColor={isFavorite ? C.warning : C.textMuted} size={18} />
+          </PopOnActive>
+        </Pressable>
+      </View>
+      <CatalogCardInfo
         name={item.name}
         widthMm={item.widthMm}
         heightMm={item.heightMm}
         category={category}
         showCategory={showCategory}
       />
-      <TemplatePreview item={item} />
-      <View style={styles.cardFooter}>
-        <View style={styles.footerClock}>
-          <AppIcon name="clock" tintColor={C.accent} size={17} />
-        </View>
-        <ShareNodeIcon color={C.accent} size={20} />
-        <Pressable
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
-          onPress={() => onToggleFavorite(item.id)}
-          style={({ pressed }) => [styles.footerFavorite, pressed && styles.cardPressed]}>
-          <AppIcon name={isFavorite ? 'star.fill' : 'star'} tintColor={isFavorite ? C.warning : C.textMuted} size={20} />
-        </Pressable>
-      </View>
     </Pressable>
   );
 });
@@ -256,6 +240,12 @@ export default function TemplateScreen() {
   const documents = useLabelStore((s) => s.documents);
   const groups = useLabelStore((s) => s.groups);
   const addGroup = useLabelStore((s) => s.addGroup);
+  // Labels an Excel saved setup was made from get a "Saved setup" mark in the Local list.
+  const savedSetups = useSavedSetupStore((s) => s.setups);
+  const setupLabelIds = useMemo(
+    () => new Set(savedSetups.flatMap((s) => (s.sourceLabelId ? [s.sourceLabelId] : []))),
+    [savedSetups],
+  );
   const deleteDocument = useLabelStore((s) => s.deleteDocument);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
   const { t } = useTranslation();
@@ -272,7 +262,10 @@ export default function TemplateScreen() {
   // Only starring counts as a tap on the feature; un-starring is undoing it.
   const onToggleFavorite = useCallback(
     (id: string) => {
-      if (!useTemplateCatalogStore.getState().favoriteIds.includes(id)) trackFeatureClick('templates.favourite');
+      if (!useTemplateCatalogStore.getState().favoriteIds.includes(id)) {
+        trackFeatureClick('templates.favourite');
+        useTipsStore.getState().markSeen('templates.star');
+      }
       toggleFavorite(id);
     },
     [toggleFavorite],
@@ -333,6 +326,7 @@ export default function TemplateScreen() {
     return catalogTemplates.filter((t) => t.categoryIds.includes(activeCategoryId));
   }, [searchQuery, activeCategoryId, catalogTemplates, categoryNames, favoriteSet]);
 
+  const [quickView, setQuickView] = useState<CatalogTemplate | null>(null);
   const [choiceFor, setChoiceFor] = useState<{ template: CatalogTemplate; mode: AcrossMode } | null>(null);
   const [arrangeFor, setArrangeFor] = useState<CatalogTemplate | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -452,6 +446,7 @@ export default function TemplateScreen() {
         <View style={styles.topRow}>
           {/* Search Pill */}
           <View style={styles.searchPill}>
+            <AppIcon name="magnifyingglass" tintColor={C.onHeader} size={17} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search Template"
@@ -478,23 +473,19 @@ export default function TemplateScreen() {
 
         {/* Header Tabs: Local | Industry */}
         <View style={styles.tabRow}>
-          <Pressable
-            onPress={() => setActiveTab('local')}
-            style={[styles.tabItem, activeTab === 'local' && styles.tabItemActive]}>
-            <Text style={[styles.tabText, activeTab === 'local' && styles.tabTextActive]}>
-              {t('template.local')} ({documents.length})
-            </Text>
-            {activeTab === 'local' && <View style={styles.tabIndicator} />}
-          </Pressable>
-
-          <Pressable
-            onPress={() => setActiveTab('industry')}
-            style={[styles.tabItem, activeTab === 'industry' && styles.tabItemActive]}>
-            <Text style={[styles.tabText, activeTab === 'industry' && styles.tabTextActive]}>
-              {t('template.industry')} ({catalogTemplates.length})
-            </Text>
-            {activeTab === 'industry' && <View style={styles.tabIndicator} />}
-          </Pressable>
+          {(
+            [
+              { key: 'local', label: `${t('template.local')} (${documents.length})` },
+              { key: 'industry', label: `${t('template.industry')} (${catalogTemplates.length})` },
+            ] as const
+          ).map((tab) => (
+            <Pressable
+              key={tab.key}
+              onPress={() => setActiveTab(tab.key)}
+              style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}>
+              <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>{tab.label}</Text>
+            </Pressable>
+          ))}
         </View>
       </View>
 
@@ -611,18 +602,21 @@ export default function TemplateScreen() {
                       { maxWidth: templateCardMaxWidth, width: '100%' },
                       pressed && styles.cardPressed,
                     ]}>
-                    <View style={styles.cardHeaderBanner}>
-                      <View style={styles.bannerLeft}>
-                        <Text numberOfLines={1} style={styles.bannerTitle}>
-                          {docItem.name}
-                        </Text>
-                      </View>
-                      <Text style={styles.bannerDimensions}>
-                        {catalogDimensions(docItem.widthMm, docItem.heightMm)}
-                      </Text>
-                    </View>
                     <LabelPreview document={composeUpsDocument(docItem)} catalogStock />
+                    <CatalogCardInfo
+                      name={docItem.name}
+                      widthMm={docItem.widthMm}
+                      heightMm={docItem.heightMm}
+                      category=""
+                      showCategory={false}
+                    />
                     <View style={styles.cardFooter}>
+                      {setupLabelIds.has(docItem.id) ? (
+                        <View style={styles.setupBadge} accessibilityLabel="Saved setup">
+                          <MaterialCommunityIcons name="file-excel-outline" color={C.accent} size={14} />
+                          <Text style={styles.setupBadgeText}>Saved setup</Text>
+                        </View>
+                      ) : null}
                       <Pressable
                         hitSlop={8}
                         onPress={() =>
@@ -663,9 +657,15 @@ export default function TemplateScreen() {
               },
             ]}
             showsVerticalScrollIndicator={false}>
-            {filteredTemplates.map((item) => (
+            {activeTab === 'industry' && !searchQuery.trim() ? (
+              <View style={[styles.tipSlot, { maxWidth: templateCardMaxWidth }]}>
+                <TipBanner id="templates.star" text="Tap the star to save a template. Press and hold a card for a quick look." />
+              </View>
+            ) : null}
+
+            {filteredTemplates.map((item, index) => (
+              <FadeInItem key={`${activeCategoryId}-${item.id}`} index={index} style={styles.cardSlot}>
               <IndustryTemplateCard
-                key={item.id}
                 item={item}
                 category={item.categoryIds
                   .map((id) => categoryNames.get(id))
@@ -675,14 +675,30 @@ export default function TemplateScreen() {
                 cardMaxWidth={templateCardMaxWidth}
                 isFavorite={favoriteSet.has(item.id)}
                 onPress={handleSelectTemplate}
+                onLongPress={(tpl) => setQuickView(tpl)}
                 onToggleFavorite={onToggleFavorite}
               />
+              </FadeInItem>
             ))}
 
-            {filteredTemplates.length === 0 && (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No templates found</Text>
-              </View>
+            {catalogLoading && catalogTemplates.length === 0
+              ? [0, 1, 2].map((n) => (
+                  <View key={n} style={[styles.templateCard, { maxWidth: templateCardMaxWidth, width: '100%' }]}>
+                    <Skeleton style={styles.skeletonPreview} />
+                    <View style={styles.skeletonInfo}>
+                      <Skeleton style={styles.skeletonTitle} />
+                      <Skeleton style={styles.skeletonChip} />
+                    </View>
+                  </View>
+                ))
+              : null}
+
+            {filteredTemplates.length === 0 && !(catalogLoading && catalogTemplates.length === 0) && (
+              <EmptyState
+                icon="magnifyingglass"
+                title={searchQuery.trim() ? `No templates match “${searchQuery.trim()}”` : 'No templates here yet'}
+                hint={searchQuery.trim() ? 'Try a shorter word, or ask us for the label you need below.' : 'Pull down to refresh, or pick another category.'}
+              />
             )}
 
             {!catalogLoading || catalogTemplates.length > 0 ? (
@@ -709,6 +725,21 @@ export default function TemplateScreen() {
         </View>
       </View>
       </View>
+
+      <TemplateQuickView
+        visible={quickView !== null}
+        title={quickView?.name ?? ''}
+        size={quickView ? `${catalogDimensions(quickView.widthMm, quickView.heightMm)} mm` : ''}
+        isFavorite={quickView ? favoriteSet.has(quickView.id) : false}
+        onClose={() => setQuickView(null)}
+        onToggleFavorite={() => quickView && onToggleFavorite(quickView.id)}
+        onOpen={() => {
+          const tpl = quickView;
+          setQuickView(null);
+          if (tpl) handleSelectTemplate(tpl);
+        }}>
+        {quickView ? <TemplatePreview item={quickView} /> : null}
+      </TemplateQuickView>
 
       <TemplateRequestModal
         visible={requestOpen}
@@ -818,17 +849,19 @@ const styles = themedStyles((c, scheme) => ({
   },
   searchPill: {
     flex: 1,
-    height: 36,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: scheme === 'light' ? '#3C6182' : c.fillStrong, // theme-fixed: light keeps the navy search pill
-    borderRadius: 18,
-    justifyContent: 'center',
+    borderRadius: 20,
     paddingHorizontal: 14,
   },
   searchInput: {
+    flex: 1,
     color: c.onAccent,
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: '500',
-    textAlign: 'center',
     padding: 0,
   },
   headerIcons: {
@@ -846,32 +879,29 @@ const styles = themedStyles((c, scheme) => ({
   tabRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingTop: 6,
+    padding: 3,
+    marginTop: 2,
+    marginBottom: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.18)', // theme-fixed: recessed track behind the header tabs
   },
   tabItem: {
+    flex: 1,
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    position: 'relative',
+    paddingVertical: 7,
+    borderRadius: 10,
   },
-  tabItemActive: {},
+  tabItemActive: {
+    backgroundColor: c.surface,
+  },
   tabText: {
-    color: c.textMuted,
-    fontSize: 15,
+    color: c.onHeader,
+    fontSize: 14,
     fontWeight: '500',
   },
   tabTextActive: {
-    color: c.onAccent,
-    fontWeight: '500',
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    height: 3,
-    width: 60,
-    backgroundColor: c.surface,
-    borderRadius: 2,
+    color: c.accent,
+    fontWeight: '700',
   },
   body: {
     flex: 1,
@@ -913,14 +943,17 @@ const styles = themedStyles((c, scheme) => ({
     includeFontPadding: false,
   },
   categoryItem: {
-    height: 38,
-    width: '100%',
+    minHeight: 40,
+    marginHorizontal: 6,
+    marginVertical: 2,
     paddingHorizontal: 6,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoryItemActive: {
     backgroundColor: c.surface,
+    ...cardElevation(c, scheme),
   },
   categoryItemText: {
     fontSize: 13.5,
@@ -931,7 +964,7 @@ const styles = themedStyles((c, scheme) => ({
   },
   categoryItemTextActive: {
     color: c.accent,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   // Right Content Area
   contentArea: {
@@ -947,52 +980,68 @@ const styles = themedStyles((c, scheme) => ({
   },
   templateCard: {
     backgroundColor: c.surface,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     ...cardElevation(c, scheme),
+  },
+  tipSlot: {
+    width: '100%',
+  },
+  cardSlot: {
+    width: '100%',
+    alignItems: 'center',
   },
   cardPressed: {
     opacity: 0.85,
   },
-  cardHeaderBanner: {
-    backgroundColor: c.accentFill,
-    overflow: 'hidden',
-    position: 'relative',
+  cardInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
   },
-  bannerLeft: {
+  infoText: {
     flex: 1,
     minWidth: 0,
-    marginRight: 8,
   },
-  bannerTitle: {
-    color: c.onAccent,
-    fontSize: 14,
-    fontWeight: '500',
+  infoTitle: {
+    color: c.text,
+    fontSize: 14.5,
+    fontWeight: '600',
   },
-  bannerCategory: {
-    color: 'rgba(255,255,255,0.88)', // theme-fixed: white text on the banner gradient
-    fontSize: 11,
+  infoCategory: {
+    color: c.accentInk,
+    fontSize: 10.5,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 1,
   },
-  bannerSubtitle: {
-    color: c.onAccent,
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  bannerDimensions: {
-    color: c.onAccent,
-    fontSize: 14,
-    fontWeight: '500',
+  sizeChip: {
     flexShrink: 0,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: c.accentFill,
+  },
+  sizeChipText: {
+    color: c.onAccent,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  favoriteBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.surface,
+    ...cardElevation(c, scheme),
   },
   // Preview Canvas
 
@@ -1020,28 +1069,40 @@ const styles = themedStyles((c, scheme) => ({
 
   // --- OTHER SPECIFIC STYLES ---
 
-  // Card Footer
+  // Card Footer (saved labels only)
+  setupBadge: {
+    marginRight: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: c.accentSoft,
+  },
+  setupBadgeText: { fontSize: 11, fontWeight: '700', color: c.accent },
   cardFooter: {
     backgroundColor: c.surface,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    gap: 18,
+    gap: 22,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: c.hairline,
   },
-  footerClock: {
-    width: 24,
-    height: 24,
+  skeletonPreview: { height: 150, borderRadius: 0 },
+  skeletonInfo: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
-  footerFavorite: {
-    marginLeft: 'auto',
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  skeletonTitle: { flex: 1, height: 14 },
+  skeletonChip: { width: 70, height: 22, borderRadius: 11 },
   emptyState: {
     padding: 30,
     alignItems: 'center',

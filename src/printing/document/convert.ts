@@ -322,8 +322,6 @@ function convertBarcode(
     fontSizePt: el.fontSize,
     bold: el.bold,
     italic: el.italic,
-    underline: el.underline,
-    strikethrough: el.strikethrough,
     align: el.align,
   };
 

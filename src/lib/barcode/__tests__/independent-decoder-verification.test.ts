@@ -82,6 +82,10 @@ const pdfTestCases = [
   { text: 'Hello World 12345', ecc: 2, label: 'Mixed case with space & numbers (ECC 2)' },
   { text: 'SEZ-PRINT-ENTERPRISE-2026', ecc: 3, label: 'Enterprise stock tag (ECC 3)' },
   { text: 'Tracking# 9400 1000 0000 0000 00', ecc: 4, label: 'USPS style tracking (ECC 4)' },
+  { text: 'lower case then UPPER then 123 and punctuation; <ok> (x)?', ecc: 2, label: 'All text sub-modes' },
+  { text: 'Line1\nLine2\tTabbed', ecc: 2, label: 'LF and TAB' },
+  { text: 'Price \u20B9499 \u00E9\u00E8 caf\u00E9 \u4F60\u597D', ecc: 2, label: 'UTF-8 via byte compaction' },
+  { text: 'x'.repeat(600) + ' END 123', ecc: 3, label: 'Long text (wide symbol)' },
 ];
 
 for (const tc of pdfTestCases) {

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { LabelSizeSetupSection } from '@/components/label-size-setup-section';
+import { LabelSizeSetupSection, type LabelSizePreset } from '@/components/label-size-setup-section';
 import { type LabelUnit } from '@/lib/label-geometry';
 import { OUTPUT_SIZE_PRESETS, type OutputSize } from '@/lib/pdf-editor/session';
 
@@ -19,10 +19,16 @@ export function PdfOutputSizeRow({
   value,
   onChange,
   preview,
+  presets,
+  unitSwitch,
 }: {
   value: OutputSize;
   onChange: (next: OutputSize) => void;
   preview?: ReactNode;
+  /** Replaces the default small-label presets. */
+  presets?: LabelSizePreset[];
+  /** Shows a mm / cm / in switch on the presets. */
+  unitSwitch?: boolean;
 }) {
   const [unit, setUnit] = useState<LabelUnit>('mm');
 
@@ -36,6 +42,8 @@ export function PdfOutputSizeRow({
         onWidthChange={(widthMm) => onChange(sizeFromMm(widthMm, value.heightMm))}
         onHeightChange={(heightMm) => onChange(sizeFromMm(value.widthMm, heightMm))}
         onUnitChange={setUnit}
+        presets={presets}
+        unitSwitch={unitSwitch}
         preview={preview}
       />
     </View>

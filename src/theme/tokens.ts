@@ -160,7 +160,7 @@ export const DarkColors: ThemeColors = {
   pressedOverlay: 'rgba(255, 255, 255, 0.08)',
   splash: '#000000',
   shadow: '#000000',
-  canvasArea: '#000000',
+  canvasArea: '#10151F',
 };
 
 export const ThemeTokens: Record<ColorScheme, ThemeColors> = {

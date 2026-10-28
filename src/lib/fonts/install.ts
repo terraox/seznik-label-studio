@@ -9,6 +9,7 @@ import { copyImportIntoSezprint, deleteSezprintFile, ensureSezprintDir, publishS
 import { dropPrintTypeface } from '@/printing/raster/print-typeface-map';
 import { registerPrintTypeface } from '@/printing/raster/print-typeface';
 import { useInstalledFontStore } from '@/stores/installed-font-store';
+import { isOnline } from '@/stores/network-store';
 
 export async function ensureUserFontsDir(): Promise<string> {
   return ensureSezprintDir('fonts');
@@ -38,6 +39,7 @@ export async function downloadCatalogFont(item: FontLibraryItem): Promise<Instal
   const dir = await ensureUserFontsDir();
   const dest = `${dir}${item.id}.ttf`;
   await deleteSezprintFile(dest);
+  if (!isOnline()) throw new Error('No internet. Connect to download this font.');
   const result = await FileSystem.downloadAsync(item.downloadUrl, dest);
   if (result.status !== 200) {
     await deleteSezprintFile(dest);

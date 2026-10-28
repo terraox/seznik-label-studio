@@ -13,6 +13,7 @@ type OcrResultPanelProps = {
   onChangeText: (text: string) => void;
   inputRef?: Ref<TextInput>;
   errorMessage?: string | null;
+  placeholder?: string;
   identifying?: boolean;
   onCopy: () => Promise<void> | void;
   onCopyError?: (error: unknown) => void;
@@ -23,6 +24,7 @@ export function OcrResultPanel({
   onChangeText,
   inputRef,
   errorMessage,
+  placeholder = '',
   identifying = false,
   onCopy,
   onCopyError,
@@ -53,11 +55,11 @@ export function OcrResultPanel({
         style={styles.previewInput}
         value={value}
         onChangeText={onChangeText}
-        placeholder=""
+        placeholder={placeholder}
         placeholderTextColor={C.textMuted}
         multiline
         editable={!identifying}
-        textAlignVertical="center"
+        textAlignVertical="top"
       />
 
       <View style={styles.copyRow}>
@@ -85,7 +87,7 @@ export function OcrResultPanel({
 
 const styles = themedStyles((c) => ({
   previewInput: {
-    minHeight: 52,
+    minHeight: 96,
     borderRadius: 6,
     backgroundColor: c.fillStrong,
     paddingHorizontal: 14,

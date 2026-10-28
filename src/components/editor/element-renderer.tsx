@@ -1,10 +1,24 @@
 import { ModedTileImage } from "@/components/editor/moded-tile-image";
+import { ItalicWrap } from "@/components/editor/italic-wrap";
 import { useModedTile } from "@/components/editor/use-moded-tile";
 import { usesModedPrint } from "@/printing/raster/image-element-settings";
 import { computeArcTextLayout } from "@/lib/editor/arctext-layout";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Platform, StyleSheet, Text, View } from "react-native";
-import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useDerivedValue,
+  type SharedValue,
+} from "react-native-reanimated";
 import Svg, {
   Circle,
   Ellipse,
@@ -19,6 +33,9 @@ import { ClipartIcon } from "@/components/clipart-icon";
 import { MonoImagePreview } from "@/components/editor/mono-image-preview";
 import { SignaturePreview } from "@/components/editor/signature-preview";
 import {
+  DEFAULT_BARCODE_STATE,
+  DEFAULT_ELEMENT_STATE,
+  DEFAULT_QRCODE_STATE,
   DRAWING_COLORS,
   applyTimeOffsets,
   formatLiveDateTime,
@@ -41,7 +58,8 @@ import {
   textContainsEmoji,
 } from "@/lib/fonts/text-font-family";
 import {
-  previewItalicWrapStyle,
+  PREVIEW_ITALIC_SKEW_DEG,
+  previewFontStyle,
   previewSyntheticBoldStyle,
   resolvePreviewFontStyle,
 } from "@/lib/fonts/preview-text-style";
@@ -53,7 +71,8 @@ import {
 } from "@/lib/barcode/barcode-snapping";
 import { encodeDataMatrix } from "@/lib/barcode/datamatrix";
 import { formatBarcodeHri } from "@/lib/barcode/hri";
-import { encodePdf417 } from "@/lib/barcode/pdf417";
+import { linePatternForBox } from "@/lib/line-pattern";
+import { encodePdf417, PDF417_ROW_HEIGHT } from "@/lib/barcode/pdf417";
 import { formatDataSourceColumn } from "@/lib/editor/data-source-display";
 import {
   looksLikeImageUri,
@@ -90,14 +109,11 @@ export function inkColor(drawingColorIndex: number) {
   return drawingColorIndex === 0 || color === "#FFFFFF" ? DESIGN_INK : color;
 }
 
-function paletteColor(drawingColorIndex: number) {
-  return DRAWING_COLORS[drawingColorIndex] ?? DESIGN_INK;
-}
-
 function shapeFillColor(element: ShapeElementState) {
   if (!element.fill) return "transparent";
   if (element.fillColor) return element.fillColor;
-  return paletteColor(element.drawingColorIndex);
+  // Palette slot 0 is white (paper), which made the fill invisible; print fills with ink.
+  return inkColor(element.drawingColorIndex);
 }
 
 function fontSizePx(fontSizePt: number, scale: number) {
@@ -148,7 +164,15 @@ type ContentProps = {
   liveWidthSv?: SharedValue<number>;
   /** Written with the native live-text laid-out height in px while reflowing. */
   liveHeightSv?: SharedValue<number>;
+  /**
+   * Wrapped lines for every reachable width (smallest width each layout starts at, mm). While a
+   * width drag is live the matching layout is shown on the UI thread: the same lines the resting
+   * text and print use, so nothing re-wraps on release. Without it the native live text is used.
+   */
+  liveBank?: LiveTextBank;
 };
+
+export type LiveTextBank = { starts: number[]; lines: string[][]; maxWidthMm: number };
 
 function textStyleFor(
   state: Pick<
@@ -185,9 +209,9 @@ function textStyleFor(
     includeFontPadding: false,
     fontFamily: preview.fontFamily,
     // Named expo faces ignore fontWeight; system default still uses it.
-    // Italic is a wrapper skew (print ITALIC_SKEW) — fontStyle italic is a no-op on these cuts.
+    // iOS: italic is a wrapper skew (print ITALIC_SKEW). Android drops View skew, so it uses fontStyle.
     fontWeight: preview.fontWeight,
-    fontStyle: "normal" as const,
+    fontStyle: previewFontStyle(state.italic),
     textDecorationLine: (decorations.join(" ") || "none") as
       | "none"
       | "underline"
@@ -287,7 +311,7 @@ function formatTextForRender(
     return {
       text: raw.replace(/\r?\n/g, " "),
       numberOfLines: 1 as number | undefined,
-      ellipsizeMode: "tail" as const,
+      ellipsizeMode: "clip" as const,
       layoutKey: "",
     };
   }
@@ -340,7 +364,7 @@ function letterSpacingStyle(
  * is still fitting, the box is laid out at a throw-away size, the text no longer fits and React
  * Native breaks it mid-word; caching that would freeze the broken lines for good.
  */
-function useSettledLineMemory(scale: number) {
+function useSettledLineMemory(scale: number, liveReflowSv?: SharedValue<boolean>) {
   const pendingLines = useRef<{ key: string; lines: string[] } | null>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -358,9 +382,101 @@ function useSettledLineMemory(scale: number) {
       settleTimer.current = null;
       const pending = pendingLines.current;
       pendingLines.current = null;
+      // A drag that started after this was scheduled would re-render the frame mid-drag.
+      if (liveReflowSv?.value) return;
       if (pending) rememberVisibleLines(pending.key, pending.lines);
     }, 250);
   };
+}
+
+/**
+ * Every wrapped layout of a text, stacked; only the one whose width range holds the live width
+ * is visible. The layers have a fixed width, so a width drag never makes native re-measure any
+ * of them (that was the cost): the frame's width only moves one transform for centre/right
+ * alignment, one derived index picks the layer, and each layer flips an opacity on the UI thread.
+ */
+function LiveTextLayers({
+  starts,
+  lines,
+  fixedWidthPx,
+  align,
+  scale,
+  liveReflowSv,
+  liveWidthSv,
+  italic,
+  textStyle,
+}: {
+  starts: number[];
+  lines: string[][];
+  fixedWidthPx: number;
+  align: "left" | "center" | "right" | "justify";
+  scale: number;
+  liveReflowSv: SharedValue<boolean>;
+  liveWidthSv: SharedValue<number>;
+  italic?: boolean;
+  textStyle: StyleProp<TextStyle>;
+}) {
+  const active = useDerivedValue(() => {
+    if (!liveReflowSv.value) return -1;
+    const widthMm = liveWidthSv.value / Math.max(0.0001, scale);
+    let index = 0;
+    for (let i = 1; i < starts.length; i += 1) {
+      if (starts[i] - 0.0001 <= widthMm) index = i;
+      else break;
+    }
+    return index;
+  });
+  const shiftStyle = useAnimatedStyle(() => {
+    const spare = liveWidthSv.value - fixedWidthPx;
+    return {
+      transform: [{ translateX: align === "center" ? spare / 2 : align === "right" ? spare : 0 }],
+    };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[styles.liveReflowText, shiftStyle]}>
+      <ItalicWrap pointerEvents="none" italic={italic} style={{ width: fixedWidthPx }}>
+        {lines.map((layout, index) => (
+          <LiveTextLayer key={index} index={index} active={active} text={layout.join("\n")} style={textStyle} />
+        ))}
+      </ItalicWrap>
+    </Animated.View>
+  );
+}
+
+const LiveTextLayer = memo(function LiveTextLayer({
+  index,
+  active,
+  text,
+  style,
+}: {
+  index: number;
+  active: SharedValue<number>;
+  text: string;
+  style: StyleProp<TextStyle>;
+}) {
+  const animated = useAnimatedStyle(() => ({ opacity: active.value === index ? 1 : 0 }));
+  return (
+    <Animated.Text
+      pointerEvents="none"
+      allowFontScaling={false}
+      style={[style, { position: "absolute", left: 0, top: 0, width: "100%" }, animated]}
+    >
+      {text}
+    </Animated.Text>
+  );
+});
+
+/** Wider than any label: a single line in it is never wrapped, and textAlign places it in the box. */
+const ONE_LINE_STRIP_PX = 4096;
+
+function oneLineStripStyle(boxWidthPx: number, align: string) {
+  const left =
+    align === "center"
+      ? (boxWidthPx - ONE_LINE_STRIP_PX) / 2
+      : align === "right"
+        ? boxWidthPx - ONE_LINE_STRIP_PX
+        : 0;
+  return { position: "absolute" as const, top: 0, left, width: ONE_LINE_STRIP_PX, flexShrink: 0 };
 }
 
 function TextContent({
@@ -372,9 +488,13 @@ function TextContent({
   liveReflowSv,
   liveWidthSv,
   liveHeightSv,
+  liveBank,
+  oneLineAt,
 }: {
   element: TextLayoutFields & { text: string };
   scale: number;
+  /** Draw on one line in an unbounded strip aligned to this box width, so no width can wrap or cut it. */
+  oneLineAt?: number;
   widthPx: number;
   heightPx?: number;
   layoutWidthMm?: number;
@@ -382,6 +502,7 @@ function TextContent({
   liveReflowSv?: SharedValue<boolean>;
   liveWidthSv?: SharedValue<number>;
   liveHeightSv?: SharedValue<number>;
+  liveBank?: LiveTextBank;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -416,7 +537,7 @@ function TextContent({
   const align = element.align === "spacing" ? "justify" : element.align;
   const swap = useReflowSwapStyles(liveReflowSv, liveWidthSv);
   const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
-  const rememberWhenSettled = useSettledLineMemory(scale);
+  const rememberWhenSettled = useSettledLineMemory(scale, liveReflowSv);
   // Native underlines sit on the font descent and overlap between lines, so draw the bars at
   // the same offsets as print (em box centred in the line, bar just below the em).
   const hasDecoration = !!(element.underline || element.strikethrough);
@@ -486,16 +607,18 @@ function TextContent({
               : align === "right"
                 ? "flex-end"
                 : "stretch",
-          // Text is never clipped (print does not clip). A frame a line short shows the line.
-          overflow: autoHeight ? "visible" : "hidden",
+          // Text is never clipped (print does not clip): a frame a line short, or a Close line
+          // wider than the box, shows all of it.
+          overflow: "visible",
         },
         element.antiColor && styles.antiBg,
         dataColumnHighlightStyle(element, highlightColumnName),
       ]}
     >
       {/* Italic skew on a View — Text fontStyle is ignored for expo-font cuts (same as print). */}
-      <View
-        style={[styles.textFill, previewItalicWrapStyle(element.italic)]}
+      <ItalicWrap
+        italic={element.italic}
+        style={oneLineAt != null ? oneLineStripStyle(oneLineAt, align) : styles.textFill}
         collapsable={false}
         onLayout={(e) => {
           const { x, y } = e.nativeEvent.layout;
@@ -552,7 +675,7 @@ function TextContent({
         >
           {formatted.text}
         </RestingText>
-      </View>
+      </ItalicWrap>
       {decoBars.length > 0 ? (
         // Hidden while the width handle reflows: the live text carries its own native line.
         <Animated.View
@@ -575,10 +698,23 @@ function TextContent({
           ))}
         </Animated.View>
       ) : null}
-      {liveReflowSv ? (
-        <View
+      {liveReflowSv && liveWidthSv && liveBank && liveBank.starts.length > 0 ? (
+        <LiveTextLayers
+          starts={liveBank.starts}
+          lines={liveBank.lines}
+          fixedWidthPx={Math.max(1, liveBank.maxWidthMm * scale)}
+          align={align}
+          scale={scale}
+          liveReflowSv={liveReflowSv}
+          liveWidthSv={liveWidthSv}
+          italic={element.italic}
+          textStyle={[style, { textAlign: align }, letterSpacingStyle(drawElement, raw, scale)]}
+        />
+      ) : liveReflowSv ? (
+        <ItalicWrap
           pointerEvents="none"
-          style={[styles.liveReflowText, previewItalicWrapStyle(element.italic)]}
+          italic={element.italic}
+          style={styles.liveReflowText}
         >
           <Animated.Text
             pointerEvents="none"
@@ -590,29 +726,33 @@ function TextContent({
               letterSpacingStyle(element, raw, scale),
               swap.live,
             ]}
+            numberOfLines={element.autoWrapping === "Close" ? 1 : undefined}
+            ellipsizeMode={element.autoWrapping === "Close" ? "clip" : undefined}
             onLayout={(e) => {
               if (!liveHeightSv) return;
-              const h = e.nativeEvent.layout.height;
+              const { width: w, height: h } = e.nativeEvent.layout;
+              // Layouts arrive a frame or two late. One measured at an older width (taller when
+              // the box is being widened) must not hold the frame up: fall back to the Skia bank.
+              const liveW = liveWidthSv?.value ?? 0;
+              if (liveW > 0 && Math.abs(w - liveW) > 1.5) {
+                liveHeightSv.value = 0;
+                return;
+              }
               if (h > 0) liveHeightSv.value = h;
             }}
           >
-            {raw}
+            {element.autoWrapping === "Close" ? raw.replace(/\r?\n/g, " ") : raw}
           </Animated.Text>
-        </View>
+        </ItalicWrap>
       ) : null}
     </View>
   );
 }
 
+/** A counter is text whose value is `content`: drawn by the Text renderer so wrapping, italic and the decoration bars are the same. */
 function DegreesContent({
   element,
-  scale,
-  heightPx,
-  layoutWidthMm,
-  layoutHeightMm,
-  liveReflowSv,
-  liveWidthSv,
-  liveHeightSv,
+  ...rest
 }: {
   element: DegreesElementState;
   scale: number;
@@ -623,163 +763,53 @@ function DegreesContent({
   liveReflowSv?: SharedValue<boolean>;
   liveWidthSv?: SharedValue<number>;
   liveHeightSv?: SharedValue<number>;
+  liveBank?: LiveTextBank;
 }) {
-  const rememberWhenSettled = useSettledLineMemory(scale);
-  const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
-  const highlightColumnName = useSettingsStore(
-    (s) => s.editor.highlightColumnName,
-  );
-  const raw = resolveTextRaw(element, element.content, showColumnName);
-  const resolvedFamily = resolveEditorFontFamily(raw, element.fontFamily);
-  const frameH =
-    layoutHeightMm ??
-    (scale > 0 && typeof heightPx === "number" && heightPx > 0 ? heightPx / scale : element.height);
-  const autoHeight = element.autoTextHeight !== false && element.autoWrapping !== "Close";
-  const drawFont =
-    autoHeight || layoutWidthMm != null
-      ? element.fontSize
-      : typeof frameH === "number" && frameH > 0
-        ? resolveDrawFontSizePt({
-            text: raw,
-            fontSize: element.fontSize,
-            widthMm: element.width,
-            heightMm: frameH,
-            autoWrapping: element.autoWrapping,
-            lineSpacing: element.lineSpacing,
-            charSpacing: element.charSpacing,
-            bold: element.bold,
-            verticalDisplay: element.verticalDisplay,
-            fontFamily: resolvedFamily ?? element.fontFamily,
-          })
-        : element.fontSize;
-  const drawElement = drawFont === element.fontSize ? element : { ...element, fontSize: drawFont };
-  const style = textStyleFor(drawElement, scale, resolvedFamily, raw);
-  const formatted = formatTextForRender(drawElement, raw, layoutWidthMm, resolvedFamily);
-  const align = element.align === "spacing" ? "justify" : element.align;
-  const swap = useReflowSwapStyles(liveReflowSv, liveWidthSv);
-  const RestingText = liveReflowSv ? (Animated.Text as unknown as typeof Text) : Text;
-  return (
-    <View
-      style={[
-        styles.fill,
-        {
-          justifyContent: "flex-start",
-          alignItems:
-            align === "center"
-              ? "center"
-              : align === "right"
-                ? "flex-end"
-                : "stretch",
-          overflow: autoHeight ? "visible" : "hidden",
-        },
-        element.antiColor && styles.antiBg,
-        dataColumnHighlightStyle(element, highlightColumnName),
-      ]}
-    >
-      <View collapsable={false} style={[styles.textFill, previewItalicWrapStyle(element.italic)]}>
-        <RestingText
-          allowFontScaling={false}
-          style={[
-            style,
-            { width: "100%" },
-            { textAlign: align },
-            letterSpacingStyle(drawElement, raw, scale),
-            liveReflowSv ? swap.resting : null,
-          ]}
-          numberOfLines={formatted.numberOfLines}
-          ellipsizeMode={
-            "ellipsizeMode" in formatted ? formatted.ellipsizeMode : undefined
-          }
-          onTextLayout={
-            layoutWidthMm != null
-              ? undefined
-              : (event) => {
-                  if (liveReflowSv?.value) return;
-                  if (!formatted.layoutKey) return;
-                  rememberWhenSettled(
-                    formatted.layoutKey,
-                    cleanNativeLines(
-                      event.nativeEvent.lines.map((line) => line.text),
-                      raw,
-                    ),
-                  );
-                }
-          }
-        >
-          {formatted.text}
-        </RestingText>
-      </View>
-      {liveReflowSv ? (
-        <View
-          pointerEvents="none"
-          style={[styles.liveReflowText, previewItalicWrapStyle(element.italic)]}
-        >
-          <Animated.Text
-            pointerEvents="none"
-            allowFontScaling={false}
-            style={[
-              textStyleFor(element, scale, resolvedFamily, raw),
-              { width: "100%" },
-              { textAlign: align },
-              letterSpacingStyle(element, raw, scale),
-              swap.live,
-            ]}
-            onLayout={(e) => {
-              if (!liveHeightSv) return;
-              const h = e.nativeEvent.layout.height;
-              if (h > 0) liveHeightSv.value = h;
-            }}
-          >
-            {raw}
-          </Animated.Text>
-        </View>
-      ) : null}
-    </View>
-  );
+  return <TextContent element={{ ...element, text: element.content }} {...rest} />;
 }
 
 function TimeContent({
   element,
   scale,
+  widthPx,
+  heightPx,
 }: {
   element: TimeElementState;
   scale: number;
   widthPx: number;
+  heightPx?: number;
 }) {
   const now = useClock(true);
-  const adjusted = applyTimeOffsets(now, element);
-  const liveText = formatLiveDateTime(adjusted);
-  const style = textStyleFor(
-    element,
-    scale,
-    resolveEditorFontFamily(liveText, element.fontFamily),
-    liveText,
-  );
-  const align = element.align === "spacing" ? "justify" : element.align;
+  const liveText = formatLiveDateTime(applyTimeOffsets(now, element));
+  // Drawn by the Text renderer (italic skew, decoration bars, same face and padding as print).
+  // "Close" keeps it on one line: a narrow box shrinks the type instead of wrapping onto more lines.
+  const asText = {
+    ...DEFAULT_ELEMENT_STATE,
+    text: liveText,
+    fontSize: element.fontSize,
+    fontFamily: element.fontFamily,
+    bold: element.bold,
+    italic: element.italic,
+    underline: element.underline,
+    strikethrough: element.strikethrough,
+    align: element.align,
+    width: element.width,
+    height: element.height,
+    antiColor: element.antiColor,
+    drawingColorIndex: element.drawingColorIndex,
+    autoWrapping: "Close" as const,
+    autoTextHeight: false,
+  };
   return (
-    <View
-      style={[
-        styles.fill,
-        {
-          justifyContent: "center",
-          alignItems:
-            align === "center"
-              ? "center"
-              : align === "right"
-                ? "flex-end"
-                : "stretch",
-          overflow: "hidden",
-        },
-        element.antiColor && styles.antiBg,
-      ]}
-    >
-      <Text
-        allowFontScaling={false}
-        style={[style, styles.textFill, { textAlign: align }]}
-      >
-        {liveText}
-      </Text>
-    </View>
+    <TextContent
+      element={asText}
+      scale={scale}
+      widthPx={widthPx}
+      heightPx={heightPx}
+      // A layout width keeps the type at its full size: the time never shrinks to a box or wraps.
+      layoutWidthMm={element.width}
+      oneLineAt={widthPx}
+    />
   );
 }
 
@@ -849,12 +879,9 @@ function BarcodeContent({
     () => barcodeModulesForMode(element.encodeMode, content),
     [content, element.encodeMode],
   );
-  const color = element.antiColor
-    ? "#FFFFFF"
-    : inkColor(element.drawingColorIndex);
-  const bgColor = element.antiColor
-    ? inkColor(element.drawingColorIndex)
-    : "transparent";
+  // Barcodes have no Anti-Color: inverted bars are not scannable.
+  const color = inkColor(element.drawingColorIndex);
+  const bgColor = "transparent";
   const labelSize = fontSizePx(element.fontSize, scale);
   const showLabel = element.textFlag !== "Hide";
   // The digit line sits in its own band. Text-frame padding is for paragraphs and
@@ -912,7 +939,9 @@ function BarcodeContent({
   }, [snapped, widthPx]);
 
   const label = showLabel ? (
-    <View
+    // Italic is a wrapper shear (fontStyle would swap the font); print uses the same slant.
+    <ItalicWrap
+      italic={element.italic}
       style={{
         width: "100%",
         height: labelHeight,
@@ -945,7 +974,7 @@ function BarcodeContent({
       >
         {hri}
       </Text>
-    </View>
+    </ItalicWrap>
   ) : null;
 
   return (
@@ -1084,7 +1113,7 @@ function QrcodeContent({
     for (let r = 0; r < pdfMatrix.rows; r++) {
       for (let c = 0; c < pdfMatrix.cols; c++) {
         if (pdfMatrix.matrix[r][c]) {
-          d += `M${c + qzX},${(r + qzY) * 3}h1v3h-1Z `;
+          d += `M${c + qzX},${(r * PDF417_ROW_HEIGHT + qzY)}h1v${PDF417_ROW_HEIGHT}h-1Z `;
         }
       }
     }
@@ -1132,7 +1161,7 @@ function QrcodeContent({
     const qzX = Math.max(2, parseInt(element.zoneSize, 10) || 2);
     const qzY = Math.max(2, parseInt(element.zoneSize, 10) || 2);
     const totalW = pdfMatrix.cols + qzX * 2;
-    const totalH = (pdfMatrix.rows + qzY * 2) * 3;
+    const totalH = pdfMatrix.rows * PDF417_ROW_HEIGHT + qzY * 2;
 
     return (
       <View style={[styles.fill, styles.center, { backgroundColor: bgColor }]}>
@@ -1167,72 +1196,11 @@ function LineContent({
   scale: number;
 }) {
   const color = inkColor(element.drawingColorIndex);
-  const vertical = heightPx >= widthPx * 2;
-  const strokeWidth = Math.max(
-    1,
-    (vertical ? element.width : element.height) * scale,
-  );
-  const midY = heightPx / 2;
-  const dash =
-    element.lineStyle === "dashed"
-      ? [
-          Math.max(3, element.virtualInterval * scale),
-          Math.max(3, element.virtualInterval * scale),
-        ]
-      : undefined;
-
-  if (element.lineStyle === "slash" || element.lineStyle === "backslash") {
-    const gap = Math.max(4, element.virtualInterval * scale * 2);
-    const count = Math.ceil(widthPx / gap) + 2;
-    const slashHeight = Math.min(heightPx, Math.max(6, strokeWidth * 4));
-    return (
-      <Svg
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${widthPx} ${heightPx}`}
-        preserveAspectRatio="none"
-      >
-        {Array.from({ length: count }).map((_, i) => {
-          const x = i * gap;
-          const up = element.lineStyle === "slash";
-          return (
-            <Line
-              key={i}
-              x1={x}
-              y1={up ? midY + slashHeight / 2 : midY - slashHeight / 2}
-              x2={x + gap * 0.6}
-              y2={up ? midY - slashHeight / 2 : midY + slashHeight / 2}
-              stroke={color}
-              strokeWidth={Math.max(1, strokeWidth / 2)}
-            />
-          );
-        })}
-      </Svg>
-    );
-  }
-
-  if (vertical) {
-    const midX = widthPx / 2;
-    return (
-      <Svg
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${widthPx} ${heightPx}`}
-        preserveAspectRatio="none"
-      >
-        <Line
-          x1={midX}
-          y1={0}
-          x2={midX}
-          y2={heightPx}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash}
-        />
-      </Svg>
-    );
-  }
-
+  const interval = Math.max(3, element.virtualInterval * scale);
+  const rects = linePatternForBox(element.lineStyle, widthPx, heightPx, interval, 1, 1);
+  const d = rects
+    .map((r) => `M${r.x},${r.y}h${r.w}v${r.h}h-${r.w}Z`)
+    .join(" ");
   return (
     <Svg
       width="100%"
@@ -1240,15 +1208,7 @@ function LineContent({
       viewBox={`0 0 ${widthPx} ${heightPx}`}
       preserveAspectRatio="none"
     >
-      <Line
-        x1={0}
-        y1={midY}
-        x2={widthPx}
-        y2={midY}
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeDasharray={dash}
-      />
+      <Path d={d} fill={color} />
     </Svg>
   );
 }
@@ -1274,6 +1234,8 @@ function ShapeContent({
   const fill = shapeFillColor(element);
   const innerW = Math.max(1, widthPx - strokeWidth - safePad * 2);
   const innerH = Math.max(1, heightPx - strokeWidth - safePad * 2);
+  // Android keeps the old fill when only the colour prop changes; a new key repaints the shape.
+  const paintKey = `${element.figureShape}|${fill}|${color}|${strokeWidth}|${element.roundRadius}`;
 
   if (element.figureShape === "oval" || element.figureShape === "circle") {
     const rx =
@@ -1286,11 +1248,23 @@ function ShapeContent({
         : heightPx / 2 - inset;
     return (
       <Svg
+        key={paintKey}
         width="100%"
         height="100%"
         viewBox={`0 0 ${widthPx} ${heightPx}`}
         preserveAspectRatio="none"
       >
+        {fill !== "transparent" ? (
+          <Ellipse
+            cx={widthPx / 2}
+            cy={heightPx / 2}
+            rx={Math.max(1, rx)}
+            ry={Math.max(1, ry)}
+            fill={fill}
+            fillOpacity={1}
+            stroke="none"
+          />
+        ) : null}
         <Ellipse
           cx={widthPx / 2}
           cy={heightPx / 2}
@@ -1298,7 +1272,7 @@ function ShapeContent({
           ry={Math.max(1, ry)}
           stroke={color}
           strokeWidth={strokeWidth}
-          fill={fill}
+          fill="none"
         />
       </Svg>
     );
@@ -1310,11 +1284,25 @@ function ShapeContent({
       : 0;
   return (
     <Svg
+      key={paintKey}
       width="100%"
       height="100%"
       viewBox={`0 0 ${widthPx} ${heightPx}`}
       preserveAspectRatio="none"
     >
+      {fill !== "transparent" ? (
+        <Rect
+          x={inset}
+          y={inset}
+          width={innerW}
+          height={innerH}
+          rx={radius}
+          ry={radius}
+          fill={fill}
+          fillOpacity={1}
+          stroke="none"
+        />
+      ) : null}
       <Rect
         x={inset}
         y={inset}
@@ -1324,7 +1312,7 @@ function ShapeContent({
         ry={radius}
         stroke={color}
         strokeWidth={strokeWidth}
-        fill={fill}
+        fill="none"
       />
     </Svg>
   );
@@ -1491,35 +1479,109 @@ function TableContent({
                 paddingVertical: Math.max(0, scale * 0.2),
               },
               selected && {
-                backgroundColor: `${tableSelectionColor}99`,
-                borderWidth: Math.max(1, scale * 0.15),
+                // Opaque-enough fill so the selected cell reads clearly on white stock.
+                backgroundColor: `${tableSelectionColor}80`,
+                borderWidth: Math.max(2, scale * 0.25),
                 borderColor: tableSelectionColor,
               },
               cell && dataColumnHighlightStyle(cell, highlightColumnName),
             ]}
           >
-            {cell && flat ? (
-              <Text
-                allowFontScaling={false}
-                numberOfLines={1}
-                ellipsizeMode="clip"
-                style={[
-                  style,
-                  letterSpacingStyle(cell, flat, scale),
-                  {
-                    textAlign: align,
-                    width: scaleX < 1 ? measuredPx : "100%",
-                    ...(scaleX < 1
-                      ? {
-                          transform: [{ scaleX }],
-                          transformOrigin: "left center" as const,
-                        }
-                      : null),
-                  },
-                ]}
+            {cell && flat && (cell.cellType === "Barcode" || cell.cellType === "QRCode")
+              ? (() => {
+                  const codeW = Math.max(1, width - padX * 2);
+                  const codeH = Math.max(1, height - Math.max(0, scale * 0.2) * 2);
+                  const shared = {
+                    contentType: cell.contentType,
+                    columnNameContent: cell.columnNameContent,
+                    antiColor: false,
+                    drawingColorIndex: cell.drawingColorIndex,
+                  };
+                  return (
+                    <View style={{ width: codeW, height: codeH, alignSelf: "center" }}>
+                      {cell.cellType === "Barcode" ? (
+                        <BarcodeContent
+                          element={{ ...DEFAULT_BARCODE_STATE, ...shared, content: flat, textFlag: "Hide" }}
+                          widthPx={codeW}
+                          heightPx={codeH}
+                          scale={scale}
+                        />
+                      ) : (
+                        <QrcodeContent
+                          element={{ ...DEFAULT_QRCODE_STATE, ...shared, content: flat }}
+                          widthPx={codeW}
+                          heightPx={codeH}
+                        />
+                      )}
+                    </View>
+                  );
+                })()
+              : null}
+            {cell && flat && style && !(cell.cellType === "Barcode" || cell.cellType === "QRCode") ? (
+              <ItalicWrap
+                collapsable={false}
+                // Italic is a shear on a wrapper (Text fontStyle would swap the font), as in Text.
+                italic={cell.italic}
+                style={{ width: "100%" }}
               >
-                {flat}
-              </Text>
+                <Text
+                  allowFontScaling={false}
+                  numberOfLines={1}
+                  ellipsizeMode="clip"
+                  style={[
+                    style,
+                    // Bars below replace the native decoration, which Android often drops.
+                    cell.underline || cell.strikethrough
+                      ? { textDecorationLine: "none" as const }
+                      : null,
+                    letterSpacingStyle(cell, flat, scale),
+                    {
+                      textAlign: align,
+                      width: scaleX < 1 ? measuredPx : "100%",
+                      ...(scaleX < 1
+                        ? {
+                            transform: [{ scaleX }],
+                            transformOrigin: "left center" as const,
+                          }
+                        : null),
+                    },
+                  ]}
+                >
+                  {flat}
+                </Text>
+                {(cell.underline || cell.strikethrough) &&
+                  (() => {
+                    const em = Math.max(1, style.fontSize);
+                    const lineBox = Number(style.lineHeight) || em * 1.2;
+                    const boxH = lineBox + (Number(style.paddingVertical) || 0) * 2;
+                    const thick = Math.max(1, Math.round(em * (cell.bold ? 0.09 : 0.065)));
+                    const barW = Math.max(1, Math.min(measuredPx || innerW, innerW));
+                    const barLeft =
+                      align === "center"
+                        ? (innerW - barW) / 2
+                        : align === "right"
+                          ? innerW - barW
+                          : 0;
+                    const bars: { key: string; top: number }[] = [];
+                    if (cell.underline)
+                      bars.push({ key: "u", top: boxH / 2 + em * 0.5 + thick * 0.4 });
+                    if (cell.strikethrough)
+                      bars.push({ key: "s", top: boxH / 2 - thick / 2 });
+                    return bars.map((bar) => (
+                      <View
+                        key={bar.key}
+                        style={{
+                          position: "absolute",
+                          left: barLeft,
+                          top: bar.top,
+                          width: barW,
+                          height: thick,
+                          backgroundColor: style.color,
+                        }}
+                      />
+                    ));
+                  })()}
+              </ItalicWrap>
             ) : null}
           </View>
         );
@@ -1528,16 +1590,43 @@ function TableContent({
   );
 }
 
+/** Radii (px) of the underline / strikethrough arcs, measured from the glyph centres' circle. */
+function arcDecorationRadii(
+  element: Pick<ArcTextElementState, "underline" | "strikethrough" | "bold">,
+  baselineRadius: number,
+  fontSizePx: number,
+) {
+  const thickness = Math.max(1, fontSizePx * (element.bold ? 0.09 : 0.065));
+  const bars: { key: string; radius: number; thickness: number }[] = [];
+  // Glyph tops point outward, so "below the baseline" is nearer the centre.
+  if (element.underline)
+    bars.push({ key: "u", radius: Math.max(1, baselineRadius - fontSizePx * 0.5 - thickness), thickness });
+  if (element.strikethrough) bars.push({ key: "s", radius: baselineRadius, thickness });
+  return bars;
+}
+
+/** Clockwise SVG arc from `from` to `to` (radians) on a circle. */
+function arcPath(cx: number, cy: number, r: number, from: number, to: number) {
+  const x0 = cx + r * Math.cos(from);
+  const y0 = cy + r * Math.sin(from);
+  const x1 = cx + r * Math.cos(to);
+  const y1 = cy + r * Math.sin(to);
+  const large = to - from > Math.PI ? 1 : 0;
+  return `M${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1}`;
+}
+
 function ArcTextContent({
   element,
   widthPx,
   heightPx,
   scale,
+  forPrint,
 }: {
   element: ArcTextElementState;
   widthPx: number;
   heightPx: number;
   scale: number;
+  forPrint?: boolean;
 }) {
   const showColumnName = useSettingsStore((s) => s.editor.showColumnName);
   const highlightColumnName = useSettingsStore(
@@ -1588,11 +1677,19 @@ function ArcTextContent({
     <View
       style={[
         styles.fill,
-        element.antiColor && styles.antiBg,
-        dataColumnHighlightStyle(element, highlightColumnName),
+        // Anti-color inverts the circle only; filling the box would print the resize frame.
+        !forPrint && dataColumnHighlightStyle(element, highlightColumnName),
       ]}
     >
       <Svg width="100%" height="100%" viewBox={`0 0 ${widthPx} ${heightPx}`}>
+        {element.antiColor && (
+          <Circle
+            cx={layout.cx}
+            cy={layout.cy}
+            r={layout.radius + layout.strokeWidth / 2}
+            fill={forPrint ? "#000000" : "#111827"}
+          />
+        )}
         {/* Circular guide line matching reference specification */}
         <Circle
           cx={layout.cx}
@@ -1610,25 +1707,45 @@ function ArcTextContent({
             x={item.x}
             y={item.y}
             fill={textColor}
+            // The print threshold turns half-covered pixels black, so thin white letters on the
+            // black circle vanish. A same-colour stroke keeps them as wide as black ones.
+            stroke={forPrint && element.antiColor ? textColor : undefined}
+            strokeWidth={
+              forPrint && element.antiColor
+                ? layout.effectiveFontSizePx * 0.12
+                : undefined
+            }
             fontSize={layout.effectiveFontSizePx}
             fontFamily={fontFamily}
             fontWeight={element.bold ? "700" : "400"}
-            fontStyle={element.italic ? "italic" : "normal"}
-            textDecoration={
-              element.underline
-                ? "underline"
-                : element.strikethrough
-                  ? "line-through"
-                  : "none"
-            }
             textAnchor="middle"
             alignmentBaseline="middle"
             dominantBaseline="middle"
-            transform={`rotate(${item.rotationDeg}, ${item.x}, ${item.y})`}
+            // Italic is a shear about the glyph (same angle as the Text preview and print):
+            // fontStyle is ignored by single-cut fonts.
+            transform={
+              element.italic
+                ? `rotate(${item.rotationDeg}, ${item.x}, ${item.y}) translate(${item.x}, ${item.y}) skewX(${PREVIEW_ITALIC_SKEW_DEG}) translate(${-item.x}, ${-item.y})`
+                : `rotate(${item.rotationDeg}, ${item.x}, ${item.y})`
+            }
           >
             {item.char}
           </SvgText>
         ))}
+
+        {/* Underline and strikethrough follow the arc, so both can show at once */}
+        {layout.characters.length > 0 &&
+          arcDecorationRadii(element, layout.baselineRadius, layout.effectiveFontSizePx).map(
+            ({ key, radius, thickness }) => (
+              <Path
+                key={key}
+                d={arcPath(layout.cx, layout.cy, radius, layout.startAngle, layout.endAngle)}
+                stroke={textColor}
+                strokeWidth={thickness}
+                fill="none"
+              />
+            ),
+          )}
       </Svg>
     </View>
   );
@@ -1705,6 +1822,7 @@ export function ElementContentView({
   liveReflowSv,
   liveWidthSv,
   liveHeightSv,
+  liveBank,
 }: ContentProps) {
   useInstalledFontStore((state) => state.revision);
   useUserClipartStore((state) => state.revision);
@@ -1719,6 +1837,7 @@ export function ElementContentView({
           liveReflowSv={liveReflowSv}
           liveWidthSv={liveWidthSv}
           liveHeightSv={liveHeightSv}
+          liveBank={liveBank}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />
@@ -1733,12 +1852,20 @@ export function ElementContentView({
           liveReflowSv={liveReflowSv}
           liveWidthSv={liveWidthSv}
           liveHeightSv={liveHeightSv}
+          liveBank={liveBank}
           layoutWidthMm={layoutWidthMm}
           layoutHeightMm={layoutHeightMm}
         />
       );
     case "time":
-      return <TimeContent element={element} scale={scale} widthPx={widthPx} />;
+      return (
+        <TimeContent
+          element={element}
+          scale={scale}
+          widthPx={widthPx}
+          heightPx={heightPx}
+        />
+      );
     case "barcode":
       return (
         <BarcodeContent
@@ -1797,6 +1924,7 @@ export function ElementContentView({
           widthPx={widthPx}
           heightPx={heightPx}
           scale={scale}
+          forPrint={forPrint}
         />
       );
     case "image":

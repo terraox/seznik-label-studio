@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';
@@ -15,9 +15,8 @@ type LastConnectedPrinterProps = {
   connectedAt?: number;
   connecting: boolean;
   visible: boolean;
-  nearby: boolean;
-  scanning: boolean;
-  autoConnectPaused: boolean;
+  autoConnect: boolean;
+  onAutoConnectChange: (on: boolean) => void;
   onConnect: () => void;
 };
 
@@ -29,9 +28,8 @@ export function LastConnectedPrinter({
   connectedAt,
   connecting,
   visible,
-  nearby,
-  scanning,
-  autoConnectPaused,
+  autoConnect,
+  onAutoConnectChange,
   onConnect,
 }: LastConnectedPrinterProps) {
   useThemeRefresh();
@@ -43,7 +41,6 @@ export function LastConnectedPrinter({
   // With a nickname set, the Bluetooth name still shows, paired or not.
   const showBtName = Boolean(nickname && btName && btName !== nickname);
   const mac = normalizePrinterMac(deviceId);
-  const status = statusCopy({ nearby, scanning, autoConnectPaused });
   const last = connectedAt ? formatLastConnected(connectedAt) : null;
 
   return (
@@ -61,10 +58,6 @@ export function LastConnectedPrinter({
               {showBtName ? (
                 <Text style={styles.btName} numberOfLines={1}>{btName}</Text>
               ) : null}
-              <View style={styles.statusRow}>
-                <View style={[styles.statusDot, { backgroundColor: status.dot }]} />
-                <Text style={[styles.statusText, { color: status.tone }]}>{status.label}</Text>
-              </View>
             </View>
             {last ? (
               <View style={styles.lastWrap} accessibilityLabel={`Last connected ${last.date} ${last.time}`}>
@@ -108,7 +101,15 @@ export function LastConnectedPrinter({
             )}
           </Pressable>
 
-          <Text style={styles.hint}>{status.hint}</Text>
+          <View style={styles.autoRow}>
+            <Text style={styles.autoLabel}>Auto-connect to this printer</Text>
+            <Switch
+              value={autoConnect}
+              onValueChange={onAutoConnectChange}
+              trackColor={{ false: C.border, true: C.accent }}
+              thumbColor="#FFFFFF" // theme-fixed: white switch thumb in both themes
+            />
+          </View>
         </View>
       </View>
     </View>
@@ -126,45 +127,6 @@ function formatLastConnected(ms: number): { date: string; time: string } {
   return {
     date: `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
     time: `${h12}:${minutes} ${hours < 12 ? 'am' : 'pm'}`,
-  };
-}
-
-function statusCopy({
-  nearby,
-  scanning,
-  autoConnectPaused,
-}: {
-  nearby: boolean;
-  scanning: boolean;
-  autoConnectPaused: boolean;
-}): { label: string; hint: string; dot: string; tone: string } {
-  if (nearby) {
-    return {
-      label: 'In range',
-      hint: autoConnectPaused
-        ? 'You disconnected earlier. Tap Connect when you want to link again.'
-        : 'Stays linked automatically when this printer is on.',
-      dot: C.success,
-      tone: C.success,
-    };
-  }
-  if (scanning) {
-    return {
-      label: 'Scanning',
-      hint: autoConnectPaused
-        ? 'Searching… tap Connect as soon as your printer appears.'
-        : 'Searching — we connect when your printer shows up.',
-      dot: C.warning,
-      tone: C.warning,
-    };
-  }
-  return {
-    label: 'Offline',
-    hint: autoConnectPaused
-      ? 'Power on the printer, then tap Connect.'
-      : 'Power on the printer — linking happens in the background.',
-    dot: C.textMuted,
-    tone: C.textMuted,
   };
 }
 
@@ -201,9 +163,6 @@ const styles = themedStyles((c, scheme) => ({
   copy: { flex: 1, gap: 4, minWidth: 0 },
   name: { fontSize: 19, fontWeight: '800', color: c.text },
   btName: { fontSize: 12, color: c.textMuted },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 13, fontWeight: '700', flexShrink: 1 },
   lastWrap: { alignItems: 'flex-end', gap: 1 },
   lastLabel: { fontSize: 10, fontWeight: '700', color: c.textMuted, letterSpacing: 0.3, textTransform: 'uppercase' },
   lastDate: { fontSize: 12, fontWeight: '700', color: c.text },
@@ -233,5 +192,7 @@ const styles = themedStyles((c, scheme) => ({
   connectBtnBusy: { opacity: 0.9 },
   connectText: { color: c.onAccent, fontSize: 16, fontWeight: '800' },
   hint: { fontSize: 12, lineHeight: 17, color: c.textMuted, textAlign: 'center' },
+  autoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  autoLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: c.text },
   pressed: { opacity: 0.9 },
 }));

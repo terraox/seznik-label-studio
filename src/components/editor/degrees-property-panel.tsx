@@ -276,7 +276,7 @@ function ContentSection({
             value={state.content}
             onChangeText={(content) => patch({ content })}
             multiline
-            placeholder="Enter serial / degrees content"
+            placeholder="Enter counter content"
             placeholderTextColor={C.textMuted}
           />
         </>
@@ -582,7 +582,7 @@ const styles = themedStyles((c) => ({
   },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 16 },
   sectionGap: { height: 8, backgroundColor: c.fillStrong },
-  graySection: { backgroundColor: c.fillStrong },
+  graySection: { backgroundColor: c.surface },
   segmentRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   segmentChip: {
     flex: 1,

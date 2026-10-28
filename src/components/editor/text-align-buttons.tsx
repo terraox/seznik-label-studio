@@ -53,6 +53,17 @@ type TextAlignButtonsProps = {
 
 const DEFAULT_OPTIONS: readonly AlignKind[] = ['left', 'center', 'right', 'justify', 'spacing'];
 
+const SINGLE_LINE_OPTIONS: readonly AlignKind[] = ['left', 'center', 'right'];
+
+/**
+ * One-line content (barcode digits, time, a table cell, text set to a single line) has no lines
+ * to justify, so only left / center / right are offered. A value already stored stays visible.
+ */
+export function alignOptionsFor(align: TextAlign, singleLine: boolean): readonly AlignKind[] {
+  if (!singleLine) return DEFAULT_OPTIONS;
+  return SINGLE_LINE_OPTIONS.includes(align) ? SINGLE_LINE_OPTIONS : [...SINGLE_LINE_OPTIONS, align];
+}
+
 export function TextAlignButtons({
   align,
   onChange,

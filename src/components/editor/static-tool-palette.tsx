@@ -15,7 +15,7 @@ import type { ElementType } from '@/lib/label-document';
 import type { AppIconName } from '@/components/app-icon';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
-export const STATIC_PALETTE_CONTENT_HEIGHT = 270;
+export const STATIC_PALETTE_CONTENT_HEIGHT = 282;
 
 export const TOOL_ROWS: { icon: AppIconName; label: string }[][] = [
   [
@@ -33,15 +33,13 @@ export const TOOL_ROWS: { icon: AppIconName; label: string }[][] = [
     { icon: 'character', label: 'ArcText' },
   ],
   [
-    { icon: 'list.number', label: 'Serial' },
+    { icon: 'list.number', label: 'Counter' },
     { icon: 'tablecells.badge.ellipsis', label: 'Excel' },
-    { icon: 'viewfinder', label: 'Scan' },
     { icon: 'eye', label: 'OCR' },
     { icon: 'face.smiling', label: 'Line Emoji' },
+    { icon: 'square.dashed', label: 'Border' },
   ],
   [
-    { icon: 'square.on.square', label: 'Label Clone' },
-    { icon: 'square.dashed', label: 'Border' },
     { icon: 'signature', label: 'Signature' },
   ],
 ];
@@ -117,7 +115,7 @@ const styles = themedStyles((c) => ({
     paddingVertical: 6,
   },
   toolRowFirst: {
-    paddingTop: 0,
+    paddingTop: 12,
   },
   toolCell: {
     flex: 1,

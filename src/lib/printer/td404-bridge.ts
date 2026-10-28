@@ -14,6 +14,8 @@ export type {
   Td404MonoLabelResult,
   Td404PngLabelOptions,
   Td404PngLabelResult,
+  Td404PrintProgressEvent,
+  Td404PrinterStatusRaw,
   RenderedPdfPage,
   RenderPdfResult,
 } from 'td404-tejas-printer';
@@ -71,6 +73,12 @@ export async function readSystemBluetoothBatteryPercent(mac: string) {
 export async function getTd404BondedDevices() {
   return (await getTd404Bridge()?.getTd404BondedDevices()) ?? [];
 }
+/** Opens the system pairing dialog for an unpaired Tejas / Rudra printer. True once it is bonded. */
+export async function pairTd404Device(mac: string): Promise<boolean> {
+  const b = getTd404Bridge();
+  if (!b) throw missing('pair');
+  return b.pairTd404Device(mac);
+}
 export function startTd404Scan(...args: Parameters<Td404Module['startTd404Scan']>) {
   const b = getTd404Bridge();
   if (!b) throw missing('scan');
@@ -82,6 +90,11 @@ export async function connectTd404(macAddress: string, name: string | null) {
   // Never leave the other printer's socket open.
   await otherBridge()?.disconnectTd404().catch(() => {});
   return b.connectTd404(macAddress, name);
+}
+/** True when the paired printer answers right now. Skipped (false) if the module lacks a probe. */
+export async function probeTd404(mac: string, timeoutMs?: number): Promise<boolean> {
+  const b = getTd404Bridge();
+  return (await b?.probeTd404?.(mac, timeoutMs)) ?? false;
 }
 /** Disconnects both bridges so a printer switch can never leave a stale socket. */
 export async function disconnectTd404() {
@@ -122,6 +135,21 @@ export function addTd404ConnectionListener(
 ): { remove: () => void } {
   const subs = (['tejas', 'rudra'] as const).map((id) => load(id)?.addTd404ConnectionListener(listener));
   return { remove: () => subs.forEach((s) => s?.remove()) };
+}
+/** Progress events from whichever bridge is printing. */
+export function addTd404PrintProgressListener(
+  listener: Parameters<Td404Module['addTd404PrintProgressListener']>[0],
+): { remove: () => void } {
+  const subs = (['tejas', 'rudra'] as const).map((id) =>
+    load(id)?.addTd404PrintProgressListener?.(listener),
+  );
+  return { remove: () => subs.forEach((s) => s?.remove()) };
+}
+export async function queryTd404PrinterStatus() {
+  return (await getTd404Bridge()?.queryTd404PrinterStatus?.()) ?? null;
+}
+export async function waitTd404PrinterIdle(timeoutMs?: number) {
+  return (await getTd404Bridge()?.waitTd404PrinterIdle?.(timeoutMs)) ?? null;
 }
 export async function getTd404ConnectionInfo() {
   return (await getTd404Bridge()?.getTd404ConnectionInfo()) ?? null;

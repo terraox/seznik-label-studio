@@ -32,6 +32,13 @@ export function getPrintTypeface(family?: string, bold?: boolean): PrintFace | n
   return faces.get(family) ?? null;
 }
 
+/** True when `family` has a heavier cut loaded, so the bold toggle swaps faces instead of thickening. */
+export function hasHeavierPrintFace(family?: string): boolean {
+  if (!family) return false;
+  const heavy = BOLD_FACE_BY_REGULAR[family];
+  return !!heavy && faces.has(heavy);
+}
+
 export function dropPrintTypeface(family: string): void {
   faces.delete(family);
   fileUris.delete(family);

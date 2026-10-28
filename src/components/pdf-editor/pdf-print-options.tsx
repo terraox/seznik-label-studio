@@ -9,9 +9,9 @@ import { PLATFORMS, type PlatformId } from '@/lib/ecommerce-label/platforms';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 const LOGO: Record<PlatformId, number> = {
-  amazon: require('../../../assets/images/platforms/amazon.png'),
-  flipkart: require('../../../assets/images/platforms/flipkart.png'),
-  meesho: require('../../../assets/images/platforms/meesho.png'),
+  amazon: require('../../../assets/amazon.png'),
+  flipkart: require('../../../assets/flipkart.png'),
+  meesho: require('../../../assets/meesho.png'),
 };
 
 // theme-fixed: the drawings are paper (white) with navy print, the same in light and dark.
@@ -105,7 +105,7 @@ function PlatformChips() {
     <View style={styles.chips} accessibilityElementsHidden importantForAccessibility="no">
       {PLATFORMS.map((p) => (
         <View key={p.id} style={styles.chip}>
-          <Image source={LOGO[p.id]} style={styles.chipLogo} contentFit="contain" />
+          <Image source={LOGO[p.id]} style={styles.chipLogo} contentFit="cover" />
           <Text numberOfLines={1} maxFontSizeMultiplier={HomeLayout.labelMaxFontScale} style={styles.chipText}>
             {p.name}
           </Text>
@@ -285,28 +285,32 @@ const styles = themedStyles((c, scheme) => ({
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
     paddingHorizontal: 10,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingLeft: 4,
-    paddingRight: 10,
-    paddingVertical: 3,
+    gap: 8,
+    paddingLeft: 5,
+    paddingRight: 14,
+    paddingVertical: 5,
     borderRadius: 99,
     backgroundColor: c.fill,
   },
   chipLogo: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: c.hairline,
+    backgroundColor: '#FFFFFF', // theme-fixed: the Amazon logo is drawn on white
   },
   chipText: {
-    fontSize: 11.5,
+    fontSize: 14,
     fontWeight: '700',
-    color: c.textSecondary,
+    color: c.text,
     flexShrink: 1,
   },
   pressed: {

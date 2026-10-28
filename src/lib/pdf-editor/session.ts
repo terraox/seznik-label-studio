@@ -22,10 +22,11 @@ export type OutputSize = {
 
 export const OUTPUT_SIZE_PRESETS: { kind: Exclude<OutputSizeKind, 'custom'>; label: string; widthMm: number; heightMm: number }[] =
   [
-    { kind: '3x4', label: '3"×4" / 76×100mm', widthMm: 76, heightMm: 100 },
-    { kind: '3x5', label: '3"×5" / 76×130mm', widthMm: 76, heightMm: 130 },
+    // Exact millimetres: an inch size here is 25 mm per inch, so 4"×6" is 100×150 mm.
+    { kind: '3x4', label: '3"×4" / 75×100mm', widthMm: 75, heightMm: 100 },
+    { kind: '3x5', label: '3"×5" / 75×125mm', widthMm: 75, heightMm: 125 },
     { kind: '4x4', label: '4"×4" / 100×100mm', widthMm: 100, heightMm: 100 },
-    { kind: '4x6', label: '4"×6" / 101.6×152.4mm', widthMm: 101.6, heightMm: 152.4 },
+    { kind: '4x6', label: '4"×6" / 100×150mm', widthMm: 100, heightMm: 150 },
   ];
 
 export const DEFAULT_OUTPUT_SIZE: OutputSize = {

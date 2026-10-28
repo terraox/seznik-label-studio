@@ -77,7 +77,7 @@ export function ExcelLabelPreview({ sheet, mappings, displayHead }: ExcelLabelPr
             </View>
           );
         }
-        const text = displayHead && value ? `${name}: ${value}` : value;
+        const text = displayHead && value ? `${name}: ${value}` : value;
         return (
           <Text allowFontScaling={false} key={mapping.columnIndex} style={styles.text}>
             {text}

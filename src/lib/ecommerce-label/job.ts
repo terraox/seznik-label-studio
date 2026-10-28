@@ -77,12 +77,18 @@ export async function scanLabelPdf(
   platform: PlatformId,
   onProgress?: (done: number, total: number) => void,
   isCancelled?: () => boolean,
+  /** Labels found so far, after the first page and after every chunk, so a preview can open early. */
+  onPartial?: (pages: ScannedPage[]) => void,
 ): Promise<ScanResult> {
+  const started = Date.now();
   const firstPage = await analyzePage(uri, 0);
   const first = labelFrom(platform, 0, firstPage);
   if (!first) throw new WrongPlatformError(platform);
   onProgress?.(1, pageCount);
   const placed = new Map<number, ScannedPage>([[0, first]]);
+  const partial = () => onPartial?.([...placed.values()].sort((x, y) => x.pageIndex - y.pageIndex));
+  partial();
+  if (__DEV__) console.info(`[SHIP-SCAN] first page ${Date.now() - started} ms, ${pageCount} pages`);
   if (pageCount === 1) return { pages: [first], skipped: [] };
 
   // Amazon's two-page format: each label page is followed by its invoice page.
@@ -108,6 +114,10 @@ export async function scanLabelPdf(
 
   const unsure: number[] = [];
   const fast = isPdfRowScanAvailable();
+  if (!fast && pageCount > 3) {
+    // Every page is then read in full, one by one: this is the slow path. A rebuilt dev client has the fast scanner.
+    console.warn('[SHIP-SCAN] native row scanner missing in this build: scanning page by page (slow). Rebuild the app.');
+  }
   if (fast) {
     try {
       let template: PageTemplate | null = null;
@@ -138,6 +148,7 @@ export async function scanLabelPdf(
           }
         }
         onProgress?.(end, pageCount);
+        partial();
       }
     } catch {
       // The native call failed part-way: read every page not yet placed in full.
@@ -148,17 +159,32 @@ export async function scanLabelPdf(
     for (let i = 1; i < pageCount; i++) if (!placed.has(i) && !consumed.has(i)) unsure.push(i);
   }
 
+  // Pages the profile could not place are read in full, a few at a time (the render runs natively, so
+  // reads overlap). They are then applied in page order, because an invoice attaches to the page before it.
   const skipped: number[] = [];
+  type Checked = { label: ScannedPage | null; invoice: NormRect | null };
+  const checkedPages = new Map<number, Checked>();
   let checked = 0;
-  for (const pageIndex of unsure) {
-    if (isCancelled?.()) break;
-    const page = await analyzePage(uri, pageIndex).catch(() => null);
-    const label = page ? labelFrom(platform, pageIndex, page) : null;
-    const invoice = page && !label && twoPage ? locateInvoicePage(platform, page.leaves) : null;
-    if (label) placed.set(pageIndex, label);
-    else if (!(invoice && attachInvoice(pageIndex, invoice))) skipped.push(pageIndex);
-    onProgress?.(pageCount - unsure.length + ++checked, pageCount);
+  let nextUnsure = 0;
+  const worker = async () => {
+    while (nextUnsure < unsure.length) {
+      if (isCancelled?.()) return;
+      const pageIndex = unsure[nextUnsure++];
+      const page = await analyzePage(uri, pageIndex).catch(() => null);
+      const label = page ? labelFrom(platform, pageIndex, page) : null;
+      const invoice = page && !label && twoPage ? locateInvoicePage(platform, page.leaves) : null;
+      checkedPages.set(pageIndex, { label, invoice });
+      onProgress?.(pageCount - unsure.length + ++checked, pageCount);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  for (const pageIndex of [...unsure].sort((a, b) => a - b)) {
+    const result = checkedPages.get(pageIndex);
+    if (!result) continue;
+    if (result.label) placed.set(pageIndex, result.label);
+    else if (!(result.invoice && attachInvoice(pageIndex, result.invoice))) skipped.push(pageIndex);
   }
+  if (__DEV__) console.info(`[SHIP-SCAN] done ${Date.now() - started} ms, ${placed.size} labels, ${unsure.length} re-checked`);
   const pages = [...placed.values()].sort((x, y) => x.pageIndex - y.pageIndex);
   return { pages, skipped };
 }

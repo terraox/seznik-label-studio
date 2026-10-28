@@ -41,6 +41,7 @@ export const HOME_TOOLS = {
     hint: 'Bulk from a sheet',
     group: 'file',
   },
+  printImage: { label: 'Image', href: '/new-label-setup?printImage=1', icon: 'image-outline', hint: 'Print a photo', group: 'file' },
   pdf: { label: 'PDF', href: '/pdf', icon: 'document-text-outline', hint: 'Print any page', group: 'file' },
   importLabel: { label: 'Import', action: 'openLabelFile', icon: 'download-outline', hint: '.seznik label file', group: 'file' },
 } as const satisfies Record<string, HomeTool>;
@@ -52,8 +53,11 @@ export const CREATE_HERO_TOOL: HomeToolId = 'newLabel';
 /** "More ways to create" — 3-column ToolGrid. */
 export const CREATE_GRID_TOOLS: readonly HomeToolId[] = ['imageToLabel', 'serialLabels', 'shippingLabels'];
 
-/** "Print from file" — 3-column ToolGrid. */
-export const FILE_TOOLS: readonly HomeToolId[] = ['excel', 'pdf', 'importLabel'];
+/** "Print from file" — 4-column ToolGrid. */
+export const FILE_TOOLS: readonly HomeToolId[] = ['excel', 'pdf', 'printImage', 'importLabel'];
 
 /** Groups that must fill whole 3-column rows. */
 export const TOOL_GRID_GROUPS = { create: CREATE_GRID_TOOLS, file: FILE_TOOLS } as const;
+
+/** Columns each group renders with. */
+export const TOOL_GRID_COLUMNS = { create: 3, file: 4 } as const;

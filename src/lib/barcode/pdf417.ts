@@ -161,6 +161,50 @@ function encodeTextCompaction(input: string): number[] {
   return codewords;
 }
 
+/** Text compaction can carry TAB, LF, CR and printable ASCII; anything else goes through byte compaction. */
+function isTextCompactable(input: string): boolean {
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    if (code === 9 || code === 10 || code === 13) continue;
+    if (code < 32 || code > 126) return false;
+  }
+  return true;
+}
+
+function utf8Bytes(input: string): number[] {
+  const bytes: number[] = [];
+  for (const ch of Array.from(input)) {
+    const cp = ch.codePointAt(0)!;
+    if (cp < 0x80) bytes.push(cp);
+    else if (cp < 0x800) bytes.push(0xc0 | (cp >> 6), 0x80 | (cp & 63));
+    else if (cp < 0x10000) bytes.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+    else bytes.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+  }
+  return bytes;
+}
+
+/** Byte compaction: latch 901 (924 when the length is a multiple of 6), 6 bytes -> 5 base-900 codewords. */
+function encodeByteCompaction(input: string): number[] {
+  const bytes = utf8Bytes(input);
+  const out: number[] = [bytes.length % 6 === 0 ? 924 : 901];
+  let i = 0;
+  for (; i + 6 <= bytes.length; i += 6) {
+    let value = 0;
+    for (let j = 0; j < 6; j++) value = value * 256 + bytes[i + j];
+    const group = new Array<number>(5);
+    for (let j = 4; j >= 0; j--) {
+      group[j] = value % 900;
+      value = Math.floor(value / 900);
+    }
+    out.push(...group);
+  }
+  for (; i < bytes.length; i++) out.push(bytes[i]);
+  return out;
+}
+
+/** Rows are drawn this many modules tall; PDF417 needs at least 3:1 row height for scanners. */
+export const PDF417_ROW_HEIGHT = 3;
+
 const START_PATTERN = '11111111010101000'; // 17 modules: 8,1,1,1,1,1,1,3
 const STOP_PATTERN = '111111101000101001';  // 18 modules: 7,1,1,3,1,1,1,2,1
 
@@ -196,14 +240,22 @@ export function encodePdf417(
   const validEcc = Math.max(0, Math.min(eccLevel, 8));
   const numEccCodewords = ECC_COUNTS[validEcc];
 
-  const rawData = encodeTextCompaction(content);
+  const rawData = isTextCompactable(content) ? encodeTextCompaction(content) : encodeByteCompaction(content);
 
   // Total raw data codewords needed (including length descriptor)
   const minDataCount = rawData.length + 1;
 
   // Determine geometry (target data columns and rows)
-  const cols = dataCols ?? Math.max(2, Math.min(8, Math.ceil(Math.sqrt((minDataCount + numEccCodewords) * 1.5))));
-  const numRows = Math.max(3, Math.min(90, Math.ceil((minDataCount + numEccCodewords) / cols)));
+  const total = minDataCount + numEccCodewords;
+  if (total > 928) return null;
+  let cols = dataCols ?? Math.max(2, Math.min(30, Math.ceil(Math.sqrt(total * 1.5))));
+  let numRows = Math.max(3, Math.ceil(total / cols));
+  // More than 90 rows is not allowed: widen the symbol until it fits.
+  while (numRows > 90 && cols < 30) {
+    cols += 1;
+    numRows = Math.max(3, Math.ceil(total / cols));
+  }
+  if (numRows > 90) return null;
 
   const totalCapacity = cols * numRows;
   const totalDataCodewords = totalCapacity - numEccCodewords;

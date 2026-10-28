@@ -5,8 +5,6 @@ import { TextInput } from '@/components/ui/text-input';
 
 import { AppIcon } from '@/components/app-icon';
 import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
-import { bridgeSupportsImageModes } from '@/lib/printer/image-mode-print';
-import { IMAGE_MODES, IMAGE_MODE_HELP, IMAGE_MODE_LABEL, type ImageMode } from '@/printing/raster/image-modes';
 import { QualityControl, type QualityStepperProps } from '@/components/quality-control';
 import { Type } from '@/constants/ui';
 import { defaultLabelSettings } from '@/lib/label-settings';
@@ -23,6 +21,9 @@ import { usePrinterStore } from '@/stores/printer-store';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
 type Mode = PdfPrintSelection['mode'];
+
+/** Shipping labels print at this darkness so barcodes and small text stay sharp. */
+const SHIPPING_DARKNESS = 7;
 
 const MODES: { id: Mode; label: string; detail: string }[] = [
   { id: 'all', label: 'All pages', detail: 'Every page in the document' },
@@ -101,9 +102,11 @@ export const PdfPrintPanel = forwardRef<
     onPrint: (selection: PdfPrintSelection, options: PdfPrintOptions) => void;
     /** 0-based pages the current choice would print, so the screen can show them. */
     onSelectedPagesChange?: (indices: number[]) => void;
+    /** Shipping labels: print darkness starts at 7 (barcodes stay sharp), so no darkness tip is shown. */
+    shipping?: boolean;
   }
 >(function PdfPrintPanel(
-  { pageCount, currentPage, printing, progress, outputLabel, onPrint, onSelectedPagesChange },
+  { pageCount, currentPage, printing, progress, outputLabel, onPrint, onSelectedPagesChange, shipping },
   ref,
 ) {
   useThemeRefresh();
@@ -133,15 +136,14 @@ export const PdfPrintPanel = forwardRef<
   const labelDefaults = useMemo(() => defaultLabelSettings(), []);
   const calibrationKey = printerDeviceId ?? printerSdkId ?? 'unknown';
   const savedCalibration = printCalibration[calibrationKey];
-  const [darkness, setDarkness] = useState<number | null>(labelDefaults.printDarkness);
+  const [darkness, setDarkness] = useState<number | null>(
+    shipping ? clampToCap(SHIPPING_DARKNESS, qualityCaps.density).value : labelDefaults.printDarkness,
+  );
   const [speed, setSpeed] = useState<number | null>(labelDefaults.printSpeed);
   const [gapMm, setGapMm] = useState(labelDefaults.gapLengthMm);
   const [hOffset, setHOffset] = useState(savedCalibration?.hOffsetMm ?? 0);
   const [vOffset, setVOffset] = useState(savedCalibration?.vOffsetMm ?? 0);
   const [showAdvanced, setShowAdvanced] = useState(true);
-  // Photo dots: Solid prints as before; a dither mode dithers only photos on a page.
-  const [photoMode, setPhotoMode] = useState<ImageMode>('solid');
-  const photoModesAvailable = bridgeSupportsImageModes();
 
   // Offsets saved for a printer load when it connects.
   const loadedKey = useRef(calibrationKey);
@@ -178,9 +180,8 @@ export const PdfPrintPanel = forwardRef<
       gapMm,
       hOffsetMm: Math.round((hOffset + labelDefaults.hOffsetMm) * 100) / 100,
       vOffsetMm: Math.round((vOffset + labelDefaults.vOffsetMm) * 100) / 100,
-      imageMode: photoModesAvailable ? photoMode : undefined,
     }),
-    [darkness, gapMm, hOffset, labelDefaults.hOffsetMm, labelDefaults.vOffsetMm, photoMode, photoModesAvailable, speed, vOffset],
+    [darkness, gapMm, hOffset, labelDefaults.hOffsetMm, labelDefaults.vOffsetMm, speed, vOffset],
   );
 
   const [mode, setMode] = useState<Mode>('all');
@@ -258,7 +259,7 @@ export const PdfPrintPanel = forwardRef<
 
   return (
     <View style={styles.wrap}>
-      {!live ? (
+      {!live && !shipping ? (
         <Pressable
           onPress={() => router.push('/printer-connect')}
           style={({ pressed }) => [styles.banner, pressed && styles.pressed]}>
@@ -352,14 +353,15 @@ export const PdfPrintPanel = forwardRef<
           {error ? <Text style={styles.err}>{error}</Text> : null}
         </WalkthroughTarget>
 
+        {shipping ? null : (
         <View style={[styles.section, styles.tip]}>
           <View style={styles.tipText}>
             <Text style={styles.tipTitle}>Printing shipping labels?</Text>
             <Text style={styles.sub}>Keep print darkness at 7 so barcodes and small text stay sharp and scannable.</Text>
           </View>
           <Pressable
-            onPress={() => setDarkness(clampToCap(7, qualityCaps.density).value)}
-            disabled={printing || darkness === 7}
+            onPress={() => setDarkness(clampToCap(SHIPPING_DARKNESS, qualityCaps.density).value)}
+            disabled={printing || darkness === SHIPPING_DARKNESS}
             accessibilityRole="button"
             accessibilityLabel="Set print darkness to 7"
             style={({ pressed }) => [styles.tipBtn, darkness === 7 && styles.tipBtnDone, pressed && styles.pressed]}>
@@ -368,30 +370,7 @@ export const PdfPrintPanel = forwardRef<
             </Text>
           </Pressable>
         </View>
-
-        {photoModesAvailable ? (
-          <View style={styles.section}>
-            <Text style={styles.groupLabel}>Photo print mode</Text>
-            <View style={styles.chipRow}>
-              {IMAGE_MODES.map((item) => {
-                const selected = photoMode === item;
-                return (
-                  <Pressable
-                    key={item}
-                    disabled={printing}
-                    onPress={() => setPhotoMode(item)}
-                    style={[styles.chip, selected && styles.chipOn]}>
-                    <Text style={[styles.chipText, selected && styles.chipTextOn]}>{IMAGE_MODE_LABEL[item]}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={styles.sub}>
-              {IMAGE_MODE_HELP[photoMode]}
-              {photoMode === 'solid' ? '' : ' Only photos are dithered. Text and barcodes stay sharp.'}
-            </Text>
-          </View>
-        ) : null}
+        )}
 
         <WalkthroughTarget id="pdf.advanced">
         <Pressable onPress={() => setShowAdvanced((v) => !v)} style={[styles.section, styles.advHead]}>

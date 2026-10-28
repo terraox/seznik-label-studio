@@ -19,13 +19,18 @@ import {
   bluetoothOffScanResult,
 } from '@/lib/printer/bluetooth-guard';
 import { assertJoshMonoBuffer, joshPackedPageDots } from '@/lib/printer/josh-mono-validate';
-import { resolveJoshJobParams } from '@/lib/printer/josh-job-params';
+import { JOSH_DENSITY_MAX, JOSH_SPEED_MIN, resolveJoshJobParams } from '@/lib/printer/josh-job-params';
 import { tsplMedia } from '@/lib/printer/paper-type';
 import { joshCharging, joshFailMessage, joshPrintError, parseJoshFailure, type JoshPrinterStatus } from '@/lib/printer/josh-status';
 import { joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
-import { useJoshProgressStore } from '@/stores/josh-progress-store';
+import { useJoshProgressStore, usePrintProgressStore } from '@/stores/print-progress-store';
+// Registers Josh fail-reason mapper for shared progress FAILED events.
+import '@/lib/printer/josh-status';
 import {
   JOSH_BORDER_PAD_DOTS,
+  JOSH_ELEMENT_X_OFFSET_MM,
+  JOSH_LPAPI_DRAW_BIAS_H_MM,
+  JOSH_LPAPI_DRAW_BIAS_V_MM,
   joshEffectiveDpi,
 } from '@/lib/printer/josh-print';
 import {
@@ -48,7 +53,7 @@ import {
   buildLabelSizeScaleJob,
 } from '@/lib/printer/td404-label-size';
 import { assertTd404MonoBuffer } from '@/printing/raster/td404-mono-validate';
-import { usePrinterStore, normalizePrinterMac, type PrinterTransport } from '@/stores/printer-store';
+import { usePrinterStore, normalizePrinterMac, isAutoConnectEnabled, type PrinterTransport } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import {
   CONSUMER_PRINTERS,
@@ -73,6 +78,12 @@ export type DiscoveredPrinter = {
   likelyDev?: boolean;
   likelyLabelX?: boolean;
   bonded?: boolean;
+  /** From Android: classic (printable) or le (a Low Energy twin of the printer). */
+  deviceType?: 'classic' | 'le' | 'dual' | 'unknown';
+  /** Android reports the printer (imaging) device class. */
+  printerClass?: boolean;
+  /** Heard over the air in this scan (not just listed from the paired devices). */
+  live?: boolean;
 };
 
 export type BluetoothCapabilities = {
@@ -168,6 +179,8 @@ export class PrintTimingLogger {
 }
 
 const SCAN_TIMEOUT_MS = 8000;
+/** TD-404 (Tejas, Rudra) scans classic and Low Energy together; classic inquiry alone takes ~12 s. */
+const TD404_SCAN_TIMEOUT_MS = 14000;
 const BLE_SCAN_MS = 2500;
 /** Default BLE payload chunk (128 bytes allows fast bursts on standard BLE peripherals). */
 const BLE_DEFAULT_CHUNK = 128;
@@ -303,6 +316,7 @@ class PrinterManager {
   private pendingAclDisconnectMac: string | null = null;
   /** Skip app-wide auto-reconnect until the last printer's ACL link comes back (manual disconnect). */
   private autoReconnectSuppressed = false;
+  private userDisconnected = false;
   /** Last successful auto-reconnect per bridge+MAC — cleared when the link drops. */
   private autoReconnectSessionKey: string | null = null;
   private autoReconnectInFlight = false;
@@ -429,26 +443,108 @@ class PrinterManager {
     // SDK may still hold a live RFCOMM session after a spurious ACL drop.
     // Josh LPAPI often stays connected after Android fires ACL_DISCONNECTED
     // during profile setup — wait and re-check before tearing the session down.
-    if (this.isConnectionHealthy()) {
+    // The socket flags stay true after a power-off, so ask the link itself.
+    if (this.isConnectionHealthy() && (await this.probeLinkAlive())) {
       console.info(`[printer] ACL drop for ${droppedMac} was transient — SDK still connected`);
       return;
     }
     if (store.sdkId === 'josh' || this.activeTransport === 'josh-lpapi') {
       await new Promise<void>((resolve) => setTimeout(resolve, 1500));
-      if (this.isConnectionHealthy()) {
+      if (this.isConnectionHealthy() && (await this.probeLinkAlive())) {
         console.info(`[printer] ACL drop for ${droppedMac} recovered — JOSH still connected`);
         return;
       }
     }
 
     console.warn(`[printer] ACL_DISCONNECTED confirmed for active printer ${droppedMac}`);
+    this.dropDeadConnection();
+  }
+
+  /** Tear the session down locally and tell the store, once the link is known to be gone. */
+  private dropDeadConnection(): void {
+    const transport = this.activeTransport;
     this.activeTransport = null;
     this.connectionState = 'disconnected';
     this.connectedDevice = null;
     this.writableTarget = null;
     this.autoReconnectSessionKey = null;
+    this.livenessFailures = 0;
     this.stopBatteryPolling();
-    store.clearConnection();
+    usePrinterStore.getState().clearConnection();
+    // Release the native handle so a later reconnect starts clean.
+    if (transport === 'td404-spp') void this.getTd404()?.disconnectTd404().catch(() => {});
+    else if (transport === 'josh-lpapi') void this.getJosh()?.disconnectJosh().catch(() => {});
+  }
+
+  /**
+   * Ask the printer itself whether the link is alive. Socket flags stay true after the printer is
+   * switched off, so a write (TD-404: a harmless CR/LF) or a status read is the only honest answer.
+   * `quiet` skips probes that disturb the printer. Returns true when the link cannot be tested,
+   * so an unknown never drops a good connection.
+   */
+  private async probeLinkAlive(opts?: { quiet?: boolean }): Promise<boolean> {
+    try {
+      if (this.activeTransport === 'td404-spp') {
+        const td404 = this.getTd404();
+        if (!td404) return true;
+        await td404.printTd404Raw(new Uint8Array([0x0d, 0x0a]));
+        return true;
+      }
+      // Josh's status light flashes on every read, so the timed watch leaves it to the ACL drop.
+      if (!opts?.quiet && (this.activeTransport === 'josh-lpapi' || this.isJosh)) {
+        const status = await this.readJoshPrinterStatus(1200);
+        return Boolean(status?.available);
+      }
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
+  private livenessTimer: ReturnType<typeof setInterval> | null = null;
+  private livenessFailures = 0;
+  private livenessInFlight = false;
+  private static readonly LIVENESS_POLL_MS = 8_000;
+  /** Failed probes in a row before the printer counts as gone (one miss can be a busy printer). */
+  private static readonly LIVENESS_FAIL_STREAK = 2;
+
+  /** While connected and idle in the foreground, probe the link so a power-off shows up within seconds. */
+  startLivenessWatch(): void {
+    if (this.livenessTimer || Platform.OS === 'web') return;
+    this.livenessTimer = setInterval(() => void this.checkLiveness(), PrinterManager.LIVENESS_POLL_MS);
+  }
+
+  private async checkLiveness(): Promise<void> {
+    if (this.livenessInFlight || AppState.currentState !== 'active') return;
+    const store = usePrinterStore.getState();
+    if (store.status !== 'connected') {
+      this.livenessFailures = 0;
+      return;
+    }
+    if (this.connectionState === 'printing' || this.connectionState === 'connecting' || this.printQueueDepth > 0) {
+      return;
+    }
+    this.livenessInFlight = true;
+    try {
+      // Native already knows it is gone: let reconcile handle it right now.
+      if (!this.isConnectionHealthy()) {
+        this.dropDeadConnection();
+        return;
+      }
+      if (await this.probeLinkAlive({ quiet: true })) {
+        this.livenessFailures = 0;
+        return;
+      }
+      // A print may have started while the probe ran.
+      if (usePrinterStore.getState().status !== 'connected') return;
+      this.livenessFailures += 1;
+      if (this.livenessFailures >= PrinterManager.LIVENESS_FAIL_STREAK) {
+        console.warn('[printer] liveness probe failed — printer unreachable, marking disconnected');
+        this.dropDeadConnection();
+      }
+    } finally {
+      this.livenessInFlight = false;
+    }
   }
 
   /** OS-level ACL link events — catches drops the SDK read loop misses. */
@@ -641,17 +737,26 @@ class PrinterManager {
     return josh.pairJoshDevice(mac);
   }
 
+  /** Opens the system pairing dialog for an unpaired Tejas / Rudra printer. True once it is paired. */
+  async pairTd404Device(mac: string): Promise<boolean> {
+    const td404 = this.getTd404();
+    if (!td404?.isTd404NativeAvailable()) return false;
+    return td404.pairTd404Device(mac);
+  }
+
   private joshPrintsInFlight = 0;
   private joshProgressSub: { remove: () => void } | null = null;
+  private td404PrintsInFlight = 0;
+  private td404ProgressSub: { remove: () => void } | null = null;
 
   /** One app-lifetime subscription: the printer can report a failure after the print call returned. */
   private beginJoshProgress(josh: NonNullable<ReturnType<PrinterManager['getJosh']>>): void {
     this.joshPrintsInFlight += 1;
-    const progress = useJoshProgressStore.getState();
+    const progress = usePrintProgressStore.getState();
     progress.begin();
     if (this.joshProgressSub || typeof josh.addJoshPrintProgressListener !== 'function') return;
     this.joshProgressSub = josh.addJoshPrintProgressListener((event) => {
-      const store = useJoshProgressStore.getState();
+      const store = usePrintProgressStore.getState();
       // A FAILED after the call returned still lands in the progress card below.
       // The SDK also sends CONNECTED when the printer connects, which is not a print. Other
       // events are kept after the call returns: the printer is still printing then.
@@ -662,7 +767,7 @@ class PrinterManager {
 
   private endJoshProgress(error?: unknown): void {
     this.joshPrintsInFlight = Math.max(0, this.joshPrintsInFlight - 1);
-    const store = useJoshProgressStore.getState();
+    const store = usePrintProgressStore.getState();
     if (error === undefined) {
       // The call returns once the job is handed to the printer, before the label is printed.
       // Done comes from the printer's own success event; this only guards against it never coming.
@@ -677,6 +782,36 @@ class PrinterManager {
           ? error.message
           : String(error),
     );
+  }
+
+  /** TD-404 paced copies emit the same progress vocabulary as Josh into the shared store. */
+  private beginTd404Progress(td404: NonNullable<ReturnType<PrinterManager['getTd404']>>): void {
+    this.td404PrintsInFlight += 1;
+    const progress = usePrintProgressStore.getState();
+    progress.begin();
+    if (this.td404ProgressSub || typeof td404.addTd404PrintProgressListener !== 'function') return;
+    this.td404ProgressSub = td404.addTd404PrintProgressListener((event) => {
+      if (this.td404PrintsInFlight === 0 && event.progress === 'CONNECTED') return;
+      usePrintProgressStore.getState().apply({
+        progress: event.progress,
+        copy: event.copy,
+        copies: event.copies,
+        reason: event.reason ?? undefined,
+        failureMessage: event.failureMessage ?? undefined,
+      });
+    });
+  }
+
+  private endTd404Progress(error?: unknown, copies = 1): void {
+    this.td404PrintsInFlight = Math.max(0, this.td404PrintsInFlight - 1);
+    const store = usePrintProgressStore.getState();
+    if (error === undefined) {
+      // Native emits SUCCESS per physical copy; only settle if the last event was missed.
+      if (store.phase === 'done' || store.phase === 'failed') return;
+      store.settle(1500 + 500 * Math.max(1, copies));
+      return;
+    }
+    store.fail(error instanceof Error ? error.message : String(error));
   }
 
   // Tez / Shakti and Label X SDKs were removed from the app.
@@ -1307,12 +1442,17 @@ class PrinterManager {
       if (!key) return;
       // Re-emit when a later sighting brings a real name; the first one is often just the MAC.
       const named = Boolean(d.name && d.name.toUpperCase() !== key && !d.name.startsWith('Bluetooth '));
-      if (seen.has(key) && !(named && !namedSeen.has(key))) return;
+      // Paired-list entries are bonded:true and carry no signal; anything else came from discovery.
+      const live = d.bonded !== true || d.rssi != null;
+      const firstLive = live && !liveSeen.has(key);
+      if (seen.has(key) && !(named && !namedSeen.has(key)) && !firstLive) return;
       seen.add(key);
       if (named) namedSeen.add(key);
-      onDevice(d);
+      if (live) liveSeen.add(key);
+      onDevice(live ? { ...d, live: true } : d);
     };
     const namedSeen = new Set<string>();
+    const liveSeen = new Set<string>();
 
     let paired = 0;
     let nearby = 0;
@@ -2097,11 +2237,13 @@ class PrinterManager {
             sdkId: 'td404',
             likelyTd404: device.likelyTd404 ?? isLikelyTd404Name(device.name),
             bonded: device.bonded,
+            deviceType: device.deviceType,
+            printerClass: device.printerClass,
           });
         }, (error) => finish(error));
         this.td404ScanStop = handle.stop;
         this.scanAbort = () => finish();
-        this.scanTimer = setTimeout(() => finish(), SCAN_TIMEOUT_MS);
+        this.scanTimer = setTimeout(() => finish(), TD404_SCAN_TIMEOUT_MS);
       } catch (error) {
         finish(error instanceof Error ? error : new Error('TD-404 scan failed to start.'));
       }
@@ -2952,26 +3094,36 @@ class PrinterManager {
   }
 
   /**
-   * Auto-reconnect only brings back the printer when the app opens. Once a live session ends
-   * (printer switched off or the user tapped Disconnect), stop retrying until the user connects
-   * again or the app is reopened. Connecting again clears the block.
+   * When a live session drops (printer switched off), auto-reconnect keeps trying from any
+   * screen. Only the user's Disconnect blocks it, until they connect again.
    */
   setupSessionDropGuard(): void {
     if (this.sessionDropUnsub) return;
     this.sessionDropUnsub = usePrinterStore.subscribe((next, prev) => {
       const wasLive = prev.status === 'connected' || prev.status === 'printing';
       const isLive = next.status === 'connected' || next.status === 'printing';
-      if (wasLive && next.status === 'disconnected') this.suppressAutoReconnect();
-      else if (!wasLive && isLive) this.autoReconnectSuppressed = false;
+      // A drop (printer off, out of range) keeps auto-reconnect running; only the user's
+      // Disconnect stops it. Clear the session key so the same printer may be retried.
+      if (wasLive && next.status === 'disconnected') this.autoReconnectSessionKey = null;
+      else if (!wasLive && isLive) {
+        this.autoReconnectSuppressed = false;
+        this.userDisconnected = false;
+      }
     });
   }
 
   private sessionDropUnsub: (() => void) | null = null;
 
   /** User tapped Disconnect — block every automatic reconnect until they connect again manually. */
-  suppressAutoReconnect(): void {
+  suppressAutoReconnect(byUser = true): void {
     this.autoReconnectSuppressed = true;
+    if (byUser) this.userDisconnected = true;
     this.autoReconnectSessionKey = null;
+  }
+
+  /** True only after the user tapped Disconnect; a dropped session (printer off) is false. */
+  isUserDisconnected(): boolean {
+    return this.userDisconnected;
   }
 
   isAutoReconnectSuppressed(): boolean {
@@ -2981,6 +3133,7 @@ class PrinterManager {
   /** Cleared when the user picks a printer or taps Reconnect last. */
   allowAutoReconnectAgain(): void {
     this.autoReconnectSuppressed = false;
+    this.userDisconnected = false;
     this.autoReconnectSessionKey = null;
   }
 
@@ -3551,11 +3704,14 @@ class PrinterManager {
    */
   async reconnectLastForConsumer(
     consumer: ConsumerPrinterId,
-    options?: { userRequested?: boolean },
+    options?: { userRequested?: boolean; screenProbe?: boolean },
   ): Promise<boolean> {
     if (options?.userRequested) {
       this.allowAutoReconnectAgain();
-    } else if (this.autoReconnectSuppressed) {
+    } else if (options?.screenProbe ? this.userDisconnected : this.autoReconnectSuppressed) {
+      return false;
+    }
+    if (!options?.userRequested && !isAutoConnectEnabled(usePrinterStore.getState().autoConnectByModel, consumer)) {
       return false;
     }
     const bridge = defaultBridgeForConsumer(consumer);
@@ -3747,15 +3903,30 @@ class PrinterManager {
   }
 
   /**
-   * Test print through the connected printer's own bridge, at that bridge's normal
-   * Auto darkness and speed. Maximum heat made the TD-404 label come out too dark.
+   * Test print through the connected printer's own bridge. Tejas/Rudra: Auto heat (max fattens
+   * TD-404 strokes). Josh: max density + slowest speed (no bitmap ink grow). Josh also cancels
+   * baked element/LPAPI bias; Tejas keeps saved calibration.
    */
   async printTestLabel(): Promise<void> {
     if (!this.isConnected) throw new Error('No printer connected.');
     const { doc, lines } = buildTestPrintDocument();
-    const { darkness, speed } = testPrintQuality(this.transport);
-    console.info(`[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=${darkness ?? 'auto'} speed=${speed ?? 'auto'}: ${lines.join(' | ')}`);
-    await printLabelDocumentMainPipeline(doc, { gapMm: 3, darkness, speed });
+    const quality = testPrintQuality(this.transport);
+    // Force LPAPI ceiling when the live session is Josh (bridge id can lag the store).
+    const darkness = this.isJosh ? (quality.darkness ?? JOSH_DENSITY_MAX) : quality.darkness;
+    const speed = this.isJosh ? (quality.speed ?? JOSH_SPEED_MIN) : quality.speed;
+    // Josh only: undo baked element X + LPAPI H/V draw bias so 2 mm inset hits the die-cut.
+    const offsetExtraMm = this.isJosh
+      ? {
+          x: -(JOSH_ELEMENT_X_OFFSET_MM + JOSH_LPAPI_DRAW_BIAS_H_MM),
+          y: -JOSH_LPAPI_DRAW_BIAS_V_MM,
+        }
+      : undefined;
+    console.info(
+      `[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=${darkness ?? 'auto'} speed=${speed ?? 'auto'}` +
+        (offsetExtraMm ? ` offsetExtra=${offsetExtraMm.x},${offsetExtraMm.y}` : '') +
+        `: ${lines.join(' | ')}`,
+    );
+    await printLabelDocumentMainPipeline(doc, { gapMm: 3, darkness, speed, offsetExtraMm });
   }
 
   /**
@@ -3821,30 +3992,39 @@ class PrinterManager {
             verticalOffsetMm: options.vOffsetMm ?? 0,
           },
         });
+        const copies = Math.max(1, Math.round(options.copies ?? 1));
+        this.beginTd404Progress(td404);
         const t0 = Date.now();
-        const result = await td404.printTd404PngLabel({
-          pngBase64: options.pngBase64,
-          widthMm: spec.widthMm,
-          heightMm: spec.heightMm,
-          gapMm: spec.gapMm,
-          density: options.density ?? 10,
-          speed: options.speed ?? 3,
-          xDots: spec.xOffsetDots,
-          yDots: spec.yOffsetDots,
-          copies: Math.max(1, Math.round(options.copies ?? 1)),
-          media: tsplMedia(options.media),
-          orientation: options.orientation ?? 0,
-          dpi: spec.dpi,
-          direction: 1,
-          threshold: options.threshold ?? 160,
-          dither: options.dither ?? false,
-        });
-        if (!result) {
-          this.lastTd404PngLabelTiming = null;
-          // Module present but method missing at runtime (old binary) — signal fallback.
-          const err = new Error('NATIVE_PNG_UNAVAILABLE');
-          (err as Error & { code?: string }).code = 'NATIVE_PNG_UNAVAILABLE';
-          throw err;
+        let result: Awaited<ReturnType<typeof td404.printTd404PngLabel>>;
+        try {
+          result = await td404.printTd404PngLabel({
+            pngBase64: options.pngBase64,
+            widthMm: spec.widthMm,
+            heightMm: spec.heightMm,
+            gapMm: spec.gapMm,
+            density: options.density ?? 10,
+            speed: options.speed ?? 3,
+            xDots: spec.xOffsetDots,
+            yDots: spec.yOffsetDots,
+            copies,
+            media: tsplMedia(options.media),
+            orientation: options.orientation ?? 0,
+            dpi: spec.dpi,
+            direction: 1,
+            threshold: options.threshold ?? 160,
+            dither: options.dither ?? false,
+            waitIdle: true,
+          });
+          if (!result) {
+            this.lastTd404PngLabelTiming = null;
+            const err = new Error('NATIVE_PNG_UNAVAILABLE');
+            (err as Error & { code?: string }).code = 'NATIVE_PNG_UNAVAILABLE';
+            throw err;
+          }
+          this.endTd404Progress(undefined, copies);
+        } catch (error) {
+          this.endTd404Progress(error, copies);
+          throw error;
         }
         this.lastTd404PngLabelTiming = {
           decodeMs: result.decodeMs,
@@ -3963,29 +4143,39 @@ class PrinterManager {
           heightMm: spec.heightMm,
           dpi: spec.dpi,
         });
+        const copies = Math.max(1, Math.round(options.copies ?? 1));
+        this.beginTd404Progress(td404);
         const t0 = Date.now();
-        const result = await td404.printTd404MonoLabel({
-          monoBytes: options.monoBytes,
-          widthDots: options.widthDots,
-          heightDots: options.heightDots,
-          bytesPerRow: options.bytesPerRow,
-          widthMm: spec.widthMm,
-          heightMm: spec.heightMm,
-          gapMm: spec.gapMm,
-          density: options.density ?? 10,
-          speed: options.speed ?? 3,
-          xDots: spec.xOffsetDots,
-          yDots: spec.yOffsetDots,
-          copies: Math.max(1, Math.round(options.copies ?? 1)),
-          media: tsplMedia(options.media),
-          dpi: spec.dpi,
-          direction: 1,
-        });
-        if (!result) {
-          this.lastTd404MonoLabelTiming = null;
-          const err = new Error('NATIVE_MONO_UNAVAILABLE');
-          (err as Error & { code?: string }).code = 'NATIVE_MONO_UNAVAILABLE';
-          throw err;
+        let result: Awaited<ReturnType<typeof td404.printTd404MonoLabel>>;
+        try {
+          result = await td404.printTd404MonoLabel({
+            monoBytes: options.monoBytes,
+            widthDots: options.widthDots,
+            heightDots: options.heightDots,
+            bytesPerRow: options.bytesPerRow,
+            widthMm: spec.widthMm,
+            heightMm: spec.heightMm,
+            gapMm: spec.gapMm,
+            density: options.density ?? 10,
+            speed: options.speed ?? 3,
+            xDots: spec.xOffsetDots,
+            yDots: spec.yOffsetDots,
+            copies,
+            media: tsplMedia(options.media),
+            dpi: spec.dpi,
+            direction: 1,
+            waitIdle: true,
+          });
+          if (!result) {
+            this.lastTd404MonoLabelTiming = null;
+            const err = new Error('NATIVE_MONO_UNAVAILABLE');
+            (err as Error & { code?: string }).code = 'NATIVE_MONO_UNAVAILABLE';
+            throw err;
+          }
+          this.endTd404Progress(undefined, copies);
+        } catch (error) {
+          this.endTd404Progress(error, copies);
+          throw error;
         }
         this.lastTd404MonoLabelTiming = {
           writeMs: result.writeMs,
@@ -4777,6 +4967,7 @@ export function getPrinterManager(): PrinterManager {
     manager = new PrinterManager();
     manager.setupAclListener();
     manager.setupSessionDropGuard();
+    manager.startLivenessWatch();
     setupAppStateListener();
     persistPrinterManagerSingleton();
   }

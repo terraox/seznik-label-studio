@@ -9,6 +9,10 @@ export type Td404Device = {
   transport?: 'bluetooth-spp';
   sdkId?: 'td404';
   likelyTd404?: boolean;
+  /** classic = serial printer link; le = Low Energy twin (not printable over SPP). */
+  deviceType?: 'classic' | 'le' | 'dual' | 'unknown';
+  /** Android reports the printer (imaging) device class. */
+  printerClass?: boolean;
 };
 
 export type Td404PngLabelResult = {
@@ -73,10 +77,12 @@ type NativeTd404 = {
   getBondedDevices(): Promise<Td404Device[]>;
   startScan(): Promise<{ discoveryStarted?: boolean; bondedCount?: number; reason?: string } | void>;
   stopScan(): Promise<void>;
+  pairDevice?(macAddress: string, timeoutMs: number): Promise<boolean>;
   connect(
     macAddress: string,
     name: string | null,
   ): Promise<{ id: string; name: string | null; transport: string; sdkId: string }>;
+  probe(macAddress: string, timeoutMs: number): Promise<boolean>;
   disconnect(): Promise<void>;
   isConnected(): boolean;
   getConnectedDevice(): Td404Device | null;
@@ -87,6 +93,8 @@ type NativeTd404 = {
     monoBytes: Uint8Array,
     options: Record<string, unknown>,
   ): Promise<Td404MonoLabelResult>;
+  queryPrinterStatus?(): Promise<Td404PrinterStatusRaw>;
+  waitPrinterIdle?(timeoutMs: number): Promise<Td404PrinterStatusRaw>;
   renderPdfPages?(
     uri: string,
     options?: Record<string, unknown>,
@@ -96,6 +104,30 @@ type NativeTd404 = {
     listener: (event: Td404Device | Record<string, unknown>) => void,
   ): { remove: () => void };
   removeListeners(count: number): void;
+};
+
+export type Td404PrinterStatusRaw = {
+  raw?: number | null;
+  printing?: boolean | null;
+  paperOut?: boolean;
+  coverOpen?: boolean;
+  paused?: boolean;
+  jammed?: boolean;
+  error?: boolean;
+  failureMessage?: string | null;
+  statusFallback?: boolean;
+  idle?: boolean;
+  sawReply?: boolean;
+  timedFallback?: boolean;
+};
+
+export type Td404PrintProgressEvent = {
+  progress: string;
+  copy?: number | null;
+  copies?: number | null;
+  reason?: string | null;
+  failureMessage?: string | null;
+  [key: string]: unknown;
 };
 
 let cached: NativeTd404 | null | undefined;
@@ -133,7 +165,7 @@ export function isTd404BluetoothEnabled(): boolean | null {
 }
 
 /**
- * OS-reported battery (0–100) for a remote Bluetooth printer MAC.
+ * OS-reported battery (0�100) for a remote Bluetooth printer MAC.
  * Returns -1 when the device does not report battery (typical for classic SPP).
  */
 export async function debugLogTd404RemoteBattery(mac: string): Promise<void> {
@@ -160,6 +192,19 @@ export async function getTd404BondedDevices(): Promise<Td404Device[]> {
     return (await mod.getBondedDevices()) ?? [];
   } catch {
     return [];
+  }
+}
+
+/** Opens the system pairing dialog for an unpaired printer. True once it is bonded. */
+export async function pairTd404Device(mac: string, timeoutMs = 30000): Promise<boolean> {
+  const mod = getNative();
+  if (!mod || typeof mod.pairDevice !== 'function') {
+    throw new Error('This app build cannot pair printers yet. Install the latest build.');
+  }
+  try {
+    return Boolean(await mod.pairDevice(mac, timeoutMs));
+  } catch {
+    return false;
   }
 }
 
@@ -224,6 +269,13 @@ export async function connectTd404(macAddress: string, name: string | null) {
   if (!mod) throw new Error('TD-404 Bluetooth module is not available.');
   await mod.stopScan().catch(() => {});
   return mod.connect(macAddress, name);
+}
+
+/** True when the paired printer answers an SPP connection right now (it is on and in range). */
+export async function probeTd404(macAddress: string, timeoutMs = 4000): Promise<boolean> {
+  const mod = getNative();
+  if (!mod) return false;
+  return mod.probe(macAddress, timeoutMs).catch(() => false);
 }
 
 export async function disconnectTd404() {
@@ -308,18 +360,23 @@ export type Td404PngLabelOptions = {
   dpi?: number;
   /** TSPL DIRECTION: 1 (default, matches JS pipeline / preview) or 0. */
   direction?: 0 | 1;
-  /** Luminance cutoff (0–255) for black ink. Default 160 keeps thin text and barcodes solid. */
+  /** Luminance cutoff (0�255) for black ink. Default 160 keeps thin text and barcodes solid. */
   threshold?: number;
   /** Whether to use Floyd-Steinberg error diffusion dithering for photos / halftones. */
   dither?: boolean;
   /** Dev-only: build TSPL job and return bytes without a socket write. Default off. */
   dryRun?: boolean;
+  /**
+   * When true (default for interactive prints), pace each copy and wait for idle
+   * so live progress events fire. Dry-run forces this off.
+   */
+  waitIdle?: boolean;
   gitSha?: string;
   buildTime?: string;
 };
 
 /**
- * Native SDK fast path: PNG → LabelCommand → SPP write (no JS rasterize).
+ * Native SDK fast path: PNG ? LabelCommand ? SPP write (no JS rasterize).
  * Returns null when the native module / method is unavailable.
  */
 export async function printTd404PngLabel(
@@ -347,6 +404,7 @@ export async function printTd404PngLabel(
     threshold: options.threshold ?? 160,
     dither: options.dither ?? false,
     dryRun: options.dryRun === true,
+    waitIdle: options.dryRun === true ? false : options.waitIdle !== false,
     gitSha: options.gitSha ?? 'unknown',
     buildTime: options.buildTime ?? 'unknown',
   });
@@ -369,6 +427,8 @@ export type Td404MonoLabelOptions = {
   dpi?: number;
   direction?: 0 | 1;
   dryRun?: boolean;
+  /** Pace copies + wait for idle (default true unless dryRun). */
+  waitIdle?: boolean;
   gitSha?: string;
   buildTime?: string;
 };
@@ -406,7 +466,7 @@ function assertTd404MonoBufferLocal(options: Td404MonoLabelOptions, dpi: number)
 }
 
 /**
- * Native path: packed 1-bit buffer → TSPL BITMAP → SPP (no PNG decode).
+ * Native path: packed 1-bit buffer ? TSPL BITMAP ? SPP (no PNG decode).
  * Returns null when the native module / method is unavailable.
  */
 export async function printTd404MonoLabel(
@@ -435,9 +495,24 @@ export async function printTd404MonoLabel(
     dpi,
     direction: options.direction ?? 1,
     dryRun: options.dryRun === true,
+    waitIdle: options.dryRun === true ? false : options.waitIdle !== false,
     gitSha: options.gitSha ?? 'unknown',
     buildTime: options.buildTime ?? 'unknown',
   });
+}
+
+export async function queryTd404PrinterStatus(): Promise<Td404PrinterStatusRaw | null> {
+  const mod = getNative();
+  if (!mod || typeof mod.queryPrinterStatus !== 'function') return null;
+  if (!mod.isConnected()) throw new Error('No TD-404 printer connected.');
+  return mod.queryPrinterStatus();
+}
+
+export async function waitTd404PrinterIdle(timeoutMs = 15000): Promise<Td404PrinterStatusRaw | null> {
+  const mod = getNative();
+  if (!mod || typeof mod.waitPrinterIdle !== 'function') return null;
+  if (!mod.isConnected()) throw new Error('No TD-404 printer connected.');
+  return mod.waitPrinterIdle(timeoutMs);
 }
 
 export type RenderedPdfPage = {
@@ -477,7 +552,7 @@ export type Td404ConnectionEvent = {
 
 /**
  * Native `onConnectionChanged`. Fires both on explicit disconnect() and when a
- * write throws IOException and the module closes the dead socket itself — the
+ * write throws IOException and the module closes the dead socket itself � the
  * router needs both, not just the ones it initiated.
  */
 export function addTd404ConnectionListener(
@@ -487,6 +562,17 @@ export function addTd404ConnectionListener(
   if (!mod) return { remove: () => {} };
   return mod.addListener('onConnectionChanged', (event) => {
     listener((event ?? {}) as Td404ConnectionEvent);
+  });
+}
+
+/** Live paced-print events: START_COPY / DATA_ENDED / SUCCESS / FAILED. */
+export function addTd404PrintProgressListener(
+  listener: (event: Td404PrintProgressEvent) => void,
+): { remove: () => void } {
+  const mod = getNative();
+  if (!mod) return { remove: () => {} };
+  return mod.addListener('onTd404PrintProgress', (event) => {
+    listener((event ?? {}) as Td404PrintProgressEvent);
   });
 }
 

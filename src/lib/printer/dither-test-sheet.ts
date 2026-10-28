@@ -109,7 +109,7 @@ export function buildDitherTestDocument(mode: ImageMode, dpi: number): LabelDocu
     id: generateId('text'),
     type: 'text',
     ...DEFAULT_ELEMENT_STATE,
-    text: IMAGE_MODE_LABEL[mode].replace('Dither - ', ''),
+    text: IMAGE_MODE_LABEL[mode],
     left: 1,
     top: 17,
     width: 31,

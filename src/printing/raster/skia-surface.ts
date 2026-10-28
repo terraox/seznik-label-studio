@@ -12,6 +12,7 @@ import { clipartOpToSvgPath, separateSvgArcFlags, type ClipartDrawOp } from '@/l
 
 import { blitTileViaRects } from './blit-tile';
 import { fillEllipse, fillRect, makeDotSurface, strokeRect, type DotSurface } from './dot-surface';
+import { shapeCovers, shapeSvgPath, type ShapePaint } from './shape-geometry';
 import {
   drawEmojiSegmentAsImage,
   measureEmojiSegmentWidth,
@@ -67,6 +68,8 @@ export type RasterSurface = {
   fillRect: (x: number, y: number, w: number, h: number, gray: number) => void;
   strokeRect: (x: number, y: number, w: number, h: number, stroke: number, gray: number) => void;
   fillEllipse: (cx: number, cy: number, rx: number, ry: number, gray: number) => void;
+  /** Rounded rectangle or ellipse, filled or as a ring, with real curved edges. */
+  paintShape: (shape: ShapePaint, gray: number) => void;
   drawTextLine: (text: string, x: number, y: number, style: TextDrawStyle) => void;
   measureTextWidth: (text: string, style: TextDrawStyle) => number;
   /** Clockwise about (cx, cy), matching a React Native view rotate. No-op at multiples of 360. */
@@ -349,26 +352,59 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
     return total;
   }
 
+  /**
+   * Bold on a face with no heavier cut to swap to (single-weight, Indic, user fonts, already-bold
+   * faces): thicken by stroking the glyph outlines too. Returns the extra outline width in dots, or 0.
+   */
+  function boldOutlineDots(style: TextDrawStyle): number {
+    if (!style.bold) return 0;
+    try {
+      const { hasHeavierPrintFace } = require('./print-typeface-map') as {
+        hasHeavierPrintFace: (family?: string) => boolean;
+      };
+      if (hasHeavierPrintFace(style.family)) return 0;
+    } catch {
+      // map unavailable: thicken anyway
+    }
+    return Math.max(1, Math.round(style.fontSizeDots * 0.04));
+  }
+
   function drawPlainSegment(text: string, x: number, y: number, style: TextDrawStyle): void {
     if (!text) return;
+    const outline = boldOutlineDots(style);
     if (needsComplexTextShaping(text)) {
       const painted = drawShapedTextLine(skiaMod, canvas, text, x, y, style);
-      if (painted) return;
+      if (painted) {
+        // Shaped lines cannot be stroked, so lay a second copy a dot to the right.
+        if (outline > 0) drawShapedTextLine(skiaMod, canvas, text, x + outline, y, style);
+        return;
+      }
     }
     const font = fontForText(text, style);
     fillPaint.setColor(grayToColor(skiaMod, style.ink));
     fillPaint.setStyle(PaintStyle.Fill);
     fillPaint.setAntiAlias(true);
     const gap = style.letterSpacingDots ?? 0;
-    if (!gap) {
-      canvas.drawText(text, x, y + style.fontSizeDots, fillPaint, font);
-    } else {
-      let cursor = x;
-      for (let i = 0; i < text.length; i++) {
-        const ch = text.charAt(i);
-        canvas.drawText(ch, cursor, y + style.fontSizeDots, fillPaint, font);
-        cursor += advanceOf(font, ch) + gap;
+    const drawRun = (paint: SkiaPaint) => {
+      if (!gap) {
+        canvas.drawText(text, x, y + style.fontSizeDots, paint, font);
+      } else {
+        let cursor = x;
+        for (let i = 0; i < text.length; i++) {
+          const ch = text.charAt(i);
+          canvas.drawText(ch, cursor, y + style.fontSizeDots, paint, font);
+          cursor += advanceOf(font, ch) + gap;
+        }
       }
+    };
+    drawRun(fillPaint);
+    if (outline > 0) {
+      strokePaint.setColor(grayToColor(skiaMod, style.ink));
+      strokePaint.setStyle(PaintStyle.Stroke);
+      strokePaint.setStrokeWidth(outline);
+      strokePaint.setAntiAlias(true);
+      drawRun(strokePaint);
+      strokePaint.setAntiAlias(false);
     }
     fillPaint.setAntiAlias(false);
   }
@@ -444,6 +480,32 @@ function makeSkiaRasterSurface(widthDots: number, heightDots: number, skiaMod: S
         Skia.XYWHRect(cx - rxf, cy - ryf, rxf * 2, ryf * 2),
         fillPaint,
       );
+    },
+    paintShape(shape, gray) {
+      if (typeof canvas.drawPath !== 'function') return;
+      const t = shape.stroke;
+      // A ring is a stroke centred inside the box so its outer edge sits on the box edge.
+      const half = t == null ? 0 : t / 2;
+      const d = shapeSvgPath(
+        shape.kind,
+        shape.x + half,
+        shape.y + half,
+        Math.max(1, shape.w - 2 * half),
+        Math.max(1, shape.h - 2 * half),
+        Math.max(0, shape.radius - half),
+      );
+      const path = Skia.Path.MakeFromSVGString(d);
+      if (!path) return;
+      const paint = Skia.Paint();
+      paint.setAntiAlias(true);
+      paint.setColor(grayToColor(skiaMod, gray));
+      if (t == null) {
+        paint.setStyle(PaintStyle.Fill);
+      } else {
+        paint.setStyle(PaintStyle.Stroke);
+        paint.setStrokeWidth(t);
+      }
+      canvas.drawPath(path, paint);
     },
     drawTextLine(text, x, y, style) {
       textDrawLog.push({
@@ -732,6 +794,19 @@ function makeDotRasterSurface(dot: DotSurface): RasterSurface {
       paintRect(x + w - t, y, t, h, gray);
     },
     fillEllipse: paintEllipse,
+    paintShape(shape, gray) {
+      const x0 = Math.floor(shape.x);
+      const y0 = Math.floor(shape.y);
+      const x1 = Math.ceil(shape.x + shape.w);
+      const y1 = Math.ceil(shape.y + shape.h);
+      for (let py = y0; py < y1; py++) {
+        for (let px = x0; px < x1; px++) {
+          if (!shapeCovers(shape, px + 0.5, py + 0.5)) continue;
+          const p = mapPoint(px + 0.5, py + 0.5);
+          putDot(p.x, p.y, gray);
+        }
+      }
+    },
     drawTextLine(text, x, y, style) {
       textDrawLog.push({
         text,

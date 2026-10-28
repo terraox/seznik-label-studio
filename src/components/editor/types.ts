@@ -7,6 +7,8 @@ export type QrcodePropertyTab = 'Regular' | 'Position' | 'Content' | 'Encoding';
 import type { SerialConfig } from '@/lib/serial/types';
 
 export type ContentType = 'Manual' | 'Degrees' | 'Data Source';
+/** What a table cell shows its text as. Absent means plain text. */
+export type TableCellType = 'Text' | 'Barcode' | 'QRCode';
 export type TextFlag = 'Hide' | 'Top' | 'Bottom';
 export type QrEncodeMode = 'QRCode' | 'PDF417' | 'DataMatrix';
 export type QrErrorLevel = 'L' | 'M' | 'Q' | 'H';
@@ -42,6 +44,8 @@ export type EditorElementState = {
   needPrinting: boolean;
   antiColor: boolean;
   drawingColorIndex: number;
+  /** Table cells only: show the text as a barcode or QR code. */
+  cellType?: TableCellType;
   contentType: ContentType;
   /** New Serial settings. Active when contentType is 'Degrees' and this is present; legacy Counters have none. */
   serial?: SerialConfig;
@@ -189,7 +193,16 @@ export const DEFAULT_QRCODE_STATE: QrcodeElementState = {
 };
 
 export type LinePropertyTab = 'Regular' | 'Position' | 'Style';
-export type LineStyle = 'solid' | 'dashed' | 'slash' | 'backslash';
+export type LineStyle =
+  | 'solid'
+  | 'dashed'
+  | 'dotted'
+  | 'dashdot'
+  | 'double'
+  | 'slash'
+  | 'backslash'
+  | 'zigzag'
+  | 'wave';
 
 export type LineElementState = {
   lineStyle: LineStyle;

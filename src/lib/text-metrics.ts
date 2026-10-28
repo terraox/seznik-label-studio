@@ -431,8 +431,8 @@ function computeWrappedLinesCore({
   }
 
   if (autoWrapping === 'Close') {
-    const lines = text.split('\n');
-    return lines.length > 0 ? lines : [''];
+    // One line, never wrapped or cut: typed line breaks become spaces (the preview does the same).
+    return [text.replace(/\r?\n/g, ' ')];
   }
 
   // Width <= 0, NaN or Infinity must not stall wrapping. 0.5 mm is below any glyph, so a
@@ -516,11 +516,10 @@ function computeWrappedLinesCore({
           currentLine = '';
         }
 
-        // Check if individual word exceeds available width on its own
+        // Like any text editor: a word is only broken when it alone is wider than the line.
         if (widthOf(word) <= safeWidthMm) {
           currentLine = word;
         } else {
-          // Word is too long to fit in one line, break mid-word
           let partial = '';
           for (let c = 0; c < word.length; ) {
             if (atCap()) {

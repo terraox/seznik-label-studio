@@ -118,7 +118,7 @@ export function fitTextBoxToContent(
       ? el.autoWrapping === 'Close'
         ? 'Word'
         : el.autoWrapping ?? 'Word'
-      : 'Close',
+      : 'Word',
     lineSpacing: el.lineSpacing ?? '1.0',
     charSpacing,
     bold,
@@ -196,6 +196,34 @@ function mergeTextElementPatchCore(
 
   const widthInPatch = 'width' in updates && typeof updates.width === 'number';
   const heightInPatch = 'height' in updates && typeof updates.height === 'number';
+
+  // Close is one line, never wrapped: the frame hugs that line (a dragged width is kept) and
+  // is exactly one line tall, instead of keeping the multi-line shape it had before.
+  if (merged.autoWrapping === 'Close' && !merged.verticalDisplay && !heightInPatch) {
+    const raw = textRawContent(merged).replace(/\r?\n/g, ' ');
+    const fontSize = merged.fontSize;
+    const insetX = textHorizontalPaddingMm(fontSize);
+    let width = merged.width;
+    if (!widthInPatch) {
+      const lineMm = measureTextWidthMm(raw, fontSize, merged.charSpacing ?? 0, merged.bold ?? false, merged.fontFamily);
+      const minW = Math.max(4, ptToMm(fontSize) * 1.4 + insetX * 2);
+      const room = canvas ? Math.max(minW, canvas.widthMm - Math.max(0, merged.left)) : Infinity;
+      width = roundMm(Math.min(room, Math.max(minW, lineMm + insetX * 2 + TEXT_FIT_SLACK_MM)));
+    }
+    const height = visibleTextHeightMm({
+      text: raw,
+      fontSize,
+      widthMm: width,
+      autoWrapping: 'Close',
+      lineSpacing: merged.lineSpacing ?? '1.0',
+      charSpacing: merged.charSpacing ?? 0,
+      bold: merged.bold ?? false,
+      verticalDisplay: false,
+      fontFamily: merged.fontFamily,
+    });
+    return { ...merged, width, height, autoTextHeight: false } as LabelElement;
+  }
+
   const fontSizeInPatch = 'fontSize' in updates && typeof updates.fontSize === 'number';
 
   if (fontSizeInPatch && !widthInPatch) {
@@ -220,7 +248,7 @@ function mergeTextElementPatchCore(
   }
 
   if (widthInPatch && Math.abs((updates.width as number) - el.width) > 0.02) {
-    const wrapping = merged.autoWrapping === 'Close' ? 'Word' : merged.autoWrapping ?? 'Word';
+    const wrapping = merged.autoWrapping ?? 'Word';
     const autoHeight = merged.autoTextHeight !== false && wrapping !== 'Close';
     const withWrap = { ...merged, autoWrapping: wrapping } as TextLikeElement;
     if (autoHeight) {
@@ -426,6 +454,17 @@ export function fitTextDefaults(widthMm: number, heightMm: number, existing: Lab
   return { left: placed.left, top: placed.top, width: placed.width, fontSize };
 }
 
+/** A new Counter is a box just wide enough for its first value, not the whole label. */
+export function fitCounterDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = [], text = '001') {
+  const fontSize = DEFAULT_TEXT_FONT_PT;
+  const pad = padMm(widthMm, heightMm);
+  const maxW = Math.max(4, widthMm - pad * 2);
+  const boxW = Math.min(maxW, Math.max(6, measureTextWidthMm(text, fontSize) + textHorizontalPaddingMm(fontSize) * 2 + 1.5));
+  const boxH = textBlockHeightMm(fontSize, 1);
+  const placed = placeInLabel(widthMm, heightMm, boxW, boxH, existing);
+  return { left: placed.left, top: placed.top, width: placed.width, height: boxH, fontSize };
+}
+
 /**
  * New text box is one line of the placeholder, fully inside the label.
  * A font that would wrap into a frame taller than the label is reduced until
@@ -554,12 +593,15 @@ export function fitTimeDefaults(widthMm: number, heightMm: number, existing: Lab
   const fromExisting = median(timeFonts);
   const labelCap = fitFontSizePt(widthMm, heightMm, 1);
   // WePrint uses compact body-sized time (12 pt), not label-fit title sizing from fitTextDefaults.
-  const fontSize = fromExisting
+  let fontSize = fromExisting
     ? Math.max(minPt, Math.min(28, Math.round(fromExisting * 2) / 2))
     : Math.max(minPt, Math.min(DEFAULT_TIME_STATE.fontSize, labelCap));
-  const measured = measureTextWidthMm(TIME_DISPLAY_SAMPLE, fontSize) + 1.5;
   const pad = padMm(widthMm, heightMm);
   const maxW = Math.max(4, widthMm - pad * 2);
+  // The whole date and time must fit the label: step the type down until it does.
+  const widthFor = (pt: number) => measureTextWidthMm(TIME_DISPLAY_SAMPLE, pt) + textHorizontalPaddingMm(pt) * 2 + 0.5;
+  while (fontSize > 4 && widthFor(fontSize) > maxW) fontSize = Math.max(4, fontSize - 0.5);
+  const measured = widthFor(fontSize);
   const boxW = Math.min(maxW, Math.max(4, measured));
   const boxH = textBlockHeightMm(fontSize, 1);
   const placed = placeInLabel(widthMm, heightMm, boxW, boxH, existing);

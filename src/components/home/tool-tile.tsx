@@ -17,17 +17,15 @@ const TILE_FEATURE: Record<HomeToolId, FeatureKey> = {
   serialLabels: 'home.serial_labels',
   shippingLabels: 'home.shipping_labels',
   excel: 'home.excel',
+  printImage: 'home.print_image',
   pdf: 'home.pdf',
   importLabel: 'home.import',
 };
 
 export function ToolTile({ id, minHeight = HomeLayout.tileHeight }: { id: HomeToolId; minHeight?: number }) {
   const tool: HomeTool = HOME_TOOLS[id];
-  return tool.action === 'openLabelFile' ? (
-    <OpenLabelFileTile id={id} minHeight={minHeight} />
-  ) : (
-    <LinkTile id={id} minHeight={minHeight} />
-  );
+  if (tool.action === 'openLabelFile') return <OpenLabelFileTile id={id} minHeight={minHeight} />;
+  return <LinkTile id={id} minHeight={minHeight} />;
 }
 
 function LinkTile({ id, minHeight }: { id: HomeToolId; minHeight: number }) {

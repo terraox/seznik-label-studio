@@ -13,7 +13,7 @@ export type ColorMode = 'Original' | 'B & W' | 'Halftone';
 export const EDITOR_BORDER_SELECTION_COLORS = ['#111111', '#9CA3AF'] as const;
 
 /** Selection outline swatches — Editor Settings → Color of The Selected Table Cell. */
-export const EDITOR_TABLE_SELECTION_COLORS = ['#111111', '#D1D5DB'] as const;
+export const EDITOR_TABLE_SELECTION_COLORS = ['#2563EB', '#48C3C7'] as const;
 
 /** Editor design grid line colors (Editor Settings → Color of Grid). */
 export const EDITOR_GRID_COLORS = ['#000000', '#6B7280', '#D1D5DB', '#FFFFFF', '#FCE7F3'] as const;
@@ -147,8 +147,12 @@ type SettingsStoreState = {
   excelColumnsTutorialSeen: boolean;
   /** The blank-label size page tour has been seen (or skipped) at least once. */
   newLabelTutorialSeen: boolean;
+  /** The Collated / Uncollated explainer (shown when Multiply all counts first goes above 1) has been seen. */
+  printOrderTourSeen: boolean;
   /** Print PDF screens whose tour was seen (or skipped): 'pick' | 'size' | 'edit' | 'print'. */
   pdfTourSeen: string[];
+  /** Scan text (OCR) screens whose tour was seen (or skipped): 'capture' | 'result'. */
+  ocrTourSeen: string[];
   /** PDF crop: the one-time "tap again for the bigger block" hint has been shown. */
   smartCropHintSeen: boolean;
   /** Settings → Appearance. Follow system by default. */
@@ -169,7 +173,9 @@ type SettingsStoreState = {
   setExcelTutorialSeen: (seen: boolean) => void;
   setExcelColumnsTutorialSeen: (seen: boolean) => void;
   setNewLabelTutorialSeen: (seen: boolean) => void;
+  setPrintOrderTourSeen: (seen: boolean) => void;
   markPdfTourSeen: (screen: string) => void;
+  markOcrTourSeen: (screen: string) => void;
   setSmartCropHintSeen: (seen: boolean) => void;
   setAppearance: (appearance: AppearancePreference) => void;
   setThemeChosen: (chosen: boolean) => void;
@@ -189,7 +195,9 @@ export const useSettingsStore = create<SettingsStoreState>()(
       excelTutorialSeen: false,
       excelColumnsTutorialSeen: false,
       newLabelTutorialSeen: false,
+      printOrderTourSeen: false,
       pdfTourSeen: [],
+      ocrTourSeen: [],
       smartCropHintSeen: false,
       appearance: 'light',
       themeChosen: false,
@@ -209,8 +217,11 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setExcelTutorialSeen: (seen) => set({ excelTutorialSeen: seen }),
       setExcelColumnsTutorialSeen: (seen) => set({ excelColumnsTutorialSeen: seen }),
       setNewLabelTutorialSeen: (seen) => set({ newLabelTutorialSeen: seen }),
+      setPrintOrderTourSeen: (seen) => set({ printOrderTourSeen: seen }),
       markPdfTourSeen: (screen) =>
         set((s) => (s.pdfTourSeen.includes(screen) ? s : { pdfTourSeen: [...s.pdfTourSeen, screen] })),
+      markOcrTourSeen: (screen) =>
+        set((s) => (s.ocrTourSeen.includes(screen) ? s : { ocrTourSeen: [...s.ocrTourSeen, screen] })),
       setSmartCropHintSeen: (seen) => set({ smartCropHintSeen: seen }),
       setAppearance: (appearance) => set({ appearance }),
       setThemeChosen: (themeChosen) => set({ themeChosen }),

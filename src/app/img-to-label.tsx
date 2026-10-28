@@ -5,6 +5,7 @@
  */
 
 import { goBack } from '@/lib/go-back';
+import { useStepBack } from '@/lib/use-step-back';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -212,6 +213,8 @@ export default function ImgToLabelScreen() {
     sourceKind,
     widthMm,
   ]);
+
+  useStepBack(step === 'size', () => setStep('import'));
 
   return (
     <View style={styles.root}>

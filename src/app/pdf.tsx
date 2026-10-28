@@ -1,4 +1,5 @@
 import { goBack as leaveScreen } from '@/lib/go-back';
+import { useStepBack } from '@/lib/use-step-back';
 import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -29,7 +30,7 @@ import { PdfSharpnessTool } from '@/components/pdf-editor/pdf-sharpness-tool';
 import { PdfToolPanel, type PdfToolId } from '@/components/pdf-editor/pdf-tool-panel';
 import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
 import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
-import { PDF_WALKTHROUGHS } from '@/lib/walkthrough/pdf-steps';
+import { PDF_WALKTHROUGHS, type PdfTourScreen } from '@/lib/walkthrough/pdf-steps';
 import { setWalkthroughScroller } from '@/lib/walkthrough/registry';
 import { useWalkthroughStore } from '@/stores/walkthrough-store';
 import { PdfWatermarkTool } from '@/components/pdf-editor/pdf-watermark-tool';
@@ -41,7 +42,7 @@ import {
 
 import { planLabelRender } from '@/lib/pdf-editor/label-render-plan';
 import { exportEditedPdf } from '@/lib/pdf-editor/export';
-import { copyPdfToCache, loadPdfMetadata, loadPdfPageSizes } from '@/lib/pdf-editor/load';
+import { loadPdfMetadata, loadPdfPageSizes, openPdfUri } from '@/lib/pdf-editor/load';
 import {
   clearPrintRasterCache,
   prewarmPrintPages,
@@ -61,10 +62,12 @@ import {
 } from '@/lib/pdf-editor/raster';
 import {
   clampCropNorm,
+  DEFAULT_OUTPUT_SIZE,
   defaultWatermark,
   pageColorMode,
   ptToMm,
   resolveScopeIndices,
+  type OutputSize,
   type PageScope,
 } from '@/lib/pdf-editor/session';
 import { downscaleWatermarkTile, previewTileSize } from '@/lib/pdf-editor/watermark-tile';
@@ -94,6 +97,8 @@ export default function PdfEditorScreen() {
     docName?: string;
     uri?: string;
     name?: string;
+    /** '1' when another app sent the PDF ("Open with" / share): ask what it is before opening it. */
+    received?: string;
   }>();
   const session = usePdfEditStore((s) => s.session);
   const startSession = usePdfEditStore((s) => s.startSession);
@@ -115,6 +120,10 @@ export default function PdfEditorScreen() {
   const setSmartCropHintSeen = useSettingsStore((s) => s.setSmartCropHintSeen);
 
   const [step, setStep] = useState<Step>('pick');
+  // Print PDF asks for the label size first; the file is chosen after Continue.
+  const [pendingSize, setPendingSize] = useState<OutputSize>({ ...DEFAULT_OUTPUT_SIZE });
+  const receivedPdf = params.received === '1' && !!params.docUri;
+  const [anyPdfChosen, setAnyPdfChosen] = useState(false);
   const startWalkthrough = useWalkthroughStore((s) => s.start);
   const stopWalkthrough = useWalkthroughStore((s) => s.stop);
   const markPdfTourSeen = useSettingsStore((s) => s.markPdfTourSeen);
@@ -171,12 +180,14 @@ export default function PdfEditorScreen() {
     const rawUri = params.docUri || params.uri;
     const rawName = params.docName || params.name || 'document.pdf';
     if (!rawUri || session) return;
+    // A PDF sent from another app waits for the choice between shipping labels and any PDF.
+    if (receivedPdf && !anyPdfChosen) return;
 
     let cancelled = false;
     setLoading(true);
     (async () => {
       try {
-        const cached = await copyPdfToCache(rawUri, rawName);
+        const cached = await openPdfUri(rawUri, rawName);
         const meta = await loadPdfMetadata(cached, 150);
         if (!cancelled) {
           startSession({
@@ -201,7 +212,7 @@ export default function PdfEditorScreen() {
     return () => {
       cancelled = true;
     };
-  }, [params.docUri, params.uri, params.docName, params.name, refinePageSizes, session, startSession]);
+  }, [params.docUri, params.uri, params.docName, params.name, refinePageSizes, session, startSession, receivedPdf, anyPdfChosen]);
 
   // On the print step, render the likely first pages now so Print starts sending at once.
   useEffect(() => {
@@ -209,7 +220,7 @@ export default function PdfEditorScreen() {
     prewarmPrintPages(session, [0, session.currentPageIndex]);
   }, [step, session]);
 
-  const importPdf = useCallback(async () => {
+  const importPdf = useCallback(async (chosenSize?: OutputSize) => {
     try {
       const picked = await pickDocumentWithSource({ preset: 'pdf' });
       if (!picked.ok) {
@@ -217,7 +228,7 @@ export default function PdfEditorScreen() {
         return;
       }
       setLoading(true);
-      const cached = await copyPdfToCache(picked.uri, picked.name);
+      const cached = await openPdfUri(picked.uri, picked.name);
       const meta = await loadPdfMetadata(cached, 150);
       startSession({
         sourceUri: cached,
@@ -225,7 +236,13 @@ export default function PdfEditorScreen() {
         pageCount: meta.pageCount,
         pageSizesPt: meta.pageSizesPt,
       });
-      setStep('size');
+      if (chosenSize) {
+        // The size was chosen before the file, so go straight to editing.
+        setOutputSize(chosenSize);
+        setStep('edit');
+      } else {
+        setStep('size');
+      }
       refinePageSizes(cached);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not open this PDF.';
@@ -233,7 +250,7 @@ export default function PdfEditorScreen() {
     } finally {
       setLoading(false);
     }
-  }, [pickDocumentWithSource, refinePageSizes, startSession]);
+  }, [pickDocumentWithSource, refinePageSizes, setOutputSize, startSession]);
 
   const exportPdf = useCallback(async () => {
     if (!session || exporting) return;
@@ -307,6 +324,8 @@ export default function PdfEditorScreen() {
   }, []);
 
   // Each screen has its own tour: it opens the first time that screen is shown.
+  // Size before a file is chosen is its own screen ('presize').
+  const tourKey: PdfTourScreen = step === 'size' && !session ? 'presize' : step;
   const hasIncomingDoc = Boolean(params.docUri || params.uri);
   useEffect(() => {
     const running = useWalkthroughStore.getState();
@@ -314,7 +333,7 @@ export default function PdfEditorScreen() {
     if (step === 'pick' && hasIncomingDoc) return; // a shared PDF skips straight to Size
     let timer: ReturnType<typeof setTimeout> | undefined;
     const maybeStart = () => {
-      if (useSettingsStore.getState().pdfTourSeen.includes(step)) return;
+      if (useSettingsStore.getState().pdfTourSeen.includes(tourKey)) return;
       timer = setTimeout(() => startWalkthrough('pdf'), 600);
     };
     if (useSettingsStore.persist.hasHydrated()) maybeStart();
@@ -323,7 +342,7 @@ export default function PdfEditorScreen() {
       unsub();
       if (timer) clearTimeout(timer);
     };
-  }, [step, hasIncomingDoc, startWalkthrough]);
+  }, [step, tourKey, hasIncomingDoc, startWalkthrough]);
 
   useEffect(
     () => () => {
@@ -350,6 +369,8 @@ export default function PdfEditorScreen() {
     }
     leaveScreen();
   };
+
+  useStepBack(step !== 'pick', goBack);
 
   const metaPageSize = session?.pageSizesPt[session.currentPageIndex] ?? { w: 612, h: 792 };
   const pageSize =
@@ -683,17 +704,52 @@ export default function PdfEditorScreen() {
         </View>
       ) : null}
 
-      {step === 'pick' || !session ? (
+      {step === 'size' && !session ? (
+        <FormScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <WalkthroughTarget id="pdf.size">
+            <PdfOutputSizeRow value={pendingSize} onChange={setPendingSize} />
+          </WalkthroughTarget>
+        </FormScrollView>
+      ) : step === 'pick' || !session ? (
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[styles.pickContent, { paddingBottom: Math.max(insets.bottom, 12) + 16 }]}
           showsVerticalScrollIndicator={false}>
           {loading ? <ActivityIndicator color={C.accent} style={styles.pickSpinner} /> : null}
           <WalkthroughTarget id="pdf.import" style={styles.pickTarget}>
+            {receivedPdf ? (
+              <View style={styles.fileRow}>
+                <View style={styles.fileIcon}>
+                  <AppIcon name="doc.text" size={22} tintColor={C.accent} />
+                </View>
+                <View style={styles.fileText}>
+                  <Text style={styles.fileName} numberOfLines={1}>
+                    {params.docName ?? 'document.pdf'}
+                  </Text>
+                  <Text style={styles.fileMeta}>Received from another app</Text>
+                </View>
+              </View>
+            ) : null}
             <PdfPickOptions
               disabled={loading}
-              onShippingLabels={() => router.replace('/ecommerce-label' as any)}
-              onPrintPdf={() => void importPdf()}
+              onShippingLabels={() =>
+                router.push(
+                  (receivedPdf
+                    ? { pathname: '/ecommerce-label', params: { docUri: params.docUri, docName: params.docName } }
+                    : '/ecommerce-label') as any,
+                )
+              }
+              onPrintPdf={() => {
+                if (receivedPdf && !session) setAnyPdfChosen(true);
+                else if (receivedPdf) {
+                  resetSession();
+                  setAnyPdfChosen(true);
+                } else setStep('size');
+              }}
             />
           </WalkthroughTarget>
         </ScrollView>
@@ -949,12 +1005,36 @@ export default function PdfEditorScreen() {
         )}
       </View>
       ) : null}
+      {step === 'size' && !session ? (
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 4) + 2 }]}>
+          <View style={styles.printActions}>
+            <Pressable
+              onPress={goBack}
+              disabled={loading}
+              style={({ pressed }) => [styles.exportBtn, pressed && styles.pressed]}>
+              <Text style={styles.exportBtnText}>Back</Text>
+            </Pressable>
+            <WalkthroughTarget id="pdf.next" style={styles.printSlot}>
+              <Pressable
+                onPress={() => void importPdf(pendingSize)}
+                disabled={loading}
+                style={({ pressed }) => [styles.primaryBtn, (loading || pressed) && styles.pressed]}>
+                {loading ? (
+                  <ActivityIndicator color={C.onAccent} size="small" />
+                ) : (
+                  <Text style={styles.primaryText}>Continue</Text>
+                )}
+              </Pressable>
+            </WalkthroughTarget>
+          </View>
+        </View>
+      ) : null}
       {documentSourceSheet}
       <WalkthroughOverlay
         tour="pdf"
-        steps={PDF_WALKTHROUGHS[step]}
+        steps={PDF_WALKTHROUGHS[tourKey]}
         onFinish={() => {
-          markPdfTourSeen(step);
+          markPdfTourSeen(tourKey);
           stopWalkthrough();
         }}
       />

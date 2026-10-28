@@ -43,9 +43,6 @@ export const NUDGE_PAD_SPLIT_EXTRA_PX = 96;
 /** Slim Excel row navigator sitting between canvas and the sheet divider. */
 export const BULK_LABEL_NAV_HEIGHT_PX = 62;
 
-/** Shorter default sheet when bulk Excel labels reserve a row navigator. */
-export const BULK_PANEL_DEFAULT_HEIGHT_PX = 232;
-
 /** Drag-release past this share of usable height snaps to full-screen canvas. */
 export const FULLSCREEN_SNAP_RATIO = 0.9;
 
@@ -172,6 +169,8 @@ export function restoreCanvasSplitHeight(input: {
   panelMinPx?: number;
   panelDefaultPx?: number;
   dividerPx?: number;
+  /** Open with the sheet exactly as tall as the full tool menu, so no empty space sits under it. */
+  fitMenu?: boolean;
 }): number {
   'worklet';
   const usable = usableSplitViewportPx(input.viewportPx, input.dividerPx);
@@ -186,7 +185,7 @@ export function restoreCanvasSplitHeight(input: {
   }
   const panelDefault = Math.max(0, finitePx(input.panelDefaultPx ?? PANEL_DEFAULT_HEIGHT_PX, PANEL_DEFAULT_HEIGHT_PX));
   let requestedCanvasPx =
-    input.ratio != null && Number.isFinite(input.ratio)
+    !input.fitMenu && input.ratio != null && Number.isFinite(input.ratio)
       ? usable * clampStoredSplitRatio(input.ratio)
       : Math.max(0, usable - panelDefault);
   // Never open with a sheet shorter than the full tool menu (toolbar + 4 rows).

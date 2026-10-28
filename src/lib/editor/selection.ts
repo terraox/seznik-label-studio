@@ -133,7 +133,7 @@ export type MemberAlignKind = 'left' | 'right' | 'top' | 'bottom' | 'center-h' |
 
 function movableSelected(elements: LabelElement[], ids: string[]): LabelElement[] {
   return elements.filter(
-    (el) => ids.includes(el.id) && !el.lockMovement && el.type !== 'border' && el.needPrinting !== false,
+    (el) => ids.includes(el.id) && !el.lockMovement && el.type !== 'border',
   );
 }
 

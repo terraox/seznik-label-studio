@@ -22,7 +22,7 @@ export type MmBox = { left: number; top: number; width: number; height: number }
 
 function overlapBoxes(elements: LabelElement[]): MmBox[] {
   return elements
-    .filter((el) => el.visible !== false && el.type !== 'border' && el.needPrinting !== false)
+    .filter((el) => el.visible !== false && el.type !== 'border')
     .map((el) => {
       const size = elementSizeMm(el);
       return { left: el.left, top: el.top, width: size.width, height: size.height };

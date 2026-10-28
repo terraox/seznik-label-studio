@@ -21,6 +21,7 @@ import { IosAlertModal, IosAlertInput } from '@/components/ui/ios-alert-modal';
 import { useExcelImportFlow, type ExcelImportSuccess } from '@/lib/use-excel-import-flow';
 import { stageImportedFile } from '@/lib/user-files/stage-import';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
+import { isOnline } from '@/stores/network-store';
 import { useDataStore, type ImportedExcelFile } from '@/stores/data-store';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
 
@@ -209,7 +210,7 @@ export default function DataFileScreen() {
     return [...excel, ...pdf].sort((a, b) => b.importedAt - a.importedAt);
   }, [excelFiles, pdfFiles]);
 
-  const finishExcelImport = async (imported: ExcelImportSuccess) => {
+  const finishExcelImport = async (imported: ExcelImportSuccess, openPreview = false) => {
     const storedUri = await stageImportedFile('excel', imported.uri, imported.name);
     const entry = addExcelFile({
       name: imported.name,
@@ -220,6 +221,10 @@ export default function DataFileScreen() {
       hasHeaderRow: imported.hasHeaderRow,
       dataStartRow: imported.dataStartRow,
     });
+    if (openPreview) {
+      router.push({ pathname: '/excel-data-preview', params: { excelFileId: entry.id } });
+      return;
+    }
     const sheet = imported.sheets[0];
     Alert.alert(
       'File Imported',
@@ -264,7 +269,7 @@ export default function DataFileScreen() {
     void (async () => {
       try {
         const imported = await importExcelFromFile(incomingFile);
-        if (imported) await finishExcelImport(imported);
+        if (imported) await finishExcelImport(imported, true);
       } catch (error) {
         Alert.alert(
           'Error',
@@ -356,6 +361,10 @@ export default function DataFileScreen() {
   };
 
   const openRemoteLink = (url: string) => {
+    if (!isOnline()) {
+      Alert.alert('No internet', 'Connect to Wi-Fi or mobile data to open this link.');
+      return;
+    }
     Linking.openURL(url).catch(() =>
       Alert.alert('Unavailable', 'Could not open this link on your device.'),
     );

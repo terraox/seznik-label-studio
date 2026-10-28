@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
+import android.util.Log
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -43,9 +44,10 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class Td404TejasPrinterModule : Module() {
   /** Bump when the TSPL packer changes so a stale installed binary is visible in logcat. */
-  private val nativeRev = "td404-border-fix-2"
+  private val nativeRev = "td404-progress-feed-6"
   private val sppUuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
   private val ioExecutor = Executors.newCachedThreadPool()
+  @Volatile private var probeSocket: android.bluetooth.BluetoothSocket? = null
   private val connectTimeoutMs = 8_000L
   private val printChunk = 32 * 1024
   private val connectGeneration = AtomicInteger(0)
@@ -54,6 +56,7 @@ class Td404TejasPrinterModule : Module() {
   private var connectedMac: String? = null
   private var connectedName: String? = null
   private var receiverRegistered = false
+
 
   private val discoveryReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -68,6 +71,7 @@ class Td404TejasPrinterModule : Module() {
               intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
             }
           if (device != null) {
+            Log.i("Td404Scan", "found ${device.address} name=${intent.getStringExtra(BluetoothDevice.EXTRA_NAME)} type=${device.type} class=${device.bluetoothClass?.deviceClass}")
             // The name carried by the broadcast is more reliable than device.name for an unpaired printer.
             emitDevice(device, bonded = false, nameHint = intent.getStringExtra(BluetoothDevice.EXTRA_NAME))
           }
@@ -82,7 +86,7 @@ class Td404TejasPrinterModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("Td404TejasPrinter")
 
-    Events("onDeviceFound", "onScanFinished", "onConnectionChanged")
+    Events("onDeviceFound", "onScanFinished", "onConnectionChanged", "onTd404PrintProgress")
 
     OnCreate {
       ensureReceiver()
@@ -208,8 +212,16 @@ class Td404TejasPrinterModule : Module() {
 
       ioExecutor.execute {
         try {
+          // cancelDiscovery is asynchronous; starting a new inquiry before it ends can fail or be cut short.
           @SuppressLint("MissingPermission")
-          if (adapter.isDiscovering) adapter.cancelDiscovery()
+          if (adapter.isDiscovering) {
+            adapter.cancelDiscovery()
+            var waited = 0
+            while (adapter.isDiscovering && waited < 1500) {
+              Thread.sleep(100)
+              waited += 100
+            }
+          }
 
           @SuppressLint("MissingPermission")
           val bonded = adapter.bondedDevices ?: emptySet()
@@ -225,6 +237,7 @@ class Td404TejasPrinterModule : Module() {
 
           @SuppressLint("MissingPermission")
           val started = adapter.startDiscovery()
+          Log.i("Td404Scan", "classic discovery started=$started")
           if (!started) {
             sendEvent("onScanFinished", emptyMap<String, Any?>())
             promise.resolve(mapOf("discoveryStarted" to false, "bondedCount" to bonded.size))
@@ -234,6 +247,25 @@ class Td404TejasPrinterModule : Module() {
         } catch (e: Exception) {
           promise.reject("SCAN_FAILED", e.message, e)
         }
+      }
+    }
+
+    /** Opens the system pairing dialog for an unpaired printer. Resolves true once it is bonded. */
+    AsyncFunction("pairDevice") { macAddress: String, timeoutMs: Int, promise: Promise ->
+      val context = appContext.reactContext
+      val adapter = getAdapter()
+      if (context == null || adapter == null || !adapter.isEnabled || !hasConnectPermission(context)) {
+        promise.resolve(false)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        promise.resolve(
+          try {
+            pairBlocking(context, adapter, macAddress, timeoutMs.toLong())
+          } catch (_: Exception) {
+            false
+          },
+        )
       }
     }
 
@@ -247,6 +279,46 @@ class Td404TejasPrinterModule : Module() {
           promise.resolve(null)
         } catch (e: Exception) {
           promise.reject("STOP_FAILED", e.message, e)
+        }
+      }
+    }
+
+    // Reachability check for the paired printer: opens the SPP link and closes it again.
+    // A paired printer is often not discoverable, so a scan can't tell if it is on.
+    AsyncFunction("probe") { macAddress: String, timeoutMs: Int, promise: Promise ->
+      val adapter = getAdapter()
+      if (adapter == null || !adapter.isEnabled) {
+        promise.resolve(false)
+        return@AsyncFunction
+      }
+      if (socket != null && connectedMac.equals(macAddress, ignoreCase = true)) {
+        promise.resolve(true)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        var sock: android.bluetooth.BluetoothSocket? = null
+        var killer: Thread? = null
+        try {
+          @SuppressLint("MissingPermission")
+          if (adapter.isDiscovering) adapter.cancelDiscovery()
+          val device = adapter.getRemoteDevice(macAddress.uppercase())
+          @SuppressLint("MissingPermission")
+          val s = device.createInsecureRfcommSocketToServiceRecord(sppUuid)
+          sock = s
+          probeSocket = s
+          killer = Thread {
+            try { Thread.sleep(timeoutMs.toLong()) } catch (_: InterruptedException) { return@Thread }
+            try { s.close() } catch (_: Exception) {}
+          }.also { it.isDaemon = true; it.start() }
+          @SuppressLint("MissingPermission")
+          s.connect()
+          promise.resolve(true)
+        } catch (_: Exception) {
+          promise.resolve(false)
+        } finally {
+          killer?.interrupt()
+          try { sock?.close() } catch (_: Exception) {}
+          if (probeSocket === sock) probeSocket = null
         }
       }
     }
@@ -273,6 +345,7 @@ class Td404TejasPrinterModule : Module() {
             adapter.cancelDiscovery()
             try { Thread.sleep(150) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
           }
+          try { probeSocket?.close() } catch (_: Exception) {}
           closePendingSocket()
           closeSocket()
           try { Thread.sleep(100) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
@@ -393,34 +466,50 @@ class Td404TejasPrinterModule : Module() {
       }
       ioExecutor.execute {
         try {
-          val input = sock.inputStream ?: throw IOException("Printer input stream unavailable.")
-          // Drop stale bytes so the reply belongs to this query.
-          while (input.available() > 0) input.skip(input.available().toLong())
-          writeBytesToSocketSync(bytes)
-          val reply = ByteArrayOutputStream()
-          val buf = ByteArray(256)
-          val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(100, 30000)
-          var lastRx = 0L
-          while (System.currentTimeMillis() < deadline) {
-            val n = input.available()
-            if (n > 0) {
-              val got = input.read(buf, 0, minOf(n, buf.size))
-              if (got > 0) {
-                reply.write(buf, 0, got)
-                lastRx = System.currentTimeMillis()
-              }
-            } else {
-              if (reply.size() > 0 && System.currentTimeMillis() - lastRx >= idleMs.coerceIn(20, 5000)) break
-              Thread.sleep(20)
-            }
-          }
-          promise.resolve(android.util.Base64.encodeToString(reply.toByteArray(), android.util.Base64.NO_WRAP))
+          val reply = queryRawSync(bytes, timeoutMs, idleMs)
+          promise.resolve(android.util.Base64.encodeToString(reply, android.util.Base64.NO_WRAP))
         } catch (e: IOException) {
           android.util.Log.e("Td404TejasPrinter", "SPP query failed: ${e.message}")
           promise.reject("QUERY_FAILED", e.message, e)
         } catch (e: InterruptedException) {
           Thread.currentThread().interrupt()
           promise.reject("QUERY_FAILED", "Interrupted", e)
+        }
+      }
+    }
+
+    /**
+     * ESC ! ? status query. Returns a map with raw/printing/paperOut/coverOpen/paused/error
+     * and failureMessage. Empty reply → printing=null (caller should use timed idle).
+     */
+    AsyncFunction("queryPrinterStatus") { promise: Promise ->
+      val sock = socket
+      if (sock == null || !sock.isConnected) {
+        promise.reject("NOT_CONNECTED", "No TD-404 printer connected.", null)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        try {
+          promise.resolve(queryPrinterStatusSync())
+        } catch (e: Exception) {
+          android.util.Log.e("Td404TejasPrinter", "status query failed: ${e.message}")
+          promise.reject("STATUS_FAILED", e.message, e)
+        }
+      }
+    }
+
+    /** Poll ESC ! ? until not printing (or timeout / hard error). */
+    AsyncFunction("waitPrinterIdle") { timeoutMs: Int, promise: Promise ->
+      val sock = socket
+      if (sock == null || !sock.isConnected) {
+        promise.reject("NOT_CONNECTED", "No TD-404 printer connected.", null)
+        return@AsyncFunction
+      }
+      ioExecutor.execute {
+        try {
+          promise.resolve(waitPrinterIdleSync(timeoutMs.coerceIn(500, 120_000), "waitPrinterIdle"))
+        } catch (e: Exception) {
+          promise.reject("WAIT_IDLE_FAILED", e.message, e)
         }
       }
     }
@@ -574,6 +663,257 @@ class Td404TejasPrinterModule : Module() {
           try { tempFile?.delete() } catch (_: Exception) {}
         }
       }
+    }
+  }
+
+  /** ESC ! ? — TSC status query. */
+  private val STATUS_QUERY = byteArrayOf(0x1b, 0x21, 0x3f)
+
+  private fun optionsWaitIdle(options: Map<String, Any?>): Boolean {
+    if (optionsDryRun(options)) return false
+    val v = options["waitIdle"] ?: options["progress"]
+    return when (v) {
+      null -> true
+      is Boolean -> v
+      is Number -> v.toInt() != 0
+      else -> true
+    }
+  }
+
+  private fun idleTimeoutMs(heightMm: Double, speed: Int, copies: Int = 1, gapMm: Double = 3.0): Int {
+    val total = estimateFeedMs(heightMm, speed, gapMm) * Math.max(1, copies)
+    return Math.min(90_000, Math.max(3_000, total.toInt()))
+  }
+
+  /**
+   * Per-label feed time from the job that was sent.
+   * TD-404 / TSC `SPEED n` is inches/sec → mm/s = n * 25.4. Travel = label height + gap.
+   */
+  private fun estimateFeedMs(heightMm: Double, speed: Int, gapMm: Double = 3.0): Long {
+    val ips = speed.coerceIn(1, 12).toDouble()
+    val mmPerSec = ips * 25.4
+    val travelMm = Math.max(5.0, heightMm) + Math.max(0.0, gapMm)
+    val ms = (travelMm / mmPerSec) * 1000.0 + 60.0
+    return Math.min(15_000L, Math.max(180L, Math.round(ms)))
+  }
+
+  private fun emitPrintProgress(
+    progress: String,
+    copy: Int?,
+    copies: Int?,
+    reason: String? = null,
+    failureMessage: String? = null,
+  ) {
+    val data = mutableMapOf<String, Any?>(
+      "progress" to progress,
+      "copy" to copy,
+      "copies" to copies,
+    )
+    if (reason != null) data["reason"] = reason
+    if (failureMessage != null) data["failureMessage"] = failureMessage
+    sendEvent("onTd404PrintProgress", data)
+  }
+
+  private fun queryRawSync(bytes: ByteArray, timeoutMs: Int, idleMs: Int): ByteArray {
+    val sock = socket ?: throw IOException("No TD-404 printer connected.")
+    val input = sock.inputStream ?: throw IOException("Printer input stream unavailable.")
+    while (input.available() > 0) input.skip(input.available().toLong())
+    writeBytesToSocketSync(bytes)
+    val reply = ByteArrayOutputStream()
+    val buf = ByteArray(256)
+    val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(100, 30000)
+    var lastRx = 0L
+    while (System.currentTimeMillis() < deadline) {
+      val n = input.available()
+      if (n > 0) {
+        val got = input.read(buf, 0, minOf(n, buf.size))
+        if (got > 0) {
+          reply.write(buf, 0, got)
+          lastRx = System.currentTimeMillis()
+        }
+      } else {
+        if (reply.size() > 0 && System.currentTimeMillis() - lastRx >= idleMs.coerceIn(20, 5000)) break
+        Thread.sleep(20)
+      }
+    }
+    return reply.toByteArray()
+  }
+
+  /**
+   * Parse TSC ESC ! ? status byte.
+   * Bits: 0 head, 1 jam, 2 paper, 3 ribbon, 4 pause, 5 printing, 6 cover.
+   */
+  private fun parseStatusReply(bytes: ByteArray): Map<String, Any?> {
+    if (bytes.isEmpty()) {
+      return mapOf(
+        "raw" to null,
+        "printing" to null,
+        "paperOut" to false,
+        "coverOpen" to false,
+        "paused" to false,
+        "jammed" to false,
+        "error" to false,
+        "failureMessage" to null,
+        "statusFallback" to true,
+      )
+    }
+    val raw = bytes[0].toInt() and 0xff
+    val headOpen = (raw and 0x01) != 0
+    val jammed = (raw and 0x02) != 0
+    val paperOut = (raw and 0x04) != 0
+    val paused = (raw and 0x10) != 0
+    val printing = (raw and 0x20) != 0
+    val coverOpen = (raw and 0x40) != 0 || headOpen
+    val error = paperOut || coverOpen || jammed
+    val failureMessage = when {
+      coverOpen || headOpen -> "Printer lid is open. Close it and try again."
+      paperOut -> "No paper detected. Load paper and try again."
+      jammed -> "Paper jam. Clear the path and try again."
+      paused -> "Printer is paused. Press feed/pause and try again."
+      else -> null
+    }
+    android.util.Log.i(
+      "Td404TejasPrinter",
+      "[td404-progress] status raw=0x${Integer.toHexString(raw)} printing=$printing paper=$paperOut cover=$coverOpen",
+    )
+    return mapOf(
+      "raw" to raw,
+      "printing" to printing,
+      "paperOut" to paperOut,
+      "coverOpen" to coverOpen,
+      "paused" to paused,
+      "jammed" to jammed,
+      "error" to error,
+      "failureMessage" to failureMessage,
+      "statusFallback" to false,
+    )
+  }
+
+  private fun queryPrinterStatusSync(): Map<String, Any?> {
+    val reply = try {
+      queryRawSync(STATUS_QUERY, 800, 80)
+    } catch (e: Exception) {
+      android.util.Log.w("Td404TejasPrinter", "[td404-progress] status query error: ${e.message}")
+      return parseStatusReply(ByteArray(0))
+    }
+    return parseStatusReply(reply)
+  }
+
+  /**
+   * Wait until printing bit clears. Empty replies use a timed sleep (status-fallback).
+   * Throws IOException with a user message on paper/cover/jam.
+   */
+  private fun waitPrinterIdleSync(timeoutMs: Int, tag: String): Map<String, Any?> {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    var sawReply = false
+    var emptyStreak = 0
+    var last: Map<String, Any?> = parseStatusReply(ByteArray(0))
+    // Give the head a moment to raise the printing bit before the first poll.
+    Thread.sleep(80)
+    while (System.currentTimeMillis() < deadline) {
+      last = queryPrinterStatusSync()
+      val failure = last["failureMessage"] as? String
+      if (failure != null && last["error"] == true) {
+        throw IOException(failure)
+      }
+      val printing = last["printing"]
+      if (printing is Boolean) {
+        sawReply = true
+        emptyStreak = 0
+        if (!printing) {
+          return last + mapOf("idle" to true, "sawReply" to true, "timedFallback" to false)
+        }
+      } else {
+        emptyStreak += 1
+        // Status silent: do not spin until the full deadline — sleep the remaining
+        // feed estimate once, then treat as idle so the next full job can go out.
+        if (emptyStreak >= 3) {
+          val remaining = (deadline - System.currentTimeMillis()).coerceIn(200, timeoutMs.toLong())
+          android.util.Log.w(
+            "Td404TejasPrinter",
+            "[td404-progress] status-fallback tag=$tag sleepMs=$remaining",
+          )
+          Thread.sleep(remaining)
+          return last + mapOf("idle" to true, "sawReply" to false, "timedFallback" to true)
+        }
+      }
+      Thread.sleep(120)
+    }
+    if (!sawReply) {
+      android.util.Log.w("Td404TejasPrinter", "[td404-progress] status-fallback tag=$tag timeoutMs=$timeoutMs")
+      return last + mapOf("idle" to true, "sawReply" to false, "timedFallback" to true)
+    }
+    throw IOException("Printer did not become idle in time. Check paper and try again.")
+  }
+
+  /**
+   * Fast path: one SPP write of a job that already ends in `PRINT N` (wire speed unchanged).
+   * Live count advances once per label using feed time from SIZE height + GAP + SPEED
+   * (same values sent in the TSPL job), so 1/N … N/N tracks the physical burst.
+   */
+  private fun printCopiesWithProgress(
+    job: ByteArray,
+    copies: Int,
+    heightMm: Double,
+    speed: Int,
+    gapMm: Double,
+    dryRun: Boolean,
+    waitIdle: Boolean,
+  ): Pair<Int, Long> {
+    if (dryRun) return Pair(0, 0L)
+    val n = copies.coerceAtLeast(1)
+    val feedMs = estimateFeedMs(heightMm, speed, gapMm)
+    emitPrintProgress("START_COPY", 1, n)
+    val t0 = System.currentTimeMillis()
+    val totalSent = writeBytesToSocketSync(job)
+    val writeMs = System.currentTimeMillis() - t0
+    emitPrintProgress("DATA_ENDED", 1, n)
+    android.util.Log.i(
+      "Td404TejasPrinter",
+      "[td404-progress] pace copies=$n feedMs=$feedMs heightMm=$heightMm gapMm=$gapMm speed=$speed",
+    )
+
+    for (c in 1..n) {
+      if (c > 1) {
+        emitPrintProgress("START_COPY", c, n)
+        emitPrintProgress("DATA_ENDED", c, n)
+      }
+      try {
+        waitCopyFeed(feedMs, waitIdle, "copy-$c")
+      } catch (e: IOException) {
+        emitPrintProgress(
+          "FAILED",
+          c,
+          n,
+          reason = "StatusError",
+          failureMessage = e.message,
+        )
+        throw e
+      }
+      emitPrintProgress("SUCCESS", c, n)
+    }
+    return Pair(totalSent, writeMs)
+  }
+
+  /**
+   * Sleep one label's feed window. Optionally poll for paper/cover errors without
+   * using status edges to tick the count (PRINT N stays busy for the whole burst).
+   */
+  private fun waitCopyFeed(feedMs: Long, waitIdle: Boolean, tag: String) {
+    val deadline = System.currentTimeMillis() + feedMs
+    if (!waitIdle) {
+      Thread.sleep(feedMs)
+      return
+    }
+    while (System.currentTimeMillis() < deadline) {
+      val st = queryPrinterStatusSync()
+      val failure = st["failureMessage"] as? String
+      if (failure != null && st["error"] == true) {
+        throw IOException(failure)
+      }
+      val left = deadline - System.currentTimeMillis()
+      if (left <= 0) break
+      Thread.sleep(minOf(120L, left))
     }
   }
 
@@ -789,9 +1129,8 @@ class Td404TejasPrinterModule : Module() {
       "DIRECTION $direction\r\n" +
       "SET TEAR ON\r\n" +
       tsplOriginAndBitmap(xDots, yDots, bytesPerRow, contentH)
-    // TSPL PRINT m,n — one socket write for all copies (avoids re-sending bitmap per copy).
-    val printCmd = if (copies <= 1) "PRINT 1\r\n" else "PRINT 1,$copies\r\n"
-    val footer = "\r\n$printCmd"
+    // Single transfer: PRINT N (same as JS TSPL builder) — firmware reprints the buffer.
+    val footer = "\r\nPRINT $copies\r\n"
 
     val headerBytes = header.toByteArray(Charsets.US_ASCII)
     val footerBytes = footer.toByteArray(Charsets.US_ASCII)
@@ -802,6 +1141,7 @@ class Td404TejasPrinterModule : Module() {
     System.arraycopy(footerBytes, 0, job, headerBytes.size + rawBmp.size, footerBytes.size)
     val tEncode = System.currentTimeMillis()
     val dryRun = optionsDryRun(options)
+    val waitIdle = optionsWaitIdle(options)
     logJobIdentity(options, dryRun)
     val headerLine = header.replace("\r\n", " | ").trim()
     val ink = wireInkMargins(rawBmp, bytesPerRow, packedW, contentH)
@@ -817,17 +1157,17 @@ class Td404TejasPrinterModule : Module() {
       android.util.Log.i(
         "Td404TejasPrinter",
         "PRINT-TRACE DRY-RUN SDK png=${pngW}x${pngH} packed=${packedW}x${packedH} " +
-          "BITMAP=${bytesPerRow}x${contentH} job=${job.size}B (no socket write)",
+          "BITMAP=${bytesPerRow}x${contentH} job=${job.size}B copies=$copies (no socket write)",
       )
     } else {
-      val tWrite0 = System.currentTimeMillis()
-      totalSent = writeBytesToSocketSync(job)
-      writeMs = System.currentTimeMillis() - tWrite0
+      val paced = printCopiesWithProgress(job, copies, heightMm, speed, gapMm, dryRun = false, waitIdle = waitIdle)
+      totalSent = paced.first
+      writeMs = paced.second
       android.util.Log.i(
         "Td404TejasPrinter",
         "PRINT-TRACE SDK png=${pngW}x${pngH} packed=${packedW}x${packedH} sizeDots=${sizeDotsW}x${sizeDotsH} " +
           "dpm=$dpm dpi=$dpi SIZE=${formatMm(widthMm)}x${formatMm(heightMm)}mm " +
-          "BITMAP=${bytesPerRow}x${contentH} DIRECTION=$direction job=${job.size}B copies=$copies " +
+          "BITMAP=${bytesPerRow}x${contentH} DIRECTION=$direction job=${job.size}B copies=$copies waitIdle=$waitIdle " +
           "decode=${tDecode - t0}ms rotate=${tRotate - tDecode}ms encode=${tEncode - tRotate}ms write=${writeMs}ms",
       )
     }
@@ -843,6 +1183,7 @@ class Td404TejasPrinterModule : Module() {
       "writeMs" to writeMs,
       "path" to "labelcommand-sdk",
       "dryRun" to dryRun,
+      "waitIdle" to waitIdle,
       "nativeRev" to nativeRev,
       "reference" to "$xDots,$yDots",
       "bitmapX" to 0,
@@ -943,8 +1284,8 @@ class Td404TejasPrinterModule : Module() {
       "DIRECTION $direction\r\n" +
       "SET TEAR ON\r\n" +
       tsplOriginAndBitmap(xDots, yDots, bytesPerRow, heightDots)
-    val printCmd = if (copies <= 1) "PRINT 1\r\n" else "PRINT 1,$copies\r\n"
-    val footer = "\r\n$printCmd"
+    // Single transfer: PRINT N (same as JS TSPL builder) — firmware reprints the buffer.
+    val footer = "\r\nPRINT $copies\r\n"
 
     val headerBytes = header.toByteArray(Charsets.US_ASCII)
     val footerBytes = footer.toByteArray(Charsets.US_ASCII)
@@ -954,6 +1295,7 @@ class Td404TejasPrinterModule : Module() {
     System.arraycopy(footerBytes, 0, job, headerBytes.size + wireBmp.size, footerBytes.size)
 
     val dryRun = optionsDryRun(options)
+    val waitIdle = optionsWaitIdle(options)
     logJobIdentity(options, dryRun)
 
     var totalSent = 0
@@ -961,18 +1303,18 @@ class Td404TejasPrinterModule : Module() {
     if (dryRun) {
       android.util.Log.i(
         "Td404TejasPrinter",
-        "PRINT-TRACE DRY-RUN MONO packed=${packedW}x${packedH} BITMAP=${bytesPerRow}x${heightDots} job=${job.size}B (no socket write)",
+        "PRINT-TRACE DRY-RUN MONO packed=${packedW}x${packedH} BITMAP=${bytesPerRow}x${heightDots} job=${job.size}B copies=$copies (no socket write)",
       )
     } else {
-      val tWrite0 = System.currentTimeMillis()
-      totalSent = writeBytesToSocketSync(job)
-      writeMs = System.currentTimeMillis() - tWrite0
+      val paced = printCopiesWithProgress(job, copies, heightMm, speed, gapMm, dryRun = false, waitIdle = waitIdle)
+      totalSent = paced.first
+      writeMs = paced.second
       android.util.Log.i(
         "Td404TejasPrinter",
         "PRINT-TRACE MONO packed=${packedW}x${packedH} sizeDots=${sizeDotsW}x${sizeDotsH} " +
           "dpm=$dpm dpi=$dpi SIZE=${formatMm(widthMm)}x${formatMm(heightMm)}mm " +
           "BITMAP=${bytesPerRow}x${heightDots} DIRECTION=$direction job=${job.size}B copies=$copies " +
-          "write=${writeMs}ms bytesSent=$totalSent",
+          "waitIdle=$waitIdle write=${writeMs}ms bytesSent=$totalSent",
       )
     }
 
@@ -983,6 +1325,7 @@ class Td404TejasPrinterModule : Module() {
       "writeMs" to writeMs,
       "path" to "mono-bitmap",
       "dryRun" to dryRun,
+      "waitIdle" to waitIdle,
       "reference" to "$xDots,$yDots",
       "bitmapX" to 0,
       "bitmapY" to 0,
@@ -1257,6 +1600,57 @@ class Td404TejasPrinterModule : Module() {
     error?.let { throw it }
   }
 
+  /** Bonds with an unpaired printer and waits for the result. False when declined, failed or timed out. */
+  @SuppressLint("MissingPermission")
+  private fun pairBlocking(context: Context, adapter: BluetoothAdapter, mac: String, timeoutMs: Long): Boolean {
+    val device = try { adapter.getRemoteDevice(mac.uppercase()) } catch (_: Exception) { return false }
+    if (device.bondState == BluetoothDevice.BOND_BONDED) return true
+
+    // An active inquiry makes bonding fail or crawl.
+    if (adapter.isDiscovering) {
+      adapter.cancelDiscovery()
+      var waited = 0
+      while (adapter.isDiscovering && waited < 2000) {
+        Thread.sleep(100)
+        waited += 100
+      }
+    }
+
+    val latch = CountDownLatch(1)
+    val receiver = object : BroadcastReceiver() {
+      override fun onReceive(c: Context?, intent: Intent?) {
+        if (intent == null) return
+        @Suppress("DEPRECATION")
+        val d = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+        if (d?.address != device.address) return
+        val state = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE)
+        val previous = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.BOND_NONE)
+        // Done when bonded, or when bonding ended back at none (declined / failed).
+        if (state == BluetoothDevice.BOND_BONDED ||
+          (state == BluetoothDevice.BOND_NONE && previous == BluetoothDevice.BOND_BONDING)
+        ) latch.countDown()
+      }
+    }
+    val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+    // System BT broadcasts (bond state) require RECEIVER_EXPORTED on API 33+.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+    } else {
+      context.registerReceiver(receiver, filter)
+    }
+    return try {
+      val started = device.createBond()
+      if (!started && device.bondState != BluetoothDevice.BOND_BONDING) {
+        false
+      } else {
+        latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+        device.bondState == BluetoothDevice.BOND_BONDED
+      }
+    } finally {
+      try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+    }
+  }
+
   private fun ensureReceiver() {
     if (receiverRegistered) return
     val context = appContext.reactContext ?: return
@@ -1265,8 +1659,11 @@ class Td404TejasPrinterModule : Module() {
       addAction(BluetoothDevice.ACTION_NAME_CHANGED)
       addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
     }
+    // ACTION_FOUND / NAME_CHANGED / DISCOVERY_FINISHED are sent by the system Bluetooth
+    // stack. RECEIVER_NOT_EXPORTED drops them on API 33+, so unpaired printers never appear
+    // (bonded list still works via getBondedDevices). Match DevPrinterModule: EXPORTED.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+      context.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_EXPORTED)
     } else {
       context.registerReceiver(discoveryReceiver, filter)
     }
@@ -1356,6 +1753,15 @@ class Td404TejasPrinterModule : Module() {
       "transport" to "bluetooth-spp",
       "sdkId" to "td404",
       "likelyTd404" to (isLikelyTd404(name) || isLikelyTd404(displayName)),
+      // Android's own view of the device: the real printer link is the classic one with the
+      // printer (imaging) class, whatever the name. A Low Energy twin has the same name stem.
+      "deviceType" to when (device.type) {
+        BluetoothDevice.DEVICE_TYPE_CLASSIC -> "classic"
+        BluetoothDevice.DEVICE_TYPE_LE -> "le"
+        BluetoothDevice.DEVICE_TYPE_DUAL -> "dual"
+        else -> "unknown"
+      },
+      "printerClass" to (device.bluetoothClass?.majorDeviceClass == android.bluetooth.BluetoothClass.Device.Major.IMAGING),
     )
   }
 

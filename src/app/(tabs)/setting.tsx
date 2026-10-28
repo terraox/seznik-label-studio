@@ -203,9 +203,14 @@ function ProfileCard() {
   );
 }
 
-function SettingGroup({ children }: { children: ReactNode }) {
+function SettingGroup({ children, title }: { children: ReactNode; title?: string }) {
   const styles = useStyles();
-  return <View style={styles.group}>{children}</View>;
+  return (
+    <View style={styles.groupWrap}>
+      {title ? <Text style={styles.groupTitle}>{title}</Text> : null}
+      <View style={styles.group}>{children}</View>
+    </View>
+  );
 }
 
 export default function SettingScreen() {
@@ -286,7 +291,7 @@ export default function SettingScreen() {
         <View style={[styles.inner, { width: contentWidth, maxWidth: MaxContentWidth }]}>
           <ProfileCard />
 
-          <SettingGroup>
+          <SettingGroup title="Printer">
             <SettingRow
               label={t('setting.connectBluetoothPrinter')}
               icon="printer"
@@ -299,7 +304,7 @@ export default function SettingScreen() {
 
           <SupportedPrintersSection />
 
-          <SettingGroup>
+          <SettingGroup title="Preferences">
             <SettingRow
               label={t('setting.languageSwitch')}
               icon="globe"
@@ -323,7 +328,7 @@ export default function SettingScreen() {
             </View>
           ) : null}
 
-          <SettingGroup>
+          <SettingGroup title="Library">
             <SettingRow
               label={t('setting.font')}
               customIcon={<FontSettingIcon />}
@@ -370,8 +375,8 @@ export default function SettingScreen() {
             />
           </SettingGroup>
 
-          {Platform.OS === 'android' ? (
-            <SettingGroup>
+          <SettingGroup title="App">
+            {Platform.OS === 'android' ? (
               <SettingRow
                 label={t('setting.widgets')}
                 icon="rectangle.3.group"
@@ -379,11 +384,9 @@ export default function SettingScreen() {
                   trackFeatureClick('settings.widgets');
                   router.push('/widgets');
                 }}
+                showDivider
               />
-            </SettingGroup>
-          ) : null}
-
-          <SettingGroup>
+            ) : null}
             <SettingRow
               label={t('setting.advancedSettings')}
               icon="gearshape"
@@ -391,10 +394,8 @@ export default function SettingScreen() {
                 trackFeatureClick('settings.advanced');
                 router.push('/advanced-settings');
               }}
+              showDivider
             />
-          </SettingGroup>
-
-          <SettingGroup>
             <SettingRow
               label={t('setting.appPermissions')}
               icon="slider.horizontal.3"
@@ -405,7 +406,7 @@ export default function SettingScreen() {
             />
           </SettingGroup>
 
-          <SettingGroup>
+          <SettingGroup title="Support">
             <SettingRow
               label={t('setting.walkthrough')}
               icon="questionmark.circle.fill"
@@ -425,7 +426,7 @@ export default function SettingScreen() {
             <SettingRow label={t('setting.aboutUs')} icon="info.circle" onPress={handleAbout} />
           </SettingGroup>
 
-          <SettingGroup>
+          <SettingGroup title="Account">
             <SettingRow
               label={t('setting.logOut')}
               icon="rectangle.portrait.and.arrow.right"
@@ -502,6 +503,17 @@ const useStyles = makeStyles((c, scheme) => ({
     backgroundColor: c.surface,
     borderRadius: 10,
     ...cardElevation(c, scheme),
+  },
+  groupWrap: {
+    gap: 6,
+  },
+  groupTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    color: c.textMuted,
+    paddingHorizontal: 4,
   },
   appearanceBlock: {
     gap: 8,

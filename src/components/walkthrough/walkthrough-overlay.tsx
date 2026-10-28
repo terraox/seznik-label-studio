@@ -91,6 +91,14 @@ export function WalkthroughOverlay({
           return;
         }
       }
+      if (step.scrollsIfHidden && attempt < 2) {
+        const relY = m.y - o.y;
+        const hidden = relY < topBound || relY + m.h > H - insets.bottom - 96;
+        if (hidden && scrollWalkthroughBy(relY - H * 0.3)) {
+          setTimeout(() => !cancelled && void run(attempt + 1), 200);
+          return;
+        }
+      }
       setRect({ x: m.x - o.x, y: m.y - o.y, w: m.w, h: m.h });
       setReady(true);
       // Re-measure once layout/scroll has fully settled so the cutout never lags the target.
@@ -163,6 +171,7 @@ export function WalkthroughOverlay({
               style={[
                 styles.ring,
                 { left: hole.x, top: hole.y, width: hole.w, height: hole.h },
+                step.holeRadius != null ? { borderRadius: step.holeRadius } : null,
               ]}
             />
           </>

@@ -4,15 +4,9 @@ import { ToolTile } from '@/components/home/tool-tile';
 import type { HomeToolId } from '@/components/home/home-tools';
 import { HomeLayout } from '@/constants/ui';
 
-export function ToolGrid({
-  ids,
-  columns = HomeLayout.gridColumns,
-}: {
-  ids: readonly HomeToolId[];
-  columns?: 3 | 4;
-}) {
-  const minHeight =
-    columns === 4 ? HomeLayout.labelTypeTileHeight : HomeLayout.tileHeight;
+/** One row of tiles; the row shares its width equally, so 3 or 4 ids both fill it. */
+export function ToolGrid({ ids }: { ids: readonly HomeToolId[] }) {
+  const minHeight = HomeLayout.tileHeight;
 
   return (
     <View style={styles.row} /* layout-ok: tiles flex to share the row */>

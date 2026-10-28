@@ -95,12 +95,12 @@ export function resizePolicyFor(element: LabelElement): ResizePolicy {
       };
     case 'time':
       return {
-        anchors: ['e', 's'],
-        behavior: { e: 'width', s: 'height' },
+        anchors: ['e'],
+        behavior: { e: 'aspect' },
         rotateHandle: false,
         minMm: MIN_ELEMENT_MM,
         comment:
-          'Time: box width and height. Font size stays put; narrowing wraps onto more lines.',
+          'Time: side handle only. It scales the type with the box (one line, never wrapped); the height follows the font size.',
       };
     default:
       return {

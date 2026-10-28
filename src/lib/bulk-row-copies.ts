@@ -1,4 +1,5 @@
 import type { ExcelSheet } from '@/stores/data-store';
+import { selectedRowIndexes, type RowSelection } from '@/lib/bulk-row-filter';
 
 export const MAX_COPIES_PER_ROW = 99;
 export const MAX_JOB_LABELS = 500;
@@ -196,10 +197,13 @@ export function planBulkPrint(
   copiesColumnIndex: number | null | undefined,
   multiply: number,
   overrides?: Record<string, number> | null,
+  rowSelection?: RowSelection | null,
 ): BulkPrintPlan {
+  const picked = selectedRowIndexes(rowSelection, sheet.rows.length);
   const factor = Math.max(1, Math.floor(Number.isFinite(multiply) ? multiply : 1));
   const rows: BulkPrintRow[] = [];
   for (let rowIndex = 0; rowIndex < sheet.rows.length; rowIndex++) {
+    if (picked && !picked.has(rowIndex)) continue;
     const perPass = resolveRowCopies(sheet, rowIndex, copiesColumnIndex, overrides);
     const copies = perPass * factor;
     if (copies > 0) rows.push({ rowIndex, copies, perPass });

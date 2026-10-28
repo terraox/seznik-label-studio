@@ -10,7 +10,6 @@
 import type { LabelDocument, LabelElement } from '@/lib/label-document';
 import { resolveField, rootOf } from './engine';
 import {
-  DEFAULT_SERIAL_COUNT,
   MAX_SERIAL_BATCH,
   type SerialConfig,
   type SerialContext,
@@ -87,8 +86,10 @@ export function serialMaps(fields: SerialFieldRef[]) {
 
 /** Number of labels in the batch: the saved count, clamped. */
 export function serialBatchCount(doc: Pick<LabelDocument, 'serialBatch'>): number {
-  const n = Math.floor(doc.serialBatch?.count ?? DEFAULT_SERIAL_COUNT);
-  return Math.max(1, Math.min(MAX_SERIAL_BATCH, Number.isFinite(n) ? n : DEFAULT_SERIAL_COUNT));
+  // No Count setting any more: a counter can be stepped through as far as the engine allows.
+  // A label made by the Serial Labels screen still carries its own count.
+  const n = Math.floor(doc.serialBatch?.count ?? MAX_SERIAL_BATCH);
+  return Math.max(1, Math.min(MAX_SERIAL_BATCH, Number.isFinite(n) ? n : MAX_SERIAL_BATCH));
 }
 
 /** Shown on the canvas for a field that cannot produce a value (the print gate blocks printing). */
