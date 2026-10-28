@@ -68,22 +68,22 @@ log "Setting up adb reverse for Metro…"
 adb reverse "tcp:${METRO_PORT}" "tcp:${METRO_PORT}" || true
 
 log "Launching dev client…"
-adb shell am force-stop com.sezprint.app
+adb shell am force-stop com.seznik.labelstudio
 adb logcat -c
-adb shell am start -a android.intent.action.VIEW -d "${DEV_CLIENT_URL}" com.sezprint.app
+adb shell am start -a android.intent.action.VIEW -d "${DEV_CLIENT_URL}" com.seznik.labelstudio
 
 log "Waiting for JS bundle (poll logcat for Running \"main\", up to 120s)…"
 wait_for_logcat 'Running "main"' 120 'Hermes bundle loaded'
 
 log "Waiting for Expo Router to settle (8s)…"
 sleep 8
-adb shell am start -n com.sezprint.app/.MainActivity >/dev/null 2>&1 || true
+adb shell am start -n com.seznik.labelstudio/.MainActivity >/dev/null 2>&1 || true
 sleep 2
 
 log "Navigating to ${GATE_ROUTE_URL}…"
-adb shell am start -a android.intent.action.VIEW -d "${GATE_ROUTE_URL}" com.sezprint.app >/dev/null 2>&1 || true
+adb shell am start -a android.intent.action.VIEW -d "${GATE_ROUTE_URL}" com.seznik.labelstudio >/dev/null 2>&1 || true
 sleep 2
-adb shell am start -a android.intent.action.VIEW -d "sezprint:///stage-a-gates" com.sezprint.app >/dev/null 2>&1 || true
+adb shell am start -a android.intent.action.VIEW -d "sezprint:///stage-a-gates" com.seznik.labelstudio >/dev/null 2>&1 || true
 
 log "Waiting for stage-a-gates mount (up to 60s)…"
 wait_for_logcat 'stage-a-gates mounted' 60 'GATE-A screen mounted'
@@ -97,5 +97,5 @@ adb logcat -d | rg "\[GATE-A\]" | rg -v "task46 run=" || true
 
 echo ""
 echo "=== GATE-A report file ==="
-adb shell run-as com.sezprint.app cat files/gate-a-report.txt 2>/dev/null \
+adb shell run-as com.seznik.labelstudio cat files/gate-a-report.txt 2>/dev/null \
   || die "gate-a-report.txt not found on device"

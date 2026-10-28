@@ -16,7 +16,7 @@ const path = require('path');
 
 const INTERVAL_MS = 2000;
 const PORTS = [8081, 8083];
-const PACKAGE_ID = 'com.sezprint.app';
+const PACKAGE_ID = 'com.seznik.labelstudio';
 const DEV_SCHEMES = ['exp+sez-print', 'exp+sezprint', 'sezprint', 'exp+zub'];
 
 function parseArgs(argv) {

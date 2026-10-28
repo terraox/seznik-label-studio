@@ -12,19 +12,19 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "bundleIdentifier": "com.sezprint.app",
+      "bundleIdentifier": "com.seznik.labelstudio",
       "icon": "./assets/images/icon.png",
       "infoPlist": {
-        "NSSpeechRecognitionUsageDescription": "Allow Sez Print to convert your speech into label text.",
-        "NSMicrophoneUsageDescription": "Allow Sez Print to use the microphone for voice-to-text on labels.",
-        "NSBluetoothAlwaysUsageDescription": "Allow Sez Print to connect to your Bluetooth label printer.",
-        "NSBluetoothPeripheralUsageDescription": "Allow Sez Print to connect to your Bluetooth label printer.",
+        "NSSpeechRecognitionUsageDescription": "Allow Seznik Label Studio to convert your speech into label text.",
+        "NSMicrophoneUsageDescription": "Allow Seznik Label Studio to use the microphone for voice-to-text on labels.",
+        "NSBluetoothAlwaysUsageDescription": "Allow Seznik Label Studio to connect to your Bluetooth label printer.",
+        "NSBluetoothPeripheralUsageDescription": "Allow Seznik Label Studio to connect to your Bluetooth label printer.",
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true
       }
     },
     "android": {
-      "package": "com.sezprint.app",
+      "package": "com.seznik.labelstudio",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -73,7 +73,7 @@
             "enableMinifyInReleaseBuilds": false,
             "enableShrinkResourcesInReleaseBuilds": false,
             "usesCleartextTraffic": true,
-            "reactNativeArchitectures": ["arm64-v8a"],
+            "reactNativeArchitectures": ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"],
             "packagingOptions": {
               "pickFirst": [
                 "**/libPrinterNative.so",
@@ -97,27 +97,27 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Sez Print to access your camera to scan label barcodes and QR codes."
+          "cameraPermission": "Allow Seznik Label Studio to access your camera to scan label barcodes and QR codes."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Sez Print to access your photos to select label images."
+          "photosPermission": "Allow Seznik Label Studio to access your photos to select label images."
         }
       ],
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "Allow Sez Print to use the microphone for voice-to-text on labels.",
-          "speechRecognitionPermission": "Allow Sez Print to convert your speech into label text."
+          "microphonePermission": "Allow Seznik Label Studio to use the microphone for voice-to-text on labels.",
+          "speechRecognitionPermission": "Allow Seznik Label Studio to convert your speech into label text."
         }
       ],
       [
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": false,
-          "bluetoothAlwaysPermission": "Allow Sez Print to connect to your Bluetooth label printer."
+          "bluetoothAlwaysPermission": "Allow Seznik Label Studio to connect to your Bluetooth label printer."
         }
       ],
       [
