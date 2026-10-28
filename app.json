@@ -73,7 +73,7 @@
             "enableMinifyInReleaseBuilds": false,
             "enableShrinkResourcesInReleaseBuilds": false,
             "usesCleartextTraffic": true,
-            "reactNativeArchitectures": ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"],
+            "buildArchs": ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"],
             "packagingOptions": {
               "pickFirst": [
                 "**/libPrinterNative.so",
