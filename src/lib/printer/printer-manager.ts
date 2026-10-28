@@ -23,7 +23,9 @@ import { JOSH_DENSITY_MAX, JOSH_SPEED_MIN, resolveJoshJobParams } from '@/lib/pr
 import { tsplMedia } from '@/lib/printer/paper-type';
 import { joshCharging, joshFailMessage, joshPrintError, parseJoshFailure, type JoshPrinterStatus } from '@/lib/printer/josh-status';
 import { joshBatteryLevel } from '@/lib/printer/josh-battery-levels';
-import { useJoshProgressStore } from '@/stores/josh-progress-store';
+import { useJoshProgressStore, usePrintProgressStore } from '@/stores/print-progress-store';
+// Registers Josh fail-reason mapper for shared progress FAILED events.
+import '@/lib/printer/josh-status';
 import {
   JOSH_BORDER_PAD_DOTS,
   JOSH_ELEMENT_X_OFFSET_MM,
@@ -744,15 +746,17 @@ class PrinterManager {
 
   private joshPrintsInFlight = 0;
   private joshProgressSub: { remove: () => void } | null = null;
+  private td404PrintsInFlight = 0;
+  private td404ProgressSub: { remove: () => void } | null = null;
 
   /** One app-lifetime subscription: the printer can report a failure after the print call returned. */
   private beginJoshProgress(josh: NonNullable<ReturnType<PrinterManager['getJosh']>>): void {
     this.joshPrintsInFlight += 1;
-    const progress = useJoshProgressStore.getState();
+    const progress = usePrintProgressStore.getState();
     progress.begin();
     if (this.joshProgressSub || typeof josh.addJoshPrintProgressListener !== 'function') return;
     this.joshProgressSub = josh.addJoshPrintProgressListener((event) => {
-      const store = useJoshProgressStore.getState();
+      const store = usePrintProgressStore.getState();
       // A FAILED after the call returned still lands in the progress card below.
       // The SDK also sends CONNECTED when the printer connects, which is not a print. Other
       // events are kept after the call returns: the printer is still printing then.
@@ -763,7 +767,7 @@ class PrinterManager {
 
   private endJoshProgress(error?: unknown): void {
     this.joshPrintsInFlight = Math.max(0, this.joshPrintsInFlight - 1);
-    const store = useJoshProgressStore.getState();
+    const store = usePrintProgressStore.getState();
     if (error === undefined) {
       // The call returns once the job is handed to the printer, before the label is printed.
       // Done comes from the printer's own success event; this only guards against it never coming.
@@ -778,6 +782,36 @@ class PrinterManager {
           ? error.message
           : String(error),
     );
+  }
+
+  /** TD-404 paced copies emit the same progress vocabulary as Josh into the shared store. */
+  private beginTd404Progress(td404: NonNullable<ReturnType<PrinterManager['getTd404']>>): void {
+    this.td404PrintsInFlight += 1;
+    const progress = usePrintProgressStore.getState();
+    progress.begin();
+    if (this.td404ProgressSub || typeof td404.addTd404PrintProgressListener !== 'function') return;
+    this.td404ProgressSub = td404.addTd404PrintProgressListener((event) => {
+      if (this.td404PrintsInFlight === 0 && event.progress === 'CONNECTED') return;
+      usePrintProgressStore.getState().apply({
+        progress: event.progress,
+        copy: event.copy,
+        copies: event.copies,
+        reason: event.reason ?? undefined,
+        failureMessage: event.failureMessage ?? undefined,
+      });
+    });
+  }
+
+  private endTd404Progress(error?: unknown, copies = 1): void {
+    this.td404PrintsInFlight = Math.max(0, this.td404PrintsInFlight - 1);
+    const store = usePrintProgressStore.getState();
+    if (error === undefined) {
+      // Native emits SUCCESS per physical copy; only settle if the last event was missed.
+      if (store.phase === 'done' || store.phase === 'failed') return;
+      store.settle(1500 + 500 * Math.max(1, copies));
+      return;
+    }
+    store.fail(error instanceof Error ? error.message : String(error));
   }
 
   // Tez / Shakti and Label X SDKs were removed from the app.
@@ -3958,30 +3992,39 @@ class PrinterManager {
             verticalOffsetMm: options.vOffsetMm ?? 0,
           },
         });
+        const copies = Math.max(1, Math.round(options.copies ?? 1));
+        this.beginTd404Progress(td404);
         const t0 = Date.now();
-        const result = await td404.printTd404PngLabel({
-          pngBase64: options.pngBase64,
-          widthMm: spec.widthMm,
-          heightMm: spec.heightMm,
-          gapMm: spec.gapMm,
-          density: options.density ?? 10,
-          speed: options.speed ?? 3,
-          xDots: spec.xOffsetDots,
-          yDots: spec.yOffsetDots,
-          copies: Math.max(1, Math.round(options.copies ?? 1)),
-          media: tsplMedia(options.media),
-          orientation: options.orientation ?? 0,
-          dpi: spec.dpi,
-          direction: 1,
-          threshold: options.threshold ?? 160,
-          dither: options.dither ?? false,
-        });
-        if (!result) {
-          this.lastTd404PngLabelTiming = null;
-          // Module present but method missing at runtime (old binary) — signal fallback.
-          const err = new Error('NATIVE_PNG_UNAVAILABLE');
-          (err as Error & { code?: string }).code = 'NATIVE_PNG_UNAVAILABLE';
-          throw err;
+        let result: Awaited<ReturnType<typeof td404.printTd404PngLabel>>;
+        try {
+          result = await td404.printTd404PngLabel({
+            pngBase64: options.pngBase64,
+            widthMm: spec.widthMm,
+            heightMm: spec.heightMm,
+            gapMm: spec.gapMm,
+            density: options.density ?? 10,
+            speed: options.speed ?? 3,
+            xDots: spec.xOffsetDots,
+            yDots: spec.yOffsetDots,
+            copies,
+            media: tsplMedia(options.media),
+            orientation: options.orientation ?? 0,
+            dpi: spec.dpi,
+            direction: 1,
+            threshold: options.threshold ?? 160,
+            dither: options.dither ?? false,
+            waitIdle: true,
+          });
+          if (!result) {
+            this.lastTd404PngLabelTiming = null;
+            const err = new Error('NATIVE_PNG_UNAVAILABLE');
+            (err as Error & { code?: string }).code = 'NATIVE_PNG_UNAVAILABLE';
+            throw err;
+          }
+          this.endTd404Progress(undefined, copies);
+        } catch (error) {
+          this.endTd404Progress(error, copies);
+          throw error;
         }
         this.lastTd404PngLabelTiming = {
           decodeMs: result.decodeMs,
@@ -4100,29 +4143,39 @@ class PrinterManager {
           heightMm: spec.heightMm,
           dpi: spec.dpi,
         });
+        const copies = Math.max(1, Math.round(options.copies ?? 1));
+        this.beginTd404Progress(td404);
         const t0 = Date.now();
-        const result = await td404.printTd404MonoLabel({
-          monoBytes: options.monoBytes,
-          widthDots: options.widthDots,
-          heightDots: options.heightDots,
-          bytesPerRow: options.bytesPerRow,
-          widthMm: spec.widthMm,
-          heightMm: spec.heightMm,
-          gapMm: spec.gapMm,
-          density: options.density ?? 10,
-          speed: options.speed ?? 3,
-          xDots: spec.xOffsetDots,
-          yDots: spec.yOffsetDots,
-          copies: Math.max(1, Math.round(options.copies ?? 1)),
-          media: tsplMedia(options.media),
-          dpi: spec.dpi,
-          direction: 1,
-        });
-        if (!result) {
-          this.lastTd404MonoLabelTiming = null;
-          const err = new Error('NATIVE_MONO_UNAVAILABLE');
-          (err as Error & { code?: string }).code = 'NATIVE_MONO_UNAVAILABLE';
-          throw err;
+        let result: Awaited<ReturnType<typeof td404.printTd404MonoLabel>>;
+        try {
+          result = await td404.printTd404MonoLabel({
+            monoBytes: options.monoBytes,
+            widthDots: options.widthDots,
+            heightDots: options.heightDots,
+            bytesPerRow: options.bytesPerRow,
+            widthMm: spec.widthMm,
+            heightMm: spec.heightMm,
+            gapMm: spec.gapMm,
+            density: options.density ?? 10,
+            speed: options.speed ?? 3,
+            xDots: spec.xOffsetDots,
+            yDots: spec.yOffsetDots,
+            copies,
+            media: tsplMedia(options.media),
+            dpi: spec.dpi,
+            direction: 1,
+            waitIdle: true,
+          });
+          if (!result) {
+            this.lastTd404MonoLabelTiming = null;
+            const err = new Error('NATIVE_MONO_UNAVAILABLE');
+            (err as Error & { code?: string }).code = 'NATIVE_MONO_UNAVAILABLE';
+            throw err;
+          }
+          this.endTd404Progress(undefined, copies);
+        } catch (error) {
+          this.endTd404Progress(error, copies);
+          throw error;
         }
         this.lastTd404MonoLabelTiming = {
           writeMs: result.writeMs,

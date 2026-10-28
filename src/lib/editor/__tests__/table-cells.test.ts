@@ -101,6 +101,15 @@ test('grid and border taps target the table, not a cell', () => {
     row: 0,
     col: 0,
   });
+
+  // Hit-slop coords slightly outside the box still resolve (clamped).
+  assert.deepEqual(hitTestTableTargetFromViewPoint(table, -8, h * 0.25, w, h), {
+    kind: 'line',
+  });
+  assert.deepEqual(hitTestTableTargetFromViewPoint(table, w + 12, h * 0.75, w, h), {
+    kind: 'line',
+  });
+  assert.deepEqual(hitTestTableTargetFromViewPoint(table, w * 0.25, -4, w, h)?.kind, 'line');
 });
 
 test('patching one cell does not change another cell', () => {

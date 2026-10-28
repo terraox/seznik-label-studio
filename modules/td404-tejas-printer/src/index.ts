@@ -93,6 +93,8 @@ type NativeTd404 = {
     monoBytes: Uint8Array,
     options: Record<string, unknown>,
   ): Promise<Td404MonoLabelResult>;
+  queryPrinterStatus?(): Promise<Td404PrinterStatusRaw>;
+  waitPrinterIdle?(timeoutMs: number): Promise<Td404PrinterStatusRaw>;
   renderPdfPages?(
     uri: string,
     options?: Record<string, unknown>,
@@ -102,6 +104,30 @@ type NativeTd404 = {
     listener: (event: Td404Device | Record<string, unknown>) => void,
   ): { remove: () => void };
   removeListeners(count: number): void;
+};
+
+export type Td404PrinterStatusRaw = {
+  raw?: number | null;
+  printing?: boolean | null;
+  paperOut?: boolean;
+  coverOpen?: boolean;
+  paused?: boolean;
+  jammed?: boolean;
+  error?: boolean;
+  failureMessage?: string | null;
+  statusFallback?: boolean;
+  idle?: boolean;
+  sawReply?: boolean;
+  timedFallback?: boolean;
+};
+
+export type Td404PrintProgressEvent = {
+  progress: string;
+  copy?: number | null;
+  copies?: number | null;
+  reason?: string | null;
+  failureMessage?: string | null;
+  [key: string]: unknown;
 };
 
 let cached: NativeTd404 | null | undefined;
@@ -340,6 +366,11 @@ export type Td404PngLabelOptions = {
   dither?: boolean;
   /** Dev-only: build TSPL job and return bytes without a socket write. Default off. */
   dryRun?: boolean;
+  /**
+   * When true (default for interactive prints), pace each copy and wait for idle
+   * so live progress events fire. Dry-run forces this off.
+   */
+  waitIdle?: boolean;
   gitSha?: string;
   buildTime?: string;
 };
@@ -373,6 +404,7 @@ export async function printTd404PngLabel(
     threshold: options.threshold ?? 160,
     dither: options.dither ?? false,
     dryRun: options.dryRun === true,
+    waitIdle: options.dryRun === true ? false : options.waitIdle !== false,
     gitSha: options.gitSha ?? 'unknown',
     buildTime: options.buildTime ?? 'unknown',
   });
@@ -395,6 +427,8 @@ export type Td404MonoLabelOptions = {
   dpi?: number;
   direction?: 0 | 1;
   dryRun?: boolean;
+  /** Pace copies + wait for idle (default true unless dryRun). */
+  waitIdle?: boolean;
   gitSha?: string;
   buildTime?: string;
 };
@@ -461,9 +495,24 @@ export async function printTd404MonoLabel(
     dpi,
     direction: options.direction ?? 1,
     dryRun: options.dryRun === true,
+    waitIdle: options.dryRun === true ? false : options.waitIdle !== false,
     gitSha: options.gitSha ?? 'unknown',
     buildTime: options.buildTime ?? 'unknown',
   });
+}
+
+export async function queryTd404PrinterStatus(): Promise<Td404PrinterStatusRaw | null> {
+  const mod = getNative();
+  if (!mod || typeof mod.queryPrinterStatus !== 'function') return null;
+  if (!mod.isConnected()) throw new Error('No TD-404 printer connected.');
+  return mod.queryPrinterStatus();
+}
+
+export async function waitTd404PrinterIdle(timeoutMs = 15000): Promise<Td404PrinterStatusRaw | null> {
+  const mod = getNative();
+  if (!mod || typeof mod.waitPrinterIdle !== 'function') return null;
+  if (!mod.isConnected()) throw new Error('No TD-404 printer connected.');
+  return mod.waitPrinterIdle(timeoutMs);
 }
 
 export type RenderedPdfPage = {
@@ -513,6 +562,17 @@ export function addTd404ConnectionListener(
   if (!mod) return { remove: () => {} };
   return mod.addListener('onConnectionChanged', (event) => {
     listener((event ?? {}) as Td404ConnectionEvent);
+  });
+}
+
+/** Live paced-print events: START_COPY / DATA_ENDED / SUCCESS / FAILED. */
+export function addTd404PrintProgressListener(
+  listener: (event: Td404PrintProgressEvent) => void,
+): { remove: () => void } {
+  const mod = getNative();
+  if (!mod) return { remove: () => {} };
+  return mod.addListener('onTd404PrintProgress', (event) => {
+    listener((event ?? {}) as Td404PrintProgressEvent);
   });
 }
 

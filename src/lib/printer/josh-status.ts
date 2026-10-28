@@ -1,7 +1,33 @@
 /**
  * Josh (DothanTech LPAPI) print failure messages, progress text and the status log.
  * Pure functions only; the native events are wired in printer-manager.ts.
+ * Live progress types/helpers live in print-progress.ts (shared with TD-404).
  */
+
+import {
+  applyPrintProgressEvent,
+  setProgressFailMessageMapper,
+  type PrintProgressEvent,
+  type PrintProgressState,
+} from '@/lib/printer/print-progress';
+
+export {
+  PRINT_PROGRESS_IDLE,
+  JOSH_PROGRESS_IDLE,
+  printCurrentLabel,
+  joshCurrentLabel,
+  printProgressFraction,
+  joshProgressFraction,
+  printProgressText,
+  joshProgressText,
+  applyPrintProgressEvent,
+  applyJoshProgressEvent,
+  type PrintProgressPhase,
+  type PrintProgressState,
+  type PrintProgressEvent,
+  type JoshProgressPhase,
+  type JoshProgressState,
+} from '@/lib/printer/print-progress';
 
 /** Every IDzPrinter.PrintFailReason in the LPAPI jar (read with javap, LPAPI-2026-01-08-R). */
 export const JOSH_FAIL_REASONS = [
@@ -85,6 +111,17 @@ export function joshFailMessage(reason: unknown, reasonCode?: number | null): st
   return `${JOSH_FAIL_MESSAGES.Other}${code}`;
 }
 
+// Shared progress FAILED events resolve Josh enum names through this mapper.
+setProgressFailMessageMapper(joshFailMessage);
+
+/** Apply a progress event; FAILED reasons use Josh message map when applicable. */
+export function applyJoshProgressEventWithFailMap(
+  state: PrintProgressState,
+  event: PrintProgressEvent,
+): PrintProgressState {
+  return applyPrintProgressEvent(state, event);
+}
+
 /**
  * Pull the failure reason out of a native rejection. Native sets
  * "JOSH_PRINT_FAILED: <PrintFailReason>" and "JOSH_PRINT_TIMEOUT".
@@ -105,113 +142,6 @@ export function joshPrintError(error: unknown): unknown {
   const friendly = new Error(joshFailMessage(parsed.reason));
   (friendly as Error & { code?: string }).code = `JOSH_${parsed.reason}`;
   return friendly;
-}
-
-export type JoshProgressPhase = 'idle' | 'sending' | 'printing' | 'done' | 'failed';
-
-export type JoshProgressState = {
-  phase: JoshProgressPhase;
-  copy: number | null;
-  copies: number | null;
-  /** Labels the printer has finished (SDK Success events). */
-  copiesDone: number;
-  failure: string | null;
-  /** Excel bulk jobs: the app's own send count. */
-  bulkIndex: number | null;
-  bulkTotal: number | null;
-};
-
-export const JOSH_PROGRESS_IDLE: JoshProgressState = {
-  phase: 'idle',
-  copy: null,
-  copies: null,
-  copiesDone: 0,
-  failure: null,
-  bulkIndex: null,
-  bulkTotal: null,
-};
-
-/** The label being printed now (1-based), as the printer's events report it. */
-export function joshCurrentLabel(state: JoshProgressState): number {
-  return Math.min(Math.max(1, state.copy ?? 1), state.copies ?? Math.max(1, state.copy ?? 1));
-}
-
-/**
- * Progress bar fill, 0 to 1, or null when idle. Each label owns 1 / N of the bar (4 labels: 25%
- * each): the labels the printer has confirmed fill their share fully, and the one being printed
- * fills part of its own share (20% while sending, 60% once its data is sent). With an Excel bulk
- * it spans every label.
- */
-export function joshProgressFraction(state: JoshProgressState): number | null {
-  if (state.phase === 'idle') return null;
-  const copies = Math.max(1, state.copies ?? 1);
-  const done = Math.min(copies, state.copiesDone ?? 0);
-  let within: number;
-  if (state.phase === 'done') within = 1;
-  else if (state.copies == null) within = 0; // total not known yet: do not guess a share
-  else {
-    const stage = state.phase === 'printing' ? 0.6 : 0.2;
-    // The label in flight (an event copy number beyond the confirmed ones) fills part of its share.
-    const inFlight = done < copies && (state.copy ?? 0) > done ? stage : 0;
-    within = Math.min(1, (done + inFlight) / copies);
-  }
-  if (state.bulkIndex != null && state.bulkTotal != null && state.bulkTotal > 0) {
-    return Math.min(1, (Math.max(0, state.bulkIndex - 1) + within) / state.bulkTotal);
-  }
-  return within;
-}
-
-/** The SDK gives no percentage, so the text never shows one. */
-export function joshProgressText(state: JoshProgressState): string | null {
-  const { phase, copies, failure, bulkIndex, bulkTotal } = state;
-  if (phase === 'idle') return null;
-  const bulk = bulkIndex != null && bulkTotal != null ? `Label ${bulkIndex} of ${bulkTotal}: ` : '';
-  switch (phase) {
-    case 'sending':
-      return `${bulk}Sending`;
-    case 'printing':
-      return copies != null && copies > 1 && state.copy != null
-        ? `${bulk}Printing ${Math.min(state.copy, copies)} of ${copies}`
-        : `${bulk}Printing`;
-    case 'done':
-      return `${bulk}Done`;
-    case 'failed':
-      return `${bulk}Failed: ${failure ?? 'printer reported a problem'}`;
-  }
-}
-
-/** Apply one native onJoshPrintProgress event. Unknown events leave the state unchanged. */
-export function applyJoshProgressEvent(
-  state: JoshProgressState,
-  event: { progress?: string; copy?: number | null; copies?: number | null; reason?: string; reasonCode?: number | null },
-): JoshProgressState {
-  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-  const copies = num(event.copies) ?? state.copies;
-  const copy = num(event.copy) ?? state.copy;
-  switch (event.progress) {
-    case 'CONNECTED':
-      return { ...state, phase: 'sending', copy, copies };
-    case 'START_COPY':
-      return { ...state, phase: 'sending', copy, copies };
-    case 'DATA_ENDED':
-      return { ...state, phase: 'printing', copy, copies };
-    case 'SUCCESS':
-      // The native "submit accepted" success carries no label count; only a counted one is real.
-      if (event.copy == null || event.copy < 1) return state;
-      return copies != null && copy != null && copy < copies
-        ? { ...state, phase: 'printing', copy, copies, copiesDone: Math.max(state.copiesDone ?? 0, copy) }
-        : { ...state, phase: 'done', copy, copies, copiesDone: copies ?? copy ?? state.copiesDone, failure: null };
-    case 'FAILED':
-      return {
-        ...state,
-        phase: 'failed',
-        copy,
-        copies,
-        failure: joshFailMessage(event.reason, event.reasonCode),
-      };
-    default:
-      return state;
-  }
 }
 
 /**

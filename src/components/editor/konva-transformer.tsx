@@ -20,6 +20,7 @@ import { type LiveRulerBounds } from '@/components/canvas-rulers';
 import { ElementContentView, type LiveTextBank } from '@/components/editor/element-renderer';
 import {
   ensureTableCells,
+  hitTestTableCellFromViewPoint,
   hitTestTableTarget,
   hitTestTableTargetFromViewPoint,
   pointerMmToTableLocal,
@@ -958,12 +959,18 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     lastTapViewRef.current = { x, y };
   }, []);
 
+  /** Live transformer box size for table hit-tests (gesture coords are in this space). */
+  const tableViewSizeRef = useRef({ w: baseWidthPx, h: baseHeightPx });
+  tableViewSizeRef.current = { w: baseWidthPx, h: baseHeightPx };
+
   const resolveTableTargetHitJS = useCallback(
     (
       viewX?: number,
       viewY?: number,
       windowX?: number,
       windowY?: number,
+      viewWidthPx?: number,
+      viewHeightPx?: number,
     ): TablePointerTarget | null => {
       if (element.type !== 'table') return null;
       const box = elementBoxRef.current;
@@ -976,8 +983,17 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       });
       const vx = Number.isFinite(viewX) ? viewX! : lastTapViewRef.current.x;
       const vy = Number.isFinite(viewY) ? viewY! : lastTapViewRef.current.y;
-      if (Number.isFinite(vx) && Number.isFinite(vy) && baseWidthPx > 0 && baseHeightPx > 0) {
-        const hit = hitTestTableTargetFromViewPoint(table, vx, vy, baseWidthPx, baseHeightPx);
+      // Prefer the live transformer box (animW/H) — hit-slop coords are in that space.
+      const vw =
+        Number.isFinite(viewWidthPx) && (viewWidthPx as number) > 0
+          ? (viewWidthPx as number)
+          : baseWidthPx;
+      const vh =
+        Number.isFinite(viewHeightPx) && (viewHeightPx as number) > 0
+          ? (viewHeightPx as number)
+          : baseHeightPx;
+      if (Number.isFinite(vx) && Number.isFinite(vy) && vw > 0 && vh > 0) {
+        const hit = hitTestTableTargetFromViewPoint(table, vx, vy, vw, vh);
         if (hit) return hit;
       }
       const wx = Number.isFinite(windowX) ? windowX! : lastTapAbsRef.current.x;
@@ -997,10 +1013,34 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       viewY?: number,
       windowX?: number,
       windowY?: number,
+      viewWidthPx?: number,
+      viewHeightPx?: number,
     ): TablePointerTarget | null => {
       if (element.type !== 'table' || !callbacksRef.current.onTableCellPress) return null;
-      const hit = resolveTableTargetHitJS(viewX, viewY, windowX, windowY);
-      if (!hit) return null;
+      const hit = resolveTableTargetHitJS(viewX, viewY, windowX, windowY, viewWidthPx, viewHeightPx);
+      if (!hit) {
+        // Last resort: open cell at clamped fraction so the text menu always appears.
+        const vw = viewWidthPx && viewWidthPx > 0 ? viewWidthPx : baseWidthPx;
+        const vh = viewHeightPx && viewHeightPx > 0 ? viewHeightPx : baseHeightPx;
+        const vx = Number.isFinite(viewX) ? viewX! : lastTapViewRef.current.x;
+        const vy = Number.isFinite(viewY) ? viewY! : lastTapViewRef.current.y;
+        if (Number.isFinite(vx) && Number.isFinite(vy) && vw > 0 && vh > 0) {
+          const box = elementBoxRef.current;
+          const table = ensureTableCells({
+            ...element,
+            left: box.left,
+            top: box.top,
+            width: box.width,
+            height: box.height,
+          });
+          const cell = hitTestTableCellFromViewPoint(table, vx, vy, vw, vh);
+          if (cell) {
+            callbacksRef.current.onTableCellPress(element.id, cell);
+            return { kind: 'cell', ...cell };
+          }
+        }
+        return null;
+      }
       if (hit.kind === 'line') {
         callbacksRef.current.onTableCellPress(element.id, null);
       } else {
@@ -1008,13 +1048,26 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       }
       return hit;
     },
-    [element.id, element.type, resolveTableTargetHitJS],
+    [element, baseWidthPx, baseHeightPx, resolveTableTargetHitJS],
   );
 
   /** Highlight the cell under the finger on touch-down, before the gesture ends. */
   const highlightTableCellJS = useCallback(
-    (viewX?: number, viewY?: number, windowX?: number, windowY?: number) => {
-      applyTablePointerHitJS(viewX, viewY, windowX, windowY);
+    (
+      viewX?: number,
+      viewY?: number,
+      windowX?: number,
+      windowY?: number,
+      viewWidthPx?: number,
+      viewHeightPx?: number,
+    ) => {
+      if (Number.isFinite(viewWidthPx) && (viewWidthPx as number) > 0) {
+        tableViewSizeRef.current.w = viewWidthPx as number;
+      }
+      if (Number.isFinite(viewHeightPx) && (viewHeightPx as number) > 0) {
+        tableViewSizeRef.current.h = viewHeightPx as number;
+      }
+      applyTablePointerHitJS(viewX, viewY, windowX, windowY, viewWidthPx, viewHeightPx);
     },
     [applyTablePointerHitJS],
   );
@@ -1128,9 +1181,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     }
 
     if (element.type === 'table' && callbacksRef.current.onTableCellPress) {
-      const hit = applyTablePointerHitJS(viewX, viewY, windowX, windowY);
+      const { w, h } = tableViewSizeRef.current;
+      const hit = applyTablePointerHitJS(viewX, viewY, windowX, windowY, w, h);
       console.log(
-        `[table-cell] single-tap tableId=${element.id} wasSelected=${wasSelectedAtTouchRef.current} view=${viewX},${viewY} window=${windowX},${windowY} computedHit=${JSON.stringify(hit)}`,
+        `[table-cell] single-tap tableId=${element.id} wasSelected=${wasSelectedAtTouchRef.current} view=${viewX},${viewY} window=${windowX},${windowY} size=${w}x${h} computedHit=${JSON.stringify(hit)}`,
       );
       return;
     }
@@ -1183,7 +1237,14 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         }
         runOnJS(notifySelectJS)(element.id);
         if (element.type === 'table') {
-          runOnJS(highlightTableCellJS)(_e.x, _e.y, _e.absoluteX, _e.absoluteY);
+          runOnJS(highlightTableCellJS)(
+            _e.x,
+            _e.y,
+            _e.absoluteX,
+            _e.absoluteY,
+            animW.value,
+            animH.value,
+          );
         }
         originLeftSv.value = originLeftSv.value + transX.value;
         originTopSv.value = originTopSv.value + transY.value;

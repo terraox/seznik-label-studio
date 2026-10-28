@@ -14,6 +14,8 @@ export type {
   Td404MonoLabelResult,
   Td404PngLabelOptions,
   Td404PngLabelResult,
+  Td404PrintProgressEvent,
+  Td404PrinterStatusRaw,
   RenderedPdfPage,
   RenderPdfResult,
 } from 'td404-tejas-printer';
@@ -133,6 +135,21 @@ export function addTd404ConnectionListener(
 ): { remove: () => void } {
   const subs = (['tejas', 'rudra'] as const).map((id) => load(id)?.addTd404ConnectionListener(listener));
   return { remove: () => subs.forEach((s) => s?.remove()) };
+}
+/** Progress events from whichever bridge is printing. */
+export function addTd404PrintProgressListener(
+  listener: Parameters<Td404Module['addTd404PrintProgressListener']>[0],
+): { remove: () => void } {
+  const subs = (['tejas', 'rudra'] as const).map((id) =>
+    load(id)?.addTd404PrintProgressListener?.(listener),
+  );
+  return { remove: () => subs.forEach((s) => s?.remove()) };
+}
+export async function queryTd404PrinterStatus() {
+  return (await getTd404Bridge()?.queryTd404PrinterStatus?.()) ?? null;
+}
+export async function waitTd404PrinterIdle(timeoutMs?: number) {
+  return (await getTd404Bridge()?.waitTd404PrinterIdle?.(timeoutMs)) ?? null;
 }
 export async function getTd404ConnectionInfo() {
   return (await getTd404Bridge()?.getTd404ConnectionInfo()) ?? null;

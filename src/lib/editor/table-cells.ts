@@ -155,11 +155,12 @@ export function tableLineToleranceFractions(
   const tolMm = Math.max(lineMm * 2, 2);
   let tx = tolMm / Math.max(table.width, 1);
   let ty = tolMm / Math.max(table.height, 1);
-  // Keep a ~10 px finger target even when the table is small on screen.
-  if (viewWidthPx != null && viewWidthPx > 0) tx = Math.max(tx, 10 / viewWidthPx);
-  if (viewHeightPx != null && viewHeightPx > 0) ty = Math.max(ty, 10 / viewHeightPx);
+  // Slimmer finger target (~6 px) so cell interiors stay easy to hit and the
+  // menu does not flip to "table adjust" when the finger is slightly off-center.
+  if (viewWidthPx != null && viewWidthPx > 0) tx = Math.max(tx, 6 / viewWidthPx);
+  if (viewHeightPx != null && viewHeightPx > 0) ty = Math.max(ty, 6 / viewHeightPx);
   // Leave room to tap cell content even on dense tables.
-  const maxFrac = Math.min(0.18, 0.35 / Math.max(table.rowCount, table.columnCount, 1));
+  const maxFrac = Math.min(0.12, 0.28 / Math.max(table.rowCount, table.columnCount, 1));
   return { tx: Math.min(tx, maxFrac), ty: Math.min(ty, maxFrac) };
 }
 
@@ -256,7 +257,9 @@ export function hitTestTableCellFromViewPoint(
   _rotationDeg = 0,
 ): { row: number; col: number } | null {
   if (!(viewWidthPx > 0) || !(viewHeightPx > 0)) return null;
-  return hitTestTableCellByFraction(table, viewX / viewWidthPx, viewY / viewHeightPx);
+  const fracX = Math.min(1, Math.max(0, viewX / viewWidthPx));
+  const fracY = Math.min(1, Math.max(0, viewY / viewHeightPx));
+  return hitTestTableCellByFraction(table, fracX, fracY);
 }
 
 export function hitTestTableTargetFromViewPoint(
@@ -267,13 +270,12 @@ export function hitTestTableTargetFromViewPoint(
   viewHeightPx: number,
 ): TablePointerTarget | null {
   if (!(viewWidthPx > 0) || !(viewHeightPx > 0)) return null;
+  // Transformer hit-slop can report coords slightly outside the box — clamp so
+  // an interior tap still opens the cell menu instead of returning null.
+  const fracX = Math.min(1, Math.max(0, viewX / viewWidthPx));
+  const fracY = Math.min(1, Math.max(0, viewY / viewHeightPx));
   const tol = tableLineToleranceFractions(table, viewWidthPx, viewHeightPx);
-  return hitTestTableTargetByFraction(
-    table,
-    viewX / viewWidthPx,
-    viewY / viewHeightPx,
-    tol,
-  );
+  return hitTestTableTargetByFraction(table, fracX, fracY, tol);
 }
 
 export function hitTestTableCell(
@@ -386,4 +388,121 @@ export function patchTableCellInElement<T extends TableElementState>(
     r.map((cell, ci) => (ri === row && ci === col ? { ...cell, ...cellPatch } : cell)),
   );
   return { ...normalized, cells };
+}
+
+/** Cell-menu structure actions (Position tab). */
+export type TableStructureAction =
+  | 'insertRow'
+  | 'deleteRow'
+  | 'addRow'
+  | 'insertColumn'
+  | 'deleteColumn'
+  | 'addColumn';
+
+/**
+ * Insert / append / delete a row or column around the active cell.
+ * Returns null when the change is not allowed (e.g. deleting the last row).
+ */
+export function applyTableStructureAction<T extends TableElementState>(
+  table: T,
+  action: TableStructureAction,
+  row: number,
+  col: number,
+): T | null {
+  const t = ensureTableCells(table);
+  const max = 10;
+  switch (action) {
+    case 'insertRow': {
+      if (t.rowCount >= max) return null;
+      const at = Math.max(0, Math.min(row, t.rowCount));
+      const h = t.rowHeights[at] ?? t.height / Math.max(1, t.rowCount);
+      const rowHeights = [...t.rowHeights];
+      rowHeights.splice(at, 0, h);
+      const cells = t.cells!.map((r) => r.map((c) => ({ ...c })));
+      cells.splice(
+        at,
+        0,
+        Array.from({ length: t.columnCount }, () => createDefaultTableCell()),
+      );
+      return {
+        ...t,
+        rowCount: t.rowCount + 1,
+        rowHeights,
+        height: rowHeights.reduce((s, v) => s + v, 0),
+        cells,
+      };
+    }
+    case 'addRow': {
+      if (t.rowCount >= max) return null;
+      const h = t.rowHeights[t.rowCount - 1] ?? t.height / Math.max(1, t.rowCount);
+      return {
+        ...t,
+        rowCount: t.rowCount + 1,
+        rowHeights: [...t.rowHeights, h],
+        height: t.height + h,
+        cells: [
+          ...t.cells!.map((r) => r.map((c) => ({ ...c }))),
+          Array.from({ length: t.columnCount }, () => createDefaultTableCell()),
+        ],
+      };
+    }
+    case 'deleteRow': {
+      if (t.rowCount <= 1) return null;
+      const at = Math.max(0, Math.min(row, t.rowCount - 1));
+      const rowHeights = t.rowHeights.filter((_, i) => i !== at);
+      const cells = t.cells!.filter((_, i) => i !== at).map((r) => r.map((c) => ({ ...c })));
+      return {
+        ...t,
+        rowCount: t.rowCount - 1,
+        rowHeights,
+        height: Math.max(0.5, rowHeights.reduce((s, v) => s + v, 0)),
+        cells,
+      };
+    }
+    case 'insertColumn': {
+      if (t.columnCount >= max) return null;
+      const at = Math.max(0, Math.min(col, t.columnCount));
+      const w = t.columnWidths[at] ?? t.width / Math.max(1, t.columnCount);
+      const columnWidths = [...t.columnWidths];
+      columnWidths.splice(at, 0, w);
+      const cells = t.cells!.map((r) => {
+        const next = r.map((c) => ({ ...c }));
+        next.splice(at, 0, createDefaultTableCell());
+        return next;
+      });
+      return {
+        ...t,
+        columnCount: t.columnCount + 1,
+        columnWidths,
+        width: columnWidths.reduce((s, v) => s + v, 0),
+        cells,
+      };
+    }
+    case 'addColumn': {
+      if (t.columnCount >= max) return null;
+      const w = t.columnWidths[t.columnCount - 1] ?? t.width / Math.max(1, t.columnCount);
+      return {
+        ...t,
+        columnCount: t.columnCount + 1,
+        columnWidths: [...t.columnWidths, w],
+        width: t.width + w,
+        cells: t.cells!.map((r) => [...r.map((c) => ({ ...c })), createDefaultTableCell()]),
+      };
+    }
+    case 'deleteColumn': {
+      if (t.columnCount <= 1) return null;
+      const at = Math.max(0, Math.min(col, t.columnCount - 1));
+      const columnWidths = t.columnWidths.filter((_, i) => i !== at);
+      const cells = t.cells!.map((r) => r.filter((_, i) => i !== at).map((c) => ({ ...c })));
+      return {
+        ...t,
+        columnCount: t.columnCount - 1,
+        columnWidths,
+        width: Math.max(0.5, columnWidths.reduce((s, v) => s + v, 0)),
+        cells,
+      };
+    }
+    default:
+      return null;
+  }
 }

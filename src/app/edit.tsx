@@ -112,11 +112,13 @@ import {
   type NormalizedCrop,
 } from '@/lib/editor/image-crop-math';
 import {
+  applyTableStructureAction,
   createDefaultTableCell,
   ensureTableCells,
   patchTableCellInElement,
   tableCellToEditorState,
   type SelectedTableCell,
+  type TableStructureAction,
 } from '@/lib/editor/table-cells';
 import {
   isPaletteDropOnArtboard,
@@ -1867,8 +1869,25 @@ export default function EditScreen() {
     [patchTableCellAt],
   );
 
+  const ensureTablePanelOpen = useCallback(() => {
+    topBarSelectionVisibleSv.value = 1;
+    bottomPanelVisibleSv.value = 1;
+    setPanelOpen(true);
+  }, [topBarSelectionVisibleSv, bottomPanelVisibleSv]);
+
+  /**
+   * Cell vs whole-table menu. Sticky while a cell is active: grid-line hits do not
+   * bounce back to the table panel (that was the main menu glitch). Pass
+   * `forceClear` from Select Table to leave cell mode on purpose.
+   */
   const handleTableCellPress = useCallback(
-    (tableId: string, cell: { row: number; col: number } | null) => {
+    (
+      tableId: string,
+      cell: { row: number; col: number } | null,
+      opts?: { forceClear?: boolean },
+    ) => {
+      const prev = selectedTableCellRef.current;
+
       if (cell) {
         const tableEl = docRef.current.elements.find(
           (el): el is Extract<LabelElement, { type: 'table' }> =>
@@ -1881,31 +1900,66 @@ export default function EditScreen() {
           cell.row >= tableEl.rowCount ||
           cell.col >= tableEl.columnCount
         ) {
-          console.log(
-            `[table-cell] select-rejected tableId=${tableId} cell=${JSON.stringify(cell)} rowCount=${tableEl?.rowCount} colCount=${tableEl?.columnCount}`,
-          );
           return;
         }
-        const prev = selectedTableCellRef.current;
+        // Same cell already active — keep the panel, skip React churn.
+        if (prev?.tableId === tableId && prev.row === cell.row && prev.col === cell.col) {
+          ensureTablePanelOpen();
+          return;
+        }
         commitSelectedTableCell({ tableId, row: cell.row, col: cell.col });
-        // Only reset tabs when entering cell mode from the table menu — keep Content/Font
-        // while hopping between cells so the panel does not reload on every tap.
-        if (!prev || prev.tableId !== tableId) setTextTab('Regular');
-        console.log(
-          `[table-cell] select-highlight tableId=${tableId} row=${cell.row} col=${cell.col} panel=TextPropertyPanel`,
-        );
-      } else {
-        const hadCell = selectedTableCellRef.current != null;
-        commitSelectedTableCell(null);
-        if (hadCell) setTableTab('Regular');
-        console.log(`[table-cell] clear-cell tableId=${tableId} panel=TablePropertyPanel`);
+        // Keep Content/Font while hopping cells of the same table.
+        if (!prev || prev.tableId !== tableId) setTextTab('Content');
+        ensureTablePanelOpen();
+        return;
       }
-      topBarSelectionVisibleSv.value = 1;
-      bottomPanelVisibleSv.value = 1;
-      setPanelOpen(true);
+
+      // Line / clear
+      if (prev == null) {
+        ensureTablePanelOpen();
+        return;
+      }
+      // Sticky cell mode: ignore accidental grid-line hits while editing a cell.
+      if (prev.tableId === tableId && !opts?.forceClear) {
+        ensureTablePanelOpen();
+        return;
+      }
+      commitSelectedTableCell(null);
+      setTableTab('Regular');
+      ensureTablePanelOpen();
     },
-    [commitSelectedTableCell, topBarSelectionVisibleSv, bottomPanelVisibleSv],
+    [commitSelectedTableCell, ensureTablePanelOpen],
   );
+
+  const handleTableStructureAction = useCallback(
+    (action: TableStructureAction) => {
+      const cell = selectedTableCellRef.current;
+      if (!cell) return;
+      const tableEl = docRef.current.elements.find(
+        (el): el is Extract<LabelElement, { type: 'table' }> =>
+          el.id === cell.tableId && el.type === 'table',
+      );
+      if (!tableEl) return;
+      const next = applyTableStructureAction(tableEl, action, cell.row, cell.col);
+      if (!next) return;
+      setElements(
+        (els) => els.map((el) => (el.id === cell.tableId ? { ...el, ...next, id: el.id, type: 'table' } : el)),
+        true,
+      );
+      const row = Math.min(cell.row, next.rowCount - 1);
+      const col = Math.min(cell.col, next.columnCount - 1);
+      commitSelectedTableCell({ tableId: cell.tableId, row, col });
+      setPanelOpen(true);
+      bottomPanelVisibleSv.value = 1;
+    },
+    [commitSelectedTableCell, setElements, bottomPanelVisibleSv],
+  );
+
+  const handleSelectWholeTable = useCallback(() => {
+    const cell = selectedTableCellRef.current;
+    if (!cell) return;
+    handleTableCellPress(cell.tableId, null, { forceClear: true });
+  }, [handleTableCellPress]);
 
   /** Stash the scan target before leaving so a remounted edit screen still fills the right cell. */
   const handleContentScanPress = useCallback(() => {
@@ -2579,9 +2633,19 @@ export default function EditScreen() {
         return;
       }
 
-      if (
-        !next.primaryId ||
-        next.primaryId !== selectedTableCellRef.current?.tableId
+      // Table touch: cell/line is resolved in onTableCellPress right after this. Clearing the
+      // cell here (or leaving the previous element's panel open) flashes the wrong menu.
+      const tableTouch = element.type === 'table' && source === 'touch';
+      if (!tableTouch) {
+        if (
+          !next.primaryId ||
+          next.primaryId !== selectedTableCellRef.current?.tableId
+        ) {
+          commitSelectedTableCell(null);
+        }
+      } else if (
+        selectedTableCellRef.current &&
+        selectedTableCellRef.current.tableId !== id
       ) {
         commitSelectedTableCell(null);
       }
@@ -2593,8 +2657,18 @@ export default function EditScreen() {
         docRef.current.elements.find((el) => el.id === next.primaryId) ?? element;
 
       // Lightweight open on touch-down — no ensurePanelMounted / full tab reset (those stall drag).
+      // Tables: panel opens from onTableCellPress after the hit is known (avoids table↔cell flash).
       if (!multipleMode) {
-        if (element.type === 'image') {
+        if (tableTouch) {
+          // Close a stale non-table panel so we don't show Table↔Text for one frame.
+          if (
+            panelOpen &&
+            (!selectedTableCellRef.current ||
+              selectedTableCellRef.current.tableId !== id)
+          ) {
+            setPanelOpen(false);
+          }
+        } else if (element.type === 'image') {
           setImageTab('Regular');
           setPanelOpen(true);
         } else if (element.type === 'clipart') {
@@ -2603,7 +2677,7 @@ export default function EditScreen() {
         } else {
           setPanelOpen(true);
         }
-      } else {
+      } else if (!tableTouch) {
         setPanelOpen(true);
       }
     },
@@ -4918,6 +4992,8 @@ export default function EditScreen() {
                 contentFocusRequest={activeCell ? focusRequest : 0}
                 panelScope="tableCell"
                 onScanPress={handleContentScanPress}
+                onTableStructureAction={handleTableStructureAction}
+                onSelectTable={handleSelectWholeTable}
               />
             </View>
           </View>

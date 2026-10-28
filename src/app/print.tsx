@@ -1,6 +1,6 @@
 import { goBack } from '@/lib/go-back';
 import { StatusChip } from '@/components/home/status-chip';
-import { JoshProgressCard } from '@/components/printers/josh-progress-card';
+import { PrintProgressCard } from '@/components/printers/print-progress-card';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon } from '@/components/app-icon';
@@ -79,7 +79,7 @@ import {
 import { serialPrintGate } from '@/lib/serial/symbology-validate';
 import { SERIAL_CONFIRM_ABOVE } from '@/lib/serial/types';
 import { joshStatusAlert } from '@/lib/printer/josh-status';
-import { useJoshProgressStore } from '@/stores/josh-progress-store';
+import { usePrintProgressStore } from '@/stores/print-progress-store';
 import { useSerialContinueStore } from '@/stores/serial-continue-store';
 import { useSerialJobStore } from '@/stores/serial-job-store';
 import { projectBulkDocument, resolveBulkSheet } from '@/lib/bulk-labels';
@@ -634,8 +634,8 @@ export default function PrintScreen() {
   const [collate, setCollate] = useState(false);
   const [printProgress, setPrintProgress] = useState<string | null>(null);
   // A boolean, not the text: the text changes with every printer event and would re-render this whole screen.
-  const joshProgressLine = useJoshProgressStore((s) => s.phase !== 'idle');
-  const joshStatusWarning = useJoshProgressStore((s) => joshStatusAlert(s.deviceStatus));
+  const printProgressActive = usePrintProgressStore((s) => s.phase !== 'idle');
+  const joshStatusWarning = usePrintProgressStore((s) => joshStatusAlert(s.deviceStatus));
   useEffect(() => {
     if (printerSdkId !== 'josh') return;
     return getPrinterManager().watchJoshStatus();
@@ -1265,7 +1265,7 @@ export default function PrintScreen() {
         const message = formatPrintFailure(error);
         haptics.error();
         // Josh's progress card already shows the failure.
-        if (message && useJoshProgressStore.getState().phase !== 'failed') Alert.alert('Print Failed', message);
+        if (message && usePrintProgressStore.getState().phase !== 'failed') Alert.alert('Print Failed', message);
       } finally {
         printingLockRef.current = false;
         setPrinting(false);
@@ -1554,10 +1554,10 @@ export default function PrintScreen() {
           console.info(
             `[print] label ${page} copy ${copyNumber} round ${round} total ${labelsCompleted}/${bulkPlan.totalPhysical} copies ${sendCopies}`,
           );
-          // Josh progress line: the app's own send count; the SDK events fill in the state of each send.
-          useJoshProgressStore.getState().setBulk(labelsCompleted + 1, bulkPlan.totalPhysical);
+          // Bulk line on the shared progress card; per-copy events fill in Sending/Printing/Done.
+          usePrintProgressStore.getState().setBulk(labelsCompleted + 1, bulkPlan.totalPhysical);
         } else {
-          useJoshProgressStore.getState().setBulk(null, null);
+          usePrintProgressStore.getState().setBulk(null, null);
         }
         const pageStart = Date.now();
         const cachedRow = bulkPlan ? rowRasters.get(page) : undefined;
@@ -2463,10 +2463,10 @@ export default function PrintScreen() {
               : serialRun
               ? `\n\nPrinted ${serialRun.cursor ? Math.min(serialRun.cursor.total, serialRun.cursor.nextIndex) : labelsCompleted} of ${pageCount} labels. Print again to continue where it stopped.`
               : '';
-        // Josh's progress card already shows the failure: add the count there instead of a second popup.
-        const joshCard = useJoshProgressStore.getState();
-        if (joshCard.phase === 'failed') {
-          if (sent) joshCard.fail(`${joshCard.failure ?? message}${sent}`);
+        // Progress card already shows the failure: add the count there instead of a second popup.
+        const progressCard = usePrintProgressStore.getState();
+        if (progressCard.phase === 'failed') {
+          if (sent) progressCard.fail(`${progressCard.failure ?? message}${sent}`);
         } else {
           Alert.alert('Print Failed', `${message}${sent}`);
         }
@@ -3072,8 +3072,8 @@ export default function PrintScreen() {
       </FormScrollView>
 
       {joshStatusWarning ? <Text style={styles.printerWarning}>{joshStatusWarning}</Text> : null}
-      <JoshProgressCard />
-      {!joshProgressLine && printProgress ? (
+      <PrintProgressCard />
+      {!printProgressActive && printProgress ? (
         <Text style={styles.printProgress}>{printProgress}</Text>
       ) : null}
       {printing && serialInfo && serialInfo.mode !== 'batch' ? (

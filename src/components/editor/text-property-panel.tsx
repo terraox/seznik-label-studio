@@ -258,6 +258,18 @@ type TextPropertyPanelProps = {
   panelScope?: 'element' | 'tableCell';
   /** Prefer this over the default /scan push so the editor can stash a scanConsumer first. */
   onScanPress?: () => void;
+  /** Position-tab structure actions when editing a table cell. */
+  onTableStructureAction?: (
+    action:
+      | 'insertRow'
+      | 'deleteRow'
+      | 'addRow'
+      | 'insertColumn'
+      | 'deleteColumn'
+      | 'addColumn',
+  ) => void;
+  /** Leave cell mode and show the whole-table property panel. */
+  onSelectTable?: () => void;
 };
 
 export function TextPropertyPanel({
@@ -272,6 +284,8 @@ export function TextPropertyPanel({
   contentFocusRequest = 0,
   panelScope = 'element',
   onScanPress,
+  onTableStructureAction,
+  onSelectTable,
 }: TextPropertyPanelProps) {
   useThemeRefresh();
   const isTableCell = panelScope === 'tableCell';
@@ -530,18 +544,83 @@ export function TextPropertyPanel({
 
         {activeTab === 'Position' && (
           <>
-            {!isTableCell ? positionSteppers : null}
-            {!isTableCell ? <SectionGap /> : null}
-            <PositionControls
-              left={state.left}
-              top={state.top}
-              width={state.width}
-              height={elementHeightMm}
-              labelWidthMm={labelWidthMm}
-              labelHeightMm={labelHeightMm}
-              textAlign={state.align}
-              onPatch={patch}
-            />
+            {isTableCell ? (
+              <>
+                <View style={styles.block}>
+                  <Text style={styles.rowLabel}>Cell Type</Text>
+                  <View style={styles.segmentRow}>
+                    {(['Text', 'Barcode', 'QRCode', 'Image'] as const).map((option) => {
+                      const active = option === 'Text';
+                      return (
+                        <Pressable
+                          key={option}
+                          onPress={() => {}}
+                          hitSlop={PRESS_HIT_SLOP}
+                          style={({ pressed }) => [
+                            styles.segmentChip,
+                            active && styles.segmentChipActive,
+                            pressed && styles.pressed,
+                            option !== 'Text' && styles.segmentChipDisabled,
+                          ]}>
+                          <Text
+                            style={[
+                              styles.segmentText,
+                              active && styles.segmentTextActive,
+                              option !== 'Text' && styles.segmentTextDisabled,
+                            ]}
+                            numberOfLines={1}>
+                            {option}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+                <SectionGap />
+                <View style={styles.structureGrid}>
+                  {(
+                    [
+                      ['Insert Row', 'insertRow'],
+                      ['Delete Row', 'deleteRow'],
+                      ['Add Row', 'addRow'],
+                      ['Insert Column', 'insertColumn'],
+                      ['Delete Column', 'deleteColumn'],
+                      ['Add Column', 'addColumn'],
+                    ] as const
+                  ).map(([label, action]) => (
+                    <Pressable
+                      key={action}
+                      onPress={() => onTableStructureAction?.(action)}
+                      hitSlop={PRESS_HIT_SLOP}
+                      style={({ pressed }) => [styles.structureChip, pressed && styles.pressed]}>
+                      <Text style={styles.structureChipText}>{label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <SectionGap />
+                <Pressable
+                  onPress={onSelectTable}
+                  hitSlop={PRESS_HIT_SLOP}
+                  style={({ pressed }) => [styles.structureFullRow, pressed && styles.pressed]}>
+                  <Text style={styles.structureChipText}>Select Table</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                {positionSteppers}
+                <SectionGap />
+                <PositionControls
+                  left={state.left}
+                  top={state.top}
+                  width={state.width}
+                  height={elementHeightMm}
+                  labelWidthMm={labelWidthMm}
+                  labelHeightMm={labelHeightMm}
+                  textAlign={state.align}
+                  onPatch={patch}
+                />
+              </>
+            )}
           </>
         )}
 
@@ -859,6 +938,44 @@ const styles = themedStyles((c) => ({
   },
   pressed: {
     opacity: 0.75,
+  },
+  segmentChipDisabled: {
+    opacity: 0.45,
+  },
+  segmentTextDisabled: {
+    color: c.textMuted,
+  },
+  structureGrid: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  structureChip: {
+    width: '31%',
+    flexGrow: 1,
+    minHeight: 44,
+    borderRadius: 8,
+    backgroundColor: c.fillStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  structureChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: c.textSecondary,
+    textAlign: 'center',
+  },
+  structureFullRow: {
+    marginHorizontal: 16,
+    minHeight: 44,
+    borderRadius: 8,
+    backgroundColor: c.fillStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   navRow: {
     minHeight: 52,

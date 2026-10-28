@@ -753,3 +753,22 @@ drawBitmapStream, drawBitmapStreamWithActualSize, drawBitmapStreamWithThreshold
 ```
 
 No `pause`, `resume`, or buffer/memory method. `IDzPrinter` also declares `cancel(int)`; `LPAPI.cancel()` is `cancel(256)` and `stopDiscovery()` is `cancel(131072)`.
+
+---
+
+## TD-404 live print progress (v1)
+
+App path: paced `PRINT 1` copies + poll `ESC ! ?` (`1B 21 3F`) until idle; events `START_COPY` / `DATA_ENDED` / `SUCCESS` / `FAILED` feed the shared `PrintProgressCard` (same UI as Josh). Silent status replies use a timed idle wait and log `[td404-progress] status-fallback`.
+
+**Cancel mid-job:** out of scope for v1. Follow-up candidates from this doc: write TSPL `ESC !.` (cancel all printing files), or close the SPP socket. Neither is wired from the progress modal yet.
+
+### Hardware checklist (log-driven)
+
+Run on a real TD-404 (Tejas or Rudra), logcat filter `td404-progress`:
+
+1. Single-copy print: card shows Sending → Printing → Print completed; one label out.
+2. Multi-copy (e.g. 5): count advances `1/5` … `5/5`; paper count matches; after copy 1, later copies are `PRINT 1` only (no full re-raster).
+3. Status bit probe: between copies, logs show `printing=true` then `printing=false`. If every query is empty, confirm `status-fallback` and that the count still advances.
+4. Paper-out / lid open mid-job: card shows FAILED with a clear reason; remaining copies are not sent.
+5. Excel bulk: card shows `Label i of n · Printing` while each row’s copies pace.
+6. Regression: Josh progress card unchanged on a Josh printer.
