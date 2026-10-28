@@ -1526,8 +1526,9 @@ function TableContent({
                 paddingVertical: Math.max(0, scale * 0.2),
               },
               selected && {
-                backgroundColor: `${tableSelectionColor}99`,
-                borderWidth: Math.max(1, scale * 0.15),
+                // Opaque-enough fill so the selected cell reads clearly on white stock.
+                backgroundColor: `${tableSelectionColor}80`,
+                borderWidth: Math.max(2, scale * 0.25),
                 borderColor: tableSelectionColor,
               },
               cell && dataColumnHighlightStyle(cell, highlightColumnName),

@@ -115,6 +115,72 @@ export function pointerMmToTableLocal(
   };
 }
 
+/** Cumulative 0..1 positions of every horizontal (row) grid line, including outer edges. */
+export function tableRowLineFractions(table: TableElementState): number[] {
+  const totalRow =
+    table.rowHeights.reduce((sum, h) => sum + h, 0) || table.height || table.rowCount;
+  const lines = [0];
+  let y = 0;
+  for (let r = 0; r < table.rowCount; r++) {
+    y += (table.rowHeights[r] ?? totalRow / table.rowCount) / totalRow;
+    lines.push(r === table.rowCount - 1 ? 1 : y);
+  }
+  return lines;
+}
+
+/** Cumulative 0..1 positions of every vertical (column) grid line, including outer edges. */
+export function tableColumnLineFractions(table: TableElementState): number[] {
+  const totalCol =
+    table.columnWidths.reduce((sum, w) => sum + w, 0) || table.width || table.columnCount;
+  const lines = [0];
+  let x = 0;
+  for (let c = 0; c < table.columnCount; c++) {
+    x += (table.columnWidths[c] ?? totalCol / table.columnCount) / totalCol;
+    lines.push(c === table.columnCount - 1 ? 1 : x);
+  }
+  return lines;
+}
+
+/**
+ * Finger-friendly half-width around a grid line, as a fraction of the table box.
+ * Prefers ~2 mm / stroke thickness, floors at ~10 px when the view size is known,
+ * and caps so small cells keep a usable interior.
+ */
+export function tableLineToleranceFractions(
+  table: TableElementState,
+  viewWidthPx?: number,
+  viewHeightPx?: number,
+): { tx: number; ty: number } {
+  const lineMm = Math.max(0.25, table.lineWidth || 0.75);
+  const tolMm = Math.max(lineMm * 2, 2);
+  let tx = tolMm / Math.max(table.width, 1);
+  let ty = tolMm / Math.max(table.height, 1);
+  // Keep a ~10 px finger target even when the table is small on screen.
+  if (viewWidthPx != null && viewWidthPx > 0) tx = Math.max(tx, 10 / viewWidthPx);
+  if (viewHeightPx != null && viewHeightPx > 0) ty = Math.max(ty, 10 / viewHeightPx);
+  // Leave room to tap cell content even on dense tables.
+  const maxFrac = Math.min(0.18, 0.35 / Math.max(table.rowCount, table.columnCount, 1));
+  return { tx: Math.min(tx, maxFrac), ty: Math.min(ty, maxFrac) };
+}
+
+/** True when the point sits on (or near) a drawn grid / border line. */
+export function isNearTableGridLineByFraction(
+  table: TableElementState,
+  fracX: number,
+  fracY: number,
+  tolerance?: { tx: number; ty: number },
+): boolean {
+  if (fracX < 0 || fracY < 0 || fracX > 1 || fracY > 1) return false;
+  const { tx, ty } = tolerance ?? tableLineToleranceFractions(table);
+  for (const x of tableColumnLineFractions(table)) {
+    if (Math.abs(fracX - x) <= tx) return true;
+  }
+  for (const y of tableRowLineFractions(table)) {
+    if (Math.abs(fracY - y) <= ty) return true;
+  }
+  return false;
+}
+
 /**
  * Map a fraction of the table box (0..1) onto a cell, using the same
  * rowHeights/columnWidths proportions as TableContent rendering.
@@ -155,6 +221,28 @@ export function hitTestTableCellByFraction(
 }
 
 /**
+ * Point-sensitive table target: grid/border lines open the table adjust menu;
+ * the cell interior opens the text-content menu.
+ */
+export type TablePointerTarget =
+  | { kind: 'cell'; row: number; col: number }
+  | { kind: 'line' };
+
+export function hitTestTableTargetByFraction(
+  table: TableElementState,
+  fracX: number,
+  fracY: number,
+  tolerance?: { tx: number; ty: number },
+): TablePointerTarget | null {
+  if (fracX < 0 || fracY < 0 || fracX > 1 || fracY > 1) return null;
+  if (isNearTableGridLineByFraction(table, fracX, fracY, tolerance)) {
+    return { kind: 'line' };
+  }
+  const cell = hitTestTableCellByFraction(table, fracX, fracY);
+  return cell ? { kind: 'cell', row: cell.row, col: cell.col } : null;
+}
+
+/**
  * Touch point inside the table view. Gesture x/y are already in that view's
  * local space (rotation is applied by the parent transform), so this must not
  * un-rotate again.
@@ -171,6 +259,23 @@ export function hitTestTableCellFromViewPoint(
   return hitTestTableCellByFraction(table, viewX / viewWidthPx, viewY / viewHeightPx);
 }
 
+export function hitTestTableTargetFromViewPoint(
+  table: TableElementState,
+  viewX: number,
+  viewY: number,
+  viewWidthPx: number,
+  viewHeightPx: number,
+): TablePointerTarget | null {
+  if (!(viewWidthPx > 0) || !(viewHeightPx > 0)) return null;
+  const tol = tableLineToleranceFractions(table, viewWidthPx, viewHeightPx);
+  return hitTestTableTargetByFraction(
+    table,
+    viewX / viewWidthPx,
+    viewY / viewHeightPx,
+    tol,
+  );
+}
+
 export function hitTestTableCell(
   table: TableElementState,
   localXMm: number,
@@ -182,6 +287,19 @@ export function hitTestTableCell(
   const fracX = table.width > 0 ? localXMm / table.width : 0;
   const fracY = table.height > 0 ? localYMm / table.height : 0;
   return hitTestTableCellByFraction(table, fracX, fracY);
+}
+
+export function hitTestTableTarget(
+  table: TableElementState,
+  localXMm: number,
+  localYMm: number,
+): TablePointerTarget | null {
+  if (localXMm < 0 || localYMm < 0 || localXMm > table.width || localYMm > table.height) {
+    return null;
+  }
+  const fracX = table.width > 0 ? localXMm / table.width : 0;
+  const fracY = table.height > 0 ? localYMm / table.height : 0;
+  return hitTestTableTargetByFraction(table, fracX, fracY, tableLineToleranceFractions(table));
 }
 
 export function tableCellToEditorState(

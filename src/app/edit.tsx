@@ -111,6 +111,7 @@ import {
   type NormalizedCrop,
 } from '@/lib/editor/image-crop-math';
 import {
+  createDefaultTableCell,
   ensureTableCells,
   patchTableCellInElement,
   tableCellToEditorState,
@@ -1878,14 +1879,18 @@ export default function EditScreen() {
           );
           return;
         }
+        const prev = selectedTableCellRef.current;
         commitSelectedTableCell({ tableId, row: cell.row, col: cell.col });
-        setTextTab('Regular');
+        // Only reset tabs when entering cell mode from the table menu — keep Content/Font
+        // while hopping between cells so the panel does not reload on every tap.
+        if (!prev || prev.tableId !== tableId) setTextTab('Regular');
         console.log(
           `[table-cell] select-highlight tableId=${tableId} row=${cell.row} col=${cell.col} panel=TextPropertyPanel`,
         );
       } else {
+        const hadCell = selectedTableCellRef.current != null;
         commitSelectedTableCell(null);
-        setTableTab('Regular');
+        if (hadCell) setTableTab('Regular');
         console.log(`[table-cell] clear-cell tableId=${tableId} panel=TablePropertyPanel`);
       }
       topBarSelectionVisibleSv.value = 1;
@@ -1894,6 +1899,27 @@ export default function EditScreen() {
     },
     [commitSelectedTableCell, topBarSelectionVisibleSv, bottomPanelVisibleSv],
   );
+
+  /** Stash the scan target before leaving so a remounted edit screen still fills the right cell. */
+  const handleContentScanPress = useCallback(() => {
+    const cell = selectedTableCellRef.current;
+    if (cell) {
+      editorBridge.scanConsumer = {
+        kind: 'tableCell',
+        tableId: cell.tableId,
+        row: cell.row,
+        col: cell.col,
+      };
+    } else if (selectedIdsRef.current.length === 1) {
+      editorBridge.scanConsumer = {
+        kind: 'element',
+        elementId: selectedIdsRef.current[0],
+      };
+    } else {
+      editorBridge.scanConsumer = null;
+    }
+    router.push({ pathname: '/scan', params: { from: 'edit' } });
+  }, []);
 
   const handleTableCellQuickEdit = useCallback(
     (tableId: string, cell: { row: number; col: number }, anchorRect?: ElementAnchorRect) => {
@@ -3697,22 +3723,42 @@ export default function EditScreen() {
       }
 
       const applyCapture = (kind: 'Text' | 'Barcode' | 'QRCode', data: string, encodeMode?: string) => {
+        // Prefer the stashed scanConsumer (survives remount), then the live cell selection.
+        const consumer = editorBridge.scanConsumer;
+        editorBridge.scanConsumer = null;
+        const cellTarget: SelectedTableCell | null =
+          consumer?.kind === 'tableCell'
+            ? { tableId: consumer.tableId, row: consumer.row, col: consumer.col }
+            : selectedTableCellRef.current;
+        const preferredElementId =
+          consumer?.kind === 'element' ? consumer.elementId : null;
+
         // A table cell only ever holds text, so a decoded scan lands as plain Manual
         // content there — never as a barcode/QR graphic, whatever the symbology was.
-        const cellTarget = selectedTableCellRef.current;
         if (cellTarget) {
           const written = patchTableCellAt(cellTarget, { text: data, contentType: 'Manual' });
           console.log(
             `[table-cell] scan-write kind=${kind} target=${JSON.stringify(cellTarget)} textLen=${data.length} written=${written} as=Manual-text`,
           );
           if (written) {
+            // Restore selection chrome after /scan (edit may have remounted).
+            selectedIdsRef.current = [cellTarget.tableId];
+            primaryIdRef.current = cellTarget.tableId;
+            setSelectedIds([cellTarget.tableId]);
+            setPrimaryId(cellTarget.tableId);
+            commitSelectedTableCell(cellTarget);
+            activeSelectedIdSv.value = cellTarget.tableId;
+            topBarSelectionVisibleSv.value = 1;
+            bottomPanelVisibleSv.value = 1;
             setTextTab('Content');
             setPanelOpen(true);
             return;
           }
         }
         // A scan into a selected barcode / QR code updates its value instead of adding another.
-        const pickedId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+        const pickedId =
+          preferredElementId ??
+          (selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null);
         const picked =
           pickedId != null ? docRef.current.elements.find((el) => el.id === pickedId) : undefined;
         if (kind === 'QRCode' && picked?.type === 'qrcode') {
@@ -3946,8 +3992,12 @@ export default function EditScreen() {
       patchElement,
       setElements,
       patchTableCellAt,
+      commitSelectedTableCell,
       placeIngestedImageOnCanvas,
       applyCroppedImageToElement,
+      activeSelectedIdSv,
+      topBarSelectionVisibleSv,
+      bottomPanelVisibleSv,
     ]),
   );
 
@@ -4297,11 +4347,28 @@ export default function EditScreen() {
         void importExcelFromCanvas();
         break;
       case 'Scan':
-        router.push({ pathname: '/scan', params: { from: 'edit' } });
+        handleContentScanPress();
         break;
-      case 'OCR':
+      case 'OCR': {
+        const cell = selectedTableCellRef.current;
+        if (cell) {
+          editorBridge.scanConsumer = {
+            kind: 'tableCell',
+            tableId: cell.tableId,
+            row: cell.row,
+            col: cell.col,
+          };
+        } else if (selectedIdsRef.current.length === 1) {
+          editorBridge.scanConsumer = {
+            kind: 'element',
+            elementId: selectedIdsRef.current[0],
+          };
+        } else {
+          editorBridge.scanConsumer = null;
+        }
         router.push({ pathname: '/ocr', params: { from: 'edit' } });
         break;
+      }
       case 'Line Emoji':
         clipartReplaceIdRef.current = null;
         clipartPendingPlacementRef.current = null;
@@ -4714,6 +4781,7 @@ export default function EditScreen() {
             labelHeightMm={labelBounds.heightMm}
             elementHeightMm={selectedElementHeightMm}
             contentFocusRequest={focusRequest}
+            onScanPress={handleContentScanPress}
           />
         );
       case 'barcode':
@@ -4775,35 +4843,48 @@ export default function EditScreen() {
           selectedTableCell.col < table.columnCount
             ? selectedTableCell
             : null;
-        if (activeCell) {
-          const cell = table.cells![activeCell.row][activeCell.col];
-          const cellState = tableCellToEditorState(cell, table, activeCell.row, activeCell.col);
-          const cellHeightMm = table.rowHeights[activeCell.row] ?? table.height / table.rowCount;
-          return (
-            <TextPropertyPanel
-              activeTab={textTab}
-              onTabChange={setTextTab}
-              state={cellState}
-              patch={patchTableCellSelected}
-              onColumnNamePress={handleColumnNamePress}
-              labelWidthMm={labelBounds.widthMm}
-              labelHeightMm={labelBounds.heightMm}
-              elementHeightMm={cellHeightMm}
-              contentFocusRequest={focusRequest}
-              panelScope="tableCell"
-            />
-          );
-        }
+        // Keep both panels mounted so line↔cell taps do not cold-mount the menu each time.
+        const cell =
+          activeCell != null
+            ? table.cells![activeCell.row][activeCell.col]
+            : createDefaultTableCell();
+        const cellRow = activeCell?.row ?? 0;
+        const cellCol = activeCell?.col ?? 0;
+        const cellState = tableCellToEditorState(cell, table, cellRow, cellCol);
+        const cellHeightMm = table.rowHeights[cellRow] ?? table.height / table.rowCount;
         return (
-          <TablePropertyPanel
-            activeTab={tableTab}
-            onTabChange={setTableTab}
-            state={targetEl}
-            patch={patchSelected}
-            labelWidthMm={labelBounds.widthMm}
-            labelHeightMm={labelBounds.heightMm}
-            elementHeightMm={selectedElementHeightMm}
-          />
+          <View style={{ flex: 1, minHeight: 0 }}>
+            <View
+              style={activeCell ? panelSlotHidden : panelSlotVisible}
+              pointerEvents={activeCell ? 'none' : 'auto'}>
+              <TablePropertyPanel
+                activeTab={tableTab}
+                onTabChange={setTableTab}
+                state={targetEl}
+                patch={patchSelected}
+                labelWidthMm={labelBounds.widthMm}
+                labelHeightMm={labelBounds.heightMm}
+                elementHeightMm={selectedElementHeightMm}
+              />
+            </View>
+            <View
+              style={activeCell ? panelSlotVisible : panelSlotHidden}
+              pointerEvents={activeCell ? 'auto' : 'none'}>
+              <TextPropertyPanel
+                activeTab={textTab}
+                onTabChange={setTextTab}
+                state={cellState}
+                patch={patchTableCellSelected}
+                onColumnNamePress={handleColumnNamePress}
+                labelWidthMm={labelBounds.widthMm}
+                labelHeightMm={labelBounds.heightMm}
+                elementHeightMm={cellHeightMm}
+                contentFocusRequest={activeCell ? focusRequest : 0}
+                panelScope="tableCell"
+                onScanPress={handleContentScanPress}
+              />
+            </View>
+          </View>
         );
       }
       case 'time':

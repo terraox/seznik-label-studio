@@ -256,6 +256,8 @@ type TextPropertyPanelProps = {
   contentFocusRequest?: number;
   /** Table cell editor: hide table/element chrome, keep text + scan controls. */
   panelScope?: 'element' | 'tableCell';
+  /** Prefer this over the default /scan push so the editor can stash a scanConsumer first. */
+  onScanPress?: () => void;
 };
 
 export function TextPropertyPanel({
@@ -269,6 +271,7 @@ export function TextPropertyPanel({
   elementHeightMm,
   contentFocusRequest = 0,
   panelScope = 'element',
+  onScanPress,
 }: TextPropertyPanelProps) {
   useThemeRefresh();
   const isTableCell = panelScope === 'tableCell';
@@ -277,8 +280,12 @@ export function TextPropertyPanel({
     'degreesOffset' in state && typeof state.degreesOffset === 'number' ? state.degreesOffset : 1;
 
   const openScan = useCallback(() => {
+    if (onScanPress) {
+      onScanPress();
+      return;
+    }
     router.push({ pathname: '/scan', params: { from: 'edit' } });
-  }, []);
+  }, [onScanPress]);
 
   useEffect(() => {
     if (contentFocusRequest > 0 && activeTab === 'Content') {

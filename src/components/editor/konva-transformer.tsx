@@ -20,10 +20,11 @@ import { type LiveRulerBounds } from '@/components/canvas-rulers';
 import { ElementContentView, type LiveTextBank } from '@/components/editor/element-renderer';
 import {
   ensureTableCells,
-  hitTestTableCell,
-  hitTestTableCellFromViewPoint,
+  hitTestTableTarget,
+  hitTestTableTargetFromViewPoint,
   pointerMmToTableLocal,
   sameTableCellSelection,
+  type TablePointerTarget,
 } from '@/lib/editor/table-cells';
 import { elementSizeMm, type LabelElement, type MediaShape } from '@/lib/label-document';
 import { clampToLabelBounds } from '@/lib/editor/label-bounds';
@@ -958,13 +959,13 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     lastTapViewRef.current = { x, y };
   }, []);
 
-  const resolveTableCellHitJS = useCallback(
+  const resolveTableTargetHitJS = useCallback(
     (
       viewX?: number,
       viewY?: number,
       windowX?: number,
       windowY?: number,
-    ): { row: number; col: number } | null => {
+    ): TablePointerTarget | null => {
       if (element.type !== 'table') return null;
       const box = elementBoxRef.current;
       const table = ensureTableCells({
@@ -977,7 +978,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       const vx = Number.isFinite(viewX) ? viewX! : lastTapViewRef.current.x;
       const vy = Number.isFinite(viewY) ? viewY! : lastTapViewRef.current.y;
       if (Number.isFinite(vx) && Number.isFinite(vy) && baseWidthPx > 0 && baseHeightPx > 0) {
-        const hit = hitTestTableCellFromViewPoint(table, vx, vy, baseWidthPx, baseHeightPx);
+        const hit = hitTestTableTargetFromViewPoint(table, vx, vy, baseWidthPx, baseHeightPx);
         if (hit) return hit;
       }
       const wx = Number.isFinite(windowX) ? windowX! : lastTapAbsRef.current.x;
@@ -985,19 +986,38 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       const pt = pointerToMmRef.current?.(wx, wy);
       if (!pt) return null;
       const local = pointerMmToTableLocal(table, pt);
-      return hitTestTableCell(table, local.x, local.y);
+      return hitTestTableTarget(table, local.x, local.y);
     },
     [element, baseWidthPx, baseHeightPx],
+  );
+
+  /** Apply table vs cell menu from the finger point (lines → table adjust, interior → cell text). */
+  const applyTablePointerHitJS = useCallback(
+    (
+      viewX?: number,
+      viewY?: number,
+      windowX?: number,
+      windowY?: number,
+    ): TablePointerTarget | null => {
+      if (element.type !== 'table' || !callbacksRef.current.onTableCellPress) return null;
+      const hit = resolveTableTargetHitJS(viewX, viewY, windowX, windowY);
+      if (!hit) return null;
+      if (hit.kind === 'line') {
+        callbacksRef.current.onTableCellPress(element.id, null);
+      } else {
+        callbacksRef.current.onTableCellPress(element.id, { row: hit.row, col: hit.col });
+      }
+      return hit;
+    },
+    [element.id, element.type, resolveTableTargetHitJS],
   );
 
   /** Highlight the cell under the finger on touch-down, before the gesture ends. */
   const highlightTableCellJS = useCallback(
     (viewX?: number, viewY?: number, windowX?: number, windowY?: number) => {
-      if (element.type !== 'table' || !callbacksRef.current.onTableCellPress) return;
-      const hit = resolveTableCellHitJS(viewX, viewY, windowX, windowY);
-      if (hit) callbacksRef.current.onTableCellPress(element.id, hit);
+      applyTablePointerHitJS(viewX, viewY, windowX, windowY);
     },
-    [element.id, element.type, resolveTableCellHitJS],
+    [applyTablePointerHitJS],
   );
 
   const notifyGroupResizeHandleBeginJS = useCallback(
@@ -1040,15 +1060,21 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 
     const openWithAnchor = (anchor?: ElementAnchorRect) => {
       if (element.type === 'table') {
-        const hit = resolveTableCellHitJS(viewX, viewY, windowX, windowY);
+        const hit = resolveTableTargetHitJS(viewX, viewY, windowX, windowY);
         console.log(
-          `[table-cell] double-tap tableId=${element.id} view=${viewX},${viewY} window=${windowX},${windowY} hit=${JSON.stringify(hit)} handler=${hit ? 'per-cell-quick-edit' : 'whole-table-onOpenPanel'}`,
+          `[table-cell] double-tap tableId=${element.id} view=${viewX},${viewY} window=${windowX},${windowY} hit=${JSON.stringify(hit)} handler=${hit?.kind === 'cell' ? 'per-cell-quick-edit' : 'whole-table-onOpenPanel'}`,
         );
-        if (hit && callbacksRef.current.onTableCellQuickEdit) {
-          callbacksRef.current.onTableCellPress?.(element.id, hit);
-          callbacksRef.current.onTableCellQuickEdit(element.id, hit, anchor);
+        if (hit?.kind === 'cell' && callbacksRef.current.onTableCellQuickEdit) {
+          callbacksRef.current.onTableCellPress?.(element.id, { row: hit.row, col: hit.col });
+          callbacksRef.current.onTableCellQuickEdit(
+            element.id,
+            { row: hit.row, col: hit.col },
+            anchor,
+          );
           return;
         }
+        // Grid/border lines (or unknown) keep the table adjust panel — not cell text.
+        callbacksRef.current.onTableCellPress?.(element.id, null);
         callbacksRef.current.onOpenPanel(element.id);
         return;
       }
@@ -1083,7 +1109,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       openWithAnchor();
     }
   },
-  [element.id, element.type, lastTapTimeSv, cancelPendingRemoveJS, resolveTableCellHitJS],
+  [element.id, element.type, lastTapTimeSv, cancelPendingRemoveJS, resolveTableTargetHitJS],
   );
 
   const triggerSingleTapJS = useCallback(
@@ -1103,13 +1129,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
     }
 
     if (element.type === 'table' && callbacksRef.current.onTableCellPress) {
-      const hit = resolveTableCellHitJS(viewX, viewY, windowX, windowY);
+      const hit = applyTablePointerHitJS(viewX, viewY, windowX, windowY);
       console.log(
         `[table-cell] single-tap tableId=${element.id} wasSelected=${wasSelectedAtTouchRef.current} view=${viewX},${viewY} window=${windowX},${windowY} computedHit=${JSON.stringify(hit)}`,
       );
-      if (hit) {
-        callbacksRef.current.onTableCellPress(element.id, hit);
-      }
       return;
     }
 
@@ -1123,7 +1146,7 @@ export const KonvaTransformer = memo(function KonvaTransformer({
       }, DOUBLE_TAP_MAX_GAP_MS);
     }
   },
-  [element.id, element.type, triggerDoubleTapJS, cancelPendingRemoveJS, resolveTableCellHitJS],
+  [element.id, element.type, triggerDoubleTapJS, cancelPendingRemoveJS, applyTablePointerHitJS],
   );
 
   const bodyDragGesture = useMemo(() => {
