@@ -129,12 +129,6 @@ export const PDF_WALKTHROUGHS: Record<PdfTourScreen, readonly WalkthroughStep[]>
       body: 'Change print darkness, speed, gap and position. Leave these on Auto unless your print looks too light, too dark or off-center.',
     },
     {
-      id: 'export',
-      target: 'pdf.export',
-      title: 'Export',
-      body: 'Save the edited PDF to share or keep, without printing.',
-    },
-    {
       id: 'print',
       target: 'pdf.print',
       title: 'Print',
