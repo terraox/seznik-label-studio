@@ -27,6 +27,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "env": {
         "APP_VARIANT": "preview",
         "EXPO_PUBLIC_API_URL": "https://api2.seznik.in"
@@ -40,6 +41,7 @@
     },
     "production": {
       "distribution": "internal",
+      "channel": "production",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api2.seznik.in"
       },
