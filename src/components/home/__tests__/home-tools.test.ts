@@ -18,6 +18,7 @@ const LEGACY_HOME_HREFS = [
   '/excel-print',
   '/pdf',
   '/ecommerce-label',
+  '/new-label-setup?printImage=1',
   '/new-label-setup?serialEditor=1',
 ];
 
@@ -51,9 +52,9 @@ test('every tool either links somewhere or runs an action', () => {
   }
 });
 
-test('Image tile picks a photo for Print Image', () => {
+test('Image tile asks for the label size first', () => {
   const tool: HomeTool = HOME_TOOLS.printImage;
-  assert.equal(tool.action, 'pickImage');
+  assert.equal(tool.href, '/new-label-setup?printImage=1');
   assert.ok(FILE_TOOLS.includes('printImage'));
 });
 

@@ -49,12 +49,13 @@ export default function SerialInfoScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const params = useLocalSearchParams<{ name?: string; widthMm?: string; heightMm?: string }>();
+  const params = useLocalSearchParams<{ name?: string; widthMm?: string; heightMm?: string; shape?: string }>();
   const defaults = useSettingsStore((s) => s.defaults);
   const upsertDocument = useLabelStore((s) => s.upsertDocument);
 
   const size = clampLabelMm(Number(firstParam(params.widthMm)) || 50, Number(firstParam(params.heightMm)) || 30);
   const name = firstParam(params.name) || 'Serial labels';
+  const circle = firstParam(params.shape) === 'circle';
 
   const [sample, setSample] = useState(DEFAULT_SERIAL_INFO.sample);
   const [count, setCount] = useState(String(DEFAULT_SERIAL_INFO.count));
@@ -78,6 +79,7 @@ export default function SerialInfoScreen() {
         orientation: defaults.orientation,
         paperType: defaults.paperType,
         autoWrap: defaults.autoWrap,
+        circle,
         options: {
           sample: sample.trim() || DEFAULT_SERIAL_INFO.sample,
           count: countOk ? countNum : 1,
@@ -89,7 +91,7 @@ export default function SerialInfoScreen() {
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [name, size.widthMm, size.heightMm, sample, countNum, countOk, step, showText, showBarcode, showQr, barcodeType],
+    [name, circle, size.widthMm, size.heightMm, sample, countNum, countOk, step, showText, showBarcode, showQr, barcodeType],
   );
 
   const total = countOk ? countNum : 1;

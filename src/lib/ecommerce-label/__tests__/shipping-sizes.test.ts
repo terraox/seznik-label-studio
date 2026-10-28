@@ -22,8 +22,13 @@ test('4 × 6 in is exactly 100 × 150 mm and comes first', () => {
   assert.equal(first.height, 150);
 });
 
-test('every size is a whole number of millimetres', () => {
+test('every size is a whole number of millimetres, close to its inch size', () => {
   for (const p of SHIPPING_SIZE_PRESETS) {
     assert.ok(Number.isInteger(p.width) && Number.isInteger(p.height), p.name);
+    if (p.inch) {
+      // Nominal sizes: 4 × 6 in is 100 × 150 mm, 3 × 5 in is 75 × 125 mm.
+      assert.ok(Math.abs(p.inch[0] * 25.4 - p.width) < 2.5, p.name);
+      assert.ok(Math.abs(p.inch[1] * 25.4 - p.height) < 2.5, p.name);
+    }
   }
 });

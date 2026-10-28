@@ -1,6 +1,6 @@
 import type { WalkthroughStep } from '@/lib/walkthrough/home-steps';
 
-export type PdfTourScreen = 'pick' | 'size' | 'edit' | 'print';
+export type PdfTourScreen = 'pick' | 'presize' | 'size' | 'edit' | 'print';
 
 /**
  * Print PDF tours, one per screen. Each shows the first time that screen opens;
@@ -18,6 +18,21 @@ export const PDF_WALKTHROUGHS: Record<PdfTourScreen, readonly WalkthroughStep[]>
       target: 'pdf.import',
       title: 'Choose what to print',
       body: 'Shipping labels crop Amazon, Flipkart or Meesho PDFs for you. Print PDF opens any other file so you can set the size and crop yourself.',
+    },
+  ],
+  presize: [
+    {
+      id: 'size',
+      target: 'pdf.size',
+      scrolls: true,
+      title: 'Set the label size',
+      body: 'Choose the size of your sticker first. Pick a ready size or type your own width and height.',
+    },
+    {
+      id: 'next',
+      target: 'pdf.next',
+      title: 'Choose your PDF',
+      body: 'Tap Continue to pick the PDF. It opens ready to edit at this size.',
     },
   ],
   size: [

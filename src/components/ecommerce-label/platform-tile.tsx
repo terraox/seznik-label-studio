@@ -51,7 +51,7 @@ export function PlatformTile({
             {SOURCE[id]}
           </Text>
         </View>
-        <AppIcon name="chevron.right" size={18} tintColor={C.textMuted} />
+        <AppIcon name="chevron.right" size={16} tintColor={C.accent} />
       </Pressable>
     </View>
   );
@@ -73,8 +73,8 @@ const styles = themedStyles((c, scheme) => ({
     overflow: 'hidden',
   },
   logoWrap: {
-    width: 64,
-    height: 64,
+    width: 68,
+    height: 68,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
@@ -83,7 +83,7 @@ const styles = themedStyles((c, scheme) => ({
   },
   logo: { width: '100%', height: '100%' },
   text: { flex: 1, minWidth: 0, gap: 2 },
-  name: { fontSize: 17, fontWeight: '700', color: c.text },
+  name: { fontSize: 18, fontWeight: '700', color: c.text },
   source: { fontSize: 13, lineHeight: 18, color: c.textMuted },
   pressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
 }));

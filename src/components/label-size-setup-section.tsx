@@ -33,9 +33,9 @@ export type LabelSizePreset = {
   label?: string;
 };
 
+/** The unit switch on shipping sizes: millimetres first, then inches. */
 const UNIT_OPTIONS: { id: LabelUnit; label: string }[] = [
   { id: 'mm', label: 'mm' },
-  { id: 'cm', label: 'cm' },
   { id: 'in', label: 'in' },
 ];
 
@@ -144,11 +144,12 @@ export function LabelSizeSetupSection({
           {presets.map((p) => {
             const active =
               Math.abs(widthMm - p.width) < 0.1 && Math.abs(heightMm - p.height) < 0.1;
-            const title = p.name ?? p.label ?? '';
             const sizeLine =
               unit === 'in' && p.inch
                 ? `${p.inch[0]} × ${p.inch[1]} in`
                 : `${formatDimension(p.width, unit)} × ${formatDimension(p.height, unit)} ${unitSuffix(unit)}`;
+            // With the unit switch each chip reads in the chosen unit only: mm or inches, never both.
+            const title = unitSwitch ? sizeLine : p.name ?? p.label ?? '';
             return (
               <Pressable
                 key={title}
@@ -161,11 +162,6 @@ export function LabelSizeSetupSection({
                   numberOfLines={1}>
                   {title}
                 </Text>
-                {unitSwitch && p.name ? (
-                  <Text style={styles.presetChipSub} numberOfLines={1}>
-                    {sizeLine}
-                  </Text>
-                ) : null}
               </Pressable>
             );
           })}
@@ -340,16 +336,10 @@ const styles = themedStyles((c, scheme) => ({
     borderColor: c.accent,
   },
   presetChipText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: c.textSecondary,
     lineHeight: 16,
-    textAlign: 'center',
-  },
-  presetChipSub: {
-    fontSize: 10,
-    color: c.textMuted,
-    lineHeight: 13,
     textAlign: 'center',
   },
   presetChipTextActive: {

@@ -1,3 +1,4 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { goBack } from '@/lib/go-back';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -308,7 +309,7 @@ export default function ExcelPrintScreen() {
                   accessibilityLabel={`Use saved setup ${setup.name}`}
                   style={({ pressed }) => [styles.setupMain, pressed && styles.pressed]}>
                   <View style={styles.setupIcon}>
-                    <AppIcon name="bolt.fill" tintColor={C.accent} size={18} />
+                    <MaterialCommunityIcons name="file-excel-outline" color={C.accent} size={20} />
                   </View>
                   <View style={styles.setupText}>
                     <Text style={styles.setupName} numberOfLines={1}>

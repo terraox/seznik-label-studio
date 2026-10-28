@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } f
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
+import { PlatformHero, PlatformSteps } from '@/components/ecommerce-label/platform-hero';
 import { PlatformTile } from '@/components/ecommerce-label/platform-tile';
 import { LabelPreview } from '@/components/ecommerce-label/label-preview';
 import { SamplePdfModal } from '@/components/ecommerce-label/sample-pdf-modal';
@@ -13,7 +14,6 @@ import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor
 import { PrintPagesStrip, type PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
 import { PdfOutputSizeRow } from '@/components/pdf-editor/pdf-output-size-row';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
-import { androidRipple } from '@/constants/ui';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import {
   printItems,
@@ -283,33 +283,10 @@ export default function EcommerceLabelScreen() {
 
       {step === 'platform' ? (
         <FormScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.hero}>
-            <View style={styles.heroTop}>
-              <View style={styles.heroBadge}>
-                <Ionicons name="print-outline" size={24} color={C.onAccent} />
-              </View>
-              <View style={styles.cardText}>
-                <Text style={styles.heroTitle}>Print marketplace labels</Text>
-                <Text style={styles.heroSub}>
-                  Crop the shipping label from your PDF and print it on your label roll.
-                </Text>
-              </View>
-            </View>
-            <View style={styles.flow}>
-              {['Choose platform', 'Upload PDF', 'Preview & print'].map((label, i) => (
-                <View key={label} style={styles.flowItem}>
-                  <View style={styles.flowDot}>
-                    <Text style={styles.flowNum}>{i + 1}</Text>
-                  </View>
-                  <Text style={styles.flowText} numberOfLines={1}>
-                    {label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
+          <PlatformHero />
+          <PlatformSteps />
 
-          <Text style={styles.heading}>Choose your platform</Text>
+          <Text style={styles.sectionLabel}>Choose your platform</Text>
           <View style={styles.tiles}>
             {PLATFORMS.map((p) => (
               <PlatformTile
@@ -325,21 +302,18 @@ export default function EcommerceLabelScreen() {
           </View>
 
           <View style={styles.note}>
-            <View style={styles.noteBar} />
-            <View style={styles.cardText}>
-              <Text style={styles.noteTitle}>Upload the PDF you downloaded</Text>
-              <Text style={styles.noteBody}>
-                Use the label PDF exactly as downloaded from your seller panel. A PDF saved again with
-                Ctrl+P, the browser Print dialog, System Print or Save as PDF, a screenshot or a photo
-                may not work.
-              </Text>
-            </View>
+            <Ionicons name="information-circle" size={18} color={C.warning} />
+            <Text style={styles.noteBody}>
+              <Text style={styles.noteTitle}>Use the PDF exactly as downloaded. </Text>
+              Re-saved PDFs (Ctrl+P, Print, Save as PDF), screenshots and photos may not work.
+            </Text>
           </View>
         </FormScrollView>
       ) : null}
 
       {step === 'setup' && platform ? (
-        <FormScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <>
+        <FormScrollView style={styles.flex} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.heading}>Label size</Text>
           <PdfOutputSizeRow value={size} onChange={setSize} presets={SHIPPING_SIZE_PRESETS} unitSwitch />
 
@@ -356,17 +330,9 @@ export default function EcommerceLabelScreen() {
             />
           </View>
 
-          <Text style={styles.heading}>{platformName(platform)} label PDF</Text>
-          <Pressable
-            onPress={() => setSampleOpen(true)}
-            hitSlop={8}
-            style={styles.sampleBtn}
-            accessibilityRole="button">
-            <AppIcon name="doc.text" size={18} tintColor={C.accent} />
-            <Text style={styles.link}>See a sample {platformName(platform)} PDF</Text>
-          </Pressable>
           {file && scan ? (
             <>
+              <Text style={styles.heading}>{platformName(platform)} label PDF</Text>
               <View style={styles.row}>
                 <AppIcon name="doc.text" size={22} tintColor={C.accent} />
                 <View style={styles.cardText}>
@@ -381,25 +347,40 @@ export default function EcommerceLabelScreen() {
                   <Text style={styles.link}>Change</Text>
                 </Pressable>
               </View>
-              <Pressable onPress={() => setStep('preview')} style={styles.printBtn}>
-                <Text style={styles.printText}>Preview</Text>
-              </Pressable>
             </>
           ) : (
-            <Pressable
-              onPress={() => void chooseFile()}
-              disabled={busy}
-              android_ripple={androidRipple}
-              style={({ pressed }) => [styles.upload, pressed && styles.pressed]}>
-              {progress ? (
-                <ActivityIndicator color={C.accent} />
-              ) : (
-                <Ionicons name="cloud-upload-outline" size={26} color={C.accent} />
-              )}
-              <Text style={styles.cardTitle}>{progress ?? (received ? received.name : 'Choose PDF')}</Text>
-            </Pressable>
+            <>
+              <Text style={styles.cardSub}>
+                Set the size and options, then tap Continue to choose your {platformName(platform)} label PDF.
+              </Text>
+              {progress || received ? (
+                <View style={styles.row}>
+                  <ActivityIndicator color={C.accent} />
+                  <Text style={[styles.cardTitle, styles.flex]} numberOfLines={1}>
+                    {progress ?? received?.name}
+                  </Text>
+                </View>
+              ) : null}
+            </>
           )}
+          <Pressable
+            onPress={() => setSampleOpen(true)}
+            hitSlop={8}
+            style={styles.sampleBtn}
+            accessibilityRole="button">
+            <AppIcon name="doc.text" size={18} tintColor={C.accent} />
+            <Text style={styles.link}>See a sample {platformName(platform)} PDF</Text>
+          </Pressable>
         </FormScrollView>
+        <BottomBar
+          insetBottom={insets.bottom}
+          onBack={handleBack}
+          backDisabled={busy}
+          nextLabel={file && scan ? 'Preview' : 'Continue'}
+          nextBusy={busy}
+          onNext={() => (file && scan ? setStep('preview') : void chooseFile())}
+        />
+        </>
       ) : null}
 
       {step === 'preview' && file && scan && current ? (
@@ -539,6 +520,7 @@ function BottomBar({
 
 const styles = themedStyles((c, scheme) => ({
   screen: { flex: 1, backgroundColor: c.bg },
+  flex: { flex: 1 },
   header: {
     height: 48,
     backgroundColor: c.header,
@@ -548,61 +530,22 @@ const styles = themedStyles((c, scheme) => ({
   },
   headerBtn: { width: 44, paddingHorizontal: 6, paddingVertical: 8 },
   headerTitle: { flex: 1, color: c.onAccent, fontSize: 17, fontWeight: '600' },
-  content: { padding: 16, gap: 12 },
+  content: { padding: 16, gap: 10 },
   printContent: { paddingVertical: 16, gap: 16 },
   printPanel: { paddingHorizontal: 16 },
   heading: { fontSize: 15, fontWeight: '700', color: c.text, marginTop: 4 },
-  hero: {
-    backgroundColor: c.surface,
-    padding: 16,
-    gap: 14,
-    borderRadius: 20,
-    ...cardElevation(c, scheme),
-  },
-  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  heroBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: c.accentFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroTitle: { fontSize: 18, fontWeight: '800', color: c.text },
-  heroSub: { fontSize: 13, lineHeight: 18, color: c.textMuted },
-  flow: { flexDirection: 'row', gap: 8 },
-  flowItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: c.accentSoft,
-  },
-  flowDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: c.accentFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  flowNum: { fontSize: 11, fontWeight: '800', color: c.onAccent },
-  flowText: { flex: 1, fontSize: 11, fontWeight: '600', color: c.accentInk },
+  sectionLabel: { fontSize: 12, fontWeight: '800', color: c.textMuted, letterSpacing: 0.8, textTransform: 'uppercase' },
   note: {
     flexDirection: 'row',
-    gap: 12,
-    padding: 14,
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
     borderRadius: 14,
     backgroundColor: c.warningSoft,
-    overflow: 'hidden',
   },
-  noteBar: { width: 4, borderRadius: 2, backgroundColor: c.warning },
-  noteTitle: { fontSize: 14, fontWeight: '700', color: c.text },
-  noteBody: { fontSize: 13, lineHeight: 19, color: c.textSecondary },
-  tiles: { gap: 12 },
+  noteTitle: { fontWeight: '700', color: c.onWarningSoft },
+  noteBody: { flex: 1, fontSize: 12.5, lineHeight: 18, color: c.onWarningSoft },
+  tiles: { gap: 10 },
   cardText: { flex: 1, minWidth: 0, gap: 2 },
   cardTitle: { fontSize: 15, fontWeight: '600', color: c.text },
   cardSub: { fontSize: 12, color: c.textMuted },
@@ -617,28 +560,6 @@ const styles = themedStyles((c, scheme) => ({
   },
   link: { fontSize: 14, fontWeight: '700', color: c.accent, flexShrink: 1 },
   sampleBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
-  upload: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 28,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: c.accent,
-    backgroundColor: c.accentSoft,
-  },
-  printBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: c.accentFill,
-    marginTop: 4,
-  },
-  printText: { fontSize: 16, fontWeight: '700', color: c.onAccent },
   previewColumn: { flex: 1 },
   previewBar: {
     flexDirection: 'row',

@@ -1,3 +1,4 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { composeUpsDocument, createLabelDocument, type LabelElement } from '@/lib/label-document';
 import type { AcrossMode } from '@/lib/across';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -612,7 +613,7 @@ export default function TemplateScreen() {
                     <View style={styles.cardFooter}>
                       {setupLabelIds.has(docItem.id) ? (
                         <View style={styles.setupBadge} accessibilityLabel="Saved setup">
-                          <AppIcon name="bolt.fill" tintColor={C.accent} size={12} />
+                          <MaterialCommunityIcons name="file-excel-outline" color={C.accent} size={14} />
                           <Text style={styles.setupBadgeText}>Saved setup</Text>
                         </View>
                       ) : null}

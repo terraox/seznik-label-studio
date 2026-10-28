@@ -54,6 +54,7 @@ import { createSerialLabelDocument, serialDocumentName } from '@/lib/serial-labe
 import { WalkthroughOverlay } from '@/components/walkthrough/walkthrough-overlay';
 import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { AppIcon } from '@/components/app-icon';
+import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { AcrossModePicker } from '@/components/across-mode-picker';
 import { createTogetherDocument } from '@/lib/across';
 import { NEW_LABEL_WALKTHROUGH } from '@/lib/walkthrough/new-label-steps';
@@ -93,10 +94,15 @@ export default function NewLabelSetupScreen() {
     serialPad?: string;
     serialSymbology?: string;
     serialEditor?: string;
+    printImage?: string;
   }>();
   const isSerial = Boolean(params.serialSample);
   // New Home entry: size first, then the normal editor with a Serial text element.
   const isSerialEditor = params.serialEditor === '1';
+  // Print Image: size first, then the photo picker, then the print screen (no label is created).
+  const isPrintImage = params.printImage === '1';
+  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
+  const [openingPhoto, setOpeningPhoto] = useState(false);
   const isImportImage = Boolean(params.importImageUri);
   const isClone = params.isClone === 'true';
   const defaults = useSettingsStore((s) => s.defaults);
@@ -134,7 +140,7 @@ export default function NewLabelSetupScreen() {
   }, [params.focusSize]);
 
   // The tour covers the plain blank-label flow only (not clone, serial or image import).
-  const showTour = !isImportImage && !isSerial && !isSerialEditor && !isClone;
+  const showTour = !isImportImage && !isSerial && !isSerialEditor && !isClone && !isPrintImage;
   const startWalkthrough = useWalkthroughStore((s) => s.start);
   const stopWalkthrough = useWalkthroughStore((s) => s.stop);
   const setNewLabelTutorialSeen = useSettingsStore((s) => s.setNewLabelTutorialSeen);
@@ -176,7 +182,7 @@ export default function NewLabelSetupScreen() {
   const cell = cellSize(form);
   const gapMm = parseGapMm(form.gap) ?? 0;
   const multi = form.columns > 1;
-  const showLayout = !isImportImage && !isSerial && !isSerialEditor;
+  const showLayout = !isImportImage && !isSerial && !isSerialEditor && !isPrintImage;
   const total = cell.w != null ? totalWidthMm(cell.w, form.columns, gapMm) : null;
   const warning = multi && total != null ? widthWarning(total, printerMaxMm) : null;
   const presetValue = presetLabelFor(form.shape, cell.w, cell.h);
@@ -200,11 +206,44 @@ export default function NewLabelSetupScreen() {
       );
     }
 
+    if (isPrintImage) {
+      if (openingPhoto) return;
+      setOpeningPhoto(true);
+      void (async () => {
+        try {
+          const asset = await pickImageAsset();
+          if (!asset) return;
+          router.push({
+            pathname: '/print-photo',
+            params: {
+              mode: 'direct',
+              imageUri: asset.uri,
+              imageWidth: String(asset.width),
+              imageHeight: String(asset.height),
+              widthMm: String(size.widthMm),
+              heightMm: String(size.heightMm),
+              ...(circle ? { shape: 'circle' } : {}),
+            },
+          });
+        } catch {
+          Alert.alert('Notice', 'Unable to open photo library.');
+        } finally {
+          setOpeningPhoto(false);
+        }
+      })();
+      return;
+    }
+
     if (isSerialEditor) {
       // Next: tell us what goes on the labels, then the editor opens.
       router.push({
         pathname: '/serial-info',
-        params: { name, widthMm: String(size.widthMm), heightMm: String(size.heightMm) },
+        params: {
+          name,
+          widthMm: String(size.widthMm),
+          heightMm: String(size.heightMm),
+          ...(circle ? { shape: 'circle' } : {}),
+        },
       });
       return;
     }
@@ -405,7 +444,9 @@ export default function NewLabelSetupScreen() {
           <Text style={styles.backChevron}>‹</Text>
         </Pressable>
         <Text style={styles.headerTitle}>
-          {isSerial || isSerialEditor
+          {isPrintImage
+            ? 'Print Image'
+            : isSerial || isSerialEditor
             ? 'Serial label size'
             : isImportImage
             ? 'Label Sizing Setup'
@@ -448,7 +489,7 @@ export default function NewLabelSetupScreen() {
           imageUri={isImportImage ? params.importImageUri : null}
         />
 
-        {showLayout ? (
+        {showLayout || isPrintImage || isSerialEditor ? (
           <WalkthroughTarget id="newLabel.shape" style={styles.section}>
             <Text style={styles.sectionHeading}>Shape</Text>
             <SegmentedControl<Shape>
@@ -505,6 +546,9 @@ export default function NewLabelSetupScreen() {
 
         <WalkthroughTarget id="newLabel.size" style={styles.section}>
           <Text style={styles.sectionHeading}>{sizeTitle}</Text>
+          {isPrintImage ? (
+            <Text style={styles.note}>Pick the shape and size of your sticker. Next you will choose the photo.</Text>
+          ) : null}
           {isSerial || isSerialEditor ? (
             <Text style={styles.note}>
               Width and height of one sticker, in mm. Measure your roll or pick a preset. Every
@@ -602,6 +646,7 @@ export default function NewLabelSetupScreen() {
           </CollapsibleBar>
         </View>
 
+        {isPrintImage ? null : (
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>{t('editor.labelName')}</Text>
           {isSerial || isSerialEditor ? (
@@ -618,6 +663,7 @@ export default function NewLabelSetupScreen() {
             style={styles.nameInput}
           />
         </View>
+        )}
 
         {showLayout && multi && form.acrossMode === 'separate' ? (
           <View style={[styles.switchRow]}>
@@ -631,6 +677,7 @@ export default function NewLabelSetupScreen() {
           </View>
         ) : null}
 
+        {isPrintImage ? null : (
         <Pressable
           onPress={() => router.push('/(tabs)/template')}
           accessibilityRole="button"
@@ -638,6 +685,7 @@ export default function NewLabelSetupScreen() {
           <Text style={styles.templatesLinkText}>Browse our templates</Text>
           <Text style={styles.chevronRight}>›</Text>
         </Pressable>
+        )}
       </FormScrollView>
 
       <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }} style={styles.stickyHost}>
@@ -649,11 +697,12 @@ export default function NewLabelSetupScreen() {
             accessibilityRole="button"
             accessibilityState={{ disabled: !canCreate }}
             style={({ pressed }) => [styles.newButton, !canCreate && styles.newButtonOff, pressed && styles.pressed]}>
-            <Text style={styles.newButtonText}>{isSerialEditor ? 'Next' : isSerial ? 'Open on canvas' : isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
+            <Text style={styles.newButtonText}>{isPrintImage ? 'Continue' : isSerialEditor ? 'Next' : isSerial ? 'Open on canvas' : isImportImage ? 'Open in Editor' : 'Create Label'}</Text>
           </Pressable>
           </WalkthroughTarget>
         </View>
       </KeyboardStickyView>
+      {imageSourceSheet}
       {showTour ? (
         <WalkthroughOverlay
           tour="newLabel"

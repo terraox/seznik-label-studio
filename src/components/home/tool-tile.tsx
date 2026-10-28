@@ -1,12 +1,11 @@
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { ToolArt, hasToolArt } from '@/components/home/tool-art';
 import { ToolIcon } from '@/components/home/tool-icon';
 import { HOME_TOOLS, type HomeTool, type HomeToolId } from '@/components/home/home-tools';
 import { androidRipple, HomeLayout } from '@/constants/ui';
-import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { useOpenLabelFile } from '@/lib/label-share/use-open-label-file';
 import { trackFeatureClick, type FeatureKey } from '@/lib/telemetry/events';
 import { C, cardElevation, themedStyles, useThemeRefresh } from '@/theme';
@@ -26,7 +25,6 @@ const TILE_FEATURE: Record<HomeToolId, FeatureKey> = {
 export function ToolTile({ id, minHeight = HomeLayout.tileHeight }: { id: HomeToolId; minHeight?: number }) {
   const tool: HomeTool = HOME_TOOLS[id];
   if (tool.action === 'openLabelFile') return <OpenLabelFileTile id={id} minHeight={minHeight} />;
-  if (tool.action === 'pickImage') return <PrintImageTile id={id} minHeight={minHeight} />;
   return <LinkTile id={id} minHeight={minHeight} />;
 }
 
@@ -41,39 +39,6 @@ function LinkTile({ id, minHeight }: { id: HomeToolId; minHeight: number }) {
         trackFeatureClick(TILE_FEATURE[id]);
         router.push(tool.href as any);
       }}
-    />
-  );
-}
-
-/** Image: picks a photo, then opens Print Image with it (size, fit and print mode are chosen there). */
-function PrintImageTile({ id, minHeight }: { id: HomeToolId; minHeight: number }) {
-  const router = useRouter();
-  const { pickImageAsset, imageSourceSheet } = useImageSourcePicker();
-  return (
-    <TileBody
-      id={id}
-      minHeight={minHeight}
-      onPress={() => {
-        trackFeatureClick(TILE_FEATURE[id]);
-        void (async () => {
-          try {
-            const asset = await pickImageAsset();
-            if (!asset) return;
-            router.push({
-              pathname: '/print-photo',
-              params: {
-                mode: 'direct',
-                imageUri: asset.uri,
-                imageWidth: String(asset.width),
-                imageHeight: String(asset.height),
-              },
-            });
-          } catch {
-            Alert.alert('Notice', 'Unable to open photo library.');
-          }
-        })();
-      }}
-      extra={imageSourceSheet}
     />
   );
 }

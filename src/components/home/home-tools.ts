@@ -12,8 +12,8 @@ export type HomeTool = {
   label: string;
   /** Where the tile goes. Tools with `action` run that instead. */
   href?: string;
-  /** Runs in place instead of navigating: 'openLabelFile' opens the .seznik file picker, 'pickImage' picks a photo and opens Print Image. */
-  action?: 'openLabelFile' | 'pickImage';
+  /** Runs in place instead of navigating: 'openLabelFile' opens the .seznik file picker. */
+  action?: 'openLabelFile';
   icon: ToolGlyph;
   /** One short line under the title on the home tile. */
   hint?: string;
@@ -41,7 +41,7 @@ export const HOME_TOOLS = {
     hint: 'Bulk from a sheet',
     group: 'file',
   },
-  printImage: { label: 'Image', action: 'pickImage', icon: 'image-outline', hint: 'Print a photo', group: 'file' },
+  printImage: { label: 'Image', href: '/new-label-setup?printImage=1', icon: 'image-outline', hint: 'Print a photo', group: 'file' },
   pdf: { label: 'PDF', href: '/pdf', icon: 'document-text-outline', hint: 'Print any page', group: 'file' },
   importLabel: { label: 'Import', action: 'openLabelFile', icon: 'download-outline', hint: '.seznik label file', group: 'file' },
 } as const satisfies Record<string, HomeTool>;

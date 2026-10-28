@@ -124,7 +124,7 @@ export function locatePage(platform: PlatformId, leaves: LeafLike[]): LocatedPag
  */
 export const SHIPPING_SIZE_PRESETS: { name: string; width: number; height: number; inch?: [number, number] }[] = [
   { name: '4 × 6 in', width: 100, height: 150, inch: [4, 6] },
-  { name: '100 × 155 mm', width: 100, height: 155 },
-  { name: 'A6', width: 105, height: 148 },
   { name: '4 × 4 in', width: 100, height: 100, inch: [4, 4] },
+  { name: '3 × 5 in', width: 75, height: 125, inch: [3, 5] },
+  { name: '2 × 1 in', width: 50, height: 25, inch: [2, 1] },
 ];

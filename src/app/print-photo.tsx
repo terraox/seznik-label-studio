@@ -19,6 +19,7 @@ import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 
+import { StatusChip } from '@/components/home/status-chip';
 import { PhotoFramePreview } from '@/components/photo-frame-preview';
 import { getPhotoFrame } from '@/constants/photo-frames';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -192,6 +193,9 @@ export default function PrintPhotoScreen() {
     imageUri?: string;
     imageWidth?: string;
     imageHeight?: string;
+    widthMm?: string;
+    heightMm?: string;
+    shape?: string;
   }>();
 
   const defaults = useSettingsStore((s) => s.defaults);
@@ -236,6 +240,13 @@ export default function PrintPhotoScreen() {
   const modesAvailable = !isFrame && bridgeSupportsImageModes();
   const [printing, setPrinting] = useState(false);
   const [footerHeight, setFooterHeight] = useState(72);
+  // Print Image asks for the size before the photo; it wins over the size suggested from the photo.
+  const chosenSize = useMemo<LabelSizeMm | null>(() => {
+    const w = Number(params.widthMm);
+    const h = Number(params.heightMm);
+    return w > 0 && h > 0 ? { widthMm: w, heightMm: h } : null;
+  }, [params.widthMm, params.heightMm]);
+  const roundLabel = params.shape === 'circle';
   const [printSize, setPrintSize] = useState<LabelSizeMm | null>(null);
   const [suggestedSize, setSuggestedSize] = useState<LabelSizeMm | null>(() => {
     const w = Number(params.imageWidth);
@@ -318,8 +329,8 @@ export default function PrintPhotoScreen() {
       return;
     }
 
-    const widthMm = printSize?.widthMm ?? suggestedSize?.widthMm ?? frame?.widthMm ?? defaults.labelWidth;
-    const heightMm = printSize?.heightMm ?? suggestedSize?.heightMm ?? frame?.heightMm ?? defaults.labelHeight;
+    const widthMm = printSize?.widthMm ?? chosenSize?.widthMm ?? suggestedSize?.widthMm ?? frame?.widthMm ?? defaults.labelWidth;
+    const heightMm = printSize?.heightMm ?? chosenSize?.heightMm ?? suggestedSize?.heightMm ?? frame?.heightMm ?? defaults.labelHeight;
     const orientationDeg = parseInt(orientation.replace('°', ''), 10) as 0 | 90 | 180 | 270;
     // Die-cut photos print at the selected stock mm. Do not swap width/height for
     // 90°/270° — that sends a landscape SIZE onto portrait jewellery rolls.
@@ -540,6 +551,7 @@ export default function PrintPhotoScreen() {
     addHistoryEntry,
     deviceName,
     printSize,
+    chosenSize,
     suggestedSize,
     photoRotation,
     modesAvailable,
@@ -560,8 +572,8 @@ export default function PrintPhotoScreen() {
     };
   }, [printSize, handlePrint]);
 
-  const jobWidthMm = printSize?.widthMm ?? suggestedSize?.widthMm ?? frame?.widthMm ?? defaults.labelWidth;
-  const jobHeightMm = printSize?.heightMm ?? suggestedSize?.heightMm ?? frame?.heightMm ?? defaults.labelHeight;
+  const jobWidthMm = printSize?.widthMm ?? chosenSize?.widthMm ?? suggestedSize?.widthMm ?? frame?.widthMm ?? defaults.labelWidth;
+  const jobHeightMm = printSize?.heightMm ?? chosenSize?.heightMm ?? suggestedSize?.heightMm ?? frame?.heightMm ?? defaults.labelHeight;
   const jobDpi = getPrinterManager().getPrintDpi();
   const printCaptureSize = useMemo(
     () => printCaptureLayout(jobWidthMm, jobHeightMm, jobDpi).content,
@@ -645,18 +657,7 @@ export default function PrintPhotoScreen() {
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
           <AppIcon name="chevron.left" tintColor={C.onHeader} size={22} />
         </Pressable>
-        <Pressable
-          onPress={() => router.push('/printer-connect')}
-          style={({ pressed }) => [
-            styles.connection,
-            connected && styles.connectionConnected,
-            pressed && styles.pressed,
-          ]}>
-          <Text numberOfLines={1} style={styles.connectionText}>
-            {connected ? deviceName ?? 'Connected' : 'Not connected'}
-          </Text>
-          <AppIcon name="link" tintColor="#FFFFFF" size={14} /* theme-fixed: white icon on status fill */ />
-        </Pressable>
+        <StatusChip poll={false} keepLive={printing} />
       </View>
 
       <FormScrollView
@@ -678,6 +679,7 @@ export default function PrintPhotoScreen() {
                     width: previewWidth,
                     height: previewWidth * (jobHeightMm / Math.max(jobWidthMm, 1)),
                   },
+                  roundLabel && { borderRadius: previewWidth },
                 ]}>
                 <Image
                   source={{ uri: modesAvailable && modePreview ? modePreview : primaryPhoto }}
@@ -966,18 +968,6 @@ const styles = themedStyles((c, scheme) => ({
     paddingBottom: 12,
   },
   backBtn: { padding: 4 },
-  connection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: c.dangerFill,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    maxWidth: 180,
-  },
-  connectionConnected: { backgroundColor: c.successFill },
-  connectionText: { color: c.onAccent, fontSize: 13, fontWeight: '500', flexShrink: 1 },
   scroll: { flex: 1, width: '100%' },
   previewArea: {
     width: '100%',

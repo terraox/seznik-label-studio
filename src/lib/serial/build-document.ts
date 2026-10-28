@@ -145,6 +145,7 @@ export function buildSerialLabelDocument(p: {
   orientation?: LabelOrientation;
   paperType?: PaperType;
   autoWrap?: AutoWrapping;
+  circle?: boolean;
   options: SerialInfoOptions;
 }): BuiltSerialLabel {
   const o = p.options;
@@ -232,6 +233,7 @@ export function buildSerialLabelDocument(p: {
     heightMm: p.heightMm,
     orientation: p.orientation,
     paperType: p.paperType,
+    ...(p.circle ? { mediaShape: 'circle' as const } : {}),
     elements,
     background: { type: 'color', color: '#FFFFFF' }, // label paper colour (document data)
   });
