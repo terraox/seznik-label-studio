@@ -988,6 +988,7 @@ export default function EditScreen() {
       viewportPx: editorFallbackViewportPx(windowHeight),
       panelMinPx: PANEL_MIN_HEIGHT_PX,
       panelDefaultPx: PANEL_DEFAULT_HEIGHT_PX,
+      fitMenu: true,
     }),
   );
 
@@ -1200,6 +1201,7 @@ export default function EditScreen() {
           viewportPx: splitViewportForCanvas,
           panelMinPx: panelMinForSplit,
           panelDefaultPx: panelDefaultForSplit,
+          fitMenu: true,
         }),
       );
       return;
@@ -1457,6 +1459,7 @@ export default function EditScreen() {
       viewportPx: viewport,
       panelMinPx: panelMinForSplit,
       panelDefaultPx: panelDefaultForSplit,
+      fitMenu: true,
     });
     setCanvasFullscreen(next);
     setCanvasSplitH(height);

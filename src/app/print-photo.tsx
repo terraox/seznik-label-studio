@@ -2,7 +2,8 @@ import { goBack } from '@/lib/go-back';
 import { AppIcon } from '@/components/app-icon';
 import { EditableNumber } from '@/components/editable-number';
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
+import { editorBridge } from '@/constants/editor-bridge';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -183,6 +184,8 @@ function ChipGroup<T extends string>({
   );
 }
 
+const PRINT_PHOTO_CROP_ID = 'print-photo';
+
 export default function PrintPhotoScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
@@ -286,6 +289,38 @@ export default function PrintPhotoScreen() {
       () => undefined,
     );
   }, [params.imageUri, suggestedSize]);
+
+  const openCrop = useCallback(() => {
+    const uri = photos.find((p) => !!p);
+    if (!uri) return;
+    router.push({
+      pathname: '/image-crop',
+      params: {
+        uri,
+        width: String(photoPixels?.width ?? 0),
+        height: String(photoPixels?.height ?? 0),
+        mode: 'replace',
+        elementId: PRINT_PHOTO_CROP_ID,
+      },
+    });
+  }, [photos, photoPixels]);
+
+  // Back from the crop screen: the cropped photo replaces the current one.
+  useFocusEffect(
+    useCallback(() => {
+      const result = editorBridge.imageCropResult;
+      if (!result || result.elementId !== PRINT_PHOTO_CROP_ID) return;
+      editorBridge.imageCropResult = null;
+      setPhotoPixels({ width: result.width, height: result.height });
+      setSuggestedSize(suggestPrintSizeFromAspect(result.width, result.height));
+      setPhotos((prev) => {
+        const next = [...prev];
+        const at = next.findIndex((p) => !!p);
+        next[at >= 0 ? at : 0] = result.uri;
+        return next;
+      });
+    }, []),
+  );
 
   const pickPhoto = useCallback(async () => {
     try {
@@ -704,6 +739,12 @@ export default function PrintPhotoScreen() {
         {primaryPhoto ? (
           <View style={[styles.photoActionRow, { width: contentWidth - 24 }]}>
             <Pressable
+              onPress={openCrop}
+              style={({ pressed }) => [styles.photoRotateBtn, pressed && styles.pressed]}>
+              <AppIcon name="rectangle.dashed" tintColor={C.link} size={16} />
+              <Text style={styles.photoRotateBtnText}>Crop Photo</Text>
+            </Pressable>
+            <Pressable
               onPress={() => setPhotoRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
               style={({ pressed }) => [styles.photoRotateBtn, pressed && styles.pressed]}>
               <AppIcon name="arrow.clockwise" tintColor={C.link} size={16} />
@@ -1018,6 +1059,7 @@ const styles = themedStyles((c, scheme) => ({
   photoActionRow: {
     marginTop: 10,
     flexDirection: 'row',
+    gap: 10,
   },
   photoRotateBtn: {
     flex: 1,

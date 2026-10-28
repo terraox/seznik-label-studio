@@ -1,3 +1,5 @@
+import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useStepBack } from '@/lib/use-step-back';
 import { goBack } from '@/lib/go-back';
 import { Image } from 'expo-image';
@@ -15,13 +17,11 @@ import {
   Alert,
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { TextInput } from '@/components/ui/text-input';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -65,6 +65,12 @@ const TYPE_OPTIONS: { value: OcrResultType; label: string }[] = [
   { value: 'Barcode', label: 'Barcode' },
   { value: 'QRCode', label: 'QR code' },
 ];
+
+const HEADING: Record<OcrResultType, string> = {
+  Text: 'Scan text',
+  Barcode: 'Scan barcode',
+  QRCode: 'Scan QR code',
+};
 
 const READ_LABEL: Record<OcrResultType, string> = {
   Text: 'Read text',
@@ -497,6 +503,7 @@ export default function OcrScreen() {
   }
 
   const busy = identifying || ocr.running;
+  const heading = HEADING[recognitionType];
   const canAdd = !busy && previewText.trim().length > 0;
 
   return (
@@ -505,7 +512,9 @@ export default function OcrScreen() {
         <Pressable onPress={handleBack} hitSlop={12} style={styles.headerSide}>
           <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
         </Pressable>
-        <Text style={styles.headerTitle}>Scan text</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {heading}
+        </Text>
         {helpButton}
       </View>
 
@@ -529,11 +538,10 @@ export default function OcrScreen() {
 
       <KeyboardAvoidingView
         behavior="padding"
-        style={[styles.identifyWhiteSection, { paddingBottom: insets.bottom + 16 }]}>
-        <ScrollView
+        style={styles.identifyWhiteSection}>
+        <FormScrollView
           style={styles.formArea}
           contentContainerStyle={styles.formContent}
-          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <Text style={styles.sectionLabel}>What is in the photo?</Text>
           <WalkthroughTarget id="ocr.type">
@@ -566,9 +574,9 @@ export default function OcrScreen() {
               onCopyError={(error) => Alert.alert('Copy Failed', ocrErrorMessage(error))}
             />
           </WalkthroughTarget>
-        </ScrollView>
+        </FormScrollView>
 
-        <WalkthroughTarget id="ocr.add" style={styles.addSlot}>
+        <WalkthroughTarget id="ocr.add" style={[styles.addSlot, { paddingBottom: insets.bottom + 14 }]}>
           <Pressable
             onPress={handleConfirm}
             disabled={!canAdd}
@@ -622,6 +630,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'flex-end',
   },
   headerTitle: {
+    flexShrink: 1,
     color: c.onAccent,
     fontSize: 18,
     fontWeight: '600',
@@ -788,10 +797,10 @@ const styles = themedStyles((c) => ({
     flex: 1,
   },
   formContent: {
-    paddingBottom: 12,
+    paddingBottom: 24,
   },
   addSlot: {
-    paddingTop: 8,
+    paddingTop: 10,
   },
   sectionLabel: {
     color: c.textSecondary,
@@ -841,7 +850,7 @@ const styles = themedStyles((c) => ({
     fontWeight: '600',
   },
   addBtn: {
-    height: 52,
+    height: 48,
     borderRadius: 12,
     backgroundColor: c.accentFill,
     alignItems: 'center',
