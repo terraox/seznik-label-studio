@@ -346,7 +346,6 @@ export default function PrinterDiagnosticsScreen() {
             <DiagRow label="Transport" value={prettyTransport(diag?.activeTransport)} />
             <DiagRow label="Device" value={diag?.deviceName ?? 'None'} />
             <DiagRow label="Address" value={diag?.deviceId ?? 'None'} mono />
-            <DiagRow label="App status" value={status} />
             {showBattery && !isJoshBattery ? (
               <DiagRow
                 label="Battery"
@@ -446,15 +445,6 @@ export default function PrinterDiagnosticsScreen() {
                 mono
               />
             </View>
-          ) : null}
-
-          {sdkId !== 'josh' ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Print queue</Text>
-            <DiagRow label="Waiting jobs" value={String(diag?.printQueueLength ?? 0)} />
-            <DiagRow label="Last retry" value={String(diag?.retryCount ?? 0)} />
-            <DiagRow label="Last error" value={diag?.lastError?.trim() ? diag.lastError : 'None'} />
-          </View>
           ) : null}
 
           <View style={styles.card}>

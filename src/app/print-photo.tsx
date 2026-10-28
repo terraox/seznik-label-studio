@@ -238,6 +238,9 @@ export default function PrintPhotoScreen() {
   const [brightness, setBrightness] = useState(0);
   const [contrast, setContrast] = useState(0);
   const modesAvailable = !isFrame && bridgeSupportsImageModes();
+  // "Standard" is the normal print (Original / B & W / Halftone) next to the Solid and dither modes.
+  const [standard, setStandard] = useState(false);
+  const modesActive = modesAvailable && !standard;
   const [printing, setPrinting] = useState(false);
   const [footerHeight, setFooterHeight] = useState(72);
   // Print Image asks for the size before the photo; it wins over the size suggested from the photo.
@@ -452,7 +455,7 @@ export default function PrintPhotoScreen() {
         fit: 'stretch',
       });
       let printed: Awaited<ReturnType<typeof printArtworkJob>> | null = null;
-      if (modesAvailable && bridgeSupportsImageModes()) {
+      if (modesActive && bridgeSupportsImageModes()) {
         // Finished dots at the label's dot size, sent as-is. The preview above is the same pipeline.
         await printGrayWithImageMode({
           gray,
@@ -554,7 +557,7 @@ export default function PrintPhotoScreen() {
     chosenSize,
     suggestedSize,
     photoRotation,
-    modesAvailable,
+    modesActive,
     printMode,
     brightness,
     contrast,
@@ -595,7 +598,7 @@ export default function PrintPhotoScreen() {
   const decodedRef = useRef<{ uri: string; gray: GrayRaster } | null>(null);
   const [modePreview, setModePreview] = useState<string | null>(null);
   useEffect(() => {
-    if (!modesAvailable || !primaryPhoto) {
+    if (!modesActive || !primaryPhoto) {
       setModePreview(null);
       return;
     }
@@ -635,7 +638,7 @@ export default function PrintPhotoScreen() {
       clearTimeout(timer);
     };
   }, [
-    modesAvailable,
+    modesActive,
     primaryPhoto,
     flipH,
     antiColor,
@@ -682,10 +685,10 @@ export default function PrintPhotoScreen() {
                   roundLabel && { borderRadius: previewWidth },
                 ]}>
                 <Image
-                  source={{ uri: modesAvailable && modePreview ? modePreview : primaryPhoto }}
+                  source={{ uri: modesActive && modePreview ? modePreview : primaryPhoto }}
                   style={[
                     StyleSheet.absoluteFillObject,
-                    modesAvailable && modePreview ? null : { transform: [{ rotate: `${photoRotation}deg` }] },
+                    modesActive && modePreview ? null : { transform: [{ rotate: `${photoRotation}deg` }] },
                   ]}
                   contentFit="fill"
                 />
@@ -749,15 +752,24 @@ export default function PrintPhotoScreen() {
           <View style={[styles.card, { width: contentWidth - 24 }]}>
             <Text style={styles.groupLabel}>Print mode</Text>
             <ChipGroup
-              options={IMAGE_MODES.map((m) => IMAGE_MODE_LABEL[m])}
-              selected={IMAGE_MODE_LABEL[printMode]}
+              options={['Standard', ...IMAGE_MODES.map((m) => IMAGE_MODE_LABEL[m])]}
+              selected={standard ? 'Standard' : IMAGE_MODE_LABEL[printMode]}
               onSelect={(label) => {
+                if (label === 'Standard') {
+                  setStandard(true);
+                  return;
+                }
                 const next = IMAGE_MODES.find((m) => IMAGE_MODE_LABEL[m] === label);
-                if (next) setPrintMode(next);
+                if (next) {
+                  setStandard(false);
+                  setPrintMode(next);
+                }
               }}
             />
-            <Text style={styles.hint}>{IMAGE_MODE_HELP[printMode]}</Text>
-            {printMode === 'solid' ? (
+            <Text style={styles.hint}>
+              {standard ? 'Normal printing: Original, B & W or Halftone, set below.' : IMAGE_MODE_HELP[printMode]}
+            </Text>
+            {standard ? null : printMode === 'solid' ? (
               <StepperRow
                 label="Threshold"
                 value={String(grayThreshold)}
@@ -766,6 +778,8 @@ export default function PrintPhotoScreen() {
                 bordered
               />
             ) : null}
+            {standard ? null : (
+              <>
             <StepperRow
               label="Brightness"
               value={String(brightness)}
@@ -779,8 +793,12 @@ export default function PrintPhotoScreen() {
               onMinus={() => setContrast((v) => Math.max(-100, v - 10))}
               onPlus={() => setContrast((v) => Math.min(100, v + 10))}
             />
+              </>
+            )}
           </View>
-        ) : (
+        ) : null}
+
+        {!modesActive ? (
         <View style={[styles.card, { width: contentWidth - 24 }]}>
           <Text style={styles.groupLabel}>Color Mode</Text>
           <ChipGroup options={COLOR_MODES} selected={colorMode} onSelect={setColorMode} />
@@ -808,7 +826,7 @@ export default function PrintPhotoScreen() {
             </Pressable>
           </View>
         </View>
-        )}
+        ) : null}
 
         <View style={[styles.card, { width: contentWidth - 24 }]}>
           <StepperRow
