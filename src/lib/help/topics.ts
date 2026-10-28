@@ -224,7 +224,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   {
     id: 'print-image',
     title: 'Image',
-    summary: 'Print a photo on a label with Solid or Dither.',
+    summary: 'Print a photo on a label in Black & White, Photo or Dots.',
     icon: 'photo',
     blocks: [
       { type: 'text', text: 'Image prints a photo on your label roll. Pick a photo, choose the label size, and check the preview before you print.' },
@@ -241,8 +241,10 @@ export const HELP_TOPICS: HelpTopic[] = [
       {
         type: 'bullets',
         items: [
-          'Solid: pure black and white with a threshold. Best for logos, text and line art.',
-          'Dither: dots for the gray areas. Best for photos.',
+          'Black & White: plain black and white with a threshold slider. Best for logos, text and line art.',
+          'Photo: smooth shading made of fine dots. Best for photos.',
+          'Photo (Bold): like Photo with stronger contrast. Good for small or faded photos.',
+          'Dots: shading made of a regular dot pattern. Good for gradients and gray fills.',
         ],
       },
     ],

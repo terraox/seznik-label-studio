@@ -1,6 +1,7 @@
 import { goBack } from '@/lib/go-back';
 import { AppIcon } from '@/components/app-icon';
 import { EditableNumber } from '@/components/editable-number';
+import { GrayThresholdSlider } from '@/components/editor/gray-threshold-slider';
 import { Image } from 'expo-image';
 import { editorBridge } from '@/constants/editor-bridge';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -33,6 +34,7 @@ import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { createPrintGeometry, rectMmToDots } from '@/lib/printer/print-spec';
 import {
   bridgeSupportsImageModes,
+  useImageModesSupported,
   modedJobDpi,
   printGrayWithImageMode,
 } from '@/lib/printer/image-mode-print';
@@ -79,6 +81,31 @@ type ColorMode = (typeof COLOR_MODES)[number];
 function containWidth(boxW: number, boxH: number, contentW: number, contentH: number) {
   const scale = Math.min(boxW / Math.max(contentW, 0.01), boxH / Math.max(contentH, 0.01));
   return Math.max(1, Math.round(contentW * scale));
+}
+
+function SliderRow({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (next: number) => void;
+}) {
+  useThemeRefresh();
+  return (
+    <View style={styles.sliderBlock}>
+      <View style={styles.sliderHead}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.sliderValue}>{value}</Text>
+      </View>
+      <GrayThresholdSlider value={value} min={min} max={max} onChange={onChange} />
+    </View>
+  );
 }
 
 function StepperRow({
@@ -236,11 +263,12 @@ export default function PrintPhotoScreen() {
   const [vOffset, setVOffset] = useState(0);
   const [flipH, setFlipH] = useState(false);
   const [antiColor, setAntiColor] = useState(false);
-  // Image print modes (every bridge). Photos default to Floyd-Steinberg on this screen only.
+  // Image print modes (not on Josh). Photos default to Photo (Floyd-Steinberg) on this screen only.
   const [printMode, setPrintMode] = useState<ImageMode>('floyd');
   const [brightness, setBrightness] = useState(0);
   const [contrast, setContrast] = useState(0);
-  const modesAvailable = !isFrame && bridgeSupportsImageModes();
+  const imageModesSupported = useImageModesSupported();
+  const modesAvailable = !isFrame && imageModesSupported;
   // "Standard" is the normal print (Original / B & W / Halftone) next to the Solid and dither modes.
   const [standard, setStandard] = useState(false);
   const modesActive = modesAvailable && !standard;
@@ -811,29 +839,12 @@ export default function PrintPhotoScreen() {
               {standard ? 'Normal printing: Original, B & W or Halftone, set below.' : IMAGE_MODE_HELP[printMode]}
             </Text>
             {standard ? null : printMode === 'solid' ? (
-              <StepperRow
-                label="Threshold"
-                value={String(grayThreshold)}
-                onMinus={() => setGrayThreshold((v) => Math.max(1, v - 8))}
-                onPlus={() => setGrayThreshold((v) => Math.min(254, v + 8))}
-                bordered
-              />
+              <SliderRow label="Threshold" value={grayThreshold} min={1} max={254} onChange={setGrayThreshold} />
             ) : null}
             {standard ? null : (
               <>
-            <StepperRow
-              label="Brightness"
-              value={String(brightness)}
-              onMinus={() => setBrightness((v) => Math.max(-100, v - 10))}
-              onPlus={() => setBrightness((v) => Math.min(100, v + 10))}
-              bordered
-            />
-            <StepperRow
-              label="Contrast"
-              value={String(contrast)}
-              onMinus={() => setContrast((v) => Math.max(-100, v - 10))}
-              onPlus={() => setContrast((v) => Math.min(100, v + 10))}
-            />
+            <SliderRow label="Brightness" value={brightness} min={-100} max={100} onChange={setBrightness} />
+            <SliderRow label="Contrast" value={contrast} min={-100} max={100} onChange={setContrast} />
               </>
             )}
           </View>
@@ -991,11 +1002,6 @@ export default function PrintPhotoScreen() {
       <View
         style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two }]}
         onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}>
-        <Pressable
-          onPress={() => router.push('/printing-settings')}
-          style={({ pressed }) => [styles.gearBtn, pressed && styles.pressed]}>
-          <AppIcon name="gearshape.fill" tintColor="#FFFFFF" size={22} /* theme-fixed: white icon on a coloured button */ />
-        </Pressable>
         <Pressable
           disabled={printing}
           onPress={() => {
@@ -1155,6 +1161,8 @@ const styles = themedStyles((c, scheme) => ({
     marginTop: 14,
     marginBottom: 8,
   },
+  sliderBlock: { paddingTop: 12, paddingBottom: 6 },
+  sliderHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 },
   sliderValue: { fontSize: 14, fontWeight: '500', color: c.accent, flexShrink: 1 },
   sliderTrack: {
     height: 4,
@@ -1239,14 +1247,6 @@ const styles = themedStyles((c, scheme) => ({
     paddingHorizontal: 16,
     paddingTop: 10,
     backgroundColor: c.fill,
-  },
-  gearBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: c.accentFill,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   printBtn: {
     flex: 1,

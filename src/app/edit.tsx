@@ -135,6 +135,7 @@ import { DegreesPropertyPanel } from '@/components/editor/degrees-property-panel
 import { ArcTextPropertyPanel } from '@/components/editor/arctext-property-panel';
 import { BarcodePropertyPanel } from '@/components/editor/barcode-property-panel';
 import { ImagePropertyPanel, type ImagePropertyTab } from '@/components/editor/image-property-panel';
+import { collectReferenceImageKeepUris } from '@/lib/reference-image';
 import { ReferenceImagePanel } from '@/components/editor/reference-image-panel';
 import {
   ClipartPropertyPanel,
@@ -3787,8 +3788,10 @@ export default function EditScreen() {
       ...historyRef.current.retainedSnapshots(),
       ...savedDocuments.map((item) => item.elements),
     ]);
-    void sweepEditorImageFiles(keep);
-  }, [doc.elements, historyRev, savedDocuments]);
+    // The Upload label guide photo is not an element; without this the sweep deletes it on open.
+    const keepRefs = collectReferenceImageKeepUris([{ referenceImage: doc.referenceImage }, ...savedDocuments]);
+    void sweepEditorImageFiles([...keep, ...keepRefs]);
+  }, [doc.elements, doc.referenceImage, historyRev, savedDocuments]);
 
   useEffect(() => {
     const rehydrateBulk = () => {

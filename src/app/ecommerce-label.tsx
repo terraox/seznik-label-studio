@@ -7,14 +7,19 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } f
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/app-icon';
+import { StatusChip } from '@/components/home/status-chip';
 import { PlatformHero, PlatformSteps } from '@/components/ecommerce-label/platform-hero';
+import { ProcessingCard } from '@/components/ecommerce-label/processing-card';
 import { PlatformTile } from '@/components/ecommerce-label/platform-tile';
 import { LabelPreview } from '@/components/ecommerce-label/label-preview';
 import { SamplePdfModal } from '@/components/ecommerce-label/sample-pdf-modal';
 import { PdfPrintPanel, type PdfPrintPanelHandle } from '@/components/pdf-editor/pdf-print-sheet';
-import { PrintPagesStrip, type PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
+import { PrintPageViewer } from '@/components/ecommerce-label/print-page-viewer';
+import type { PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
 import { PdfOutputSizeRow } from '@/components/pdf-editor/pdf-output-size-row';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
+import { Spacing } from '@/constants/theme';
+import { Type } from '@/constants/ui';
 import { useDocumentSourcePicker } from '@/lib/file-import/use-document-source-picker';
 import {
   printItems,
@@ -61,8 +66,6 @@ export default function EcommerceLabelScreen() {
   const params = useLocalSearchParams<{ platform?: string | string[]; docUri?: string; docName?: string }>();
   const linkedPlatform = parsePlatformId(Array.isArray(params.platform) ? params.platform[0] : params.platform);
   const deviceName = usePrinterStore((s) => s.deviceName);
-  const printerStatus = usePrinterStore((s) => s.status);
-  const printerLive = printerStatus === 'connected' || printerStatus === 'printing';
   const printPanelRef = useRef<PdfPrintPanelHandle>(null);
   const [printIndices, setPrintIndices] = useState<number[]>([]);
   const { pickDocumentWithSource, documentSourceSheet } = useDocumentSourcePicker();
@@ -81,6 +84,8 @@ export default function EcommerceLabelScreen() {
   const [file, setFile] = useState<PickedFile | null>(null);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+  // Pages checked so far while the first labels are not on screen yet.
+  const [checkCount, setCheckCount] = useState<{ done: number; total: number } | null>(null);
   const [printing, setPrinting] = useState(false);
   const cancelled = useRef(false);
   // Each file open gets a number; a scan whose number is old (Back, Change, a newer file) stops.
@@ -188,7 +193,10 @@ export default function EcommerceLabelScreen() {
         (done, total) => {
           if (stale()) return;
           if (opened) setScanning({ done, total });
-          else setProgress(`Checking page ${done} / ${total}`);
+          else {
+            setProgress(`Checking page ${done} / ${total}`);
+            setCheckCount({ done, total });
+          }
         },
         stale,
         pageCount > 1 ? openPreview : undefined,
@@ -212,6 +220,7 @@ export default function EcommerceLabelScreen() {
       setStep((s) => (s === 'preview' ? 'setup' : s));
     } finally {
       setProgress(null);
+      setCheckCount(null);
     }
   }, [busy, clearFile, pickDocumentWithSource, platform, received]);
 
@@ -231,10 +240,7 @@ export default function EcommerceLabelScreen() {
         return;
       }
       if (!getPrinterManager().isConnected) {
-        Alert.alert('Connect your printer first', 'Your printer is not connected. Connect it, then come back to print.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Connect', onPress: () => router.push('/printer-connect') },
-        ]);
+        askToConnectPrinter();
         return;
       }
       setPrinting(true);
@@ -275,13 +281,14 @@ export default function EcommerceLabelScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top, height: 48 + insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 6, minHeight: 48 + insets.top }]}>
         <Pressable onPress={handleBack} hitSlop={8} style={styles.headerBtn}>
           <AppIcon name="chevron.left" size={22} tintColor={C.onAccent} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {title}
         </Text>
+        <StatusChip poll={false} keepLive={printing} />
       </View>
 
       {step === 'platform' ? (
@@ -357,12 +364,10 @@ export default function EcommerceLabelScreen() {
                 Set the size and options, then tap Continue to choose your {platformName(platform)} label PDF.
               </Text>
               {progress || received ? (
-                <View style={styles.row}>
-                  <ActivityIndicator color={C.accent} />
-                  <Text style={[styles.cardTitle, styles.flex]} numberOfLines={1}>
-                    {progress ?? received?.name}
-                  </Text>
-                </View>
+                <ProcessingCard
+                  title={checkCount ? 'Checking your labels' : 'Opening your PDF'}
+                  progress={checkCount}
+                />
               ) : null}
             </>
           )}
@@ -415,10 +420,15 @@ export default function EcommerceLabelScreen() {
           </View>
           {scanning ? (
             <View style={styles.scanStrip}>
-              <ActivityIndicator size="small" color={C.accent} />
-              <Text style={styles.scanText} numberOfLines={1}>
-                Checking pages {scanning.done} / {scanning.total} · {labelCount} label{labelCount === 1 ? '' : 's'} so far
-              </Text>
+              <View style={styles.scanRow}>
+                <ActivityIndicator size="small" color={C.accent} />
+                <Text style={styles.scanText} numberOfLines={1}>
+                  Checking pages {scanning.done} / {scanning.total} · {labelCount} label{labelCount === 1 ? '' : 's'} so far
+                </Text>
+              </View>
+              <View style={styles.scanTrack}>
+                <View style={[styles.scanFill, { width: `${Math.min(100, (scanning.done / Math.max(1, scanning.total)) * 100)}%` }]} />
+              </View>
             </View>
           ) : null}
           {scan.skipped.length > 0 ? (
@@ -439,38 +449,43 @@ export default function EcommerceLabelScreen() {
 
       {step === 'print' && file && scan ? (
         <>
-          <FormScrollView contentContainerStyle={styles.printContent} showsVerticalScrollIndicator={false}>
-            <PrintPagesStrip uri={file.uri} items={stripItems} labelAspect={size.widthMm / size.heightMm} />
+          <FormScrollView style={styles.flex} contentContainerStyle={styles.printContent} showsVerticalScrollIndicator={false}>
+            <PrintPageViewer uri={file.uri} items={stripItems} size={size} />
             <View style={styles.printPanel}>
-            <PdfPrintPanel
-              ref={printPanelRef}
-              onSelectedPagesChange={setPrintIndices}
-              pageCount={items.length}
-              currentPage={Math.min(previewIndex, items.length - 1) + 1}
-              printing={printing}
-              progress={progress}
-              outputLabel={`${size.widthMm} × ${size.heightMm} mm`}
-              onPrint={(selection, options) => {
-                void print(selection, options);
-              }}
-            />
+              <PdfPrintPanel
+                ref={printPanelRef}
+                shipping
+                onSelectedPagesChange={setPrintIndices}
+                pageCount={items.length}
+                currentPage={Math.min(previewIndex, items.length - 1) + 1}
+                printing={printing}
+                progress={progress}
+                outputLabel={`${size.widthMm} × ${size.heightMm} mm`}
+                onPrint={(selection, options) => {
+                  void print(selection, options);
+                }}
+              />
             </View>
           </FormScrollView>
-          <BottomBar
-            insetBottom={insets.bottom}
-            onBack={handleBack}
-            backDisabled={printing}
-            nextLabel={printerLive ? 'Print' : 'Connect printer'}
-            nextBusy={printing}
-            nextDanger={!printerLive}
-            onNext={() => {
-              if (!printerLive) {
-                router.push('/printer-connect');
-                return;
-              }
-              printPanelRef.current?.submit();
-            }}
-          />
+          <View style={[styles.printFooter, { paddingBottom: insets.bottom + Spacing.two }]}>
+            <Pressable
+              disabled={printing}
+              hitSlop={6}
+              onPress={() => {
+                if (!getPrinterManager().isConnected) {
+                  askToConnectPrinter();
+                  return;
+                }
+                printPanelRef.current?.submit();
+              }}
+              style={({ pressed }) => [styles.printPill, (pressed || printing) && styles.pressed]}>
+              {printing ? (
+                <ActivityIndicator size="small" color={C.onAccent} />
+              ) : (
+                <Text style={styles.printPillText}>Print</Text>
+              )}
+            </Pressable>
+          </View>
         </>
       ) : null}
       {platform ? (
@@ -478,6 +493,18 @@ export default function EcommerceLabelScreen() {
       ) : null}
       {documentSourceSheet}
     </View>
+  );
+}
+
+/** Same prompt as the normal Print screen when no printer is connected. */
+function askToConnectPrinter() {
+  Alert.alert(
+    'Connect a printer first',
+    'No printer is connected. Connect your printer first. You can print only after it is connected.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Connect printer', onPress: () => router.push('/printer-connect') },
+    ],
   );
 }
 
@@ -525,17 +552,32 @@ const styles = themedStyles((c, scheme) => ({
   screen: { flex: 1, backgroundColor: c.bg },
   flex: { flex: 1 },
   header: {
-    height: 48,
+    paddingBottom: 6,
     backgroundColor: c.header,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
   },
   headerBtn: { width: 44, paddingHorizontal: 6, paddingVertical: 8 },
-  headerTitle: { flex: 1, color: c.onAccent, fontSize: 17, fontWeight: '600' },
+  headerTitle: { flex: 1, minWidth: 0, paddingRight: 8, color: c.onAccent, fontSize: 17, fontWeight: '600' },
   content: { padding: 16, gap: 10 },
-  printContent: { paddingVertical: 16, gap: 16 },
+  printContent: { paddingBottom: 16, gap: 12 },
   printPanel: { paddingHorizontal: 16 },
+  printFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    backgroundColor: c.fill,
+  },
+  printPill: {
+    flex: 1,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: c.accentFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  printPillText: { color: c.onAccent, ...Type.button },
   heading: { fontSize: 15, fontWeight: '700', color: c.text, marginTop: 4 },
   sectionLabel: { fontSize: 12, fontWeight: '800', color: c.textMuted, letterSpacing: 0.8, textTransform: 'uppercase' },
   note: {
@@ -584,7 +626,10 @@ const styles = themedStyles((c, scheme) => ({
   },
   navOff: { opacity: 0.35 },
   navText: { fontSize: 15, fontWeight: '700', color: c.text, minWidth: 56, textAlign: 'center', flexShrink: 1 },
-  scanStrip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: c.surface },
+  scanStrip: { gap: 6, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: c.surface },
+  scanRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  scanTrack: { height: 4, borderRadius: 2, backgroundColor: c.fill, overflow: 'hidden' },
+  scanFill: { height: '100%', borderRadius: 2, backgroundColor: c.accentFill },
   scanText: { fontSize: 12, fontWeight: '600', color: c.textSecondary, flexShrink: 1 },
   skipNote: { fontSize: 12, color: c.textMuted, textAlign: 'center', paddingBottom: 12, backgroundColor: c.surface },
   bottomBar: {

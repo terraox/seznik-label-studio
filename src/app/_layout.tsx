@@ -3,7 +3,6 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import * as SplashScreen from 'expo-splash-screen';
 import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import { AppState, ScrollView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -28,7 +27,7 @@ import { openIncomingFile } from '@/lib/file-import/open-incoming-file';
 import { useIncomingFileStore } from '@/stores/incoming-file-store';
 import { usePrinterStore } from '@/stores/printer-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { AppThemeProvider, DarkColors, useScheme, useSettingsHydrated } from '@/theme';
+import { AppThemeProvider, DarkColors, LightColors, useScheme, useSettingsHydrated } from '@/theme';
 
 /** React Navigation colours for dark mode. Light keeps DefaultTheme exactly as before. */
 const NavDarkTheme = {
@@ -43,8 +42,6 @@ const NavDarkTheme = {
     notification: DarkColors.danger,
   },
 };
-
-SplashScreen.preventAutoHideAsync().catch(() => {});
 
 class RootErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
@@ -121,17 +118,11 @@ function AppRoot() {
       });
   }, []);
 
-  // The native splash (static logo) stays up until the stores have loaded; then the navigator mounts.
   const appReady = true;
   const authHydrated = useAuthStore((s) => s.hydrated);
   const signedIn = useAuthStore((s) => s.token !== null);
   const needsPrinter = useAuthStore((s) => s.needsPrinter);
   const themeChosen = useSettingsStore((s) => s.themeChosen);
-
-  const settingsReady = authHydrated && settingsHydrated;
-  useEffect(() => {
-    if (settingsReady) SplashScreen.hideAsync().catch(() => {});
-  }, [settingsReady]);
 
   // A file sent to the app ("Open with" or share: Excel, PDF, .seznik) opens on its own screen
   // once the app is ready and signed in.
@@ -246,7 +237,10 @@ function AppRoot() {
           <Stack.Screen name="serial-label" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="serial-info" options={{ animation: 'slide_from_right' }} />
         </Stack>
-      ) : null}
+      ) : (
+        // No splash: until the stores load, show the plain app background.
+        <View style={{ flex: 1, backgroundColor: scheme === 'dark' ? DarkColors.bg : LightColors.bg }} />
+      )}
       <FeedbackPrompt enabled={appReady && signedIn && !needsPrinter} />
       <NavigationBarScrim />
       <OfflineBanner />

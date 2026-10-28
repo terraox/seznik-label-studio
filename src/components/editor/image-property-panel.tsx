@@ -9,13 +9,6 @@ import { formatMm, normalizeRotation } from '@/components/editor/types';
 import { GrayThresholdSlider } from '@/components/editor/gray-threshold-slider';
 import type { ImageElementState } from '@/lib/label-document';
 import { resolveEditorColorMode } from '@/lib/editor/image-mono';
-import {
-  DEFAULT_IMAGE_THRESHOLD,
-  IMAGE_MODES,
-  IMAGE_MODE_HELP,
-  IMAGE_MODE_LABEL,
-  type ImageMode,
-} from '@/printing/raster/image-modes';
 import { useImageSourcePicker } from '@/lib/file-import/pick-image';
 import { containFitImageOnLabel } from '@/lib/label-coordinate-system';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
@@ -23,7 +16,6 @@ import { C, themedStyles, useThemeRefresh } from '@/theme';
 const TABS = ['Regular', 'Position', 'Image', 'Effect'] as const;
 export type ImagePropertyTab = (typeof TABS)[number];
 const COLOR_MODES = ['Original', 'B & W', 'Halftone'] as const;
-const PRINT_MODE_CHOICES = ['Standard', ...IMAGE_MODES.map((m) => IMAGE_MODE_LABEL[m])] as const;
 
 function Divider() {
   useThemeRefresh();
@@ -272,34 +264,6 @@ export function ImagePropertyPanel({
   const colorMode = resolveEditorColorMode(state.colorMode);
   const threshold = state.grayThreshold ?? 128;
   const contentType = state.contentType === 'Data Source' ? 'Data Source' : 'Local Image';
-  const printMode: ImageMode | null = state.imageMode ?? null;
-  const printModeChoice = printMode ? IMAGE_MODE_LABEL[printMode] : 'Standard';
-  const selectPrintMode = (label: string) => {
-    const next = IMAGE_MODES.find((m) => IMAGE_MODE_LABEL[m] === label);
-    if (!next) {
-      // Back to the old behaviour: forget every new field, give Anti-color its value back.
-      patch({
-        imageMode: undefined,
-        threshold: undefined,
-        brightness: undefined,
-        contrast: undefined,
-        invert: undefined,
-        antiColor: state.invert === true ? !state.antiColor : state.antiColor,
-      });
-      return;
-    }
-    if (!printMode) {
-      // First pick keeps today's threshold, and Anti-color becomes the new Invert so nothing flips.
-      patch({
-        imageMode: next,
-        threshold: state.grayThreshold ?? DEFAULT_IMAGE_THRESHOLD,
-        invert: state.antiColor,
-        antiColor: false,
-      });
-      return;
-    }
-    patch({ imageMode: next });
-  };
   const applyTile = (tile: boolean) => {
     if (tile) {
       patch({
@@ -570,64 +534,6 @@ export function ImagePropertyPanel({
               value={state.antiColor}
               onValueChange={(antiColor) => patch({ antiColor })}
             />
-            <Divider />
-            <SegmentRow
-              label="Print mode"
-              options={PRINT_MODE_CHOICES}
-              selected={printModeChoice}
-              onSelect={selectPrintMode}
-            />
-            {printMode ? (
-              <>
-                <Text style={styles.printModeHelp}>{IMAGE_MODE_HELP[printMode]}</Text>
-                {printMode === 'solid' ? (
-                  <View style={styles.thresholdBlock}>
-                    <View style={styles.thresholdHeader}>
-                      <Text style={styles.rowLabel}>Threshold</Text>
-                      <Text style={styles.thresholdValue}>{state.threshold ?? DEFAULT_IMAGE_THRESHOLD}</Text>
-                    </View>
-                    <GrayThresholdSlider
-                      value={state.threshold ?? DEFAULT_IMAGE_THRESHOLD}
-                      min={1}
-                      max={254}
-                      onChange={(threshold) => patch({ threshold })}
-                    />
-                  </View>
-                ) : null}
-                <View style={styles.thresholdBlock}>
-                  <View style={styles.thresholdHeader}>
-                    <Text style={styles.rowLabel}>Brightness</Text>
-                    <Text style={styles.thresholdValue}>{state.brightness ?? 0}</Text>
-                  </View>
-                  <GrayThresholdSlider
-                    value={state.brightness ?? 0}
-                    min={-100}
-                    max={100}
-                    onChange={(brightness) => patch({ brightness })}
-                  />
-                </View>
-                <View style={styles.thresholdBlock}>
-                  <View style={styles.thresholdHeader}>
-                    <Text style={styles.rowLabel}>Contrast</Text>
-                    <Text style={styles.thresholdValue}>{state.contrast ?? 0}</Text>
-                  </View>
-                  <GrayThresholdSlider
-                    value={state.contrast ?? 0}
-                    min={-100}
-                    max={100}
-                    onChange={(contrast) => patch({ contrast })}
-                  />
-                </View>
-                <ToggleRow
-                  label="Invert"
-                  value={state.invert === true}
-                  onValueChange={(invert) => patch({ invert })}
-                />
-                <Text style={styles.printModeHelp}>
-                  Applies to TD-404 and Josh printers. Other printers print this image the standard way.
-                </Text>
-              </>
-            ) : null}
           </GraySection>
         )}
       </ScrollView>
@@ -895,7 +801,6 @@ const styles = themedStyles((c) => ({
     flexShrink: 1,
     textAlign: 'right',
   },
-  printModeHelp: { fontSize: 12, color: c.textSecondary, paddingHorizontal: 2, paddingBottom: 4 },
   thresholdBlock: {
     paddingVertical: 8,
   },

@@ -11,10 +11,25 @@ import { printLabelDocumentMainPipeline } from '@/lib/printer/main-pipeline-prin
 import { joshEffectiveDpi } from '@/lib/printer/josh-print';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 
+import { usePrinterStore } from '@/stores/printer-store';
+
 export type { ModedGrayPrintInput };
 
+/**
+ * Josh does not dither correctly, so the dither modes are off for it. A connected printer decides;
+ * with none connected the printer chosen at purchase (or last connected) decides.
+ */
 export function bridgeSupportsImageModes(): boolean {
-  return true;
+  const { status, selectedPrinterModel } = usePrinterStore.getState();
+  const connected = status === 'connected' || status === 'printing';
+  if (connected) return !getPrinterManager().isJosh;
+  return selectedPrinterModel !== 'josh';
+}
+
+/** Same rule as `bridgeSupportsImageModes`, re-evaluated when the printer changes. */
+export function useImageModesSupported(): boolean {
+  usePrinterStore((s) => s.status + s.selectedPrinterModel + (s.sdkId ?? '') + (s.transport ?? ''));
+  return bridgeSupportsImageModes();
 }
 
 /** The printer dpi the headless raster uses for this job. */

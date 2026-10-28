@@ -15,17 +15,17 @@ export type ImageMode = 'solid' | 'floyd' | 'atkinson' | 'ordered';
 export const IMAGE_MODES: readonly ImageMode[] = ['solid', 'floyd', 'atkinson', 'ordered'];
 
 export const IMAGE_MODE_LABEL: Record<ImageMode, string> = {
-  solid: 'Solid',
-  floyd: 'Dither - Floyd-Steinberg',
-  atkinson: 'Dither - Atkinson',
-  ordered: 'Dither - Ordered 8x8',
+  solid: 'Black & White',
+  floyd: 'Photo',
+  atkinson: 'Photo (Bold)',
+  ordered: 'Dots',
 };
 
 export const IMAGE_MODE_HELP: Record<ImageMode, string> = {
-  solid: 'Hard black and white. Best for logos, line art and text.',
-  floyd: 'Best for photos.',
-  atkinson: 'Lighter. Good for small or low-contrast photos.',
-  ordered: 'Stable pattern. Good for gradients and gray fills.',
+  solid: 'Plain black and white, no shading. Best for logos, line art and text.',
+  floyd: 'Smooth shading. Best for photos.',
+  atkinson: 'Photos with stronger contrast. Good for small or faded photos.',
+  ordered: 'Shaded with a dot pattern. Good for gradients and gray fills.',
 };
 
 export type ImageSettings = {
