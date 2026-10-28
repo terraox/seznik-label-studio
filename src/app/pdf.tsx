@@ -1,7 +1,6 @@
 import { goBack as leaveScreen } from '@/lib/go-back';
 import { useStepBack } from '@/lib/use-step-back';
 import { Image } from 'expo-image';
-import * as Sharing from 'expo-sharing';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -41,7 +40,6 @@ import {
 } from '@/components/pdf-editor/use-smart-crop';
 
 import { planLabelRender } from '@/lib/pdf-editor/label-render-plan';
-import { exportEditedPdf } from '@/lib/pdf-editor/export';
 import { loadPdfMetadata, loadPdfPageSizes, openPdfUri } from '@/lib/pdf-editor/load';
 import {
   clearPrintRasterCache,
@@ -88,7 +86,7 @@ const STEP_TITLE: Record<Step, string> = {
   print: 'Print',
 };
 
-/** Standalone PDF editor: size, then crop tools, then print or export. */
+/** Standalone PDF editor: size, then crop tools, then print. */
 export default function PdfEditorScreen() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
@@ -132,8 +130,6 @@ export default function PdfEditorScreen() {
   const [tool, setTool] = useState<PdfToolId | null>(null);
   const [pageUri, setPageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [exportProgress, setExportProgress] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const [printProgress, setPrintProgress] = useState<string | null>(null);
   const printPanelRef = useRef<PdfPrintPanelHandle>(null);
@@ -252,32 +248,6 @@ export default function PdfEditorScreen() {
     }
   }, [pickDocumentWithSource, refinePageSizes, setOutputSize, startSession]);
 
-  const exportPdf = useCallback(async () => {
-    if (!session || exporting) return;
-    setExporting(true);
-    setExportProgress('Exporting…');
-    try {
-      const result = await exportEditedPdf(session, (current, total) => {
-        setExportProgress(`Page ${current} / ${total}`);
-      });
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(result.uri, {
-          mimeType: 'application/pdf',
-          UTI: 'com.adobe.pdf',
-          dialogTitle: session.sourceName,
-        });
-      } else {
-        Alert.alert('Exported', result.uri);
-      }
-    } catch (err) {
-      Alert.alert('Export failed', err instanceof Error ? err.message : 'Could not write PDF.');
-    } finally {
-      setExporting(false);
-      setExportProgress(null);
-    }
-  }, [exporting, session]);
-
   const printPdf = useCallback(
     async (selection: PdfPrintSelection, options: PdfPrintOptions) => {
       if (!session || printing) return;
@@ -353,7 +323,7 @@ export default function PdfEditorScreen() {
   );
 
   const goBack = () => {
-    if (printing || exporting) return;
+    if (printing) return;
     if (step === 'print') {
       setStep('edit');
       return;
@@ -936,7 +906,7 @@ export default function PdfEditorScreen() {
               pageCount={session.pageCount}
               currentPage={session.currentPageIndex + 1}
               printing={printing}
-              progress={printProgress ?? exportProgress}
+              progress={printProgress}
               outputLabel={`${session.outputSize.widthMm} × ${session.outputSize.heightMm} mm`}
               onPrint={(selection, options) => {
                 void printPdf(selection, options);
@@ -950,18 +920,6 @@ export default function PdfEditorScreen() {
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 4) + 2 }]}>
         {step === 'print' ? (
           <View style={styles.printActions}>
-            <WalkthroughTarget id="pdf.export" style={styles.exportSlot}>
-            <Pressable
-              onPress={() => void exportPdf()}
-              disabled={exporting || printing}
-              style={({ pressed }) => [
-                styles.exportBtn,
-                (exporting || printing) && styles.btnOff,
-                pressed && styles.pressed,
-              ]}>
-              <Text style={styles.exportBtnText}>{exporting ? 'Exporting…' : 'Export'}</Text>
-            </Pressable>
-            </WalkthroughTarget>
             <WalkthroughTarget id="pdf.print" style={styles.printSlot}>
             <Pressable
               onPress={() => {
@@ -971,12 +929,12 @@ export default function PdfEditorScreen() {
                 }
                 printPanelRef.current?.submit();
               }}
-              disabled={printing || exporting}
+              disabled={printing}
               style={({ pressed }) => [
                 styles.primaryBtn,
                 styles.printBtn,
                 !printerLive && styles.connectFirstBtn,
-                (printing || exporting) && styles.btnOff,
+                printing && styles.btnOff,
                 pressed && styles.pressed,
               ]}>
               {printing ? (
@@ -1060,8 +1018,7 @@ const styles = themedStyles((c, scheme) => ({
     fontWeight: '600',
   },
   headerHelp: { paddingHorizontal: 6, paddingVertical: 6 },
-  exportSlot: { flex: 1 },
-  printSlot: { flex: 1.4 },
+  printSlot: { flex: 1 },
   pageLoading: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

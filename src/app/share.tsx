@@ -1,8 +1,7 @@
 import { goBack } from '@/lib/go-back';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { NewLabelArt, SeznikFileMark, ToolArt } from '@/components/home/tool-art';
+import { NewLabelArt, SeznikFileMark } from '@/components/home/tool-art';
 import { useMemo, useRef, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Alert, Platform, StyleSheet, Pressable, Switch, Text, View } from 'react-native';
@@ -99,32 +98,6 @@ export default function ShareModal() {
     }
   };
 
-  const handleSharePdf = async () => {
-    if (!doc || busy) return;
-    if (!(await ensureSharingAvailable())) return;
-    setBusy(true);
-    try {
-      const capture = shotRef.current?.capture;
-      if (!capture) throw new Error('Could not render the label.');
-      const png = await capture();
-      const base64 = await FileSystem.readAsStringAsync(png, { encoding: FileSystem.EncodingType.Base64 });
-      const widthPt = Math.max(1, Math.round((doc.widthMm / 25.4) * 72));
-      const heightPt = Math.max(1, Math.round((doc.heightMm / 25.4) * 72));
-      const html = `<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>@page{margin:0}html,body{margin:0;padding:0}img{display:block;width:100%;height:100%}</style></head><body><img src="data:image/png;base64,${base64}"/></body></html>`;
-      const file = await Print.printToFileAsync({ html, width: widthPt, height: heightPt });
-      await Sharing.shareAsync(file.uri, {
-        mimeType: 'application/pdf',
-        UTI: 'com.adobe.pdf',
-        dialogTitle: `Share "${doc.name}"`,
-      });
-      goBack();
-    } catch (error) {
-      Alert.alert('Share Failed', error instanceof Error ? error.message : 'Could not create the PDF.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const handleShareImage = async () => {
     if (!doc || busy) return;
     if (!(await ensureSharingAvailable())) return;
@@ -204,7 +177,6 @@ export default function ShareModal() {
             <View style={styles.options}>
               <ShareOption art={<SeznikFileMark size={56} />} label="As .seznik" onPress={() => setView('file')} />
               <ShareOption art={<NewLabelArt kind="upload" size={56} />} label="As image" onPress={() => void handleShareImage()} />
-              <ShareOption art={<ToolArt id="pdf" size={56} />} label="As PDF" onPress={() => void handleSharePdf()} />
             </View>
           ) : (
             <Text style={styles.emptyHint}>

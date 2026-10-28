@@ -9,14 +9,12 @@ import {
   type PDFPage,
 } from 'pdf-lib';
 
-import { applyMonoToRgba, DEFAULT_GRAY_THRESHOLD, type EditorColorMode } from '@/lib/editor/image-mono';
 import { pngBase64ToGray, type GrayRaster } from '@/lib/printer/escpos';
 import { EXPORT_DPI, rasterPdfPageCached } from '@/lib/pdf-editor/raster';
 import { renderPdfPage } from 'pdf-raster';
 import {
   cropWindowPts,
   mmToPt,
-  pageColorMode,
   resolveScopeIndices,
   shouldRasterizePage,
   stampRectInCropSpace,
@@ -259,11 +257,6 @@ function cropRgba(
 
 export type PdfExportProgress = (current: number, total: number) => void;
 
-export type PdfExportResult = {
-  uri: string;
-  usedRaster: boolean[];
-};
-
 async function composeEditedPages(
   session: PdfEditSession,
   indices: number[],
@@ -355,13 +348,6 @@ async function composeEditedPages(
   return { doc: out, usedRaster };
 }
 
-function rotatedPagePts(page: PDFPage): { w: number; h: number } {
-  const size = page.getSize();
-  const angle = ((page.getRotation().angle % 360) + 360) % 360;
-  if (angle === 90 || angle === 270) return { w: size.height, h: size.width };
-  return { w: size.width, h: size.height };
-}
-
 async function writePdfFile(doc: PDFDocument, name: string): Promise<string> {
   const outB64 = await doc.saveAsBase64({ dataUri: false });
   const root = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '';
@@ -375,44 +361,6 @@ async function writePdfFile(doc: PDFDocument, name: string): Promise<string> {
     encoding: FileSystem.EncodingType.Base64,
   });
   return uri;
-}
-
-/** Raster pages that are not Original and bake B&W or halftone. */
-async function flattenPdfColorMode(doc: PDFDocument, modes: EditorColorMode[]): Promise<PDFDocument> {
-  if (modes.every((mode) => mode === 'Original')) return doc;
-  const uri = await writePdfFile(doc, `flatten_${Date.now()}.pdf`);
-  try {
-    const next = await PDFDocument.create();
-    const count = doc.getPageCount();
-    for (let i = 0; i < count; i++) {
-      const mode = modes[i] ?? 'Original';
-      if (mode === 'Original') {
-        const [copied] = await next.copyPages(doc, [i]);
-        next.addPage(copied);
-        continue;
-      }
-      const rendered = await renderPdfPage(uri, i, EXPORT_DPI);
-      const pngBytes = await readBytes(rendered.uri);
-      const decoded = decodePng(pngBytes);
-      const rgba = new Uint8Array(decoded.data.length);
-      rgba.set(decoded.data);
-      applyMonoToRgba(rgba, decoded.width, decoded.height, DEFAULT_GRAY_THRESHOLD, mode);
-      const encoded = encodePng({
-        width: decoded.width,
-        height: decoded.height,
-        data: rgba,
-        depth: 8,
-        channels: 4,
-      });
-      const box = rotatedPagePts(doc.getPage(i));
-      const page = next.addPage([box.w, box.h]);
-      const img = await next.embedPng(encoded);
-      page.drawImage(img, { x: 0, y: 0, width: box.w, height: box.h });
-    }
-    return next;
-  } finally {
-    await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
-  }
 }
 
 export type EditedPdfPageRaster = {
@@ -455,32 +403,4 @@ export async function renderEditedPdfPages(
   } finally {
     await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
   }
-}
-
-export async function exportEditedPdf(
-  session: PdfEditSession,
-  onProgress?: PdfExportProgress,
-): Promise<PdfExportResult> {
-  const indices = Array.from({ length: session.pageCount }, (_, i) => i);
-  const composed = await composeEditedPages(session, indices, onProgress);
-  const colorModes = Array.from({ length: session.pageCount }, (_, i) => pageColorMode(session, i));
-  const doc = colorModes.every((mode) => mode === 'Original')
-    ? composed.doc
-    : await flattenPdfColorMode(composed.doc, colorModes);
-  const usedRaster = colorModes.every((mode) => mode === 'Original')
-    ? composed.usedRaster
-    : composed.usedRaster.map(() => true);
-
-  const outB64 = await doc.saveAsBase64({ dataUri: false });
-  const root = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '';
-  const dir = `${root}pdf-editor/`;
-  const dirInfo = await FileSystem.getInfoAsync(dir);
-  if (!dirInfo.exists) {
-    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-  }
-  const uri = `${dir}export_${Date.now()}.pdf`;
-  await FileSystem.writeAsStringAsync(uri, outB64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  return { uri, usedRaster };
 }

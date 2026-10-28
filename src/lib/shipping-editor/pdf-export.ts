@@ -4,8 +4,6 @@
  * as well as direct ZPL/TSPL command streams.
  */
 
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 
 import { generateCode128Vector } from '@/lib/shipping-editor/svg-barcode';
 import {
@@ -237,43 +235,6 @@ export function generateShippingLabelHtml(
 /**
  * Renders the shipping label to a true-size PDF file.
  */
-export async function renderLabelToPDF(
-  template: ShippingTemplate,
-  data: ShippingOrderData = DEFAULT_SHIPPING_ORDER_DATA,
-  sizePreset: LabelSizePreset = STANDARD_LABEL_SIZES[template.labelSize] || STANDARD_LABEL_SIZES['4x6'],
-): Promise<{ uri: string; numberOfPages: number }> {
-  const widthMm = template.customWidthMm || sizePreset.widthMm;
-  const heightMm = template.customHeightMm || sizePreset.heightMm;
-
-  const widthPt = (widthMm / MM_PER_INCH) * 72;
-  const heightPt = (heightMm / MM_PER_INCH) * 72;
-
-  const html = generateShippingLabelHtml(template, data, sizePreset);
-
-  const file = await Print.printToFileAsync({
-    html,
-    width: Math.round(widthPt),
-    height: Math.round(heightPt),
-  });
-
-  return file;
-}
-
-/**
- * Shares or saves a generated PDF.
- */
-export async function shareLabelPDF(pdfUri: string): Promise<void> {
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (!isAvailable) {
-    throw new Error('Sharing is not available on this device.');
-  }
-  await Sharing.shareAsync(pdfUri, {
-    mimeType: 'application/pdf',
-    dialogTitle: 'Share Shipping Label PDF',
-    UTI: 'com.adobe.pdf',
-  });
-}
-
 /**
  * Generates direct Zebra Programming Language (ZPL) text commands.
  */

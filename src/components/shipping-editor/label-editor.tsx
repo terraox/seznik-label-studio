@@ -26,7 +26,6 @@ import ViewShot, { captureRef } from 'react-native-view-shot';
 import { AppIcon } from '@/components/app-icon';
 import { LabelSizePicker } from '@/components/shipping-editor/label-size-picker';
 import { ShippingLabelCanvas } from '@/components/shipping-editor/shipping-label-canvas';
-import { renderLabelToPDF, shareLabelPDF } from '@/lib/shipping-editor/pdf-export';
 import { resolvePrintQuality } from '@/lib/printer/print-quality';
 import {
   DEFAULT_SHIPPING_ORDER_DATA,
@@ -90,7 +89,6 @@ export function LabelEditor({
   const [zoomLevel, setZoomLevel] = useState(1);
 
   // Modals & States
-  const [exportingPdf, setExportingPdf] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [dataModalVisible, setDataModalVisible] = useState(false);
@@ -162,20 +160,6 @@ export function LabelEditor({
         return { ...f, x: newX, y: newY } as ShippingField;
       }),
     }));
-  };
-
-  // Export to Vector PDF
-  const handleExportPDF = async () => {
-    setExportingPdf(true);
-    try {
-      const pdf = await renderLabelToPDF(template, orderData, sizePreset);
-      await shareLabelPDF(pdf.uri);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Could not generate PDF.';
-      Alert.alert('Export Failed', msg);
-    } finally {
-      setExportingPdf(false);
-    }
   };
 
   const printShotRef = useRef<ViewShot>(null);
@@ -503,7 +487,7 @@ export function LabelEditor({
         </View>
       )}
 
-      {/* Bottom Export & Print Actions Bar with Bluetooth Status */}
+      {/* Bottom Print Actions Bar with Bluetooth Status */}
       <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 10 }]}>
         {/* Bluetooth Connection Status Pill */}
         <Pressable
@@ -541,20 +525,6 @@ export function LabelEditor({
             style={({ pressed }) => [styles.secBtn, pressed && styles.pressed]}>
             <AppIcon name="person.crop.circle" tintColor={C.text} size={16} />
             <Text style={styles.secBtnText}>Order Data</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleExportPDF}
-            disabled={exportingPdf}
-            style={({ pressed }) => [styles.secBtn, pressed && styles.pressed]}>
-            {exportingPdf ? (
-              <ActivityIndicator size="small" color={C.text} />
-            ) : (
-              <>
-                <AppIcon name="arrow.down.doc" tintColor={C.text} size={16} />
-                <Text style={styles.secBtnText}>Export PDF</Text>
-              </>
-            )}
           </Pressable>
 
           <Pressable
