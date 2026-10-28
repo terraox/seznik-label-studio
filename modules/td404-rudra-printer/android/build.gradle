@@ -25,7 +25,9 @@ android {
 dependencies {
   implementation 'androidx.core:core-ktx:1.13.1'
   // Ninestar / TD-404 LabelCommand + BitmapUtils (same JAR as Tejas / vendor demo).
-  implementation files('libs/labelprinter.jar')
+  // compileOnly: the Tejas module packages this identical JAR into the app. Bundling it from both
+  // modules makes D8 fail with "com.ninestar.printer.BuildConfig is defined multiple times".
+  compileOnly files('libs/labelprinter.jar')
 }
 
 // Classic Bluetooth SPP matches Ninestar TD-404 SppBluetoothPort transport.

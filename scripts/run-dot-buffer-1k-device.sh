@@ -67,22 +67,22 @@ log "Setting up adb reverse for Metro…"
 adb reverse "tcp:${METRO_PORT}" "tcp:${METRO_PORT}" || true
 
 log "Launching dev client…"
-adb shell am force-stop com.sezprint.app
+adb shell am force-stop com.seznik.labelstudio
 adb logcat -c
-adb shell am start -a android.intent.action.VIEW -d "${DEV_CLIENT_URL}" com.sezprint.app
+adb shell am start -a android.intent.action.VIEW -d "${DEV_CLIENT_URL}" com.seznik.labelstudio
 
 log "Waiting for JS bundle…"
 wait_for_logcat 'Running "main"' 120 'Hermes bundle loaded'
 
 log "Waiting for Expo Router to settle (8s)…"
 sleep 8
-adb shell am start -n com.sezprint.app/.MainActivity >/dev/null 2>&1 || true
+adb shell am start -n com.seznik.labelstudio/.MainActivity >/dev/null 2>&1 || true
 sleep 2
 
 log "Navigating to ${GATE_ROUTE_URL}…"
-adb shell am start -a android.intent.action.VIEW -d "${GATE_ROUTE_URL}" com.sezprint.app >/dev/null 2>&1 || true
+adb shell am start -a android.intent.action.VIEW -d "${GATE_ROUTE_URL}" com.seznik.labelstudio >/dev/null 2>&1 || true
 sleep 2
-adb shell am start -a android.intent.action.VIEW -d "sezprint:///dot-buffer-1k" com.sezprint.app >/dev/null 2>&1 || true
+adb shell am start -a android.intent.action.VIEW -d "sezprint:///dot-buffer-1k" com.seznik.labelstudio >/dev/null 2>&1 || true
 
 log "Waiting for screen mount (up to 60s)…"
 wait_for_logcat '\[DOT-1K\] screen mounted' 60 'DOT-1K screen mounted'
@@ -96,7 +96,7 @@ adb logcat -d | rg "\[DOT-1K\]" | rg -v "progress " || true
 
 mkdir -p "${OUT_DIR}"
 log "Pulling CSV to ${OUT_CSV}…"
-adb shell run-as com.sezprint.app cat files/dot-buffer-1k.csv > "${OUT_CSV}" \
+adb shell run-as com.seznik.labelstudio cat files/dot-buffer-1k.csv > "${OUT_CSV}" \
   || die "dot-buffer-1k.csv not found on device"
 
 rows=$(wc -l < "${OUT_CSV}" | tr -d ' ')
