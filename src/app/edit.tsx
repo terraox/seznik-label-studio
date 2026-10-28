@@ -84,7 +84,6 @@ import {
 } from '@/lib/editor/resize-policy';
 import {
   BULK_LABEL_NAV_HEIGHT_PX,
-  BULK_PANEL_DEFAULT_HEIGHT_PX,
   SPLIT_GAP_PX,
   NUDGE_PAD_SPLIT_EXTRA_PX,
   PANEL_DEFAULT_HEIGHT_PX,
@@ -1055,7 +1054,8 @@ export default function EditScreen() {
     (showBulkCopies ? BULK_COPIES_BAR_HEIGHT_PX : 0) +
     (showSerialBar ? SERIAL_BAR_HEIGHT_PX : 0);
   const splitViewportForCanvas = Math.max(0, splitViewportH - bulkNavReservePx);
-  const panelDefaultBase = showBulkNav ? BULK_PANEL_DEFAULT_HEIGHT_PX : PANEL_DEFAULT_HEIGHT_PX;
+  // Excel keeps the full tool menu visible by default; the canvas fits what is left above it.
+  const panelDefaultBase = PANEL_DEFAULT_HEIGHT_PX;
   const panelDefaultForSplit =
     panelDefaultBase +
     (editorSettings.showNudgePad ? NUDGE_PAD_SPLIT_EXTRA_PX : 0) +
@@ -5561,6 +5561,8 @@ export default function EditScreen() {
         visible={setupPromptVisible}
         onClose={() => finishSetupPrompt(false)}
         title="Save this setup?"
+        plainScroll
+        cardAlign="center"
         message={
           'Saving keeps this label\'s size, paper and layout, and which column goes where.\n\n' +
           'Next time: open Excel, tap this setup, and pick a new sheet with the same column names. The label opens already set up.\n\n' +
