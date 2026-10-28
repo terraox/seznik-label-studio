@@ -2672,34 +2672,48 @@ export default function PrintScreen() {
           ) : null}
 
           {pageCount > 1 ? (
-            <View style={styles.pageNav}>
-              <Pressable
-                hitSlop={12}
-                disabled={pageIndex <= 0}
-                onPress={() => setPageIndex((p) => Math.max(0, p - 1))}
-                style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
-                <AppIcon
-                  name="chevron.left"
-                  tintColor={pageIndex <= 0 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
-                  size={16}
-                />
-              </Pressable>
-              <Text style={styles.pageNavText}>
-                {serialInfo?.mode === 'batch'
-                  ? describeSerialValues(baseDocument!, pageIndex + liveSerialOffset)
-                  : `${baseDocument?.bulk ? 'Label' : 'Row'} ${pageIndex + 1} / ${pageCount}`}
-              </Text>
-              <Pressable
-                hitSlop={12}
-                disabled={pageIndex >= pageCount - 1}
-                onPress={() => setPageIndex((p) => Math.min(pageCount - 1, p + 1))}
-                style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
-                <AppIcon
-                  name="chevron.right"
-                  tintColor={pageIndex >= pageCount - 1 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
-                  size={16}
-                />
-              </Pressable>
+            <View style={styles.pageNavDock} pointerEvents="box-none">
+              <View style={styles.pageNav}>
+                <Pressable
+                  hitSlop={12}
+                  disabled={pageIndex <= 0}
+                  onPress={() => setPageIndex((p) => Math.max(0, p - 1))}
+                  style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
+                  <AppIcon
+                    name="chevron.left"
+                    tintColor={pageIndex <= 0 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
+                    size={13}
+                  />
+                </Pressable>
+                {serialInfo?.mode === 'batch' ? (
+                  <Text style={styles.pageNavText}>
+                    {describeSerialValues(baseDocument!, pageIndex + liveSerialOffset)}
+                  </Text>
+                ) : (
+                  <View style={styles.pageNumber}>
+                    <Text style={styles.pageNavText}>{baseDocument?.bulk ? 'Label ' : 'Row '}</Text>
+                    <EditableNumber
+                      value={pageIndex + 1}
+                      min={1}
+                      max={pageCount}
+                      onCommit={(next) => setPageIndex(next - 1)}
+                      style={[styles.pageNavText, styles.pageInput, { minWidth: 8 + String(pageCount).length * 8 }]}
+                    />
+                    <Text style={styles.pageNavText}> / {pageCount}</Text>
+                  </View>
+                )}
+                <Pressable
+                  hitSlop={12}
+                  disabled={pageIndex >= pageCount - 1}
+                  onPress={() => setPageIndex((p) => Math.min(pageCount - 1, p + 1))}
+                  style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
+                  <AppIcon
+                    name="chevron.right"
+                    tintColor={pageIndex >= pageCount - 1 ? '#7C848E' : '#FFFFFF'} // theme-fixed: on the dark page-nav pill
+                    size={13}
+                  />
+                </Pressable>
+              </View>
             </View>
           ) : null}
 
@@ -3220,25 +3234,27 @@ const styles = themedStyles((c, scheme) => ({
     fontSize: 12,
     color: c.textSecondary,
   },
+  pageNavDock: { position: 'absolute', left: 0, right: 0, bottom: 14, height: 34, alignItems: 'center', justifyContent: 'center' },
   pageNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    marginTop: 14,
+    gap: 6,
     backgroundColor: c.neutralFill,
     borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
   },
+  pageNumber: { flexDirection: 'row', alignItems: 'center' },
+  pageInput: { textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 4, paddingVertical: 1 }, // theme-fixed: field highlight on the dark pill
   pageNavText: {
     color: c.onAccent,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     flexShrink: 1,
   },
   pageNavBtn: {
-    minWidth: 32,
-    minHeight: 32,
+    minWidth: 26,
+    minHeight: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },

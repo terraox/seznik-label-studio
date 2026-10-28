@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
+import { EditableNumber } from '@/components/editable-number';
 import type { PrintStripItem } from '@/components/pdf-editor/print-pages-strip';
 import { rasterPdfPageCached, regionImageCached } from '@/lib/pdf-editor/raster';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
@@ -87,6 +88,38 @@ export function PrintPageViewer({
           </ScrollView>
         </ScrollView>
 
+        {total > 1 ? (
+          <View style={styles.pageNavDock} pointerEvents="box-none">
+            <View style={styles.pageNav}>
+              <Pressable
+                hitSlop={12}
+                disabled={at <= 0}
+                onPress={() => setIndex(at - 1)}
+                style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
+                <AppIcon name="chevron.left" tintColor={at <= 0 ? '#7C848E' : '#FFFFFF'} /* theme-fixed: on the dark page-nav pill */ size={13} />
+              </Pressable>
+              <View style={styles.pageNumber}>
+                <Text style={styles.pageNavText}>Label </Text>
+                <EditableNumber
+                  value={at + 1}
+                  min={1}
+                  max={total}
+                  onCommit={(next) => setIndex(next - 1)}
+                  style={[styles.pageNavText, styles.pageInput, { minWidth: 8 + String(total).length * 8 }]}
+                />
+                <Text style={styles.pageNavText}> / {total}</Text>
+              </View>
+              <Pressable
+                hitSlop={12}
+                disabled={at >= total - 1}
+                onPress={() => setIndex(at + 1)}
+                style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
+                <AppIcon name="chevron.right" tintColor={at >= total - 1 ? '#7C848E' : '#FFFFFF'} /* theme-fixed: on the dark page-nav pill */ size={13} />
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.zoomControls}>
           <Pressable
             hitSlop={6}
@@ -110,27 +143,6 @@ export function PrintPageViewer({
             {size.widthMm} × {size.heightMm} mm
           </Text>
         </View>
-        {total > 1 ? (
-          <View style={styles.pageNav}>
-            <Pressable
-              hitSlop={12}
-              disabled={at <= 0}
-              onPress={() => setIndex(at - 1)}
-              style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
-              <AppIcon name="chevron.left" tintColor={at <= 0 ? '#7C848E' : '#FFFFFF'} /* theme-fixed: on the dark page-nav pill */ size={16} />
-            </Pressable>
-            <Text style={styles.pageNavText} numberOfLines={1}>
-              Label {at + 1} / {total}
-            </Text>
-            <Pressable
-              hitSlop={12}
-              disabled={at >= total - 1}
-              onPress={() => setIndex(at + 1)}
-              style={({ pressed }) => [styles.pageNavBtn, pressed && styles.pressed]}>
-              <AppIcon name="chevron.right" tintColor={at >= total - 1 ? '#7C848E' : '#FFFFFF'} /* theme-fixed: on the dark page-nav pill */ size={16} />
-            </Pressable>
-          </View>
-        ) : null}
         {total === 0 ? <Text style={styles.empty}>No pages selected</Text> : null}
       </View>
     </View>
@@ -168,17 +180,20 @@ const styles = themedStyles((c, scheme) => ({
     paddingVertical: 3,
   },
   sizeBadgeText: { color: c.onAccent, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
+  pageNumber: { flexDirection: 'row', alignItems: 'center' },
+  pageInput: { textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 4, paddingVertical: 1 }, // theme-fixed: field highlight on the dark pill
+  pageNavDock: { position: 'absolute', left: 0, right: 0, bottom: 14, height: 34, alignItems: 'center', justifyContent: 'center' },
   pageNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 6,
     backgroundColor: c.neutralFill,
     borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
   },
-  pageNavText: { color: c.onAccent, fontSize: 13, fontWeight: '600', flexShrink: 1 },
-  pageNavBtn: { minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' },
+  pageNavText: { color: c.onAccent, fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  pageNavBtn: { minWidth: 26, minHeight: 26, alignItems: 'center', justifyContent: 'center' },
   empty: { fontSize: 13, color: c.textMuted },
   zoomControls: {
     position: 'absolute',
