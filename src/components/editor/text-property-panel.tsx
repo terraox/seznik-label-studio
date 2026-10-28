@@ -24,6 +24,7 @@ import {
   type EditorElementState,
   type LineSpacing,
   type PropertyTab,
+  type TableCellType,
   normalizeRotation,
 } from '@/components/editor/types';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
@@ -550,23 +551,25 @@ export function TextPropertyPanel({
                   <Text style={styles.rowLabel}>Cell Type</Text>
                   <View style={styles.segmentRow}>
                     {(['Text', 'Barcode', 'QRCode', 'Image'] as const).map((option) => {
-                      const active = option === 'Text';
+                      const active = option === (state.cellType ?? 'Text');
+                      const available = option !== 'Image';
                       return (
                         <Pressable
                           key={option}
-                          onPress={() => {}}
+                          disabled={!available}
+                          onPress={() => patch({ cellType: option as TableCellType })}
                           hitSlop={PRESS_HIT_SLOP}
                           style={({ pressed }) => [
                             styles.segmentChip,
                             active && styles.segmentChipActive,
                             pressed && styles.pressed,
-                            option !== 'Text' && styles.segmentChipDisabled,
+                            !available && styles.segmentChipDisabled,
                           ]}>
                           <Text
                             style={[
                               styles.segmentText,
                               active && styles.segmentTextActive,
-                              option !== 'Text' && styles.segmentTextDisabled,
+                              !available && styles.segmentTextDisabled,
                             ]}
                             numberOfLines={1}>
                             {option}

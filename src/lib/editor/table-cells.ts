@@ -5,6 +5,7 @@ import {
   type EditorElementState,
   type LineSpacing,
   type TableElementState,
+  type TableCellType,
   type TextAlign,
 } from '@/components/editor/types';
 
@@ -31,6 +32,8 @@ export type TableCellContent = {
   strikethrough: boolean;
   align: TextAlign;
   contentType: ContentType;
+  /** Barcode or QR code made from the cell's text. Absent means plain text. */
+  cellType?: TableCellType;
   columnNameContent: string;
   charSpacing: number;
   lineSpacing: LineSpacing;
@@ -331,6 +334,7 @@ export function tableCellToEditorState(
     antiColor: cell.antiColor,
     drawingColorIndex: cell.drawingColorIndex,
     contentType: cell.contentType,
+    ...(cell.cellType ? { cellType: cell.cellType } : {}),
     columnNameContent: cell.columnNameContent,
     charSpacing: cell.charSpacing,
     lineSpacing: cell.lineSpacing,
@@ -344,6 +348,7 @@ export function tableCellToEditorState(
 
 const CELL_KEYS = new Set([
   'text',
+  'cellType',
   'fontSize',
   'fontFamily',
   'bold',

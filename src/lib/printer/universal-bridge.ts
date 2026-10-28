@@ -21,6 +21,7 @@ import { createTd404Adapter, createTd404Capabilities } from '@/printing/adapters
 import { defaultPrintQueue } from '@/printing/printer/PrintQueue';
 import { encodeTscBitmapJob, inspectTsplJob } from '@/lib/printer/tsc';
 import { tsplMedia } from '@/lib/printer/paper-type';
+import { resampleGrayToSize } from '@/lib/img-to-label-engine';
 import { createPrintGeometry, type PrintGeometry } from '@/lib/printer/print-spec';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import {
@@ -442,10 +443,17 @@ async function runArtworkJob(
   }
 
   if (manager.usesTd404CommandSet) {
+    // The TD-404 bridge refuses to resize: it takes the label's exact dot size (or an integer
+    // multiple of it). A photo has its own pixel size, so it is fitted to the label here.
+    const target = createPrintGeometry(input.widthMm, input.heightMm, manager.getPrintDpi());
+    const extraCols = input.gray.width - target.bitmapDotsW;
+    // Up to 7 spare columns are cropped natively; anything else is fitted.
+    const alreadyFits = input.gray.height === target.bitmapDotsH && extraCols >= 0 && extraCols <= 7;
+    const gray = alreadyFits ? input.gray : resampleGrayToSize(input.gray, target.bitmapDotsW, target.bitmapDotsH);
     const pngBase64 = grayToPngBase64({
-      width: input.gray.width,
-      height: input.gray.height,
-      gray: input.gray.gray,
+      width: gray.width,
+      height: gray.height,
+      gray: gray.gray,
     });
     await defaultPrintQueue.enqueue(async () => {
       await manager.printPngLabelFast({

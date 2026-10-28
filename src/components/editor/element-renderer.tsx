@@ -33,7 +33,9 @@ import { ClipartIcon } from "@/components/clipart-icon";
 import { MonoImagePreview } from "@/components/editor/mono-image-preview";
 import { SignaturePreview } from "@/components/editor/signature-preview";
 import {
+  DEFAULT_BARCODE_STATE,
   DEFAULT_ELEMENT_STATE,
+  DEFAULT_QRCODE_STATE,
   DRAWING_COLORS,
   applyTimeOffsets,
   formatLiveDateTime,
@@ -1485,7 +1487,37 @@ function TableContent({
               cell && dataColumnHighlightStyle(cell, highlightColumnName),
             ]}
           >
-            {cell && flat && style ? (
+            {cell && flat && (cell.cellType === "Barcode" || cell.cellType === "QRCode")
+              ? (() => {
+                  const codeW = Math.max(1, width - padX * 2);
+                  const codeH = Math.max(1, height - Math.max(0, scale * 0.2) * 2);
+                  const shared = {
+                    contentType: cell.contentType,
+                    columnNameContent: cell.columnNameContent,
+                    antiColor: false,
+                    drawingColorIndex: cell.drawingColorIndex,
+                  };
+                  return (
+                    <View style={{ width: codeW, height: codeH, alignSelf: "center" }}>
+                      {cell.cellType === "Barcode" ? (
+                        <BarcodeContent
+                          element={{ ...DEFAULT_BARCODE_STATE, ...shared, content: flat, textFlag: "Hide" }}
+                          widthPx={codeW}
+                          heightPx={codeH}
+                          scale={scale}
+                        />
+                      ) : (
+                        <QrcodeContent
+                          element={{ ...DEFAULT_QRCODE_STATE, ...shared, content: flat }}
+                          widthPx={codeW}
+                          heightPx={codeH}
+                        />
+                      )}
+                    </View>
+                  );
+                })()
+              : null}
+            {cell && flat && style && !(cell.cellType === "Barcode" || cell.cellType === "QRCode") ? (
               <ItalicWrap
                 collapsable={false}
                 // Italic is a shear on a wrapper (Text fontStyle would swap the font), as in Text.

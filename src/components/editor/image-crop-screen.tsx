@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppIcon } from '@/components/app-icon';
 import { ImageCropCanvas, type ImageCropCanvasHandle } from '@/components/editor/image-crop-canvas';
 import { applyImageCrop, inspectImagePixelSize } from '@/lib/editor/apply-image-crop';
 import {
@@ -105,26 +106,22 @@ export function ImageCropScreen({
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <View style={styles.header}>
-        <Pressable onPress={onCancel} hitSlop={12} style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}>
-          <Text style={styles.cancelText}>Cancel</Text>
+    <View style={styles.root}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Pressable onPress={onCancel} hitSlop={12} style={styles.headerSide}>
+          <AppIcon name="chevron.left" tintColor={C.onAccent} size={24} />
         </Pressable>
-        <View style={styles.headerCenter}>
-          <Text style={styles.title}>Crop Photo</Text>
-          <Text style={styles.subtitle}>Drag corners or move the frame</Text>
-        </View>
-        <Pressable
-          disabled={saving || loadingDims}
-          onPress={handleConfirm}
-          hitSlop={12}
-          style={({ pressed }) => [styles.doneBtn, (pressed || saving) && styles.pressed]}>
-          {saving ? (
-            <ActivityIndicator color={C.onAccent} size="small" />
-          ) : (
-            <Text style={styles.doneText}>Done</Text>
-          )}
-        </Pressable>
+        <Text style={styles.title} numberOfLines={1}>
+          Crop photo
+        </Text>
+        <View style={styles.headerSide} />
+      </View>
+
+      <View style={styles.hintRow}>
+        <AppIcon name="rectangle.dashed" tintColor={C.accent} size={16} />
+        <Text style={styles.hint} numberOfLines={2}>
+          Drag the frame to move it, or drag a corner to resize
+        </Text>
       </View>
 
       <ImageCropCanvas
@@ -137,59 +134,74 @@ export function ImageCropScreen({
         style={styles.stage}
       />
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 14 }]}>
         <Pressable onPress={handleReset} style={({ pressed }) => [styles.resetBtn, pressed && styles.pressed]}>
           <Text style={styles.resetText}>Reset</Text>
         </Pressable>
-        <Text style={styles.footerHint}>Drag inside to move · corners to resize</Text>
+        <Pressable
+          disabled={saving || loadingDims}
+          onPress={handleConfirm}
+          style={({ pressed }) => [styles.doneBtn, (pressed || saving || loadingDims) && styles.pressed]}>
+          {saving ? (
+            <ActivityIndicator color={C.onAccent} size="small" />
+          ) : (
+            <Text style={styles.doneText}>Done</Text>
+          )}
+        </Pressable>
       </View>
     </View>
   );
 }
 
 const styles = themedStyles((c) => ({
-  root: { flex: 1, backgroundColor: '#0F172A' }, // theme-fixed: dark crop screen in both themes
+  root: { flex: 1, backgroundColor: c.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
+    paddingBottom: 12,
+    backgroundColor: c.header,
   },
-  headerBtn: { minWidth: 64, paddingVertical: 8 },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  title: { color: c.onAccent, fontSize: 17, fontWeight: '700' },
-  subtitle: { color: c.textMuted, fontSize: 12, marginTop: 2 },
-  cancelText: { color: c.textDisabled, fontSize: 16, fontWeight: '500' },
-  doneBtn: {
-    minWidth: 72,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: c.accent,
+  headerSide: { width: 72, height: 40, justifyContent: 'center' },
+  title: { flexShrink: 1, color: c.onAccent, fontSize: 18, fontWeight: '600', textAlign: 'center' },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  hint: { flex: 1, flexShrink: 1, color: c.textSecondary, fontSize: 13 },
+  stage: {
+    flex: 1,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  footer: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  resetBtn: {
+    height: 48,
+    paddingHorizontal: 22,
+    borderRadius: 12,
+    backgroundColor: c.fillStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  doneText: { color: c.onAccent, fontSize: 16, fontWeight: '700' },
-  stage: {
+  resetText: { flexShrink: 1, color: c.text, fontSize: 16, fontWeight: '600' },
+  doneBtn: {
     flex: 1,
-    marginHorizontal: 12,
+    height: 48,
     borderRadius: 12,
-  },
-  footer: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 8,
+    backgroundColor: c.accentFill,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
   },
-  resetBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#1E293B', // theme-fixed: dark crop screen in both themes
-  },
-  resetText: { color: c.textDisabled, fontSize: 15, fontWeight: '600' },
-  footerHint: { color: c.textSecondary, fontSize: 12, textAlign: 'center' },
+  doneText: { flexShrink: 1, color: c.onAccent, fontSize: 17, fontWeight: '700' },
   pressed: { opacity: 0.72 },
 }));

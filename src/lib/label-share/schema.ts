@@ -250,6 +250,7 @@ const CELL_SPEC: Record<string, Spec> = (() => {
     text: str(d.text),
     ...fontFields(d),
     ...contentFields(),
+    cellType: optOneOf(['Text', 'Barcode', 'QRCode']),
     ...flowFields(),
     antiColor: bool(false),
     drawingColorIndex: int(0, 99, 0),

@@ -186,7 +186,7 @@ export default function NewLabelSetupScreen() {
   const total = cell.w != null ? totalWidthMm(cell.w, form.columns, gapMm) : null;
   const warning = multi && total != null ? widthWarning(total, printerMaxMm) : null;
   const presetValue = presetLabelFor(form.shape, cell.w, cell.h);
-  const err = (key: keyof typeof errors) => (triedCreate ? errors[key] ?? 'Enter a number' : errors[key]);
+  const err = (key: keyof typeof errors) => errors[key];
 
   const setColumns = (n: number) => {
     patch({ columns: Math.max(2, clampColumns(n)) });
