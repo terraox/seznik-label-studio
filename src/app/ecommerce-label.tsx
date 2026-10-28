@@ -20,12 +20,14 @@ import {
   printLabelPages,
   scanLabelPdf,
   WrongPlatformError,
+  type ScannedPage,
   type ScanResult,
 } from '@/lib/ecommerce-label/job';
 import { PLATFORMS, SHIPPING_SIZE_PRESETS, parsePlatformId, platformName, type PlatformId } from '@/lib/ecommerce-label/platforms';
-import { copyPdfToCache, loadPdfMetadata } from '@/lib/pdf-editor/load';
+import { openPdfUri } from '@/lib/pdf-editor/load';
+import { SMART_CROP_DPI } from '@/lib/pdf-editor/smart-crop/source';
 import { clearPrintRasterCache, type PdfPrintOptions } from '@/lib/pdf-editor/print';
-import { clearRasterCache } from '@/lib/pdf-editor/raster';
+import { clearRasterCache, rasterPdfPageCached } from '@/lib/pdf-editor/raster';
 import {
   resolvePrintPageIndices,
   type OutputSize,
@@ -80,6 +82,10 @@ export default function EcommerceLabelScreen() {
   const [progress, setProgress] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const cancelled = useRef(false);
+  // Each file open gets a number; a scan whose number is old (Back, Change, a newer file) stops.
+  const runId = useRef(0);
+  // The rest of the file is still being checked while the first labels are already on screen.
+  const [scanning, setScanning] = useState<{ done: number; total: number } | null>(null);
   const busy = progress !== null || printing;
 
   useEffect(() => {
@@ -115,6 +121,8 @@ export default function EcommerceLabelScreen() {
   );
 
   const clearFile = useCallback(() => {
+    runId.current += 1;
+    setScanning(null);
     setFile(null);
     setScan(null);
     clearRasterCache();
@@ -124,7 +132,11 @@ export default function EcommerceLabelScreen() {
   const handleBack = () => {
     if (busy) return;
     if (step === 'print') setStep('preview');
-    else if (step === 'preview') setStep('setup');
+    else if (step === 'preview') {
+      // Leaving while the rest of the file is still being checked stops the check: its list is incomplete.
+      if (scanning) clearFile();
+      setStep('setup');
+    }
     else if (step === 'setup') {
       clearFile();
       setPlatform(null);
@@ -143,22 +155,50 @@ export default function EcommerceLabelScreen() {
         return;
       }
       clearFile();
+      const run = runId.current;
+      const stale = () => cancelled.current || runId.current !== run;
       setProgress('Opening…');
-      const uri = await copyPdfToCache(picked.uri, picked.name);
-      const meta = await loadPdfMetadata(uri);
+      // Read the file where the picker left it: no copy before the first label appears.
+      const uri = await openPdfUri(picked.uri, picked.name);
+      // Page 1 at the analysis resolution gives the page count and size, and is reused by the scan.
+      const first = await rasterPdfPageCached(uri, 0, SMART_CROP_DPI);
+      const pageCount = Math.max(1, first.pageCount);
+      const firstSize = { w: first.widthPt, h: first.heightPt };
+      const pageSizesPt = Array.from({ length: pageCount }, () => firstSize);
+      let opened = false;
+      const openPreview = (pages: ScannedPage[]) => {
+        if (stale()) return;
+        setScan({ pages, skipped: [] });
+        if (opened) return;
+        // The first label is ready: show it now and keep checking the other pages behind it.
+        opened = true;
+        setFile({ uri, name: picked.name, pageCount, pageSizesPt });
+        setReceived(null);
+        setPreviewIndex(0);
+        setStep('preview');
+        setProgress(null);
+      };
       const result = await scanLabelPdf(
         uri,
-        meta.pageCount,
+        pageCount,
         platform,
-        (done, total) => setProgress(`Checking page ${done} / ${total}`),
-        () => cancelled.current,
+        (done, total) => {
+          if (stale()) return;
+          if (opened) setScanning({ done, total });
+          else setProgress(`Checking page ${done} / ${total}`);
+        },
+        stale,
+        pageCount > 1 ? openPreview : undefined,
       );
-      if (cancelled.current) return;
-      setFile({ uri, name: picked.name, pageCount: meta.pageCount, pageSizesPt: meta.pageSizesPt });
+      if (stale()) return;
+      setFile({ uri, name: picked.name, pageCount, pageSizesPt });
       setReceived(null);
       setScan(result);
-      setPreviewIndex(0);
-      setStep('preview');
+      if (!opened) {
+        setPreviewIndex(0);
+        setStep('preview');
+      }
+      setScanning(null);
     } catch (err) {
       if (err instanceof WrongPlatformError) {
         Alert.alert('Wrong PDF', `${err.message}\nUpload the ${platformName(platform)} label PDF exactly as downloaded from your seller panel. A PDF saved again with Ctrl+P, the Print dialog or Save as PDF, a screenshot or a photo may not work.`);
@@ -166,6 +206,7 @@ export default function EcommerceLabelScreen() {
         Alert.alert('PDF', err instanceof Error ? err.message : 'Could not open this PDF.');
       }
       clearFile();
+      setStep((s) => (s === 'preview' ? 'setup' : s));
     } finally {
       setProgress(null);
     }
@@ -388,13 +429,27 @@ export default function EcommerceLabelScreen() {
               <AppIcon name="chevron.right" size={20} tintColor={C.accent} />
             </Pressable>
           </View>
+          {scanning ? (
+            <View style={styles.scanStrip}>
+              <ActivityIndicator size="small" color={C.accent} />
+              <Text style={styles.scanText} numberOfLines={1}>
+                Checking pages {scanning.done} / {scanning.total} · {labelCount} label{labelCount === 1 ? '' : 's'} so far
+              </Text>
+            </View>
+          ) : null}
           {scan.skipped.length > 0 ? (
             <Text style={styles.skipNote}>
               {scan.skipped.length} page{scan.skipped.length === 1 ? '' : 's'} skipped: not a{' '}
               {platformName(platform!)} label.
             </Text>
           ) : null}
-          <BottomBar insetBottom={insets.bottom} onBack={handleBack} nextLabel="Next" onNext={() => setStep('print')} />
+          <BottomBar
+            insetBottom={insets.bottom}
+            onBack={handleBack}
+            nextLabel="Next"
+            nextBusy={scanning !== null}
+            onNext={() => setStep('print')}
+          />
         </View>
       ) : null}
 
@@ -605,6 +660,8 @@ const styles = themedStyles((c, scheme) => ({
   },
   navOff: { opacity: 0.35 },
   navText: { fontSize: 15, fontWeight: '700', color: c.text, minWidth: 56, textAlign: 'center', flexShrink: 1 },
+  scanStrip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: c.surface },
+  scanText: { fontSize: 12, fontWeight: '600', color: c.textSecondary, flexShrink: 1 },
   skipNote: { fontSize: 12, color: c.textMuted, textAlign: 'center', paddingBottom: 12, backgroundColor: c.surface },
   bottomBar: {
     flexDirection: 'row',

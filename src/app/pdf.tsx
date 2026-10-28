@@ -41,7 +41,7 @@ import {
 
 import { planLabelRender } from '@/lib/pdf-editor/label-render-plan';
 import { exportEditedPdf } from '@/lib/pdf-editor/export';
-import { copyPdfToCache, loadPdfMetadata, loadPdfPageSizes } from '@/lib/pdf-editor/load';
+import { loadPdfMetadata, loadPdfPageSizes, openPdfUri } from '@/lib/pdf-editor/load';
 import {
   clearPrintRasterCache,
   prewarmPrintPages,
@@ -182,7 +182,7 @@ export default function PdfEditorScreen() {
     setLoading(true);
     (async () => {
       try {
-        const cached = await copyPdfToCache(rawUri, rawName);
+        const cached = await openPdfUri(rawUri, rawName);
         const meta = await loadPdfMetadata(cached, 150);
         if (!cancelled) {
           startSession({
@@ -223,7 +223,7 @@ export default function PdfEditorScreen() {
         return;
       }
       setLoading(true);
-      const cached = await copyPdfToCache(picked.uri, picked.name);
+      const cached = await openPdfUri(picked.uri, picked.name);
       const meta = await loadPdfMetadata(cached, 150);
       startSession({
         sourceUri: cached,

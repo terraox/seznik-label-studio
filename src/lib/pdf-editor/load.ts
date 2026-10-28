@@ -93,6 +93,16 @@ async function loadPdfPageSizesParsed(uri: string): Promise<PdfMeta> {
   return { pageCount, pageSizesPt };
 }
 
+/**
+ * A PDF the renderer can read right now. The picker has already put the file in the app's cache, so a
+ * local file path is opened as it is: no second copy before the first page appears. Anything else
+ * (a content:// link from another app) is copied first, as before.
+ */
+export async function openPdfUri(sourceUri: string, name: string): Promise<string> {
+  if (sourceUri.startsWith('file://')) return sourceUri;
+  return copyPdfToCache(sourceUri, name);
+}
+
 export async function copyPdfToCache(sourceUri: string, name: string): Promise<string> {
   const { stageImportedFile } = await import('@/lib/user-files/stage-import');
   const safe = name.trim() || 'document.pdf';
