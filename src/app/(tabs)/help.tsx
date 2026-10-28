@@ -95,7 +95,7 @@ const GUIDES = [
   },
   {
     title: 'Scan and OCR',
-    body: 'Scan reads a barcode or QR code with the camera. OCR reads text from a photo so you do not have to type it. Both are in the editor tool bar.',
+    body: 'Scan reads a barcode or QR code with the camera. OCR (Scan text) reads text from a photo so you do not have to type it: take a photo, pick Text, Barcode or QR code, tap Read, check the result, then Add to label. Both are in the editor tool bar. Tap the i button on the Scan text screen to replay the tour.',
   },
   {
     title: 'Templates',

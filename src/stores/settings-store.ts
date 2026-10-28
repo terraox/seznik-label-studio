@@ -151,6 +151,8 @@ type SettingsStoreState = {
   printOrderTourSeen: boolean;
   /** Print PDF screens whose tour was seen (or skipped): 'pick' | 'size' | 'edit' | 'print'. */
   pdfTourSeen: string[];
+  /** Scan text (OCR) screens whose tour was seen (or skipped): 'capture' | 'result'. */
+  ocrTourSeen: string[];
   /** PDF crop: the one-time "tap again for the bigger block" hint has been shown. */
   smartCropHintSeen: boolean;
   /** Settings → Appearance. Follow system by default. */
@@ -173,6 +175,7 @@ type SettingsStoreState = {
   setNewLabelTutorialSeen: (seen: boolean) => void;
   setPrintOrderTourSeen: (seen: boolean) => void;
   markPdfTourSeen: (screen: string) => void;
+  markOcrTourSeen: (screen: string) => void;
   setSmartCropHintSeen: (seen: boolean) => void;
   setAppearance: (appearance: AppearancePreference) => void;
   setThemeChosen: (chosen: boolean) => void;
@@ -194,6 +197,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       newLabelTutorialSeen: false,
       printOrderTourSeen: false,
       pdfTourSeen: [],
+      ocrTourSeen: [],
       smartCropHintSeen: false,
       appearance: 'light',
       themeChosen: false,
@@ -216,6 +220,8 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setPrintOrderTourSeen: (seen) => set({ printOrderTourSeen: seen }),
       markPdfTourSeen: (screen) =>
         set((s) => (s.pdfTourSeen.includes(screen) ? s : { pdfTourSeen: [...s.pdfTourSeen, screen] })),
+      markOcrTourSeen: (screen) =>
+        set((s) => (s.ocrTourSeen.includes(screen) ? s : { ocrTourSeen: [...s.ocrTourSeen, screen] })),
       setSmartCropHintSeen: (seen) => set({ smartCropHintSeen: seen }),
       setAppearance: (appearance) => set({ appearance }),
       setThemeChosen: (themeChosen) => set({ themeChosen }),
