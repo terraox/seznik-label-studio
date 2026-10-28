@@ -222,6 +222,8 @@ export default function NewLabelSetupScreen() {
               imageHeight: String(asset.height),
               widthMm: String(size.widthMm),
               heightMm: String(size.heightMm),
+              // Print Image: the crop window opens first, then this print page.
+              autoCrop: '1',
               ...(circle ? { shape: 'circle' } : {}),
             },
           });

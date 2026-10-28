@@ -226,6 +226,7 @@ export default function PrintPhotoScreen() {
     widthMm?: string;
     heightMm?: string;
     shape?: string;
+    autoCrop?: string;
   }>();
 
   const defaults = useSettingsStore((s) => s.defaults);
@@ -332,6 +333,15 @@ export default function PrintPhotoScreen() {
       },
     });
   }, [photos, photoPixels]);
+
+  // Print Image: right after the photo is chosen, open the crop window once. Cancelling it
+  // leaves the photo as picked on this print page.
+  const autoCropped = useRef(false);
+  useEffect(() => {
+    if (params.autoCrop !== '1' || autoCropped.current || !primaryPhoto) return;
+    autoCropped.current = true;
+    openCrop();
+  }, [params.autoCrop, primaryPhoto, openCrop]);
 
   // Back from the crop screen: the cropped photo replaces the current one.
   useFocusEffect(

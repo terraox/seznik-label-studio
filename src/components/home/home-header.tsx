@@ -88,7 +88,7 @@ export function HomeHeader() {
           </Text>
         </View>
       </View>
-      <WalkthroughTarget id="home.printer">
+      <WalkthroughTarget id="home.printer" style={styles.chipSlot}>
         <StatusChip />
       </WalkthroughTarget>
     </View>
@@ -108,7 +108,9 @@ const styles = themedStyles((c) => ({
     borderBottomRightRadius: 24,
     overflow: 'hidden',
   },
-  brand: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  // The name keeps its full width; on a narrow phone the printer chip gives way, not the name.
+  brand: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  chipSlot: { flexShrink: 1, minWidth: 0, alignItems: 'flex-end' },
   badge: {
     width: 48,
     height: 48,
@@ -117,7 +119,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  lockup: { flexShrink: 1, justifyContent: 'center' },
+  lockup: { flexShrink: 0, justifyContent: 'center' },
   wordmark: {
     color: c.onHeader,
     fontSize: 21,
@@ -125,6 +127,8 @@ const styles = themedStyles((c) => ({
     fontWeight: '900',
     fontStyle: 'italic',
     letterSpacing: 1.6,
+    // The slanted last letter overhangs its box; a little room keeps it from being clipped.
+    paddingRight: 4,
     includeFontPadding: false,
   },
   sub: { color: SKY, fontSize: 11.5, lineHeight: 15, fontWeight: '700', letterSpacing: 1.9, includeFontPadding: false },
