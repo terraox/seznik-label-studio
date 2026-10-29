@@ -17,7 +17,7 @@ export type WalkthroughStep = {
 const BASE_STEPS: readonly WalkthroughStep[] = [
   {
     id: 'welcome',
-    title: 'Welcome to Sez Print',
+    title: 'Welcome to Seznik Label Studio',
     body: 'A quick tour of the Home screen. You can replay it anytime from Setting → App Walkthrough.',
   },
   {
