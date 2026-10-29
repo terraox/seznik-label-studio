@@ -40,12 +40,20 @@
       }
     },
     "production": {
-      "distribution": "internal",
       "channel": "production",
+      "autoIncrement": true,
       "env": {
         "APP_VARIANT": "production",
         "EXPO_PUBLIC_API_URL": "https://api2.seznik.in"
       },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "autoIncrement": false,
       "android": {
         "buildType": "apk"
       }
