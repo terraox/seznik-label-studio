@@ -746,8 +746,6 @@ class PrinterManager {
 
   private joshPrintsInFlight = 0;
   private joshProgressSub: { remove: () => void } | null = null;
-  private td404PrintsInFlight = 0;
-  private td404ProgressSub: { remove: () => void } | null = null;
 
   /** One app-lifetime subscription: the printer can report a failure after the print call returned. */
   private beginJoshProgress(josh: NonNullable<ReturnType<PrinterManager['getJosh']>>): void {
@@ -782,36 +780,6 @@ class PrinterManager {
           ? error.message
           : String(error),
     );
-  }
-
-  /** TD-404 paced copies emit the same progress vocabulary as Josh into the shared store. */
-  private beginTd404Progress(td404: NonNullable<ReturnType<PrinterManager['getTd404']>>): void {
-    this.td404PrintsInFlight += 1;
-    const progress = usePrintProgressStore.getState();
-    progress.begin();
-    if (this.td404ProgressSub || typeof td404.addTd404PrintProgressListener !== 'function') return;
-    this.td404ProgressSub = td404.addTd404PrintProgressListener((event) => {
-      if (this.td404PrintsInFlight === 0 && event.progress === 'CONNECTED') return;
-      usePrintProgressStore.getState().apply({
-        progress: event.progress,
-        copy: event.copy,
-        copies: event.copies,
-        reason: event.reason ?? undefined,
-        failureMessage: event.failureMessage ?? undefined,
-      });
-    });
-  }
-
-  private endTd404Progress(error?: unknown, copies = 1): void {
-    this.td404PrintsInFlight = Math.max(0, this.td404PrintsInFlight - 1);
-    const store = usePrintProgressStore.getState();
-    if (error === undefined) {
-      // Native emits SUCCESS per physical copy; only settle if the last event was missed.
-      if (store.phase === 'done' || store.phase === 'failed') return;
-      store.settle(1500 + 500 * Math.max(1, copies));
-      return;
-    }
-    store.fail(error instanceof Error ? error.message : String(error));
   }
 
   // Tez / Shakti and Label X SDKs were removed from the app.
@@ -4000,7 +3968,6 @@ class PrinterManager {
           },
         });
         const copies = Math.max(1, Math.round(options.copies ?? 1));
-        this.beginTd404Progress(td404);
         const t0 = Date.now();
         let result: Awaited<ReturnType<typeof td404.printTd404PngLabel>>;
         try {
@@ -4028,9 +3995,7 @@ class PrinterManager {
             (err as Error & { code?: string }).code = 'NATIVE_PNG_UNAVAILABLE';
             throw err;
           }
-          this.endTd404Progress(undefined, copies);
         } catch (error) {
-          this.endTd404Progress(error, copies);
           throw error;
         }
         this.lastTd404PngLabelTiming = {
@@ -4151,7 +4116,6 @@ class PrinterManager {
           dpi: spec.dpi,
         });
         const copies = Math.max(1, Math.round(options.copies ?? 1));
-        this.beginTd404Progress(td404);
         const t0 = Date.now();
         let result: Awaited<ReturnType<typeof td404.printTd404MonoLabel>>;
         try {
@@ -4179,9 +4143,7 @@ class PrinterManager {
             (err as Error & { code?: string }).code = 'NATIVE_MONO_UNAVAILABLE';
             throw err;
           }
-          this.endTd404Progress(undefined, copies);
         } catch (error) {
-          this.endTd404Progress(error, copies);
           throw error;
         }
         this.lastTd404MonoLabelTiming = {
