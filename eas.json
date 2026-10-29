@@ -43,6 +43,7 @@
       "distribution": "internal",
       "channel": "production",
       "env": {
+        "APP_VARIANT": "production",
         "EXPO_PUBLIC_API_URL": "https://api2.seznik.in"
       },
       "android": {

@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import {
   SettingsCard,
@@ -9,12 +9,16 @@ import {
 } from '@/components/settings-ui';
 import { readAppPermissionStatus, type AppPermissionKind } from '@/lib/app-permission-status';
 
-const PERMISSION_ROWS: { kind: AppPermissionKind; label: string }[] = [
+// Android 12+ finds printers through Nearby devices, so it never asks for location there.
+const SHOW_LOCATION = Platform.OS !== 'android' || (Platform.Version as number) < 31;
+
+const ALL_ROWS: { kind: AppPermissionKind; label: string }[] = [
   { kind: 'bluetooth', label: 'Bluetooth' },
   { kind: 'location', label: 'Location' },
   { kind: 'nearby', label: 'Nearby Device' },
   { kind: 'camera', label: 'Camera' },
 ];
+const PERMISSION_ROWS = ALL_ROWS.filter((row) => SHOW_LOCATION || row.kind !== 'location');
 
 export default function AppPermissionsScreen() {
   const [status, setStatus] = useState<Record<AppPermissionKind, boolean>>({
