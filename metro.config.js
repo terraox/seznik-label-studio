@@ -12,6 +12,9 @@ try {
 
 const config = getDefaultConfig(__dirname);
 
+// The packed Twemoji PNGs ship as a single .bin asset (EAS Update caps assets at 1000 per update).
+if (!config.resolver.assetExts.includes('bin')) config.resolver.assetExts.push('bin');
+
 if (process.platform === 'win32') {
   config.maxWorkers = Math.min(2, os.cpus().length || 2);
 }

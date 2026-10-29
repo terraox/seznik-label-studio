@@ -99,36 +99,38 @@ const tileCache = new Map<string, EmojiTile>();
 /** Decoded Twemoji color images, keyed by file id. Filled before rasterize. */
 const twemojiImages = new Map<string, SkImage>();
 
-function twemojiModules(): Record<string, number> {
+type TwemojiPack = { TWEMOJI_PACK?: number; TWEMOJI_INDEX?: Record<string, [number, number]> };
+
+function twemojiPack(): TwemojiPack {
   try {
-    const mod = require('@/lib/emoji/twemoji-modules') as { TWEMOJI_MODULES?: Record<string, number> };
-    return mod.TWEMOJI_MODULES ?? {};
+    return require('@/lib/emoji/twemoji-modules') as TwemojiPack;
   } catch {
     return {};
   }
 }
 
 function twemojiFileId(cluster: string): string | undefined {
-  const modules = twemojiModules();
+  const index = twemojiPack().TWEMOJI_INDEX ?? {};
   for (const id of clusterToTwemojiLookupIds(cluster)) {
-    if (modules[id] != null) return id;
+    if (index[id] != null) return id;
   }
   return undefined;
 }
 
 export async function preloadTwemojiImages(clusters: readonly string[]): Promise<void> {
-  const modules = twemojiModules();
-  const pending = new Map<string, number>();
+  const { TWEMOJI_PACK, TWEMOJI_INDEX } = twemojiPack();
+  if (TWEMOJI_PACK == null || !TWEMOJI_INDEX) return;
+  const pending = new Set<string>();
   for (const cluster of clusters) {
     for (const id of clusterToTwemojiLookupIds(cluster)) {
-      const assetId = modules[id];
-      if (assetId == null || twemojiImages.has(id)) continue;
-      pending.set(id, assetId);
+      if (TWEMOJI_INDEX[id] == null || twemojiImages.has(id)) continue;
+      pending.add(id);
       break;
     }
   }
   if (pending.size === 0) return;
   const skia = require('@shopify/react-native-skia').Skia as EmojiSkiaModule['Skia'];
+  if (!skia.Data?.fromBytes || !skia.Image?.MakeImageFromEncoded) return;
   const { Asset } = require('expo-asset') as {
     Asset: {
       fromModule: (id: number) => {
@@ -137,21 +139,36 @@ export async function preloadTwemojiImages(clusters: readonly string[]): Promise
       };
     };
   };
-  await Promise.all(
-    [...pending.entries()].map(async ([id, assetId]) => {
+  const { File } = require('expo-file-system') as {
+    File: new (uri: string) => {
+      open: () => {
+        offset: number | null;
+        readBytes: (length: number) => Uint8Array;
+        close: () => void;
+      };
+    };
+  };
+  let handle: ReturnType<InstanceType<typeof File>['open']> | null = null;
+  try {
+    const asset = Asset.fromModule(TWEMOJI_PACK);
+    if (!asset.localUri) await asset.downloadAsync();
+    if (!asset.localUri) return;
+    handle = new File(asset.localUri).open();
+    for (const id of pending) {
       try {
-        const asset = Asset.fromModule(assetId);
-        if (!asset.localUri) await asset.downloadAsync();
-        const uri = asset.localUri;
-        if (!uri || !skia.Data?.fromURI || !skia.Image?.MakeImageFromEncoded) return;
-        const data = await skia.Data.fromURI(uri);
-        const image = skia.Image.MakeImageFromEncoded(data);
+        const [offset, length] = TWEMOJI_INDEX[id];
+        handle.offset = offset;
+        const image = skia.Image.MakeImageFromEncoded(skia.Data.fromBytes(handle.readBytes(length)));
         if (image) twemojiImages.set(id, image);
       } catch (err) {
         console.warn('[twemoji] decode failed', id, err);
       }
-    }),
-  );
+    }
+  } catch (err) {
+    console.warn('[twemoji] pack load failed', err);
+  } finally {
+    handle?.close();
+  }
 }
 
 export function emojiDestSizeDots(fontSizeDots: number): number {
