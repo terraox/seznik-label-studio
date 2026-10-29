@@ -89,7 +89,7 @@ const SECTIONS: Section[] = [
   {
     heading: 'How long we keep data, and deleting your account',
     paragraphs: [
-      'We keep your account data while your account is active. You can delete your account at any time in the app under Settings. You are asked to tell us why. When you confirm:',
+      'We keep your account data while your account is active. You can delete your account at any time in the app under Settings, or request it by email. The steps are at https://api2.seznik.in/delete-account. In the app you are asked to tell us why. When you confirm:',
     ],
     items: [
       'Your account, feedback, template requests, product taps and printer connection history are deleted.',
