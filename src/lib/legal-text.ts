@@ -56,39 +56,52 @@ export const LEGAL_DOCS: Record<LegalDocId, LegalDoc> = {
   privacy: {
     id: 'privacy',
     title: 'Privacy Policy',
-    updated: 'October 2026',
+    updated: '29 October 2026',
     sections: [
       {
         heading: 'What we collect',
         body: [
           'Account details: your name, mobile number and the printer you use. Your password is stored only as a secure hash.',
-          'Usage details: how many labels you print, which features you use, and your phone model, platform and app version, so we can fix problems and improve the app.',
-          'Anything you send us on purpose, such as feedback, complaints and template requests.',
+          'Device and usage details: your phone model, platform and app version, when you last used the app, and what you print (label size, template name, number of labels, printer and time). We do not store the labels or the data you print. We also count how often each feature is used, without linking the counts to you.',
+          'Anything you send us on purpose, such as feedback, complaints and template requests, and the supplies you tap in the shop.',
+          'Our server also records technical details of each request, such as the time and IP address, for security.',
         ],
       },
       {
         heading: 'What stays on your phone',
         body: [
-          'Your labels, templates, fonts and imported files are stored on your phone. They are not uploaded unless you choose to share or send them.',
+          'Your labels, templates, fonts, imported files and print history are stored on your phone. They are not uploaded unless you choose to share or send them.',
+        ],
+      },
+      {
+        heading: 'Permissions',
+        body: [
+          'Bluetooth (Nearby devices) connects your printer. On Android 11 and older, Android needs the location permission for Bluetooth scanning; we do not collect your location. The camera scans barcodes, QR codes and text on your phone, and the pictures are not sent to us. The microphone is used only for voice-to-text, which your phone’s speech service (Google’s on Android) may process on its servers; we do not receive the audio.',
         ],
       },
       {
         heading: 'How we use it',
         body: [
-          'To log you in, verify your number with a one-time code sent by SMS, support your account, understand how the app is used, and answer your messages.',
-          'We do not sell your personal information.',
+          'To log you in, verify your number with a one-time code sent by SMS, support your account, understand how the app is used, keep the service safe, and answer your messages.',
+          'We do not sell your personal information and the app shows no ads.',
         ],
       },
       {
         heading: 'Who sees it',
         body: [
-          'Our team can see account and usage details to give support. Services that help us run the app, such as the SMS provider that delivers your one-time code, only receive what they need to do that job.',
+          'Our team can see account and usage details to give support. Services that help us run the app receive only what they need: MSG91 (your number and the one-time code, to send the SMS), DigitalOcean and Neon (hosting and database), Expo (IP address, app version and platform when the app checks for updates), and Google (on-device scanning and speech recognition when you use them).',
         ],
       },
       {
-        heading: 'Your choices',
+        heading: 'Deleting your account',
         body: [
-          'You can delete your account from Settings. We then remove your personal details and keep only anonymous usage counts. Contact us from Settings, Suggestions and Complaints, for any other request about your data.',
+          'You can delete your account from Settings. We then delete your account, feedback, requests, shop taps and printer history, and unlink your print records. We keep one deletion record (name, mobile number, printer, labels printed, your reason, sign-up date, app version and platform) for our records and to prevent misuse, and the number and reason if we blocked it. To ask us to erase that record or to correct your data, write to tech_support@seznik.in.',
+        ],
+      },
+      {
+        heading: 'Full policy',
+        body: [
+          'Read the full policy at https://api2.seznik.in/privacy.',
         ],
       },
     ],

@@ -13,6 +13,7 @@ const PUBLIC_PREFIXES = [
   '/favicon',
   '/seznik_logo',
   '/icons',
+  '/privacy',
 ];
 
 function isPublic(pathname: string) {
