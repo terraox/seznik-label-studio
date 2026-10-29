@@ -69,6 +69,27 @@ function withPlayPermissions(config) {
       });
     }
 
+    // Camera, microphone, location and portrait are implied by permissions and activities, so Play
+    // would hide the app from phones without them. None of them is needed to design or print.
+    const features = manifest['uses-feature'] ?? [];
+    for (const name of [
+      'android.hardware.camera',
+      'android.hardware.camera.autofocus',
+      'android.hardware.microphone',
+      'android.hardware.location',
+      'android.hardware.location.gps',
+      'android.hardware.screen.portrait',
+    ]) {
+      const existing = features.find((f) => f.$?.['android:name'] === name);
+      if (existing) {
+        existing.$['android:required'] = 'false';
+        existing.$['tools:replace'] = 'android:required';
+      } else {
+        features.push({ $: { 'android:name': name, 'android:required': 'false', 'tools:replace': 'android:required' } });
+      }
+    }
+    manifest['uses-feature'] = features;
+
     const app = manifest.application?.[0];
     if (app) {
       app.$['android:usesCleartextTraffic'] = release ? 'false' : 'true';
