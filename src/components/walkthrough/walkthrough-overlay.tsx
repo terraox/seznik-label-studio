@@ -22,6 +22,10 @@ const HOLE_PAD = 6;
 const RING_INSET = 2;
 const CARD_MAX_W = 360;
 const CARD_EST_H = 190;
+const POLL_MS = 150;
+const WATCH_MS = 500;
+const MAX_TRIES = 30;
+const MAX_SCROLLS = 4;
 
 export function WalkthroughOverlay({
   tour,
@@ -75,40 +79,65 @@ export function WalkthroughOverlay({
         rootRef.current.measureInWindow((x, y) => resolve({ x, y }));
       });
 
-    const run = async (attempt: number) => {
+    // Slow phones mount and lay out late, so poll until the target exists and has stopped moving
+    // (same rect on consecutive reads) instead of trusting a fixed delay.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let tries = 0;
+    let scrolled = 0;
+    let lastKey = '';
+    let stable = 0;
+    const tick = async () => {
+      if (cancelled) return;
+      tries += 1;
       const [m, o] = await Promise.all([measureWalkthroughTarget(step.target!), originOf()]);
       if (cancelled) return;
       if (!m) {
-        setRect(null);
-        setReady(true);
+        if (tries >= MAX_TRIES) {
+          setRect(null);
+          setReady(true);
+          return;
+        }
+        timer = setTimeout(() => void tick(), POLL_MS);
         return;
       }
       // Scroll steps: bring the target's top to just under the header so the card fits below it.
-      if (step.scrolls && attempt < 2) {
+      if (step.scrolls && scrolled < MAX_SCROLLS) {
         const dy = m.y - o.y - topBound;
         if (Math.abs(dy) > 4 && scrollWalkthroughBy(dy)) {
-          setTimeout(() => !cancelled && void run(attempt + 1), 200);
+          scrolled += 1;
+          stable = 0;
+          lastKey = '';
+          timer = setTimeout(() => void tick(), 200);
           return;
         }
       }
-      if (step.scrollsIfHidden && attempt < 2) {
+      if (step.scrollsIfHidden && scrolled < MAX_SCROLLS) {
         const relY = m.y - o.y;
         const hidden = relY < topBound || relY + m.h > H - insets.bottom - 96;
         if (hidden && scrollWalkthroughBy(relY - H * 0.3)) {
-          setTimeout(() => !cancelled && void run(attempt + 1), 200);
+          scrolled += 1;
+          stable = 0;
+          lastKey = '';
+          timer = setTimeout(() => void tick(), 200);
           return;
         }
       }
-      setRect({ x: m.x - o.x, y: m.y - o.y, w: m.w, h: m.h });
+      const next = { x: m.x - o.x, y: m.y - o.y, w: m.w, h: m.h };
+      const key = `${Math.round(next.x)},${Math.round(next.y)},${Math.round(next.w)},${Math.round(next.h)}`;
+      stable = key === lastKey ? stable + 1 : 0;
+      if (key !== lastKey) setRect(next);
+      lastKey = key;
       setReady(true);
-      // Re-measure once layout/scroll has fully settled so the cutout never lags the target.
-      if (attempt < 3) setTimeout(() => !cancelled && void run(3), 350);
+      // Once settled keep watching at a slow pace: the printer pill, fonts, rotation or the
+      // keyboard can still resize a target, and the cutout must follow it.
+      const settled = stable >= 2 || tries >= MAX_TRIES;
+      timer = setTimeout(() => void tick(), settled ? WATCH_MS : POLL_MS);
     };
     // Let the Modal / tab focus settle before measuring.
-    const t = setTimeout(() => void run(0), 250);
+    timer = setTimeout(() => void tick(), 250);
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
     // Window size too: after a rotation every target has moved.
   }, [visible, step, insets.top, win.width, win.height]);
