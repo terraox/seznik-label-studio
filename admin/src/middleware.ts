@@ -14,6 +14,7 @@ const PUBLIC_PREFIXES = [
   '/seznik_logo',
   '/icons',
   '/privacy',
+  '/delete-account',
 ];
 
 function isPublic(pathname: string) {
