@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { PixelRatio, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
@@ -7,6 +7,8 @@ import { StatusChip } from '@/components/home/status-chip';
 import { LOGO_BLUE, LOGO_CYAN, LOGO_NAVY, LOGO_SWOOSH } from '@/components/home/tool-art';
 import { Spacing } from '@/constants/theme';
 import { HomeLayout } from '@/constants/ui';
+import { brandScale, pillRoom, pillVariant } from '@/lib/layout/home-header-fit';
+import { FONT_SCALE_CAP } from '@/theme/font-scale';
 import { themedStyles, useThemeRefresh } from '@/theme';
 
 // theme-fixed: the header is the same navy band in light and dark; everything on it is drawn for that.
@@ -15,8 +17,7 @@ const BG_TOP = '#2D3178';
 const BG_BOTTOM = '#181A45';
 const WHITE = '#FFFFFF';
 
-/** Header width (dp) under which the printer pill switches to its tighter form. */
-const COMPACT_BELOW = 400;
+const HEADER_GAP = 16;
 
 /** The swoosh path's own box. */
 const SWOOSH_W = 28.3;
@@ -50,10 +51,10 @@ function HeaderBackdrop({ w, h }: { w: number; h: number }) {
 }
 
 /** The logo swoosh on a white circle, like the app icon. */
-function BrandBadge() {
+function BrandBadge({ k }: { k: number }) {
   return (
-    <View style={styles.badge}>
-      <Svg width={31} height={26} viewBox={`0 0 ${SWOOSH_W} ${SWOOSH_H}`} accessibilityElementsHidden importantForAccessibility="no">
+    <View style={[styles.badge, { width: 48 * k, height: 48 * k, borderRadius: 24 * k }]}>
+      <Svg width={31 * k} height={26 * k} viewBox={`0 0 ${SWOOSH_W} ${SWOOSH_H}`} accessibilityElementsHidden importantForAccessibility="no">
         <Defs>
           <LinearGradient id="hdr-swoosh" x1="0.3" y1="0" x2="0.7" y2="1">
             <Stop offset="0" stopColor={LOGO_CYAN} />
@@ -73,6 +74,14 @@ export function HomeHeader() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const [brandW, setBrandW] = useState(0);
+  const k = brandScale(size.w);
+  // The pill takes the room the brand leaves; its form follows that room, on any width or font size.
+  const fontScale = Math.min(PixelRatio.getFontScale(), FONT_SCALE_CAP);
+  const variant =
+    size.w > 0 && brandW > 0
+      ? pillVariant(pillRoom(size.w, HomeLayout.screenPad, brandW, HEADER_GAP), fontScale)
+      : 'full';
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     if (width !== size.w || height !== size.h) setSize({ w: width, h: height });
@@ -81,19 +90,19 @@ export function HomeHeader() {
   return (
     <View onLayout={onLayout} style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
       {size.w > 0 ? <HeaderBackdrop w={size.w} h={size.h} /> : null}
-      <View style={styles.brand}>
-        <BrandBadge />
+      <View style={[styles.brand, { gap: 11 * k }]} onLayout={(e) => setBrandW(e.nativeEvent.layout.width)}>
+        <BrandBadge k={k} />
         <View style={styles.lockup}>
-          <Text numberOfLines={1} allowFontScaling={false} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.wordmark}>
+          <Text numberOfLines={1} allowFontScaling={false} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.wordmark, { fontSize: 21 * k, lineHeight: 24 * k, letterSpacing: 1.6 * k }]}>
             SEZNIK
           </Text>
-          <Text numberOfLines={1} allowFontScaling={false} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.sub}>
+          <Text numberOfLines={1} allowFontScaling={false} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.sub, { fontSize: 11.5 * k, lineHeight: 15 * k, letterSpacing: 1.9 * k }]}>
             LABEL STUDIO
           </Text>
         </View>
       </View>
       <View style={styles.chipSlot}>
-        <StatusChip walkthroughId="home.printer" compact={size.w > 0 && size.w < COMPACT_BELOW} />
+        <StatusChip walkthroughId="home.printer" variant={variant} />
       </View>
     </View>
   );
@@ -105,7 +114,7 @@ const styles = themedStyles((c) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 16,
+    gap: HEADER_GAP,
     paddingHorizontal: HomeLayout.screenPad,
     paddingBottom: Spacing.three + 2,
     borderBottomLeftRadius: 24,

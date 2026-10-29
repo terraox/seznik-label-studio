@@ -62,3 +62,6 @@ fixtures/smart-crop/*.pdf
 
 # local notes
 features.md
+
+# layout matrix screenshots
+.layout-matrix/
