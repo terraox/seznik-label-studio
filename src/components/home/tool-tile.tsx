@@ -99,7 +99,7 @@ function TileBody({
           </Text>
           {tool.hint ? (
             <Text
-              numberOfLines={1}
+              numberOfLines={2}
               maxFontSizeMultiplier={HomeLayout.labelMaxFontScale}
               style={styles.hint}>
               {tool.hint}
@@ -118,6 +118,7 @@ const styles = themedStyles((c, scheme) => ({
     minWidth: 0,
   },
   inner: {
+    flexGrow: 1, // tiles in a row stay one height when a hint wraps to two lines
     backgroundColor: c.surface,
     borderRadius: 16,
     alignItems: 'center',

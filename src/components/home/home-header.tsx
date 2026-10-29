@@ -15,6 +15,9 @@ const BG_TOP = '#2D3178';
 const BG_BOTTOM = '#181A45';
 const WHITE = '#FFFFFF';
 
+/** Header width (dp) under which the printer pill switches to its tighter form. */
+const COMPACT_BELOW = 400;
+
 /** The swoosh path's own box. */
 const SWOOSH_W = 28.3;
 const SWOOSH_H = 24;
@@ -90,7 +93,7 @@ export function HomeHeader() {
         </View>
       </View>
       <View style={styles.chipSlot}>
-        <StatusChip walkthroughId="home.printer" />
+        <StatusChip walkthroughId="home.printer" compact={size.w > 0 && size.w < COMPACT_BELOW} />
       </View>
     </View>
   );
@@ -102,7 +105,7 @@ const styles = themedStyles((c) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
     paddingHorizontal: HomeLayout.screenPad,
     paddingBottom: Spacing.three + 2,
     borderBottomLeftRadius: 24,
