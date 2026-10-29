@@ -87,6 +87,7 @@
           "image": "./assets/images/splash-blank.png",
           "backgroundColor": "#F4F7FB",
           "dark": {
+            "image": "./assets/images/splash-blank.png",
             "backgroundColor": "#000000"
           }
         }
