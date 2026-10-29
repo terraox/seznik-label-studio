@@ -54,6 +54,9 @@ type PickedFile = {
 };
 
 // 4 × 6 in is 100 × 150 mm here, exactly.
+/** Header width (dp) the title row takes: padding, back button and a heading's worth of room. The printer pill gets the rest. */
+const HEADER_TITLE_RESERVED = 230;
+
 const DEFAULT_SIZE: OutputSize = {
   kind: 'custom',
   widthMm: SHIPPING_SIZE_PRESETS[0].width,
@@ -285,10 +288,11 @@ export default function EcommerceLabelScreen() {
         <Pressable onPress={handleBack} hitSlop={8} style={styles.headerBtn}>
           <AppIcon name="chevron.left" size={22} tintColor={C.onAccent} />
         </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
+        {/* The heading comes first: it wraps to a second line before it is cut, and the printer pill gives way. */}
+        <Text style={styles.headerTitle} numberOfLines={2}>
           {title}
         </Text>
-        <StatusChip poll={false} keepLive={printing} />
+        <StatusChip poll={false} keepLive={printing} reserved={HEADER_TITLE_RESERVED} />
       </View>
 
       {step === 'platform' ? (
@@ -559,7 +563,7 @@ const styles = themedStyles((c, scheme) => ({
     paddingHorizontal: 8,
   },
   headerBtn: { width: 44, paddingHorizontal: 6, paddingVertical: 8 },
-  headerTitle: { flex: 1, minWidth: 0, paddingRight: 8, color: c.onAccent, fontSize: 17, fontWeight: '600' },
+  headerTitle: { flex: 1, minWidth: 0, paddingRight: 8, color: c.onAccent, fontSize: 17, lineHeight: 21, fontWeight: '600' },
   content: { padding: 16, gap: 10 },
   printContent: { paddingBottom: 16, gap: 12 },
   printPanel: { paddingHorizontal: 16 },

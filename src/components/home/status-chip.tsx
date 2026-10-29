@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, PixelRatio, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { PrinterBatteryLabel } from '@/components/printers/printer-battery-label';
@@ -11,8 +11,10 @@ import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterNickname, usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-store';
+import { pillVariant, type PillVariant } from '@/lib/layout/home-header-fit';
 import { registerWalkthroughTarget } from '@/lib/walkthrough/registry';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
+import { FONT_SCALE_CAP } from '@/theme/font-scale';
 
 // Only two states show: a background reconnect stays "Not connected" until it succeeds.
 // theme-fixed: solid status fills keep white text readable on the navy header in both themes.
@@ -64,8 +66,24 @@ export function StatusChip({
   poll = true,
   keepLive = false,
   walkthroughId,
-  compact = false,
-}: { poll?: boolean; keepLive?: boolean; walkthroughId?: string; compact?: boolean } = {}) {
+  variant: forcedVariant,
+  reserved = 90,
+}: {
+  poll?: boolean;
+  keepLive?: boolean;
+  walkthroughId?: string;
+  /** Home measures its own header and passes the form; other headers leave it to the window width. */
+  variant?: PillVariant;
+  /** Width (dp) the rest of the header row takes (padding, back button, gaps), for the automatic form. */
+  reserved?: number;
+} = {}) {
+  const { width: windowWidth } = useWindowDimensions();
+  const variant =
+    forcedVariant ??
+    pillVariant(windowWidth - reserved, Math.min(PixelRatio.getFontScale(), FONT_SCALE_CAP));
+  const compact = variant !== 'full';
+  // Minimal drops the idle printer icon, but a connected printer's photo always stays.
+  const minimal = variant === 'minimal';
   useThemeRefresh();
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
@@ -138,6 +156,7 @@ export function StatusChip({
           { backgroundColor: fill },
           pressed && styles.pressed,
         ]}>
+        {minimal && !live ? null : (
         <View style={live ? styles.photoWrap : styles.iconDisc}>
           {live ? (
             <Image
@@ -151,6 +170,7 @@ export function StatusChip({
             <AppIcon name="printer" tintColor={fill} size={16} pointerEvents="none" />
           )}
         </View>
+        )}
         <View style={styles.lines}>
           <View style={styles.captionRow}>
             <Text numberOfLines={1} maxFontSizeMultiplier={HomeLayout.labelMaxFontScale} style={styles.caption}>
