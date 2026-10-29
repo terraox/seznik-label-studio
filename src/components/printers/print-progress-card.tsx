@@ -15,7 +15,7 @@ import { C, themedStyles, useThemeRefresh } from '@/theme';
 import { ALL_ORIENTATIONS } from '@/lib/layout/screen-sizes';
 
 /**
- * Live print progress popup (Josh LPAPI + TD-404 paced status): step text, a "2 / 3" count
+ * Live print progress popup (Josh LPAPI only; Tejas and Rudra show a plain "Print Sent" alert): step text, a "2 / 3" count
  * and a bar that moves as each label comes out. On success it says "Print completed".
  */
 export function PrintProgressCard() {
