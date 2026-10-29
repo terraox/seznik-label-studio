@@ -11,6 +11,7 @@ import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { isJoshPrinter } from '@/lib/printer/battery-percent';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterNickname, usePrinterStore, type PrinterConnectionStatus } from '@/stores/printer-store';
+import { registerWalkthroughTarget } from '@/lib/walkthrough/registry';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 // Only two states show: a background reconnect stays "Not connected" until it succeeds.
@@ -59,7 +60,12 @@ function PulseRing({ color, active }: { color: string; active: boolean }) {
  * mounted while the app is open. `keepLive` shows "Connected" while a job is reconnecting, so the card does
  * not flash "Not connected" mid-print.
  */
-export function StatusChip({ poll = true, keepLive = false }: { poll?: boolean; keepLive?: boolean } = {}) {
+export function StatusChip({
+  poll = true,
+  keepLive = false,
+  walkthroughId,
+  compact = false,
+}: { poll?: boolean; keepLive?: boolean; walkthroughId?: string; compact?: boolean } = {}) {
   useThemeRefresh();
   const router = useRouter();
   const status = usePrinterStore((s) => s.status);
@@ -109,7 +115,11 @@ export function StatusChip({ poll = true, keepLive = false }: { poll?: boolean; 
         : '';
 
   return (
-    <View style={styles.wrap}>
+    // The tour measures this view itself (not a wrapper), so its box is exactly the pill on every phone.
+    <View
+      ref={walkthroughId ? (node) => registerWalkthroughTarget(walkthroughId, node) : undefined}
+      collapsable={false}
+      style={styles.wrap}>
       <PulseRing color={fill} active={!live} />
       <Pressable
         onPress={() => router.push('/printer-connect')}
@@ -122,7 +132,12 @@ export function StatusChip({ poll = true, keepLive = false }: { poll?: boolean; 
             : `Printer ${modelName}: ${caption}. ${text}`
         }
         accessibilityHint="Opens printer connection"
-        style={({ pressed }) => [styles.chip, { backgroundColor: fill }, pressed && styles.pressed]}>
+        style={({ pressed }) => [
+          styles.chip,
+          compact && styles.chipCompact,
+          { backgroundColor: fill },
+          pressed && styles.pressed,
+        ]}>
         <View style={live ? styles.photoWrap : styles.iconDisc}>
           {live ? (
             <Image
@@ -161,7 +176,9 @@ export function StatusChip({ poll = true, keepLive = false }: { poll?: boolean; 
             {text}
           </Text>
         </View>
-        <AppIcon name="chevron.right" tintColor={C.onAccent} size={14} pointerEvents="none" />
+        {compact ? null : (
+          <AppIcon name="chevron.right" tintColor={C.onAccent} size={14} pointerEvents="none" />
+        )}
       </Pressable>
     </View>
   );
@@ -187,6 +204,8 @@ const styles = themedStyles((c) => ({
     borderColor: 'rgba(255, 255, 255, 0.28)', // theme-fixed: light edge on the status fill
     overflow: 'hidden',
   },
+  // Narrow header: drop the chevron and tighten up so the pill leaves room for the brand name.
+  chipCompact: { gap: 6, paddingLeft: 6, paddingRight: 8 },
   iconDisc: {
     width: 32,
     height: 32,

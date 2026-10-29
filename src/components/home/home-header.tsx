@@ -5,7 +5,6 @@ import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop } f
 
 import { StatusChip } from '@/components/home/status-chip';
 import { LOGO_BLUE, LOGO_CYAN, LOGO_NAVY, LOGO_SWOOSH } from '@/components/home/tool-art';
-import { WalkthroughTarget } from '@/components/walkthrough/walkthrough-target';
 import { Spacing } from '@/constants/theme';
 import { HomeLayout } from '@/constants/ui';
 import { themedStyles, useThemeRefresh } from '@/theme';
@@ -15,6 +14,9 @@ const SKY = '#7CCBF0';
 const BG_TOP = '#2D3178';
 const BG_BOTTOM = '#181A45';
 const WHITE = '#FFFFFF';
+
+/** Header width (dp) under which the printer pill switches to its tighter form. */
+const COMPACT_BELOW = 400;
 
 /** The swoosh path's own box. */
 const SWOOSH_W = 28.3;
@@ -65,6 +67,8 @@ function BrandBadge() {
   );
 }
 
+// The SEZNIK / LABEL STUDIO lockup is a logo: it ignores the phone's font size so it keeps the same
+// size next to the 48dp badge on every phone (a large system font made it oversized on older ones).
 export function HomeHeader() {
   useThemeRefresh();
   const insets = useSafeAreaInsets();
@@ -80,17 +84,17 @@ export function HomeHeader() {
       <View style={styles.brand}>
         <BrandBadge />
         <View style={styles.lockup}>
-          <Text numberOfLines={1} maxFontSizeMultiplier={HomeLayout.labelMaxFontScale} style={styles.wordmark}>
+          <Text numberOfLines={1} allowFontScaling={false} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.wordmark}>
             SEZNIK
           </Text>
-          <Text numberOfLines={1} maxFontSizeMultiplier={HomeLayout.labelMaxFontScale} style={styles.sub}>
+          <Text numberOfLines={1} allowFontScaling={false} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.sub}>
             LABEL STUDIO
           </Text>
         </View>
       </View>
-      <WalkthroughTarget id="home.printer" style={styles.chipSlot}>
-        <StatusChip />
-      </WalkthroughTarget>
+      <View style={styles.chipSlot}>
+        <StatusChip walkthroughId="home.printer" compact={size.w > 0 && size.w < COMPACT_BELOW} />
+      </View>
     </View>
   );
 }
@@ -101,7 +105,7 @@ const styles = themedStyles((c) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
     paddingHorizontal: HomeLayout.screenPad,
     paddingBottom: Spacing.three + 2,
     borderBottomLeftRadius: 24,
@@ -109,8 +113,8 @@ const styles = themedStyles((c) => ({
     overflow: 'hidden',
   },
   // The name keeps its full width; on a narrow phone the printer chip gives way, not the name.
-  brand: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  chipSlot: { flexShrink: 1, minWidth: 0, alignItems: 'flex-end' },
+  brand: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  chipSlot: { flexShrink: 3, minWidth: 0, alignItems: 'flex-end' },
   badge: {
     width: 48,
     height: 48,
@@ -119,7 +123,7 @@ const styles = themedStyles((c) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  lockup: { flexShrink: 0, justifyContent: 'center' },
+  lockup: { flexShrink: 1, minWidth: 0, justifyContent: 'center', paddingRight: 6 },
   wordmark: {
     color: c.onHeader,
     fontSize: 21,
@@ -131,5 +135,5 @@ const styles = themedStyles((c) => ({
     paddingRight: 4,
     includeFontPadding: false,
   },
-  sub: { color: SKY, fontSize: 11.5, lineHeight: 15, fontWeight: '700', letterSpacing: 1.9, includeFontPadding: false },
+  sub: { paddingRight: 4, color: SKY, fontSize: 11.5, lineHeight: 15, fontWeight: '700', letterSpacing: 1.9, includeFontPadding: false },
 }));

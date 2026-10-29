@@ -1122,16 +1122,19 @@ class PrinterManager {
         mode === 'connect-only'
           ? [PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT]
           : [
+              // BLUETOOTH_SCAN is declared neverForLocation, so Android 12+ needs no location prompt.
               PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
               PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-              PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
             ];
       const results = await PermissionsAndroid.requestMultiple(wanted);
-      const connectOk =
-        results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] ===
-        PermissionsAndroid.RESULTS.GRANTED;
+      const connectResult = results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT];
+      const connectOk = connectResult === PermissionsAndroid.RESULTS.GRANTED;
       if (!connectOk) {
-        throw new Error('Bluetooth Connect permission was denied.');
+        throw new Error(
+          connectResult === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
+            ? 'Bluetooth permission is blocked. Turn on Nearby devices for this app in Settings > Apps > Seznik Label Studio > Permissions.'
+            : 'Bluetooth Connect permission was denied.',
+        );
       }
       if (mode === 'full') {
         const scanOk =
@@ -1149,7 +1152,11 @@ class PrinterManager {
       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
     );
     if (result !== PermissionsAndroid.RESULTS.GRANTED) {
-      throw new Error('Location permission (required for Bluetooth scanning) was denied.');
+      throw new Error(
+        result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
+          ? 'Location permission is blocked. Turn it on in Settings > Apps > Seznik Label Studio > Permissions (Android needs it to find Bluetooth printers).'
+          : 'Location permission (required for Bluetooth scanning) was denied.',
+      );
     }
   }
 
