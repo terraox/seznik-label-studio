@@ -23,22 +23,6 @@ export const CHROME_HANDLE_FILL = '#42BCC7';
 export const CHROME_HANDLE_COLOR = '#42BCC7';
 export const CHROME_HANDLE_SIZE_PX = 34;
 export const CHROME_HANDLE_RADIUS_PX = 17;
-/** Smallest handle that is still easy to see; the touch target stays larger (hitSlop). */
-export const CHROME_HANDLE_MIN_SIZE_PX = 24;
-
-/**
- * Handle diameter for an element drawn at widthPx x heightPx on screen. A big label is shown zoomed
- * out, so a small element would be hidden under full-size handles; shrink them with the element,
- * between CHROME_HANDLE_MIN_SIZE_PX and the full CHROME_HANDLE_SIZE_PX.
- */
-export function chromeHandleSizePx(widthPx: number, heightPx: number): number {
-  const side = Math.min(widthPx, heightPx);
-  if (!Number.isFinite(side) || side <= 0) return CHROME_HANDLE_MIN_SIZE_PX;
-  return Math.round(
-    Math.min(CHROME_HANDLE_SIZE_PX, Math.max(CHROME_HANDLE_MIN_SIZE_PX, side * 0.9)),
-  );
-}
-
 export const CHROME_HANDLE_ICON_COLOR = '#FFFFFF';
 export const CHROME_HANDLE_ICON_SIZE = 18;
 

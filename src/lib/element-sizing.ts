@@ -536,10 +536,9 @@ export function fitNewTextDefaults(
 export function fitBarcodeDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {
   const pad = padMm(widthMm, heightMm);
   // Natural tight barcode proportions matching WePrint (aspect ratio ~0.40, hugging bars + HRI text)
-  // Up to 60 mm wide the cap is the old 28 mm (small labels look exactly as before); on a bigger
-  // label the barcode grows with it, half the label width, so it is not a speck on a 100 x 150 mm label.
-  const widthCap = widthMm > 60 ? widthMm * 0.5 : 28;
-  const targetW = Math.min(widthCap, Math.max(16, widthMm * 0.58));
+  // Up to 60 mm wide the cap is the old 28 mm (small labels look exactly as before). On a bigger
+  // label the barcode grows with it to about 80% of the width, as new elements do in the vendor app.
+  const targetW = widthMm > 60 ? widthMm * 0.8 : Math.min(28, Math.max(16, widthMm * 0.58));
   const width = Math.min(targetW, Math.max(6, widthMm - pad * 2));
   const targetH = Math.max(6, width * 0.40);
   const height = Math.min(targetH, Math.max(3, heightMm - pad * 2));
@@ -555,7 +554,9 @@ export function fitBarcodeDefaults(widthMm: number, heightMm: number, existing: 
 
 export function fitQrcodeDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {
   const pad = padMm(widthMm, heightMm);
-  const size = Math.max(6, Math.min(widthMm - pad * 2, heightMm - pad * 2, widthMm * 0.4, heightMm * 0.48));
+  // Bigger labels (over 60 mm wide) start the QR at about 55% of the width, like the vendor app.
+  const widthShare = widthMm > 60 ? 0.55 : 0.4;
+  const size = Math.max(6, Math.min(widthMm - pad * 2, heightMm - pad * 2, widthMm * widthShare, heightMm * 0.48));
   const placed = placeInLabel(widthMm, heightMm, size, size, existing);
   return {
     left: placed.left,

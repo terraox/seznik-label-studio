@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { fitBarcodeDefaults } from '../element-sizing';
+import { fitBarcodeDefaults, fitQrcodeDefaults } from '../element-sizing';
 
 test('small labels keep the old default barcode size (28 mm cap)', () => {
   const fit = fitBarcodeDefaults(50, 30);
@@ -11,8 +11,8 @@ test('small labels keep the old default barcode size (28 mm cap)', () => {
 
 test('a 100 x 150 mm label gets a barcode that grows with it', () => {
   const fit = fitBarcodeDefaults(100, 150);
-  assert.ok(fit.width >= 45 && fit.width <= 60, `width ${fit.width}`);
-  assert.ok(fit.height >= 15, `height ${fit.height}`);
+  assert.ok(fit.width >= 70 && fit.width <= 90, `width ${fit.width}`);
+  assert.ok(fit.height >= 25, `height ${fit.height}`);
   assert.ok(fit.left + fit.width <= 100 && fit.top + fit.height <= 150);
 });
 
@@ -23,4 +23,11 @@ test('the default barcode never leaves the label', () => {
     assert.ok(fit.left + fit.width <= w + 0.01, `${w}x${h} width`);
     assert.ok(fit.top + fit.height <= h + 0.01, `${w}x${h} height`);
   }
+});
+
+test('a QR on a 100 x 150 mm label starts big, and on a small label as before', () => {
+  const big = fitQrcodeDefaults(100, 150);
+  assert.ok(big.width >= 50 && big.width <= 60, `width ${big.width}`);
+  const small = fitQrcodeDefaults(50, 30);
+  assert.ok(small.width <= 50 * 0.4 + 0.01, `small width ${small.width}`);
 });

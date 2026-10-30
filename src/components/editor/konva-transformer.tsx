@@ -57,7 +57,6 @@ import {
   CHROME_HANDLE_ICON_SIZE,
   CHROME_HANDLE_RADIUS_PX,
   CHROME_HANDLE_SIZE_PX,
-  chromeHandleSizePx,
   CHROME_SELECTION_STROKE,
   DRAG_LIFT_OPACITY,
 } from '@/lib/editor/canvas-chrome';
@@ -2061,18 +2060,10 @@ export const KonvaTransformer = memo(function KonvaTransformer({
         {element.lockMovement ? null : (
           <>
             {handleGestures.e ? (
-              <EdgeResizeHandle
-                position="e"
-                gesture={handleGestures.e}
-                sizePx={chromeHandleSizePx(baseWidthPx, baseHeightPx)}
-              />
+              <EdgeResizeHandle position="e" gesture={handleGestures.e} />
             ) : null}
             {handleGestures.s ? (
-              <EdgeResizeHandle
-                position="s"
-                gesture={handleGestures.s}
-                sizePx={chromeHandleSizePx(baseWidthPx, baseHeightPx)}
-              />
+              <EdgeResizeHandle position="s" gesture={handleGestures.s} />
             ) : null}
           </>
         )}
@@ -2123,41 +2114,27 @@ export const KonvaTransformer = memo(function KonvaTransformer({
 const EdgeResizeHandle = memo(function EdgeResizeHandle({
   position,
   gesture,
-  sizePx = CHROME_HANDLE_SIZE_PX,
 }: {
   position: HandlePosition;
   gesture: ReturnType<typeof Gesture.Pan>;
-  /** Visible diameter; smaller than the default for small elements. Touch area keeps its hitSlop. */
-  sizePx?: number;
 }) {
   useThemeRefresh();
-  const radius = sizePx / 2;
-  const iconSize = Math.round((CHROME_HANDLE_ICON_SIZE * sizePx) / CHROME_HANDLE_SIZE_PX);
-  const sized = {
-    width: sizePx,
-    height: sizePx,
-    borderRadius: radius,
-    // Centred on the box border: half inside, half outside.
-    ...(position === 'e'
-      ? { right: -radius, marginTop: -radius }
-      : { bottom: -radius, marginLeft: -radius }),
-  };
   return (
     <GestureDetector gesture={gesture}>
       <View
         collapsable={false}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        style={[styles.handleCircle, position === 'e' ? styles.handleE : styles.handleS, sized]}>
+        style={[styles.handleCircle, position === 'e' ? styles.handleE : styles.handleS]}>
         <View pointerEvents="none">
           {position === 'e' ? (
-            <Svg width={iconSize} height={iconSize} viewBox="-10 -10 20 20">
+            <Svg width={CHROME_HANDLE_ICON_SIZE} height={CHROME_HANDLE_ICON_SIZE} viewBox="-10 -10 20 20">
               <SvgPath
                 d="M -3 -5 L -8.5 0 L -3 5 L -3 1.5 L 3 1.5 L 3 5 L 8.5 0 L 3 -5 L 3 -1.5 L -3 -1.5 Z"
                 fill="#FFFFFF" // theme-fixed: handle icon
               />
             </Svg>
           ) : (
-            <Svg width={iconSize} height={iconSize} viewBox="-10 -10 20 20">
+            <Svg width={CHROME_HANDLE_ICON_SIZE} height={CHROME_HANDLE_ICON_SIZE} viewBox="-10 -10 20 20">
               <SvgPath
                 d="M -5 -3 L 0 -8.5 L 5 -3 L 1.5 -3 L 1.5 3 L 5 3 L 0 8.5 L -5 3 L -1.5 3 L -1.5 -3 Z"
                 fill="#FFFFFF" // theme-fixed: handle icon
