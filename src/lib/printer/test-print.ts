@@ -3,7 +3,8 @@ import { resolveQualityBridge } from '@/lib/printer/bridge-quality-caps';
 import { buildDiagnosticCompactLabelDocument } from '@/lib/printer/diagnostic-test-label';
 import { JOSH_DENSITY_MAX, JOSH_SPEED_MIN } from '@/lib/printer/josh-job-params';
 import { usePrinterStore } from '@/stores/printer-store';
-import type { LabelDocument } from '@/lib/label-document';
+import type { LabelDocument, PaperType } from '@/lib/label-document';
+import { shownPaperType } from '@/lib/printer/paper-type';
 
 /**
  * Same 50×15 strip for every bridge. Josh's old 25 mm canvas clipped long Bluetooth
@@ -26,7 +27,7 @@ export function testPrintLines(bridgeName: string, bluetoothName: string, _narro
   return ['seznik label studio', bridgeName, bluetoothName];
 }
 
-export function buildTestPrintDocument(): { doc: LabelDocument; lines: string[] } {
+export function buildTestPrintDocument(paperType?: PaperType): { doc: LabelDocument; lines: string[] } {
   const store = usePrinterStore.getState();
   const bridgeName = testPrintBridgeName();
   const bluetoothName = store.deviceName?.trim() || store.deviceId || 'Unknown';
@@ -42,7 +43,8 @@ export function buildTestPrintDocument(): { doc: LabelDocument; lines: string[] 
     maxLines: 3,
     bold: false,
   });
-  return { doc, lines };
+  // Same mapping as a normal print: the bridge turns this into its own media command.
+  return { doc: { ...doc, paperType: shownPaperType(paperType, store.sdkId) }, lines };
 }
 
 /**

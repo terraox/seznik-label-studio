@@ -3,11 +3,28 @@ import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
-import { rulerTicksFor, type RulerTick } from '@/lib/editor/ruler-ticks';
+import {
+  RULER_LABEL_GAP_H,
+  RULER_LABEL_GAP_V,
+  rulerLabelTicks,
+  rulerTicksFor,
+  type RulerTick,
+} from '@/lib/editor/ruler-ticks';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 /** Ruler gutter: large enough for legible mm labels while the canvas gives up only this much. */
 export const RULER_SIZE = 22;
+
+/** Ruler number text: one line, in a box wide enough for 3 digits, centred on its tick. */
+const LABEL_LINE_PX = 11;
+const LABEL_BOX_PX = 30;
+
+/** Left ruler tick lengths: short, so the number fits to the left of the mark inside the narrow gutter. */
+const V_TICK_MAJOR = 4;
+const V_TICK_MID = 3;
+const V_TICK_MINOR = 2;
+/** Room left of the longest left-ruler tick for a number: 3 digits at the 8.5px label size need ~14. */
+const V_LABEL_WIDTH = RULER_SIZE - 1 - V_TICK_MAJOR - 1;
 
 export type LiveRulerBounds = {
   leftMm: SharedValue<number>;
@@ -22,23 +39,6 @@ type Tick = RulerTick;
 
 function formatTick(mm: number) {
   return Number.isInteger(mm) ? String(mm) : mm.toFixed(1);
-}
-
-function spacedMajor(ticks: Tick[], minGapPx: number, lengthMm?: number) {
-  const majors = ticks.filter((t) => t.kind === 'major');
-  const kept: Tick[] = [];
-  for (const tick of majors) {
-    // If this is the exact end-boundary tick of the ruler (e.g. 80mm on an 80mm label),
-    // omit its label so it doesn't compress or crowd the final segment.
-    // The ruler boundary is clearly demarcated by the end tick mark line and artboard edge.
-    if (lengthMm !== undefined && Math.abs(tick.mm - lengthMm) < 0.01) {
-      continue;
-    }
-    const prev = kept[kept.length - 1];
-    if (prev && Math.abs(tick.px - prev.px) < minGapPx) continue;
-    kept.push(tick);
-  }
-  return kept;
 }
 
 function tickLen(kind: Tick['kind'], major: number, mid: number, minor: number) {
@@ -74,7 +74,7 @@ export const HorizontalRuler = memo(function HorizontalRuler({
   const content = Math.max(1, contentWidthPx);
   const origin = Math.max(0, originPx);
   const ticks = useMemo(() => rulerTicksFor(lengthMm, content), [lengthMm, content]);
-  const labels = useMemo(() => spacedMajor(ticks, 28, lengthMm), [ticks, lengthMm]);
+  const labels = useMemo(() => rulerLabelTicks(ticks, RULER_LABEL_GAP_H, lengthMm), [ticks, lengthMm]);
 
   // Selected element projection on horizontal ruler (fallback for static prop)
   const selectionProjection = useMemo(() => {
@@ -199,10 +199,16 @@ export const HorizontalRuler = memo(function HorizontalRuler({
         return (
           <Text
             key={`hl-${tick.mm}`}
+            numberOfLines={1}
+            allowFontScaling={false}
             style={[
               styles.hLabel,
               isStart ? styles.endLabel : null,
-              { left: origin + tick.px + 2 },
+              // Centred on its tick, just above it. The 0 mark sits at the strip edge, so its number
+              // starts there instead of being cut off.
+              isStart
+                ? { left: origin + 3, textAlign: 'left' }
+                : { left: origin + tick.px - LABEL_BOX_PX / 2 },
             ]}>
             {formatTick(tick.mm)}
           </Text>
@@ -232,7 +238,7 @@ export const VerticalRuler = memo(function VerticalRuler({
   const content = Math.max(1, contentHeightPx);
   const origin = Math.max(0, originPx);
   const ticks = useMemo(() => rulerTicksFor(lengthMm, content), [lengthMm, content]);
-  const labels = useMemo(() => spacedMajor(ticks, 22, lengthMm), [ticks, lengthMm]);
+  const labels = useMemo(() => rulerLabelTicks(ticks, RULER_LABEL_GAP_V, lengthMm), [ticks, lengthMm]);
 
   // Selected element projection on vertical ruler (fallback for static prop)
   const selectionProjection = useMemo(() => {
@@ -301,7 +307,7 @@ export const VerticalRuler = memo(function VerticalRuler({
 
         {/* Ticks: touching the right divider line at x = RULER_SIZE - 1 */}
         {ticks.map((tick) => {
-          const w = tickLen(tick.kind, 10, 7, 4);
+          const w = tickLen(tick.kind, V_TICK_MAJOR, V_TICK_MID, V_TICK_MINOR);
           const isStart = tick.mm < 0.001;
           const isEnd = Math.abs(tick.mm - lengthMm) < 0.01;
           const isMajor = tick.kind === 'major';
@@ -356,10 +362,15 @@ export const VerticalRuler = memo(function VerticalRuler({
         return (
           <Text
             key={`vl-${tick.mm}`}
+            numberOfLines={1}
+            ellipsizeMode="clip"
+            allowFontScaling={false}
             style={[
               styles.vLabel,
               isStart ? styles.endLabel : null,
-              { top: origin + tick.px + 2 },
+              // To the left of its tick, level with it; the 0 mark is at the top edge, so its number sits
+              // just below that edge instead of being cut off.
+              { top: isStart ? origin + 1 : origin + tick.px - LABEL_LINE_PX / 2 },
             ]}>
             {formatTick(tick.mm)}
           </Text>
@@ -411,16 +422,24 @@ const styles = themedStyles((c, scheme) => ({
   },
   hLabel: {
     position: 'absolute',
-    top: 2,
+    top: 0,
+    width: LABEL_BOX_PX,
+    textAlign: 'center',
     fontSize: 10,
+    lineHeight: LABEL_LINE_PX,
+    includeFontPadding: false,
     fontWeight: '600',
     letterSpacing: 0.1,
     color: c.textMuted,
   },
   vLabel: {
     position: 'absolute',
-    left: 2,
-    fontSize: 10,
+    left: 0,
+    width: V_LABEL_WIDTH,
+    textAlign: 'right',
+    fontSize: 8.5,
+    lineHeight: LABEL_LINE_PX,
+    includeFontPadding: false,
     fontWeight: '600',
     letterSpacing: 0.1,
     color: c.textMuted,

@@ -43,6 +43,7 @@ import {
   shouldUseTsplCommandSet,
   getAmbiguousModelCandidates,
 } from '@/lib/printer/printer-heuristics';
+import type { PaperType } from '@/lib/label-document';
 import { buildTestPrintDocument, testPrintQuality } from '@/lib/printer/test-print';
 import {
   printLabelDocumentMainPipeline,
@@ -3882,9 +3883,9 @@ class PrinterManager {
    * TD-404 strokes). Josh: max density + slowest speed (no bitmap ink grow). Josh also cancels
    * baked element/LPAPI bias; Tejas keeps saved calibration.
    */
-  async printTestLabel(): Promise<void> {
+  async printTestLabel(paperType?: PaperType): Promise<void> {
     if (!this.isConnected) throw new Error('No printer connected.');
-    const { doc, lines } = buildTestPrintDocument();
+    const { doc, lines } = buildTestPrintDocument(paperType);
     const quality = testPrintQuality(this.transport);
     // Force LPAPI ceiling when the live session is Josh (bridge id can lag the store).
     const darkness = this.isJosh ? (quality.darkness ?? JOSH_DENSITY_MAX) : quality.darkness;
@@ -3897,7 +3898,7 @@ class PrinterManager {
         }
       : undefined;
     console.info(
-      `[print] Test label via ${this.transport ?? 'unknown'} bridge, darkness=${darkness ?? 'auto'} speed=${speed ?? 'auto'}` +
+      `[print] Test label (${doc.paperType}) via ${this.transport ?? 'unknown'} bridge, darkness=${darkness ?? 'auto'} speed=${speed ?? 'auto'}` +
         (offsetExtraMm ? ` offsetExtra=${offsetExtraMm.x},${offsetExtraMm.y}` : '') +
         `: ${lines.join(' | ')}`,
     );
