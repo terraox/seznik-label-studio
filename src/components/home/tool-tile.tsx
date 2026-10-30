@@ -99,7 +99,7 @@ function TileBody({
           </Text>
           {tool.hint ? (
             <Text
-              numberOfLines={2}
+              numberOfLines={1}
               maxFontSizeMultiplier={HomeLayout.labelMaxFontScale}
               style={styles.hint}>
               {tool.hint}
