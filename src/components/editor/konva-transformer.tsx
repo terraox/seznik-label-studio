@@ -58,7 +58,6 @@ import {
   CHROME_HANDLE_RADIUS_PX,
   CHROME_HANDLE_SIZE_PX,
   chromeHandleSizePx,
-  chromeHandlesOutside,
   CHROME_SELECTION_STROKE,
   DRAG_LIFT_OPACITY,
 } from '@/lib/editor/canvas-chrome';
@@ -2066,7 +2065,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 position="e"
                 gesture={handleGestures.e}
                 sizePx={chromeHandleSizePx(baseWidthPx, baseHeightPx)}
-                outside={chromeHandlesOutside(baseWidthPx, baseHeightPx)}
               />
             ) : null}
             {handleGestures.s ? (
@@ -2074,7 +2072,6 @@ export const KonvaTransformer = memo(function KonvaTransformer({
                 position="s"
                 gesture={handleGestures.s}
                 sizePx={chromeHandleSizePx(baseWidthPx, baseHeightPx)}
-                outside={chromeHandlesOutside(baseWidthPx, baseHeightPx)}
               />
             ) : null}
           </>
@@ -2127,27 +2124,23 @@ const EdgeResizeHandle = memo(function EdgeResizeHandle({
   position,
   gesture,
   sizePx = CHROME_HANDLE_SIZE_PX,
-  outside = false,
 }: {
   position: HandlePosition;
   gesture: ReturnType<typeof Gesture.Pan>;
   /** Visible diameter; smaller than the default for small elements. Touch area keeps its hitSlop. */
   sizePx?: number;
-  /** Very small element: sit fully outside the box so the handle does not hide it. */
-  outside?: boolean;
 }) {
   useThemeRefresh();
   const radius = sizePx / 2;
-  // Centred on the edge normally; flush against the outside of the edge for a very small element.
-  const edge = outside ? -sizePx : -radius;
   const iconSize = Math.round((CHROME_HANDLE_ICON_SIZE * sizePx) / CHROME_HANDLE_SIZE_PX);
   const sized = {
     width: sizePx,
     height: sizePx,
     borderRadius: radius,
+    // Centred on the box border: half inside, half outside.
     ...(position === 'e'
-      ? { right: edge, marginTop: -radius }
-      : { bottom: edge, marginLeft: -radius }),
+      ? { right: -radius, marginTop: -radius }
+      : { bottom: -radius, marginLeft: -radius }),
   };
   return (
     <GestureDetector gesture={gesture}>
