@@ -22,6 +22,9 @@ import { SettingsStackHeader } from '@/components/settings-stack-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { printerReportsBattery } from '@/lib/printer/printer-battery';
 import { isJoshPrinter } from '@/lib/printer/battery-percent';
+import { friendlyPrinterError } from '@/lib/printer/friendly-error';
+import type { PaperType } from '@/lib/label-document';
+import { useTestPrintPaperSheet } from '@/lib/printer/use-test-print-paper-sheet';
 import { getPrinterManager, type DiagnosticInfo } from '@/lib/printer/printer-manager';
 import {
   DIAGNOSTIC_GRID_SIZE_PRESETS,
@@ -190,7 +193,7 @@ export default function PrinterDiagnosticsScreen() {
   const fail = (title: string, error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error);
     log(`Failed: ${msg}`);
-    Alert.alert(title, msg);
+    Alert.alert(title, friendlyPrinterError(error, msg));
   };
 
   const handleTestConnection = async () => {
@@ -213,12 +216,12 @@ export default function PrinterDiagnosticsScreen() {
     }
   };
 
-  const handleTestPrint = async () => {
+  const handleTestPrint = async (paperType: PaperType) => {
     setBusy('test-print');
     try {
       log('Sending a test label…');
       const t0 = Date.now();
-      await getPrinterManager().printTestLabel();
+      await getPrinterManager().printTestLabel(paperType);
       log(`Test label sent in ${Date.now() - t0} ms.`);
     } catch (error) {
       fail('Test print failed', error);
@@ -304,6 +307,8 @@ export default function PrinterDiagnosticsScreen() {
     }
   };
 
+  const { askPaperType, paperSheet } = useTestPrintPaperSheet((type) => void handleTestPrint(type));
+
   const connectionState = diag?.connectionState ?? 'disconnected';
   const look = statusLook(connectionState);
   const linked = connectionState === 'connected' || connectionState === 'printing';
@@ -311,6 +316,7 @@ export default function PrinterDiagnosticsScreen() {
 
   return (
     <View style={styles.root}>
+      {paperSheet}
       <SettingsStackHeader title="Diagnostics" />
 
       <FormScrollView
@@ -560,7 +566,7 @@ export default function PrinterDiagnosticsScreen() {
               icon="printer"
               busy={busy === 'test-print'}
               disabled={busy !== null || !linked}
-              onPress={() => void handleTestPrint()}
+              onPress={askPaperType}
             />
             <ActionButton
               label="Disconnect"

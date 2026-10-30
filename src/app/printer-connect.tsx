@@ -1,6 +1,7 @@
 import * as Linking from 'expo-linking';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PaperType } from '@/lib/label-document';
 import { Alert, AppState, Platform, Text, View } from 'react-native';
 import { FormScrollView } from '@/components/ui/form-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +26,7 @@ import {
 } from '@/constants/printer-models';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
+import { friendlyPrinterError } from '@/lib/printer/friendly-error';
 import { isBluetoothOffError } from '@/lib/printer/bluetooth-guard';
 import { bridgeDisplayLabel, defaultBridgeForConsumer, lastDeviceForConsumer } from '@/lib/printer/printer-bridge';
 import { getAmbiguousModelCandidates } from '@/lib/printer/printer-heuristics';
@@ -42,6 +44,7 @@ import { JOSH_LID_MESSAGE, joshLidOpen } from '@/lib/printer/josh-status';
 import { useJoshProgressStore } from '@/stores/josh-progress-store';
 import { isAutoConnectEnabled, normalizePrinterMac, usePrinterNickname, usePrinterStore } from '@/stores/printer-store';
 import { themedStyles, useThemeRefresh } from '@/theme';
+import { useTestPrintPaperSheet } from '@/lib/printer/use-test-print-paper-sheet';
 
 const ANDROID_BLUETOOTH_SETTINGS = 'android.settings.BLUETOOTH_SETTINGS';
 // Discovery restarts as soon as it ends.
@@ -596,7 +599,7 @@ export default function PrinterConnectScreen() {
               usePrinterStore.getState().setStatus('connecting');
               void connectWith(modelId, device)
                 .catch((error) => {
-                  Alert.alert('Connection failed', error instanceof Error ? error.message : 'Could not connect.');
+                  Alert.alert('Connection failed', friendlyPrinterError(error, 'Could not connect.'));
                 })
                 .finally(() => {
                   if (mountedRef.current && connectRequestRef.current === choiceRequest) setConnectingId(null);
@@ -622,7 +625,7 @@ export default function PrinterConnectScreen() {
       if (mountedRef.current) {
         Alert.alert(
           'Connection failed',
-          error instanceof Error ? error.message : `Could not connect to ${printer.shortName}.`,
+          friendlyPrinterError(error, `Could not connect to ${printer.shortName}.`),
         );
       }
     } finally {
@@ -646,7 +649,7 @@ export default function PrinterConnectScreen() {
     try {
       const ok = await getPrinterManager().reconnectLastForConsumer(selectedModel, { userRequested: true });
       if (!ok) {
-        const reason = getPrinterManager().getLastErrorMessage();
+        const reason = friendlyPrinterError(getPrinterManager().getLastErrorMessage(), '');
         Alert.alert(
           'Could not connect',
           `${reason ? `${reason}\n\n` : ''}Turn the printer on and stay on this screen — we will connect when it appears.`,
@@ -656,7 +659,7 @@ export default function PrinterConnectScreen() {
     } catch (error) {
       Alert.alert(
         'Connection failed',
-        error instanceof Error ? error.message : 'Could not connect to the last printer.',
+        friendlyPrinterError(error, 'Could not connect to the last printer.'),
       );
     } finally {
       if (mountedRef.current && connectRequestRef.current === request) setConnectingId(null);
@@ -678,17 +681,19 @@ export default function PrinterConnectScreen() {
     }
   };
 
-  const handleTestPrint = async () => {
+  const handleTestPrint = async (paperType: PaperType) => {
     setTesting(true);
     try {
-      await getPrinterManager().printTestLabel();
+      await getPrinterManager().printTestLabel(paperType);
       Alert.alert('Test print sent', `Check ${printer.shortName} for the diagnostic test label.`);
     } catch (error) {
-      Alert.alert('Test print failed', error instanceof Error ? error.message : 'Could not send the test print.');
+      Alert.alert('Test print failed', friendlyPrinterError(error, 'Could not send the test print.'));
     } finally {
       setTesting(false);
     }
   };
+
+  const { askPaperType, paperSheet } = useTestPrintPaperSheet((type) => void handleTestPrint(type));
 
   const showBluetoothSettings =
     Platform.OS !== 'web' &&
@@ -698,6 +703,7 @@ export default function PrinterConnectScreen() {
 
   return (
     <View style={styles.root}>
+      {paperSheet}
       <SettingsStackHeader title="Connect printer" />
       <FormScrollView
         style={styles.scroll}
@@ -717,7 +723,7 @@ export default function PrinterConnectScreen() {
               warning={watchingJosh && joshLidOpenNow ? JOSH_LID_MESSAGE : null}
               showBattery={showBattery}
               testing={testing}
-              onTest={() => void handleTestPrint()}
+              onTest={askPaperType}
               onDisconnect={() => void handleDisconnect()}
               onDiagnostics={() => router.push('/printer-diagnostics')}
             />

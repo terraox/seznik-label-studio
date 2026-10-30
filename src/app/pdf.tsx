@@ -106,6 +106,7 @@ export default function PdfEditorScreen() {
   const setCrop = usePdfEditStore((s) => s.setCrop);
   const setPageSizes = usePdfEditStore((s) => s.setPageSizes);
   const setRotationForScope = usePdfEditStore((s) => s.setRotationForScope);
+  const rotatePagesBy = usePdfEditStore((s) => s.rotatePagesBy);
   const setSharpnessForScope = usePdfEditStore((s) => s.setSharpnessForScope);
   const setWatermark = usePdfEditStore((s) => s.setWatermark);
   const patchWatermark = usePdfEditStore((s) => s.patchWatermark);
@@ -899,6 +900,23 @@ export default function PdfEditorScreen() {
             {loading ? <ActivityIndicator color={C.onAccent} style={{ marginTop: 8 }} /> : null}
           </WalkthroughTarget>
           <PrintPagesStrip uri={session.sourceUri} items={stripItems} labelAspect={session.outputSize.widthMm / session.outputSize.heightMm} />
+          <View style={styles.rotateRow}>
+            <Text style={styles.rotateLabel}>Rotate before printing</Text>
+            <Pressable
+              onPress={() => rotatePagesBy(printIndices, -90)}
+              disabled={printIndices.length === 0}
+              accessibilityLabel="Rotate left"
+              style={({ pressed }) => [styles.rotateBtn, pressed && styles.pressed]}>
+              <Text style={styles.rotateBtnText}>↺ Left</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => rotatePagesBy(printIndices, 90)}
+              disabled={printIndices.length === 0}
+              accessibilityLabel="Rotate right"
+              style={({ pressed }) => [styles.rotateBtn, pressed && styles.pressed]}>
+              <Text style={styles.rotateBtnText}>Right ↻</Text>
+            </Pressable>
+          </View>
           <View style={styles.printSettings}>
             <PdfPrintPanel
               ref={printPanelRef}
@@ -1076,6 +1094,16 @@ const styles = themedStyles((c, scheme) => ({
   sizeBadgeText: { color: c.onAccent, fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
   printContent: { paddingBottom: 24 },
   printSettings: { paddingHorizontal: 12, paddingTop: 12 },
+  rotateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
+  rotateLabel: { flex: 1, fontSize: 13, fontWeight: '600', color: c.text },
+  rotateBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: c.hairline,
+  },
+  rotateBtnText: { fontSize: 13, fontWeight: '600', color: c.accent },
   scroll: { flex: 1, minHeight: 0 },
   scrollContent: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24, gap: 12 },
   empty: {

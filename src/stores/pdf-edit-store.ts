@@ -33,6 +33,8 @@ type PdfEditState = {
   setCropRect: (originNorm: { x: number; y: number }, sizeNorm?: { w: number; h: number }) => void;
   setRotationForCurrent: (deg: number) => void;
   setRotationForScope: (deg: number, scope: PageScope) => void;
+  /** Turns each listed page a further `delta` degrees (used by the print step). */
+  rotatePagesBy: (pageIndices: number[], delta: number) => void;
   setSharpnessForCurrent: (value: number) => void;
   setSharpnessForScope: (value: number, scope: PageScope) => void;
   setWatermark: (watermark: PdfWatermark | null) => void;
@@ -125,6 +127,16 @@ export const usePdfEditStore = create<PdfEditState>((set) => ({
       const next = normalizeRotation(deg);
       for (const i of resolveScopeIndices(scope, s.session.pageCount, s.session.currentPageIndex)) {
         rotationByPage[i] = next;
+      }
+      return { session: { ...s.session, rotationByPage } };
+    }),
+
+  rotatePagesBy: (pageIndices, delta) =>
+    set((s) => {
+      if (!s.session) return s;
+      const rotationByPage = [...s.session.rotationByPage];
+      for (const i of pageIndices) {
+        rotationByPage[i] = normalizeRotation((rotationByPage[i] ?? 0) + delta);
       }
       return { session: { ...s.session, rotationByPage } };
     }),

@@ -450,7 +450,12 @@ function ChipGroup<T extends string>({
               active && styles.chipActive,
               pressed && styles.pressed,
             ]}>
-            <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
+            {/* One line always: the label shrinks to fit its chip (e.g. "Transparent" on Josh) instead of being cut. */}
+            <Text
+              style={[styles.chipText, active && styles.chipTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}>
               {labelFor ? labelFor(option) : option}
             </Text>
             {badge ? (

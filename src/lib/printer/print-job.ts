@@ -1,3 +1,4 @@
+import { friendlyConnectionMessage } from '@/lib/printer/friendly-error';
 import type { LabelDocument, LabelOrientation } from '@/lib/label-document';
 import {
   mmToDots,
@@ -468,6 +469,8 @@ export async function tryNativeSdkPngPrint(options: NativePngPrintOptions): Prom
 export function formatPrintFailure(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '');
   if (/cancel|dismiss/i.test(message)) return '';
+  const friendly = friendlyConnectionMessage(error);
+  if (friendly) return friendly;
   if (/not connected|no printer/i.test(message)) {
     return 'Printer disconnected. Reconnect Bluetooth or Wi‑Fi and try again.';
   }

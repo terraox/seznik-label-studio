@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,8 @@ import {
   type ConsumerPrinterId,
   type SeznikPrinterModelId,
 } from '@/constants/printer-models';
+import type { PaperType } from '@/lib/label-document';
+import { useTestPrintPaperSheet } from '@/lib/printer/use-test-print-paper-sheet';
 import { getPrinterManager } from '@/lib/printer/printer-manager';
 import { usePrinterStore } from '@/stores/printer-store';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
@@ -105,14 +107,16 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
     }
   };
 
-  const handleInternalTestPrint = async (model: ConsumerPrinter) => {
+  const pendingTestModel = useRef<ConsumerPrinter | null>(null);
+
+  const runTestPrint = async (model: ConsumerPrinter, paperType?: PaperType) => {
     setIsTesting(true);
     try {
       if (onTestPrint) {
         await onTestPrint(model);
       } else {
         const mgr = getPrinterManager();
-        await mgr.printTestLabel();
+        await mgr.printTestLabel(paperType);
         Alert.alert('Test Label Sent!', `Test pattern transmitted to ${model.name}.`);
       }
     } catch (err: any) {
@@ -125,10 +129,25 @@ export const SeznikPrinterGrid: React.FC<SeznikPrinterGridProps> = ({
     }
   };
 
+  const { askPaperType, paperSheet } = useTestPrintPaperSheet((type) => {
+    const model = pendingTestModel.current;
+    if (model) void runTestPrint(model, type);
+  });
+
+  const handleInternalTestPrint = (model: ConsumerPrinter) => {
+    if (onTestPrint) {
+      void runTestPrint(model);
+      return;
+    }
+    pendingTestModel.current = model;
+    askPaperType();
+  };
+
   const currentSelection = selectedModelId ?? activeModelId;
 
   return (
     <View style={styles.container}>
+      {paperSheet}
       {CONSUMER_PRINTER_LIST.map((model) => {
         const modelConnected = getModelStatus(model) === 'connected';
         const isSelected = currentSelection === model.id;
