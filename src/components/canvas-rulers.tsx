@@ -9,6 +9,10 @@ import { C, themedStyles, useThemeRefresh } from '@/theme';
 /** Ruler gutter: large enough for legible mm labels while the canvas gives up only this much. */
 export const RULER_SIZE = 22;
 
+/** Ruler number text: one line, in a box wide enough for 3 digits, centred on its tick. */
+const LABEL_LINE_PX = 11;
+const LABEL_BOX_PX = 30;
+
 export type LiveRulerBounds = {
   leftMm: SharedValue<number>;
   topMm: SharedValue<number>;
@@ -199,10 +203,16 @@ export const HorizontalRuler = memo(function HorizontalRuler({
         return (
           <Text
             key={`hl-${tick.mm}`}
+            numberOfLines={1}
+            allowFontScaling={false}
             style={[
               styles.hLabel,
               isStart ? styles.endLabel : null,
-              { left: origin + tick.px + 2 },
+              // Centred on its tick, just above it. The 0 mark sits at the strip edge, so its number
+              // starts there instead of being cut off.
+              isStart
+                ? { left: origin + 3, textAlign: 'left' }
+                : { left: origin + tick.px - LABEL_BOX_PX / 2 },
             ]}>
             {formatTick(tick.mm)}
           </Text>
@@ -356,10 +366,13 @@ export const VerticalRuler = memo(function VerticalRuler({
         return (
           <Text
             key={`vl-${tick.mm}`}
+            numberOfLines={1}
+            allowFontScaling={false}
             style={[
               styles.vLabel,
               isStart ? styles.endLabel : null,
-              { top: origin + tick.px + 2 },
+              // Just above its tick; the 0 mark is at the top edge, so its number goes just below it.
+              { top: isStart ? origin + 2 : origin + tick.px - LABEL_LINE_PX - 1 },
             ]}>
             {formatTick(tick.mm)}
           </Text>
@@ -411,16 +424,24 @@ const styles = themedStyles((c, scheme) => ({
   },
   hLabel: {
     position: 'absolute',
-    top: 2,
+    top: 0,
+    width: LABEL_BOX_PX,
+    textAlign: 'center',
     fontSize: 10,
+    lineHeight: LABEL_LINE_PX,
+    includeFontPadding: false,
     fontWeight: '600',
     letterSpacing: 0.1,
     color: c.textMuted,
   },
   vLabel: {
     position: 'absolute',
-    left: 2,
+    left: 0,
+    width: RULER_SIZE - 2,
+    textAlign: 'center',
     fontSize: 10,
+    lineHeight: LABEL_LINE_PX,
+    includeFontPadding: false,
     fontWeight: '600',
     letterSpacing: 0.1,
     color: c.textMuted,
