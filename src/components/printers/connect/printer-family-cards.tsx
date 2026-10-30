@@ -36,12 +36,13 @@ export function PrinterFamilyCards({ selectedId, onSelect }: PrinterFamilyCardsP
           />
         ))}
       </View>
-      <PrinterMatchNotice />
+      <PrinterMatchNotice selectedId={selectedId} />
     </View>
   );
 }
 
-function PrinterMatchNotice() {
+/** Tejas and Rudra are paired in the phone's Bluetooth settings first; Josh is not. */
+function PrinterMatchNotice({ selectedId }: { selectedId: ConsumerPrinterId }) {
   useThemeRefresh();
   return (
     <>
@@ -52,13 +53,15 @@ function PrinterMatchNotice() {
         for the best print quality and accurate label sizing.
       </Text>
     </View>
-    <View style={[styles.notice, styles.pairNotice]}>
-      <AppIcon name="bluetooth" tintColor={C.success} size={16} />
-      <Text style={[styles.noticeText, styles.pairText]}>
-        <Text style={styles.noticeStrong}>Pair first. </Text>
-        Before you scan, pair your printer in your phone's Bluetooth settings.
-      </Text>
-    </View>
+    {selectedId === 'josh' ? null : (
+      <View style={[styles.notice, styles.pairNotice]}>
+        <AppIcon name="bluetooth" tintColor={C.success} size={16} />
+        <Text style={[styles.noticeText, styles.pairText]}>
+          <Text style={styles.noticeStrong}>Pair first. </Text>
+          Before you scan, pair your printer in your phone's Bluetooth settings.
+        </Text>
+      </View>
+    )}
     </>
   );
 }
