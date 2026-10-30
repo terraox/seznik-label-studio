@@ -536,9 +536,12 @@ export function fitNewTextDefaults(
 export function fitBarcodeDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {
   const pad = padMm(widthMm, heightMm);
   // Natural tight barcode proportions matching WePrint (aspect ratio ~0.40, hugging bars + HRI text)
-  const targetW = Math.min(28, Math.max(16, widthMm * 0.58));
+  // Up to 60 mm wide the cap is the old 28 mm (small labels look exactly as before); on a bigger
+  // label the barcode grows with it, half the label width, so it is not a speck on a 100 x 150 mm label.
+  const widthCap = widthMm > 60 ? widthMm * 0.5 : 28;
+  const targetW = Math.min(widthCap, Math.max(16, widthMm * 0.58));
   const width = Math.min(targetW, Math.max(6, widthMm - pad * 2));
-  const targetH = Math.min(12, Math.max(6, width * 0.40));
+  const targetH = Math.max(6, width * 0.40);
   const height = Math.min(targetH, Math.max(3, heightMm - pad * 2));
   const placed = placeInLabel(widthMm, heightMm, width, height, existing);
   return {
@@ -546,7 +549,7 @@ export function fitBarcodeDefaults(widthMm: number, heightMm: number, existing: 
     top: placed.top,
     width: placed.width,
     height: placed.height,
-    fontSize: Math.max(4, Math.min(mmToPt(height * 0.25), 8.5)),
+    fontSize: Math.max(4, Math.min(mmToPt(height * 0.25), height > 12 ? 12 : 8.5)),
   };
 }
 
