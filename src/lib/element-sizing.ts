@@ -533,12 +533,23 @@ export function fitNewTextDefaults(
   };
 }
 
+/** Label width (mm) where default barcode and QR sizes start growing, and where they stop. */
+const BIG_LABEL_FROM_MM = 60;
+const BIG_LABEL_FULL_MM = 100;
+
+/** 0 up to 60 mm wide, 1 from 100 mm wide, a straight line between, so default sizes have no jump. */
+function bigLabelBlend(widthMm: number): number {
+  return Math.min(1, Math.max(0, (widthMm - BIG_LABEL_FROM_MM) / (BIG_LABEL_FULL_MM - BIG_LABEL_FROM_MM)));
+}
+
 export function fitBarcodeDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {
   const pad = padMm(widthMm, heightMm);
   // Natural tight barcode proportions matching WePrint (aspect ratio ~0.40, hugging bars + HRI text)
-  // Up to 60 mm wide the cap is the old 28 mm (small labels look exactly as before). On a bigger
-  // label the barcode grows with it to about 80% of the width, as new elements do in the vendor app.
-  const targetW = widthMm > 60 ? widthMm * 0.8 : Math.min(28, Math.max(16, widthMm * 0.58));
+  // Up to 60 mm wide the cap is the old 28 mm (small labels look exactly as before). Above that the
+  // barcode grows smoothly with the label, reaching about 80% of the width (the vendor app's size)
+  // at 100 mm, so two labels of nearly the same size never get very different barcodes.
+  const smallW = Math.min(28, Math.max(16, widthMm * 0.58));
+  const targetW = smallW + (widthMm * 0.8 - smallW) * bigLabelBlend(widthMm);
   const width = Math.min(targetW, Math.max(6, widthMm - pad * 2));
   const targetH = Math.max(6, width * 0.40);
   const height = Math.min(targetH, Math.max(3, heightMm - pad * 2));
@@ -548,14 +559,17 @@ export function fitBarcodeDefaults(widthMm: number, heightMm: number, existing: 
     top: placed.top,
     width: placed.width,
     height: placed.height,
-    fontSize: Math.max(4, Math.min(mmToPt(height * 0.25), height > 12 ? 12 : 8.5)),
+    // The number under the bars is always a quarter of the barcode's height, so bars and text keep
+    // the same ratio on a small barcode and on a big one (it used to stop growing at 12 pt).
+    fontSize: Math.max(4, mmToPt(height * 0.25)),
   };
 }
 
 export function fitQrcodeDefaults(widthMm: number, heightMm: number, existing: LabelElement[] = []) {
   const pad = padMm(widthMm, heightMm);
-  // Bigger labels (over 60 mm wide) start the QR at about 55% of the width, like the vendor app.
-  const widthShare = widthMm > 60 ? 0.55 : 0.4;
+  // Up to 60 mm wide the QR starts at 40% of the width. Above that the share grows smoothly to 55%
+  // (the vendor app's size) at 100 mm.
+  const widthShare = 0.4 + 0.15 * bigLabelBlend(widthMm);
   const size = Math.max(6, Math.min(widthMm - pad * 2, heightMm - pad * 2, widthMm * widthShare, heightMm * 0.48));
   const placed = placeInLabel(widthMm, heightMm, size, size, existing);
   return {
