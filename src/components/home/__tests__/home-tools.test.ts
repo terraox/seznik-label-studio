@@ -8,7 +8,6 @@ import {
   HOME_TOOLS,
   TOOL_GRID_COLUMNS,
   TOOL_GRID_GROUPS,
-  UNPLACED_HOME_TOOLS,
   type HomeTool,
   type HomeToolId,
 } from '../home-tools';
@@ -53,11 +52,10 @@ test('every tool either links somewhere or runs an action', () => {
   }
 });
 
-test('Image tile asks for the label size first (it is not placed on Home)', () => {
+test('Image tile asks for the label size first', () => {
   const tool: HomeTool = HOME_TOOLS.printImage;
   assert.equal(tool.href, '/new-label-setup?printImage=1');
-  assert.ok(UNPLACED_HOME_TOOLS.includes('printImage'));
-  assert.ok(!FILE_TOOLS.includes('printImage'));
+  assert.ok(FILE_TOOLS.includes('printImage'));
 });
 
 test('PDF tile keeps pointing at /pdf', () => {
@@ -71,7 +69,7 @@ test('every tool icon is an Ionicons outline glyph', () => {
 });
 
 test('every tool is placed in exactly one home section', () => {
-  const placed = [CREATE_HERO_TOOL, ...CREATE_GRID_TOOLS, ...FILE_TOOLS, ...UNPLACED_HOME_TOOLS];
+  const placed = [CREATE_HERO_TOOL, ...CREATE_GRID_TOOLS, ...FILE_TOOLS];
   assert.deepEqual([...placed].sort(), [...allIds].sort());
 });
 

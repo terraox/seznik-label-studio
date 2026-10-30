@@ -53,14 +53,11 @@ export const CREATE_HERO_TOOL: HomeToolId = 'newLabel';
 /** "More ways to create" — 3-column ToolGrid. */
 export const CREATE_GRID_TOOLS: readonly HomeToolId[] = ['imageToLabel', 'serialLabels', 'shippingLabels'];
 
-/** "Print from file" — 3-column ToolGrid. The Image tile (printImage) is defined above but not shown on Home. */
-export const FILE_TOOLS: readonly HomeToolId[] = ['excel', 'pdf', 'importLabel'];
-
-/** Tools that exist but are not placed on the Home screen. */
-export const UNPLACED_HOME_TOOLS: readonly HomeToolId[] = ['printImage'];
+/** "Print from file" — 4-column ToolGrid. */
+export const FILE_TOOLS: readonly HomeToolId[] = ['excel', 'pdf', 'printImage', 'importLabel'];
 
 /** Groups that must fill whole 3-column rows. */
 export const TOOL_GRID_GROUPS = { create: CREATE_GRID_TOOLS, file: FILE_TOOLS } as const;
 
 /** Columns each group renders with. */
-export const TOOL_GRID_COLUMNS = { create: 3, file: 3 } as const;
+export const TOOL_GRID_COLUMNS = { create: 3, file: 4 } as const;
