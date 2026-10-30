@@ -1,23 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { rulerTicksFor, type RulerTick } from '../../lib/editor/ruler-ticks';
+import { RULER_LABEL_GAP_H, RULER_LABEL_GAP_V, rulerLabelTicks, rulerTicksFor, type RulerTick } from '../../lib/editor/ruler-ticks';
 
-type Tick = RulerTick;
-
-function spacedMajor(ticks: Tick[], minGapPx: number, lengthMm?: number) {
-  const majors = ticks.filter((t) => t.kind === 'major');
-  const kept: Tick[] = [];
-  for (const tick of majors) {
-    if (lengthMm !== undefined && Math.abs(tick.mm - lengthMm) < 0.01) {
-      continue;
-    }
-    const prev = kept[kept.length - 1];
-    if (prev && Math.abs(tick.px - prev.px) < minGapPx) continue;
-    kept.push(tick);
-  }
-  return kept;
-}
+const spacedMajor = (ticks: RulerTick[], minGapPx: number, lengthMm: number) =>
+  rulerLabelTicks(ticks, minGapPx, lengthMm);
 
 test('80x50mm label: ruler tick spacing is mathematically uniform across all segments', () => {
   const lengthMm = 80;
@@ -241,3 +228,35 @@ test('tick step selection across various label sizes and zoom densities', () => 
   assert.equal(stepZoomed, 0.5);
 });
 
+
+test('100x150mm label: the number before the far edge is always shown, on narrow and wide canvases', () => {
+  // 100mm across: 26px per 10mm (a narrow phone) down to 18px per 10mm.
+  for (const contentPx of [260, 230, 200, 180]) {
+    const labels = rulerLabelTicks(rulerTicksFor(100, contentPx), RULER_LABEL_GAP_H, 100).map((l) => l.mm);
+    assert.equal(labels[0], 0, `${contentPx}px start`);
+    assert.equal(labels[labels.length - 1], 90, `${contentPx}px last`);
+    assert.ok(!labels.includes(100), 'the far-edge tick is not numbered');
+  }
+  // 150mm down the side: 22px per 10mm and tighter.
+  for (const contentPx of [330, 300, 220, 160]) {
+    const labels = rulerLabelTicks(rulerTicksFor(150, contentPx), RULER_LABEL_GAP_V, 150).map((l) => l.mm);
+    assert.equal(labels[0], 0, `${contentPx}px start`);
+    assert.equal(labels[labels.length - 1], 140, `${contentPx}px last`);
+  }
+  // At 26px per 10mm every number fits.
+  assert.deepEqual(
+    rulerLabelTicks(rulerTicksFor(100, 260), RULER_LABEL_GAP_H, 100).map((l) => l.mm),
+    [0, 10, 20, 30, 40, 50, 60, 70, 80, 90],
+  );
+});
+
+test('numbers never sit closer than the gap, except the pinned last one', () => {
+  for (const length of [40, 55, 75, 100, 150, 210]) {
+    for (const px of [140, 200, 260, 330, 420]) {
+      const labels = rulerLabelTicks(rulerTicksFor(length, px), RULER_LABEL_GAP_H, length);
+      for (let i = 1; i < labels.length - 1; i++) {
+        assert.ok(labels[i].px - labels[i - 1].px >= RULER_LABEL_GAP_H - 1e-6, `${length}mm@${px}px`);
+      }
+    }
+  }
+});

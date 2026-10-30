@@ -41,3 +41,31 @@ export function rulerTicksFor(lengthMm: number, sizePx: number): RulerTick[] {
   }
   return items;
 }   
+
+
+/** Smallest centre-to-centre gap (px) between two ruler numbers: a 3-digit number plus air. */
+export const RULER_LABEL_GAP_H = 24;
+/** Vertical numbers are one line (~11px) tall, so they can sit closer. */
+export const RULER_LABEL_GAP_V = 14;
+
+/**
+ * Which major ticks get a number. The 0 mark and the last full major before the far edge always
+ * do, so the end of the ruler is never left bare; the ones between are thinned left to right so
+ * no two numbers touch. The far-edge tick itself (e.g. 100 on a 100mm label) is not numbered:
+ * the artboard edge marks it.
+ */
+export function rulerLabelTicks(ticks: RulerTick[], minGapPx: number, lengthMm: number): RulerTick[] {
+  const majors = ticks.filter((t) => t.kind === 'major' && Math.abs(t.mm - lengthMm) >= 0.01);
+  if (majors.length <= 2) return majors;
+  const first = majors[0];
+  const last = majors[majors.length - 1];
+  const kept: RulerTick[] = [first];
+  for (const tick of majors.slice(1, -1)) {
+    const prev = kept[kept.length - 1];
+    if (tick.px - prev.px < minGapPx) continue;
+    if (last.px - tick.px < minGapPx) continue;
+    kept.push(tick);
+  }
+  if (last.px - kept[kept.length - 1].px >= minGapPx * 0.5) kept.push(last);
+  return kept;
+}
