@@ -72,7 +72,8 @@ export function resizePolicyFor(element: LabelElement): ResizePolicy {
         anchors: ['e', 's'],
         behavior: { e: 'width', s: 'height' },
         rotateHandle: false,
-        minMm: MIN_ELEMENT_MM,
+        // A barcode under ~5 mm is a hairline: it cannot be seen, grabbed or scanned.
+        minMm: RESIZE_MIN_PROPORTIONAL_MM,
         comment: 'Barcode: width and height independently. Live preview stretches the same bars; it does not re-snap modules while dragging.',
       };
     case 'text':

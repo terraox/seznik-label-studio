@@ -39,6 +39,15 @@ export function chromeHandleSizePx(widthPx: number, heightPx: number): number {
   );
 }
 
+/**
+ * True when the element is too small for the handles to sit on its edge without hiding it. The
+ * handles then sit fully outside the box, so the element stays visible and the two handles do not overlap.
+ */
+export function chromeHandlesOutside(widthPx: number, heightPx: number): boolean {
+  const side = Math.min(widthPx, heightPx);
+  return !Number.isFinite(side) || side < CHROME_HANDLE_SIZE_PX * 1.5;
+}
+
 export const CHROME_HANDLE_ICON_COLOR = '#FFFFFF';
 export const CHROME_HANDLE_ICON_SIZE = 18;
 
