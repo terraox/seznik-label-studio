@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   AlignCenter, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignLeft, AlignRight,
   AlignStartHorizontal, AlignStartVertical, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BringToFront, Clipboard, ClipboardPaste, Copy, Maximize,
-  Minus, Plus, QrCode, Redo2, RotateCcw, RotateCw, ScanBarcode, SendToBack, Trash2, Type, Undo2, X,
+  Minus, Plus, QrCode, Redo2, RotateCcw, RotateCw, ScanBarcode, SendToBack, Sparkles, Trash2, Type, Undo2, X,
 } from 'lucide-react';
 
 import { useToast } from '@/components/desk';
@@ -12,6 +12,7 @@ import { api } from '@/lib/client';
 import {
   APP_FONT, INK, INK_BLACK, PT_MM, barcodeBars, barcodeFontPt, qrModules, textHeightMm, textLineMm, textPadXMm, textPadYMm,
 } from '@/lib/sample-render';
+import { USE_CASES, guessUseCase, suggestForTemplate, type UseCase } from '@/lib/sample-suggest';
 import { sampleVisualBox, type SampleElement, type SampleElementType, type SampleRotation } from '@/lib/sample-layout';
 
 type Template = { id: string; name: string; widthMm: number | null; heightMm: number | null; svgCode: string; sampleLayout?: unknown };
@@ -247,6 +248,8 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
   const [hud, setHud] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const variant = useRef(0);
+  const [useCase, setUseCase] = useState<UseCase>(() => guessUseCase(template.name));
   const [area, setArea] = useState({ w: 800, h: 520 });
   const wrap = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -316,6 +319,14 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
     const el = create(type, W, H, items);
     setItems((cur) => [...cur, el]);
     setSelection([el.id]);
+    setDirty(true);
+  }
+  /** Replaces the sample content with a suggestion for this shape and use case. One undo step. */
+  function suggest() {
+    if (items.length && !dirty && !window.confirm('Replace the current sample content with a suggestion?')) return;
+    record();
+    setItems(suggestForTemplate(template.svgCode, template.name, useCase, W, H, newId, variant.current++).map(fit));
+    setSelection([]);
     setDirty(true);
   }
   function remove(ids: string[]) {
@@ -678,6 +689,12 @@ export function SampleDesigner({ template, onClose, onSaved }: { template: Templ
           </div>
 
           <aside className="designer-side sd-side">
+            <div className="sd-suggest">
+              <div className="seg" role="group" aria-label="Use case">
+                {USE_CASES.map((u) => <button key={u.id} type="button" className={useCase === u.id ? 'on' : ''} onClick={() => { setUseCase(u.id); variant.current = 0; }}>{u.name}</button>)}
+              </div>
+              <button type="button" className="btn small" onClick={suggest}><Sparkles size={13} /> Suggest design</button>
+            </div>
             <div className="sd-tools">
               {(['text', 'barcode', 'qrcode', 'line'] as const).map((t) => {
                 const Icon = TYPE_ICON[t];

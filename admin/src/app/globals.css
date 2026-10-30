@@ -722,6 +722,8 @@ html.dark .ptag.web { color: #a5b4fc; }
 .sd-zoom { position: absolute; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); font-size: 0.78rem; }
 .sd-zoom span { min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
 .sd-side { gap: 16px; }
+.sd-suggest { display: grid; gap: 8px; margin-bottom: 12px; }
+.sd-suggest .seg { flex-wrap: wrap; }
 .sd-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .sd-tool { display: grid; justify-items: center; gap: 6px; padding: 12px 4px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); color: var(--text-main); font-size: 0.74rem; font-weight: 600; cursor: pointer; }
 .sd-tool:hover { border-color: var(--brand); color: var(--brand); }
