@@ -1,6 +1,7 @@
 /**
- * One-time interactive setup for iOS internal (ad hoc) signing.
- * GitHub / dashboard builds stay non-interactive and will fail until this succeeds.
+ * One-time interactive setup for iOS signing credentials.
+ * GitHub / dashboard builds stay non-interactive and fail until this succeeds
+ * AND the Expo account has Release Manager (or Owner) on the org.
  */
 const { spawnSync } = require('child_process');
 const path = require('path');
@@ -30,15 +31,20 @@ function run(args) {
 }
 
 console.log(`
-iOS signing credentials must be created/validated in an interactive terminal.
-Dashboard / GitHub builds are non-interactive and fail with:
-  "Distribution Certificate is not validated for non-interactive builds"
+iOS EAS builds need:
+  A) Expo account with Release Manager or Owner on the project org
+     (VIEW/RUN/PUBLISH alone cannot read Apple credentials when
+      "credentials protection" is on)
+  B) Interactive Apple login once to validate the distribution certificate
 
-1) Log in as an Expo account that can manage this app (owner is "yttfuy"):
+1) Log in as Owner / Release Manager (project owner in app.json is "yttfuy"):
      npx eas-cli logout && npx eas-cli login
 2) This script configures credentials for profile "${profile}".
-3) Sign in to Apple when asked (validates the distribution certificate).
+3) Sign in to Apple when asked.
 4) For internal/ad-hoc profiles, register the iPhone (npx eas-cli device:create).
+
+If you see "Release Manager role or higher", an Owner must grant that role at:
+  https://expo.dev/accounts/[account]/settings/members
 `);
 
 const who = spawnSync(easCmd, ['--yes', 'eas-cli', 'whoami'], {
@@ -60,9 +66,9 @@ if ((info.status ?? 1) !== 0) {
   process.stdout.write(info.stdout || '');
   process.stderr.write(info.stderr || '');
   console.error(
-    `\nCannot read this EAS project. You are logged into the wrong Expo account.\n` +
+    `\nCannot read this EAS project. Wrong Expo account or insufficient role.\n` +
       `Run: npx eas-cli logout && npx eas-cli login\n` +
-      `Use an account with access to owner "yttfuy" / project seznik-label-studio, then re-run:\n` +
+      `Use Owner/Release Manager for owner "yttfuy" / seznik-label-studio, then:\n` +
       `  npm run credentials:ios\n`
   );
   process.exit(1);
@@ -77,12 +83,17 @@ const code = run([
   profile,
 ]);
 if (code !== 0) {
+  console.error(`
+If the error mentions Release Manager / credentials protection:
+  Ask the Expo org Owner to set your member role to Release Manager (or Owner),
+  then re-run this command. Code/git cannot grant that permission.
+`);
   process.exit(code);
 }
 
 console.log(`
 Credentials configured for profile "${profile}".
-Next — run ONE interactive build from this same terminal (do not use the Expo website yet):
+Next — ONE interactive build from this terminal (not the Expo website):
   npx eas-cli build -p ios --profile ${profile}
 
 After that succeeds once, GitHub/dashboard non-interactive builds will work.

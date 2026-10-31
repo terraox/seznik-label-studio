@@ -35,10 +35,11 @@ if (platform === 'ios') {
     process.stdout.write(info.stdout || '');
     process.stderr.write(info.stderr || '');
     console.error(
-      `\nWrong Expo account for this project (app.json owner is "yttfuy").\n` +
+      `\nWrong Expo account or insufficient role for this project (owner: "yttfuy").\n` +
+        `iOS credentials require Release Manager or Owner when credentials protection is on.\n` +
         `Run: npx eas-cli logout && npx eas-cli login\n` +
-        `Then once: npm run credentials:ios\n` +
-        `GitHub/dashboard iOS builds stay non-interactive and need those credentials first.\n`
+        `Then once: npm run credentials:ios   (or credentials:ios:production)\n` +
+        `GitHub/dashboard iOS builds stay non-interactive until credentials are validated.\n`
     );
     process.exit(1);
   }
