@@ -80,8 +80,9 @@ if (code !== 0) {
 
 console.log(`
 Credentials configured for profile "${profile}".
-Next:
-  npm run build:ios          # internal IPA (preview)
-  # or trigger the GitHub/dashboard build again
+Next — run ONE interactive build from this same terminal (do not use the Expo website yet):
+  npx eas-cli build -p ios --profile ${profile}
+
+After that succeeds once, GitHub/dashboard non-interactive builds will work.
 `);
 process.exit(0);
