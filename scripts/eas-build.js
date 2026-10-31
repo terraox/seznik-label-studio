@@ -5,6 +5,15 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 
+const major = Number(process.versions.node.split('.')[0]);
+if (Number.isFinite(major) && major < 22) {
+  console.error(
+    `EAS CLI needs Node.js 22+ (this shell is running ${process.version} at ${process.execPath}).\n` +
+      `Use the Node 22+ install (e.g. "C:\\Program Files\\nodejs\\node.exe"), then re-run.`
+  );
+  process.exit(1);
+}
+
 const projectRoot = path.resolve(__dirname, '..');
 process.chdir(projectRoot);
 process.env.EAS_NO_VCS = '1';
