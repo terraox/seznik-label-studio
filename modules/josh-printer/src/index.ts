@@ -145,7 +145,7 @@ type NativeJoshPrinter = {
 let cached: NativeJoshPrinter | null | undefined;
 
 function getNative(): NativeJoshPrinter | null {
-  if (Platform.OS !== 'android') return null;
+  if (Platform.OS !== 'android' && Platform.OS !== 'ios') return null;
   if (cached !== undefined) return cached;
   try {
     cached = requireNativeModule<NativeJoshPrinter>('JoshPrinter');
@@ -160,8 +160,8 @@ export function getJoshNativeDiagnostic(): {
   isAvailable: boolean;
   reason?: string;
 } {
-  if (Platform.OS !== 'android') {
-    return { isLinked: false, isAvailable: false, reason: 'JOSH LPAPI is only supported on Android' };
+  if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+    return { isLinked: false, isAvailable: false, reason: 'JOSH LPAPI requires Android or iOS' };
   }
   let mod: NativeJoshPrinter | null = null;
   try {
@@ -170,14 +170,14 @@ export function getJoshNativeDiagnostic(): {
     return {
       isLinked: false,
       isAvailable: false,
-      reason: `Native module 'JoshPrinter' is not compiled into the APK running on this device (${err?.message ?? 'not found'}). An APK reinstall is required after adding native modules.`,
+      reason: `Native module 'JoshPrinter' is not compiled into this app build (${err?.message ?? 'not found'}). Reinstall a dev client after adding native modules.`,
     };
   }
   if (!mod) {
     return {
       isLinked: false,
       isAvailable: false,
-      reason: "requireNativeModule('JoshPrinter') returned null — native code not present in running APK",
+      reason: "requireNativeModule('JoshPrinter') returned null — native code not present in this build",
     };
   }
   try {
@@ -254,7 +254,7 @@ export function startJoshDiscovery(
   const mod = getNative();
   if (!mod) {
     throw new Error(
-      'JOSH Bluetooth module requires a development build (`npx expo run:android`). Not available in Expo Go.',
+      'JOSH Bluetooth module requires a development build (`npx expo run:ios` / `run:android`). Not available in Expo Go.',
     );
   }
 

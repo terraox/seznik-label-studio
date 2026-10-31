@@ -1,10 +1,11 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/app-icon';
 import { Spacing } from '@/constants/theme';
 
 import { selectPrinterNickname, usePrinterStore } from '@/stores/printer-store';
 import type { DiscoveredPrinter } from '@/lib/printer/printer-manager';
+import { printerScanUnavailableCopy } from '@/lib/printer/ios-platform-notice';
 import { C, themedStyles, useThemeRefresh } from '@/theme';
 
 export type DeviceBadge = {
@@ -174,7 +175,7 @@ function emptyCopy(
   filterPrefix: string | null,
 ): string | null {
   if (count > 0) return null;
-  if (!canScan) return 'Build the Android app to list printers from phone Bluetooth.';
+  if (!canScan) return printerScanUnavailableCopy(Platform.OS as string);
   if (!bluetoothOn) return 'Turn Bluetooth on to see printers.';
   if (scanning) return 'Looking for printers…';
   if (filterPrefix) return `No printers starting with ${filterPrefix} found. Turn the printer on, then scan again, or show all devices.`;

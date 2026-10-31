@@ -32,3 +32,8 @@ backend/sdks/**/vendor/**/*.aar
 # Local native module build artifacts
 modules/**/android/build/
 modules/**/android/.gradle/
+
+# Vendor SDK dumps (JOSH iOS libs are vendored under modules/josh-printer/ios/LPAPI)
+TD 404IOSSDK/
+docs/sdk-report/
+artifacts/

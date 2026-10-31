@@ -38,7 +38,7 @@ export function useOtp(purpose: OtpPurpose, onAutoCode?: (code: string) => void)
       if (busy || cooldown > 0) return false;
       setBusy(true);
       setError(null);
-      // Android shows its "Allow to read this message?" prompt for the incoming SMS.
+      // Android: SMS User Consent prompt. iOS: no-op here; otp-boxes use one-time-code autofill.
       stopListening();
       stopListen.current = listenForOtp(OTP_LENGTH, (code) => {
         stopListening();

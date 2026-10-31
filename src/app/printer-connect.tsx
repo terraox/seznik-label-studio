@@ -28,6 +28,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 import { friendlyPrinterError } from '@/lib/printer/friendly-error';
 import { isBluetoothOffError } from '@/lib/printer/bluetooth-guard';
+import { iosPrinterConnectBanner } from '@/lib/printer/ios-platform-notice';
 import { bridgeDisplayLabel, defaultBridgeForConsumer, lastDeviceForConsumer } from '@/lib/printer/printer-bridge';
 import { getAmbiguousModelCandidates } from '@/lib/printer/printer-heuristics';
 import {
@@ -730,6 +731,9 @@ export default function PrinterConnectScreen() {
           ) : (
             <>
           <PrinterFamilyCards selectedId={printer.id} onSelect={handleModelChange} />
+          {iosPrinterConnectBanner(Platform.OS) ? (
+            <Text style={styles.iosNotice}>{iosPrinterConnectBanner(Platform.OS)}</Text>
+          ) : null}
           <LastConnectedPrinter
             modelName={lastPrinterMeta.shortName}
             bridgeLabel={bridgeDisplayLabel(activeBridge)}
@@ -811,5 +815,6 @@ const styles = themedStyles((c) => ({
   content: { alignItems: 'center', paddingHorizontal: Spacing.three, paddingTop: Spacing.three },
   inner: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.three },
   warn: { color: c.warning, fontSize: 13, lineHeight: 18 },
+  iosNotice: { color: c.textMuted, fontSize: 13, lineHeight: 19 },
   settingsLink: { color: c.accent, fontSize: 14, fontWeight: '700', textAlign: 'center' },
 }));

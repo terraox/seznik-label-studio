@@ -35,6 +35,10 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": false,
+        "resourceClass": "m-medium"
+      },
       "cache": {
         "disabled": true
       }
@@ -48,6 +52,10 @@
       },
       "android": {
         "buildType": "app-bundle"
+      },
+      "ios": {
+        "simulator": false,
+        "resourceClass": "m-medium"
       }
     },
     "production-apk": {

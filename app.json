@@ -13,14 +13,37 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.seznik.labelstudio",
+      "supportsTablet": true,
       "icon": "./assets/images/icon.png",
       "infoPlist": {
+        "NSCameraUsageDescription": "Allow Seznik Label Studio to access your camera to scan label barcodes and QR codes.",
+        "NSPhotoLibraryUsageDescription": "Allow Seznik Label Studio to access your photos to select label images.",
         "NSSpeechRecognitionUsageDescription": "Allow Seznik Label Studio to convert your speech into label text.",
         "NSMicrophoneUsageDescription": "Allow Seznik Label Studio to use the microphone for voice-to-text on labels.",
         "NSBluetoothAlwaysUsageDescription": "Allow Seznik Label Studio to connect to your Bluetooth label printer.",
         "NSBluetoothPeripheralUsageDescription": "Allow Seznik Label Studio to connect to your Bluetooth label printer.",
         "UIFileSharingEnabled": true,
-        "LSSupportsOpeningDocumentsInPlace": true
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "UISupportsDocumentBrowser": true,
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Seznik Label",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Owner",
+            "LSItemContentTypes": ["com.seznik.labelstudio.seznik"]
+          }
+        ],
+        "UTExportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "com.seznik.labelstudio.seznik",
+            "UTTypeDescription": "Seznik Label Document",
+            "UTTypeConformsTo": ["public.data", "public.content"],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": ["seznik"],
+              "public.mime-type": ["application/vnd.seznik.label"]
+            }
+          }
+        ]
       }
     },
     "android": {

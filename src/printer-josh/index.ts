@@ -4,8 +4,7 @@
  * A thin adapter over the existing `josh-printer` native module, which wraps
  * DothanTech's LPAPI SDK for the JOSH printer family.
  *
- * Android only. LPAPI has no iOS equivalent in the vendor zip; `platforms`
- * says so and the UI can state "Android-only" instead of failing mysteriously.
+ * Android (SPP/LPAPI JAR) and iOS (CoreBluetooth/LPAPI static lib). Same JS API.
  *
  * Dialect notes:
  *   JOSH actually supports vector, bitmap, ESC/POS, and raw command modes, but
@@ -51,8 +50,8 @@ export class JoshDriver implements PrinterDriver {
   readonly capabilities: PrinterCapabilities = {
     driverId: JOSH_DRIVER_ID,
     displayName: 'JOSH (LPAPI)',
-    platforms: ['android'],
-    transports: ['spp'],
+    platforms: ['android', 'ios'],
+    transports: ['spp', 'ble'],
     // Bitmap-only in this build. The LPAPI SDK also supports vector, ESC/POS,
     // and raw command paths but those are not exposed by the native module yet.
     dialects: ['bitmap'],

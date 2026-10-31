@@ -65,3 +65,7 @@ features.md
 
 # layout matrix screenshots
 .layout-matrix/
+
+# Vendor SDK dumps (LPAPI copied into modules/josh-printer/ios)
+TD 404IOSSDK/
+

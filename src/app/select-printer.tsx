@@ -1,7 +1,9 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { iosPrinterConnectBanner } from '@/lib/printer/ios-platform-notice';
 
 import { AppIcon } from '@/components/app-icon';
 import { authPalette, AuthScreen, LinkText, PrimaryButton } from '@/components/auth/auth-ui';
@@ -73,6 +75,9 @@ export default function SelectPrinterScreen() {
           ))}
         </View>
         <Text style={styles.note}>More printers are on the way.</Text>
+        {iosPrinterConnectBanner(Platform.OS) ? (
+          <Text style={styles.note}>{iosPrinterConnectBanner(Platform.OS)}</Text>
+        ) : null}
         <PrimaryButton label="Continue" onPress={() => setStep('choose')} />
       </AuthScreen>
     );
