@@ -19,9 +19,14 @@ const args = [
   platform,
   '--profile',
   profile,
-  '--non-interactive',
   '--clear-cache',
 ];
+
+// iOS internal/ad-hoc signing needs interactive prompts the first time
+// (create cert / register devices). Android can stay fully non-interactive.
+if (platform !== 'ios') {
+  args.push('--non-interactive');
+}
 
 const easCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const fullArgs = ['--yes', 'eas-cli', ...args];

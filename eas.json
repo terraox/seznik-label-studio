@@ -22,9 +22,6 @@
         "buildConfiguration": "Debug"
       }
     },
-    "development ": {
-      "extends": "development"
-    },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
