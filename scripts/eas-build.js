@@ -22,6 +22,28 @@ process.env.EAS_PROJECT_ROOT = projectRoot;
 const platform = process.argv[2] || 'android';
 const profile = process.argv[3] || 'preview';
 
+const easCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+
+if (platform === 'ios') {
+  const info = spawnSync(easCmd, ['--yes', 'eas-cli', 'project:info'], {
+    encoding: 'utf8',
+    shell: false,
+    cwd: projectRoot,
+    env: process.env,
+  });
+  if ((info.status ?? 1) !== 0) {
+    process.stdout.write(info.stdout || '');
+    process.stderr.write(info.stderr || '');
+    console.error(
+      `\nWrong Expo account for this project (app.json owner is "yttfuy").\n` +
+        `Run: npx eas-cli logout && npx eas-cli login\n` +
+        `Then once: npm run credentials:ios\n` +
+        `GitHub/dashboard iOS builds stay non-interactive and need those credentials first.\n`
+    );
+    process.exit(1);
+  }
+}
+
 const args = [
   'build',
   '--platform',
@@ -33,11 +55,12 @@ const args = [
 
 // iOS internal/ad-hoc signing needs interactive prompts the first time
 // (create cert / register devices). Android can stay fully non-interactive.
+// Never force --non-interactive for iOS — dashboard/GitHub already is non-interactive
+// and will fail until `npm run credentials:ios` has been completed once.
 if (platform !== 'ios') {
   args.push('--non-interactive');
 }
 
-const easCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const fullArgs = ['--yes', 'eas-cli', ...args];
 
 const result = spawnSync(easCmd, fullArgs, {

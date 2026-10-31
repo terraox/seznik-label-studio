@@ -162,6 +162,8 @@
     "build:android": "node ./scripts/eas-build.js android preview",
     "prebuild:android:dev": "npm run -s test:layout",
     "build:android:dev": "node ./scripts/eas-build.js android development",
+    "credentials:ios": "node ./scripts/eas-ios-credentials.js preview",
+    "credentials:ios:dev": "node ./scripts/eas-ios-credentials.js development",
     "prebuild:ios": "npm run -s test:layout",
     "build:ios": "node ./scripts/eas-build.js ios preview",
     "prebuild:ios:dev": "npm run -s test:layout",
