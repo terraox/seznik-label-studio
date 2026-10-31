@@ -30,13 +30,15 @@ function run(args) {
 }
 
 console.log(`
-iOS internal distribution needs Apple ad-hoc credentials on the Expo project.
-Dashboard / GitHub builds cannot create them (non-interactive).
+iOS signing credentials must be created/validated in an interactive terminal.
+Dashboard / GitHub builds are non-interactive and fail with:
+  "Distribution Certificate is not validated for non-interactive builds"
 
 1) Log in as an Expo account that can manage this app (owner is "yttfuy"):
-     npx eas-cli login
-2) This script will configure build credentials for profile "${profile}".
-3) Register the iPhone if prompted (or run: npx eas-cli device:create).
+     npx eas-cli logout && npx eas-cli login
+2) This script configures credentials for profile "${profile}".
+3) Sign in to Apple when asked (validates the distribution certificate).
+4) For internal/ad-hoc profiles, register the iPhone (npx eas-cli device:create).
 `);
 
 const who = spawnSync(easCmd, ['--yes', 'eas-cli', 'whoami'], {
