@@ -14,16 +14,18 @@ Pod::Spec.new do |s|
   s.source         = { git: '' }
   s.static_framework = true
 
-  s.source_files = 'JoshPrinterModule.swift', 'JoshPrinter-Bridging-Header.h', 'LPAPI/LPAPI.h'
-  s.public_header_files = 'LPAPI/LPAPI.h'
-  s.preserve_paths = 'LPAPI/*.a', 'JoshPrinter-Bridging-Header.h'
+  # No Swift bridging header — Expo pods are frameworks and bridging headers are unsupported.
+  # Swift talks to LPAPI through JoshLPAPIClient (ObjC).
+  s.source_files = 'JoshPrinterModule.swift', 'JoshLPAPIClient.{h,m}', 'LPAPI/LPAPI.h'
+  s.public_header_files = 'JoshLPAPIClient.h'
+  s.private_header_files = 'LPAPI/LPAPI.h'
+  s.preserve_paths = 'LPAPI/*.a'
 
   s.frameworks = 'UIKit', 'Foundation', 'CoreBluetooth', 'CoreGraphics'
 
-  # Device vs simulator LPAPI static libraries (vendor ships separate .a files).
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
-    'SWIFT_OBJC_BRIDGING_HEADER' => '$(PODS_TARGET_SRCROOT)/JoshPrinter-Bridging-Header.h',
+    'CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES' => 'YES',
     'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)" "$(PODS_TARGET_SRCROOT)/LPAPI"',
     'LIBRARY_SEARCH_PATHS[sdk=iphoneos*]' => '"$(PODS_TARGET_SRCROOT)/LPAPI"',
     'LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]' => '"$(PODS_TARGET_SRCROOT)/LPAPI"',

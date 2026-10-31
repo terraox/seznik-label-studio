@@ -4,6 +4,7 @@ import UIKit
 /**
  * iOS bridge for JOSH / DothanTech LPAPI.
  * Mirrors the Android JoshPrinter module method names so JS stays shared.
+ * Calls LPAPI only through JoshLPAPIClient (no Swift bridging header).
  */
 public class JoshPrinterModule: Module {
   private var connectedName: String?
@@ -29,7 +30,7 @@ public class JoshPrinterModule: Module {
     )
 
     OnCreate {
-      LPAPI.didReadPrinterStateHandler { [weak self] code, message in
+      JoshLPAPIClient.setStateHandler { [weak self] code, message in
         guard let self else { return }
         let msg = message ?? ""
         if code != 0 {
@@ -55,7 +56,6 @@ public class JoshPrinterModule: Module {
 
     Function("isBluetoothEnabled") { () -> Bool in
       // LPAPI owns CoreBluetooth; report optimistic true so the JS scan path can start.
-      // Real failures surface from startDiscovery / openPrinter.
       true
     }
 
@@ -75,7 +75,6 @@ public class JoshPrinterModule: Module {
     }
 
     AsyncFunction("pairDevice") { (_ mac: String, _ timeoutMs: Int) -> Bool in
-      // iOS LPAPI pairs during openPrinter; no separate classic bond dialog.
       false
     }
 
@@ -87,37 +86,36 @@ public class JoshPrinterModule: Module {
       self.emitConnectionState("DISCOVERING")
 
       return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[String: Any], Error>) in
-        LPAPI.scanPrinters(false, completion: { [weak self] names in
-          guard let self else {
+        JoshLPAPIClient.scanPrinters(
+          completion: { [weak self] names in
+            guard let self else {
+              cont.resume(returning: ["discoveryStarted": true])
+              return
+            }
+            for name in names {
+              self.sendEvent("onJoshPrinterDiscovered", [
+                "id": name,
+                "name": name,
+                "macAddress": name,
+                "transport": "josh-lpapi",
+                "sdkId": "josh",
+                "bonded": false,
+              ])
+            }
+            self.discovering = false
+            self.sendEvent("onJoshScanFinished", [:] as [String: Any])
+            self.emitConnectionState(self.connectedName != nil ? "CONNECTED" : "IDLE")
             cont.resume(returning: ["discoveryStarted": true])
-            return
-          }
-          let list = (names as? [String]) ?? []
-          for name in list {
-            let id = name
-            self.sendEvent("onJoshPrinterDiscovered", [
-              "id": id,
-              "name": name,
-              "macAddress": id,
-              "transport": "josh-lpapi",
-              "sdkId": "josh",
-              "bonded": false,
-            ])
-          }
-          self.discovering = false
-          self.sendEvent("onJoshScanFinished", [:] as [String: Any])
-          self.emitConnectionState(self.connectedName != nil ? "CONNECTED" : "IDLE")
-          cont.resume(returning: ["discoveryStarted": true])
-        }, didOpenedPrinterHandler: { [weak self] success in
-          guard let self else { return }
-          if success {
-            let name = LPAPI.connectingPrinterName() ?? self.connectedName ?? ""
+          },
+          didOpenPrinterHandler: { [weak self] success in
+            guard let self, success else { return }
+            let name = JoshLPAPIClient.connectingPrinterName() ?? self.connectedName ?? ""
             self.connectedName = name
             self.connectedId = name
             self.lastConnectedAt = Date().timeIntervalSince1970 * 1000
             self.emitConnectionState("CONNECTED")
           }
-        })
+        )
       }
     }
 
@@ -156,7 +154,7 @@ public class JoshPrinterModule: Module {
     AsyncFunction("connect") { (macAddress: String, name: String?) -> [String: Any] in
       let printerName = (name?.isEmpty == false ? name! : macAddress)
       return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[String: Any], Error>) in
-        LPAPI.openPrinter(printerName) { [weak self] success in
+        JoshLPAPIClient.openPrinter(printerName) { [weak self] success in
           guard let self else {
             cont.resume(throwing: NSError(domain: "JoshPrinter", code: -1, userInfo: [
               NSLocalizedDescriptionKey: "Module released during connect",
@@ -164,11 +162,19 @@ public class JoshPrinterModule: Module {
             return
           }
           if success {
-            let info = LPAPI.connectingPrinterDetailInfos()
-            let resolvedName = info?.deviceName ?? LPAPI.connectingPrinterName() ?? printerName
-            let stableId = info?.mcuID?.isEmpty == false
-              ? info!.mcuID!
-              : (info?.deviceAddress?.isEmpty == false ? info!.deviceAddress! : resolvedName)
+            let resolvedName = JoshLPAPIClient.connectingDeviceName()
+              ?? JoshLPAPIClient.connectingPrinterName()
+              ?? printerName
+            let mcu = JoshLPAPIClient.connectingMcuId()
+            let address = JoshLPAPIClient.connectingDeviceAddress()
+            let stableId: String
+            if let mcu, !mcu.isEmpty {
+              stableId = mcu
+            } else if let address, !address.isEmpty {
+              stableId = address
+            } else {
+              stableId = resolvedName
+            }
             self.connectedName = resolvedName
             self.connectedId = stableId
             self.lastError = nil
@@ -178,7 +184,7 @@ public class JoshPrinterModule: Module {
             cont.resume(returning: [
               "id": stableId,
               "name": resolvedName,
-              "macAddress": info?.deviceAddress ?? stableId,
+              "macAddress": address ?? stableId,
               "transport": "josh-lpapi",
               "sdkId": "josh",
             ])
@@ -195,7 +201,7 @@ public class JoshPrinterModule: Module {
     }
 
     AsyncFunction("disconnect") { () in
-      LPAPI.closePrinter()
+      JoshLPAPIClient.closePrinter()
       self.connectedName = nil
       self.connectedId = nil
       self.emitConnectionState("DISCONNECTED")
@@ -204,7 +210,7 @@ public class JoshPrinterModule: Module {
     AsyncFunction("reconnect") { () -> Bool in
       guard let name = self.connectedName, !name.isEmpty else { return false }
       return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Bool, Error>) in
-        LPAPI.openPrinter(name) { [weak self] success in
+        JoshLPAPIClient.openPrinter(name) { [weak self] success in
           guard let self else {
             cont.resume(returning: false)
             return
@@ -288,7 +294,7 @@ public class JoshPrinterModule: Module {
       var lastSuccess = false
       for copyIndex in 1...copies {
         let ok = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Bool, Error>) in
-          LPAPI.printImage(image) { success in
+          JoshLPAPIClient.printImage(image) { success in
             cont.resume(returning: success)
           }
         }
@@ -336,11 +342,12 @@ public class JoshPrinterModule: Module {
   }
 
   private func applyPrintParams() {
-    // iOS LPAPI gap length is millimetres (integer), unlike Android's 0.01 mm unit.
-    LPAPI.setPrintPageGapType(Int32(gapType))
-    LPAPI.setPrintPageGapLength(Int32(max(0, Int(gapLengthMm.rounded()))))
-    LPAPI.setPrintDarkness(Int32(max(0, min(15, density))))
-    LPAPI.setPrintSpeed(Int32(max(0, min(5, speed))))
+    JoshLPAPIClient.setGapType(
+      Int32(gapType),
+      gapLengthMm: Int32(max(0, Int(gapLengthMm.rounded()))),
+      darkness: Int32(max(0, min(15, density))),
+      speed: Int32(max(0, min(5, speed)))
+    )
   }
 
   private func stateSnapshot() -> [String: Any] {
