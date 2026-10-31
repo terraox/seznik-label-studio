@@ -16,6 +16,7 @@
       "supportsTablet": true,
       "icon": "./assets/images/icon.png",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Allow Seznik Label Studio to access your camera to scan label barcodes and QR codes.",
         "NSPhotoLibraryUsageDescription": "Allow Seznik Label Studio to access your photos to select label images.",
         "NSSpeechRecognitionUsageDescription": "Allow Seznik Label Studio to convert your speech into label text.",
